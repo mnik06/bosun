@@ -1,0 +1,22 @@
+@import './theme.css';
+
+@import '@mantine/notifications/styles.layer.css';
+
+/* Self-hosted brand fonts (Inter for UI, JetBrains Mono for codes/IDs/logs). */
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/jetbrains-mono';
+
+@theme inline {
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+button {
+  @apply cursor-pointer;
+}

@@ -1,0 +1,21 @@
+{
+  "minTokens": 50,
+  "format": [
+    "typescript",
+    "tsx"
+  ],
+  "reporters": [
+    "console"
+  ],
+  "absolute": true,
+  "gitignore": true,
+  "ignore": [
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/+types/**",
+    "**/node_modules/**",
+    "**/build/**",
+    "**/.react-router/**"
+  ],
+  "threshold": 5
+}

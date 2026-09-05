@@ -1,0 +1,31 @@
+# Root-level ignores. Each package (be/, fe/) also has its own .gitignore.
+
+# Dependencies
+node_modules/
+
+# Build output
+build/
+dist/
+.react-router/
+
+# Environment — .env.example is checked in on purpose
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Editors
+.idea/
+.vscode/
+*.swp

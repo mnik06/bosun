@@ -1,0 +1,5 @@
+# pnpm v11 reads these settings here, NOT from .npmrc (which only holds auth/registry)
+engineStrict: true
+ignoreScripts: true
+blockExoticSubdeps: true
+minimumReleaseAge: 10080 # 1 week in minutes — block freshly-published packages

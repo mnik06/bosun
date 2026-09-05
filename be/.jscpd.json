@@ -1,0 +1,18 @@
+{
+  "minTokens": 50,
+  "format": [
+    "typescript"
+  ],
+  "reporters": [
+    "console"
+  ],
+  "absolute": true,
+  "gitignore": true,
+  "ignore": [
+    "**/*.test.ts",
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/drizzle-out/**"
+  ],
+  "threshold": 5
+}
