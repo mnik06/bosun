@@ -5,7 +5,8 @@ import {
 	EnrollmentSchema,
 	MachineSchema,
 	type Enrollment,
-	type Machine
+	type Machine,
+	type PreflightCheck
 } from 'src/types/MachineSchema';
 
 type Db = ReturnType<typeof getDb>;
@@ -83,6 +84,61 @@ export function getMachineRepo(db: Db) {
 						gt(machines.tokenExpiresAt, opts.now)
 					)
 				)
+				.returning(publicColumns);
+
+			return row ? MachineSchema.parse(row) : null;
+		},
+
+		async findAuthByKeyHash(
+			machineKeyHash: string
+		): Promise<{ id: string; machineKeyHash: string } | null> {
+			const [row] = await db
+				.select({ id: machines.id, machineKeyHash: machines.machineKeyHash })
+				.from(machines)
+				.where(eq(machines.machineKeyHash, machineKeyHash));
+
+			return row?.machineKeyHash ? { id: row.id, machineKeyHash: row.machineKeyHash } : null;
+		},
+
+		async markOnline(opts: {
+			id: string;
+			agentVersion: string;
+			repoPath: string;
+			now: Date;
+		}): Promise<Machine | null> {
+			const [row] = await db
+				.update(machines)
+				.set({
+					status: 'online',
+					agentVersion: opts.agentVersion,
+					repoPath: opts.repoPath,
+					lastSeenAt: opts.now
+				})
+				.where(eq(machines.id, opts.id))
+				.returning(publicColumns);
+
+			return row ? MachineSchema.parse(row) : null;
+		},
+
+		async markOffline(opts: { id: string; now: Date }): Promise<Machine | null> {
+			const [row] = await db
+				.update(machines)
+				.set({ status: 'offline', lastSeenAt: opts.now })
+				.where(eq(machines.id, opts.id))
+				.returning(publicColumns);
+
+			return row ? MachineSchema.parse(row) : null;
+		},
+
+		async saveCapabilities(opts: {
+			id: string;
+			checks: PreflightCheck[];
+			now: Date;
+		}): Promise<Machine | null> {
+			const [row] = await db
+				.update(machines)
+				.set({ capabilities: opts.checks, lastSeenAt: opts.now })
+				.where(eq(machines.id, opts.id))
 				.returning(publicColumns);
 
 			return row ? MachineSchema.parse(row) : null;

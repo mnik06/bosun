@@ -6,6 +6,7 @@ import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { useState } from 'react'
 import { isRouteErrorResponse, Links, Meta, Outlet, Scripts, ScrollRestoration } from 'react-router'
 
+import { MachinesSocketProvider } from '~/entities/machine'
 import { theme } from '~/theme'
 
 import './app.css'
@@ -64,7 +65,9 @@ export default function App () {
 			<MantineProvider theme={theme} defaultColorScheme="auto">
 				<ModalsProvider>
 					<Notifications />
-					<Outlet />
+					<MachinesSocketProvider>
+						<Outlet />
+					</MachinesSocketProvider>
 				</ModalsProvider>
 			</MantineProvider>
 		</QueryProvider>

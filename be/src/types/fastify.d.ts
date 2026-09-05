@@ -6,4 +6,8 @@ declare module 'fastify' {
 		db: ReturnType<typeof getDb>;
 		repos: Repos;
 	}
+
+	interface FastifyRequest {
+		machineId?: string;
+	}
 }

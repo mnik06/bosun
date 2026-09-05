@@ -4,9 +4,11 @@ import { CreateMachineReqSchema } from 'src/api/routes/schemas/machines/CreateMa
 import { CreateMachineRespSchema } from 'src/api/routes/schemas/machines/CreateMachineRespSchema';
 import { MachineIdParamsSchema } from 'src/api/routes/schemas/machines/MachineIdParamsSchema';
 import { MachineListRespSchema } from 'src/api/routes/schemas/machines/MachineListRespSchema';
+import { PingMachineRespSchema } from 'src/api/routes/schemas/machines/PingMachineRespSchema';
 import { createMachine } from 'src/controllers/machines/create-machine';
 import { getMachine } from 'src/controllers/machines/get-machine';
 import { listMachines } from 'src/controllers/machines/list-machines';
+import { pingMachine } from 'src/controllers/machines/ping-machine';
 import { MachineSchema } from 'src/types/MachineSchema';
 
 const routes: FastifyPluginAsync = async function (f) {
@@ -53,6 +55,21 @@ const routes: FastifyPluginAsync = async function (f) {
 		},
 		async (req) => {
 			return getMachine({ machineRepo: fastify.repos.machineRepo, id: req.params.id });
+		}
+	);
+
+	fastify.post(
+		'/:id/ping',
+		{
+			schema: {
+				params: MachineIdParamsSchema,
+				response: { 202: PingMachineRespSchema }
+			}
+		},
+		async (req, reply) => {
+			await getMachine({ machineRepo: fastify.repos.machineRepo, id: req.params.id });
+
+			return reply.status(202).send(pingMachine({ id: req.params.id }));
 		}
 	);
 };

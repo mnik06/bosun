@@ -6,6 +6,7 @@ import crypto from 'crypto';
 import helmet from '@fastify/helmet';
 import compress from '@fastify/compress';
 import cors from '@fastify/cors';
+import websocket from '@fastify/websocket';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import { errorHandler } from 'src/api/errors/error.handler';
 import { getLoggerOptions } from 'src/api/plugins/logger.plugin';
@@ -18,6 +19,7 @@ function registerCorePlugins(server: FastifyInstance): void {
 	server.register(cors, {
 		methods: ['GET', 'HEAD', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS']
 	});
+	server.register(websocket);
 }
 
 function decorateContext(server: FastifyInstance): void {

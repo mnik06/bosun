@@ -3,10 +3,13 @@ import path from 'path';
 import { Command } from 'commander';
 import { defaultConfigPath } from './config';
 import { enroll } from './enroll';
+import { readConfig } from './config';
+import { run } from './run';
+import { AGENT_VERSION } from './version';
 
 const program = new Command();
 
-program.name('bosun-agent').description('Bosun machine agent').version('1.0.0');
+program.name('bosun-agent').description('Bosun machine agent').version(AGENT_VERSION);
 
 program
 	.command('enroll')
@@ -39,6 +42,14 @@ program
 
 		console.log(`Enrolled as ${config.machineId}`);
 		console.log(`Config written to ${configPath}`);
+	});
+
+program
+	.command('run')
+	.description('Hold an outbound connection to the bosun backend')
+	.option('--config <path>', 'path to the agent config', defaultConfigPath())
+	.action(async (opts: { config: string }) => {
+		await run(readConfig(path.resolve(opts.config)));
 	});
 
 program.parseAsync(process.argv).catch((error: unknown) => {

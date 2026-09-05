@@ -55,6 +55,9 @@ pnpm build
 node dist/index.js enroll --server http://127.0.0.1:1506 --token <code from the browser>
 ```
 
+`run` holds the outbound WebSocket, re-sending `hello` and `preflight` on every connect and
+reconnecting with jittered backoff — see `agent/src/run.md`.
+
 `enroll` writes `~/.bosun/config.json` at mode `0600` — server URL, machine id, machine key, repo
 path. `--repo` defaults to the current directory, `--config` overrides the path.
 

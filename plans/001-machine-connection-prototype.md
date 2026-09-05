@@ -27,24 +27,24 @@ The binding checklist. Each states an observable condition.
 - [x] **AC-4** — Enrolling twice with the same code fails with a clear error and issues no second key.
 - [x] **AC-5** — A code older than its TTL is rejected with a clear error.
 - [x] **AC-6** — The machine key is stored only as a hash. The plaintext appears in exactly one HTTP response and is never retrievable again.
-- [ ] **AC-7** — The BE is reachable at a public HTTPS URL and `GET /health` there returns `{"status":"ok"}`.
+- [x] **AC-7** — The BE is reachable at a public HTTPS URL and `GET /health` there returns `{"status":"ok"}`.
 
 **The connection**
 
-- [ ] **AC-8** — `bosun-agent run` opens a WebSocket to the BE, authenticates with the machine key, and the machine's status becomes `online`.
-- [ ] **AC-9** — A connection attempt with a missing or wrong key is rejected with `401` and no socket is opened.
-- [ ] **AC-10** — On connect the agent sends `hello` and `preflight`; the results are persisted on the machine row.
-- [ ] **AC-11** — The status dot flips to green in an already-open browser within 2s of the agent connecting, with no page refresh.
-- [ ] **AC-12** — The machine detail view renders every preflight check as pass/fail with its detail text.
-- [ ] **AC-13** — Stopping the agent process flips the status to offline in the browser within 45s.
-- [ ] **AC-14** — Severing the agent's network without killing the process also flips it offline within 45s, driven by unanswered heartbeat frames.
-- [ ] **AC-15** — Restarting the agent reconnects, and the stale socket is discarded — one machine never holds two live sockets.
-- [ ] **AC-16** — With the BE unreachable, the agent retries with backoff and connects on its own once the BE returns, without being restarted.
+- [x] **AC-8** — `bosun-agent run` opens a WebSocket to the BE, authenticates with the machine key, and the machine's status becomes `online`.
+- [x] **AC-9** — A connection attempt with a missing or wrong key is rejected with `401` and no socket is opened.
+- [x] **AC-10** — On connect the agent sends `hello` and `preflight`; the results are persisted on the machine row.
+- [x] **AC-11** — The status dot flips to green in an already-open browser within 2s of the agent connecting, with no page refresh.
+- [x] **AC-12** — The machine detail view renders every preflight check as pass/fail with its detail text.
+- [x] **AC-13** — Stopping the agent process flips the status to offline in the browser within 45s.
+- [x] **AC-14** — Severing the agent's network without killing the process also flips it offline within 45s, driven by unanswered heartbeat frames.
+- [x] **AC-15** — Restarting the agent reconnects, and the stale socket is discarded — one machine never holds two live sockets.
+- [x] **AC-16** — With the BE unreachable, the agent retries with backoff and connects on its own once the BE returns, without being restarted.
 
 **The round-trip**
 
-- [ ] **AC-17** — A Ping button on the machine detail sends a command; the UI shows the pong and the round-trip time in ms.
-- [ ] **AC-18** — Ping against an offline machine returns a clear "machine offline" error, surfaced in the UI rather than silently swallowed.
+- [x] **AC-17** — A Ping button on the machine detail sends a command; the UI shows the pong and the round-trip time in ms.
+- [x] **AC-18** — Ping against an offline machine returns a clear "machine offline" error, surfaced in the UI rather than silently swallowed.
 - [ ] **AC-19** — The agent runs on the real VPS — not the dev laptop — and completes the round-trip.
 - [ ] **AC-20** — The preflight checklist reflects the actual state of that VPS, and at least one deliberately broken check renders red.
 
@@ -205,8 +205,8 @@ Explicitly out of scope; each would be scope drift in the slices.
 
 ## Slices
 
-- [ ] **Phase 1: Machines exist and can enroll** — AC-1 … AC-7
-- [ ] **Phase 2: The line stays open** — AC-8 … AC-16
+- [x] **Phase 1: Machines exist and can enroll** — AC-1 … AC-7
+- [x] **Phase 2: The line stays open** — AC-8 … AC-16
 - [ ] **Phase 3: Round-trip on the real VPS** — AC-17 … AC-20
 
 ### Phase 1 — Machines exist and can enroll
@@ -285,3 +285,16 @@ Proof: AC-17 through AC-20, with the agent on the VPS and the laptop agent stopp
   see `be/src/controllers/enroll/enroll-machine.md`.
 - **`auto_stop_machines = "off"` in `fly.toml`.** A proxy-stopped machine drops every agent socket,
   which is the one thing this service exists to hold.
+- **Fly runs one machine, `--ha=false`.** Fly's default of two would split the socket registry: an
+  agent connected to one instance and a ping arriving at the other. Single-instance is a correctness
+  constraint here, not a cost decision — see `be/src/services/sockets/registry.service.md`.
+- **`lhr`, not `dub`.** Fly could not host machines in Dublin; London is the nearest region to the
+  Supabase project in `eu-west-1`.
+- **The container runs `node` directly, never `pnpm`.** With a pruned `node_modules` pnpm decides the
+  install is stale and re-resolves dependencies on every container start, which OOM-killed the
+  machine before it ever bound a port.
+- **Heartbeat frames every 15s, not 30s.** Two missed frames at 30s is a 60s worst case, and AC-14
+  requires offline within 45s.
+- **The ping round-trip was built with phase 2**, not held back to phase 3: the `pong` message is
+  part of the same protocol module, and leaving its handler unwired would have meant shipping a
+  branch that silently did nothing.

@@ -21,4 +21,7 @@ COPY --from=build /app/dist ./dist
 COPY --from=build /app/assets ./assets
 COPY --from=build /app/package.json /app/tsconfig.json ./
 EXPOSE 8080
-CMD ["pnpm", "production"]
+# node directly, never pnpm: a pruned node_modules no longer matches the lockfile,
+# so pnpm would re-resolve dependencies on every container start.
+ENV TS_NODE_BASEURL=dist
+CMD ["node", "-r", "tsconfig-paths/register", "dist/src/api/api.js"]

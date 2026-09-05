@@ -1,11 +1,12 @@
 import { Card, Group, Stack, Text } from '@mantine/core'
+import { Link } from 'react-router'
 
 import { MachineStatusDot, type Machine } from '~/entities/machine'
 import { formatRelativeTime } from '~/shared/lib'
 
 export function MachineCard ({ machine }: { machine: Machine }) {
 	return (
-		<Card withBorder padding="md" radius="md">
+		<Card withBorder padding="md" radius="md" component={Link} to={`/machines/${machine.id}`}>
 			<Group justify="space-between" wrap="nowrap">
 				<Group gap="sm" wrap="nowrap">
 					<MachineStatusDot status={machine.status} />

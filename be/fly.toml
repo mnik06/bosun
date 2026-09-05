@@ -1,5 +1,5 @@
 app = "bosun-be"
-primary_region = "dub"
+primary_region = "lhr"
 
 [build]
 
