@@ -45,8 +45,8 @@ The binding checklist. Each states an observable condition.
 
 - [x] **AC-17** — A Ping button on the machine detail sends a command; the UI shows the pong and the round-trip time in ms.
 - [x] **AC-18** — Ping against an offline machine returns a clear "machine offline" error, surfaced in the UI rather than silently swallowed.
-- [ ] **AC-19** — The agent runs on the real VPS — not the dev laptop — and completes the round-trip.
-- [ ] **AC-20** — The preflight checklist reflects the actual state of that VPS, and at least one deliberately broken check renders red.
+- [x] **AC-19** — The agent runs on the real VPS — not the dev laptop — and completes the round-trip.
+- [x] **AC-20** — The preflight checklist reflects the actual state of that VPS, and at least one deliberately broken check renders red.
 
 ## Architecture
 
@@ -207,7 +207,7 @@ Explicitly out of scope; each would be scope drift in the slices.
 
 - [x] **Phase 1: Machines exist and can enroll** — AC-1 … AC-7
 - [x] **Phase 2: The line stays open** — AC-8 … AC-16
-- [ ] **Phase 3: Round-trip on the real VPS** — AC-17 … AC-20
+- [x] **Phase 3: Round-trip on the real VPS** — AC-17 … AC-20
 
 ### Phase 1 — Machines exist and can enroll
 
@@ -295,6 +295,11 @@ Proof: AC-17 through AC-20, with the agent on the VPS and the laptop agent stopp
   machine before it ever bound a port.
 - **Heartbeat frames every 15s, not 30s.** Two missed frames at 30s is a 60s worst case, and AC-14
   requires offline within 45s.
+- **The agent is installed by a served `install.sh`, not by hand.** The plan made `install.sh` a
+  non-goal on the grounds that it proves nothing about the connection, which held right up until the
+  agent had to reach a machine with no Node on it. A bun-compiled binary plus a checksum-verified
+  installer replaced "clone the repo and build it" — see
+  `be/src/services/installer/installer.service.md`.
 - **The ping round-trip was built with phase 2**, not held back to phase 3: the `pong` message is
   part of the same protocol module, and leaving its handler unwired would have meant shipping a
   branch that silently did nothing.
