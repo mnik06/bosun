@@ -34,11 +34,9 @@ pnpm db:migration:run
 pnpm local
 ```
 
-`SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` come from the Supabase project (Settings -> API Keys),
-and `CORS_ORIGINS` is the comma-separated list of browser origins allowed to call the API — note that
-`localhost` and `127.0.0.1` are distinct origins to a browser, so local dev wants both. Both Supabase
-values are public; the **secret** key must never appear here, and the server refuses to boot if it
-does. Email/password sign-in must be enabled on the project, with email confirmation off — the app
+`SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` come from the Supabase project (Settings -> API Keys).
+Both are public values; the **secret** key must never appear here, and the server refuses to boot if
+it does. Email/password sign-in must be enabled on the project, with email confirmation off — the app
 signs you in the moment you sign up.
 
 Check it:
@@ -110,5 +108,5 @@ for `/health`.
 Secrets are set out of band, once:
 
 ```bash
-fly secrets set --app bosun-be SUPABASE_URL=... SUPABASE_PUBLISHABLE_KEY=... CORS_ORIGINS=...
+fly secrets set --app bosun-be SUPABASE_URL=... SUPABASE_PUBLISHABLE_KEY=...
 ```

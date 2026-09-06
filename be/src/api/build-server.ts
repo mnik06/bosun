@@ -14,13 +14,18 @@ import { getRequireUserHook } from 'src/api/plugins/auth.plugin';
 import { getSupabaseAuth } from 'src/services/auth/supabase-auth.service';
 import { getDb } from 'src/services/drizzle/drizzle.service';
 import { getRepos } from 'src/repos/index';
-import { parseCommaList } from 'src/utils/general';
 
 function registerCorePlugins(server: FastifyInstance): void {
 	server.register(helmet);
 	server.register(compress, { global: true, encodings: ['br', 'gzip'], threshold: 1024 });
+	// Any origin, because this API carries no ambient credential: every protected
+	// route reads a bearer token the browser attaches deliberately, so a page on
+	// another origin has nothing to replay and no CSRF to mount. That holds only
+	// while `credentials` stays off — turning it on alongside a wildcard origin
+	// would let any site make authenticated requests with the user's cookies.
 	server.register(cors, {
-		origin: parseCommaList(process.env.CORS_ORIGINS!),
+		origin: '*',
+		credentials: false,
 		methods: ['GET', 'HEAD', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS']
 	});
 	server.register(websocket);

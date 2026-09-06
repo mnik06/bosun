@@ -41,7 +41,7 @@ every request the browser makes carries a token the backend resolves to a user b
 
 **Transport**
 
-- [x] **AC-14** — CORS is an explicit origin allowlist; a request from an unlisted origin is refused.
+- [ ] **AC-14** — ~~CORS is an explicit origin allowlist; a request from an unlisted origin is refused.~~ **Dropped** — see Decisions taken.
 - [x] **AC-15** — `/ui/ws` is authenticated by a single-use, short-lived ticket obtained over HTTPS, and a connection without one is rejected.
 
 ## Architecture
@@ -163,7 +163,7 @@ the installer's surface, and they authenticate with the machine key or nothing a
 
 - [ ] **Phase 1: Sign in and out** — AC-1 … AC-5
 - [ ] **Phase 2: The backend trusts the token** — AC-6 … AC-13
-- [x] **Phase 3: Lock the transport** — AC-14, AC-15
+- [x] **Phase 3: Lock the transport** — AC-15 (AC-14 dropped)
 
 ### Phase 1 — Sign in and out
 
@@ -250,17 +250,23 @@ unlisted origin is blocked.
   `sb_secret_`: the plan's "anon key, not service role" decision is worth nothing if a paste can
   silently undo it. The guard cannot catch a legacy pair — both are JWTs and are indistinguishable by
   shape.
-- **The local CORS allowlist carries both `127.0.0.1:5373` and `localhost:5373`.** They are distinct
-  origins to a browser, and an allowlist that holds only one turns whichever the developer happens to
-  type into a CORS failure with no server-side error to read.
+- **AC-14 was dropped: CORS allows any origin.** The allowlist was built, then removed on request.
+  It costs little to give up here because this API carries no ambient credential — every protected
+  route reads a bearer token the browser attaches deliberately, so a page on another origin has
+  nothing to replay and no CSRF to mount, and the allowlist was mostly protecting against a class of
+  attack the bearer design already rules out. What it did buy was defence in depth and one fewer way
+  to misconfigure a deployment, and that is what was traded away. **The trade is only valid while
+  `credentials` stays `false`.** A wildcard origin together with `credentials: true` would let any
+  site on the internet make authenticated requests with the user's cookies, so the two are pinned
+  together in `build-server.ts` with the reason written next to them.
 - **Signup treats a missing session as "already registered".** Supabase deliberately does not error on
   a taken address — that would allow account enumeration — so the absent session is the only signal
   available for AC-3.
 
 ## Verification
 
-Proved against a running backend: AC-6, AC-7, AC-10, AC-14, AC-15, plus `/health`, `/install.sh` and
-`/enroll` still answering unauthenticated. Unit tests cover the `resolveToken` failure taxonomy
+Proved against a running backend: AC-6, AC-7, AC-10, AC-15, plus `/health`, `/install.sh` and
+`/enroll` still answering unauthenticated. AC-14 was proved and then deliberately reversed. Unit tests cover the `resolveToken` failure taxonomy
 (including 5xx and 429 landing on `unavailable`), the ticket single-use and expiry invariants, and the
 `resolveRequestUser` mapping onto 401/503.
 

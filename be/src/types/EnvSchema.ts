@@ -18,8 +18,7 @@ export const EnvSchema = z.object({
 	PUBLIC_SERVER_URL: z.url(),
 	AGENT_DOWNLOAD_BASE_URL: z.url(),
 	SUPABASE_URL: z.url(),
-	SUPABASE_PUBLISHABLE_KEY: PublishableKeySchema,
-	CORS_ORIGINS: z.string().min(1)
+	SUPABASE_PUBLISHABLE_KEY: PublishableKeySchema
 });
 
 export type Env = z.infer<typeof EnvSchema>;

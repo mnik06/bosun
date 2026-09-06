@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseCommaList, readBearerToken } from 'src/utils/general';
+import { readBearerToken } from 'src/utils/general';
 
 describe('readBearerToken', () => {
 	it('returns the token from a well-formed header', () => {
@@ -18,15 +18,5 @@ describe('readBearerToken', () => {
 	it('returns null rather than an empty token', () => {
 		expect(readBearerToken('Bearer ')).toBeNull();
 		expect(readBearerToken('Bearer    ')).toBeNull();
-	});
-});
-
-describe('parseCommaList', () => {
-	it('splits and trims entries', () => {
-		expect(parseCommaList('http://a, http://b')).toEqual(['http://a', 'http://b']);
-	});
-
-	it('drops empty entries', () => {
-		expect(parseCommaList('http://a,,  ,http://b,')).toEqual(['http://a', 'http://b']);
 	});
 });
