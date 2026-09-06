@@ -5,7 +5,8 @@ import type { MachineStatus } from '~/entities/machine/model/machine'
 const statusColor: Record<MachineStatus, string> = {
 	pending: 'gray.5',
 	online: 'green.6',
-	offline: 'red.6'
+	offline: 'red.6',
+	paused: 'yellow.6'
 }
 
 export function MachineStatusDot ({ status }: { status: MachineStatus }) {

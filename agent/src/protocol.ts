@@ -31,6 +31,23 @@ export const PingMsgSchema = z.object({
 	id: z.string()
 });
 
-export const ServerMsgSchema = z.discriminatedUnion('type', [PingMsgSchema]);
+export const RefreshMsgSchema = z.object({ type: z.literal('refresh') });
+
+export const PauseMsgSchema = z.object({ type: z.literal('pause') });
+
+export const ResumeMsgSchema = z.object({ type: z.literal('resume') });
+
+export const ShutdownMsgSchema = z.object({
+	type: z.literal('shutdown'),
+	reason: z.string()
+});
+
+export const ServerMsgSchema = z.discriminatedUnion('type', [
+	PingMsgSchema,
+	RefreshMsgSchema,
+	PauseMsgSchema,
+	ResumeMsgSchema,
+	ShutdownMsgSchema
+]);
 
 export type ServerMsg = z.infer<typeof ServerMsgSchema>;

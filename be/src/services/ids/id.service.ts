@@ -7,3 +7,7 @@ export function createMachineId(): string {
 export function createCommandId(): string {
 	return `cmd_${nanoid(12)}`;
 }
+
+export function createUserId(): string {
+	return `u_${nanoid(12)}`;
+}

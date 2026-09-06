@@ -1,6 +1,12 @@
-import { index, route, type RouteConfig } from '@react-router/dev/routes'
+import { index, layout, route, type RouteConfig } from '@react-router/dev/routes'
 
 export default [
-	index('views/machines/machines-page.tsx'),
-	route('machines/:machineId', 'views/machine-detail/machine-detail-page.tsx')
+	layout('views/auth-layout/auth-layout.tsx', [
+		route('login', 'views/login/login-page.tsx'),
+		route('signup', 'views/signup/signup-page.tsx')
+	]),
+	layout('views/app-layout/app-layout.tsx', [
+		index('views/machines/machines-page.tsx'),
+		route('machines/:machineId', 'views/machine-detail/machine-detail-page.tsx')
+	])
 ] satisfies RouteConfig

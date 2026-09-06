@@ -3,11 +3,21 @@ import WebSocket, { type RawData } from 'ws';
 import { type AgentConfig } from './config';
 import { collectPreflight } from './preflight';
 import { ServerMsgSchema } from './protocol';
+import { terminateSelf } from './terminate';
 import { AGENT_VERSION } from './version';
 
 const BASE_DELAY_MS = 1_000;
 const MAX_DELAY_MS = 30_000;
 const MAX_BACKOFF_STEPS = 5;
+
+// A refused upgrade carrying a well-formed key means the credential was
+// destroyed on purpose. Retrying cannot fix it, and retrying forever is how a
+// deleted machine turns into a process that reconnects until someone notices.
+class RevokedError extends Error {}
+
+interface AgentState {
+	paused: boolean;
+}
 
 function socketUrl(serverUrl: string): string {
 	const url = new URL(serverUrl);
@@ -30,6 +40,14 @@ async function sleep(ms: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function sendPreflight(socket: WebSocket, repoPath: string): Promise<void> {
+	const checks = await collectPreflight(repoPath);
+
+	if (socket.readyState === WebSocket.OPEN) {
+		socket.send(JSON.stringify({ type: 'preflight', checks }));
+	}
+}
+
 async function announce(socket: WebSocket, config: AgentConfig): Promise<void> {
 	socket.send(
 		JSON.stringify({
@@ -40,18 +58,20 @@ async function announce(socket: WebSocket, config: AgentConfig): Promise<void> {
 		})
 	);
 
-	const checks = await collectPreflight(config.repoPath);
-
-	if (socket.readyState === WebSocket.OPEN) {
-		socket.send(JSON.stringify({ type: 'preflight', checks }));
-	}
+	await sendPreflight(socket, config.repoPath);
 }
 
-function handleServerFrame(socket: WebSocket, raw: RawData): void {
+async function handleServerFrame(opts: {
+	socket: WebSocket;
+	config: AgentConfig;
+	configPath: string;
+	state: AgentState;
+	raw: RawData;
+}): Promise<void> {
 	let json: unknown;
 
 	try {
-		json = JSON.parse(raw.toString());
+		json = JSON.parse(opts.raw.toString());
 	} catch {
 		console.error('dropped unparseable frame from server');
 
@@ -66,13 +86,45 @@ function handleServerFrame(socket: WebSocket, raw: RawData): void {
 		return;
 	}
 
-	socket.send(JSON.stringify({ type: 'pong', id: parsed.data.id, at: Date.now() }));
+	const msg = parsed.data;
+
+	if (msg.type === 'ping') {
+		opts.socket.send(JSON.stringify({ type: 'pong', id: msg.id, at: Date.now() }));
+
+		return;
+	}
+
+	if (msg.type === 'refresh') {
+		await sendPreflight(opts.socket, opts.config.repoPath);
+
+		return;
+	}
+
+	if (msg.type === 'pause') {
+		opts.state.paused = true;
+		console.log('paused by bosun — holding the connection, taking no work');
+
+		return;
+	}
+
+	if (msg.type === 'resume') {
+		opts.state.paused = false;
+		console.log('resumed by bosun');
+
+		return;
+	}
+
+	await terminateSelf({ configPath: opts.configPath, reason: msg.reason });
 }
 
-async function connectOnce(config: AgentConfig): Promise<void> {
+async function connectOnce(opts: {
+	config: AgentConfig;
+	configPath: string;
+	state: AgentState;
+}): Promise<void> {
 	return new Promise<void>((resolve, reject) => {
-		const socket = new WebSocket(socketUrl(config.serverUrl), {
-			headers: { Authorization: `Bearer ${config.machineKey}` }
+		const socket = new WebSocket(socketUrl(opts.config.serverUrl), {
+			headers: { Authorization: `Bearer ${opts.config.machineKey}` }
 		});
 		let settled = false;
 
@@ -86,16 +138,28 @@ async function connectOnce(config: AgentConfig): Promise<void> {
 		};
 
 		socket.on('open', () => {
-			console.log(`connected to ${config.serverUrl}`);
-			void announce(socket, config);
+			const paused = opts.state.paused ? ' (paused by bosun)' : '';
+
+			console.log(`connected to ${opts.config.serverUrl}${paused}`);
+			void announce(socket, opts.config);
 		});
 
 		socket.on('message', (raw: RawData) => {
-			handleServerFrame(socket, raw);
+			void handleServerFrame({
+				socket,
+				config: opts.config,
+				configPath: opts.configPath,
+				state: opts.state,
+				raw
+			});
 		});
 
 		socket.on('unexpected-response', (_req, res) => {
-			settle(new Error(`server refused the connection (${res.statusCode})`));
+			settle(
+				res.statusCode === 401
+					? new RevokedError('this machine is no longer registered with bosun')
+					: new Error(`server refused the connection (${res.statusCode})`)
+			);
 		});
 
 		socket.on('error', (error) => {
@@ -108,15 +172,20 @@ async function connectOnce(config: AgentConfig): Promise<void> {
 	});
 }
 
-export async function run(config: AgentConfig): Promise<never> {
+export async function run(opts: { config: AgentConfig; configPath: string }): Promise<never> {
 	let attempt = 0;
+	const state: AgentState = { paused: false };
 
 	for (;;) {
 		try {
-			await connectOnce(config);
+			await connectOnce({ config: opts.config, configPath: opts.configPath, state });
 			console.log('connection closed');
 			attempt = 0;
 		} catch (error) {
+			if (error instanceof RevokedError) {
+				await terminateSelf({ configPath: opts.configPath, reason: error.message });
+			}
+
 			console.error(error instanceof Error ? error.message : error);
 		}
 

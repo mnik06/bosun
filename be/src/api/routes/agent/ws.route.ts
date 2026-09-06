@@ -8,6 +8,7 @@ import { saveMachinePreflight } from 'src/controllers/machines/save-machine-pref
 import {
 	broadcastToUi,
 	registerAgentSocket,
+	sendToAgent,
 	unregisterAgentSocket
 } from 'src/services/sockets/registry.service';
 import { resolvePing } from 'src/services/sockets/pending-pings.service';
@@ -17,10 +18,8 @@ import { AgentMsgSchema } from 'src/types/protocol';
 const HEARTBEAT_MS = 15_000;
 const MAX_MISSED = 2;
 
-function announce(machine: Machine | null): void {
-	if (machine) {
-		broadcastToUi({ type: 'machine.updated', machine });
-	}
+function announceUpdate(machine: Machine): void {
+	broadcastToUi({ userId: machine.userId, message: { type: 'machine.updated', machine } });
 }
 
 // Protocol-level ping frames, not the application ping: this is what catches a
@@ -51,6 +50,8 @@ function startHeartbeat(socket: WebSocket): () => void {
 async function handleMessage(opts: {
 	fastify: FastifyInstance;
 	machineId: string;
+	userId: string;
+	socket: WebSocket;
 	raw: string;
 	log: FastifyBaseLogger;
 }): Promise<void> {
@@ -75,50 +76,65 @@ async function handleMessage(opts: {
 
 	const msg = parsed.data;
 
-	if (msg.type === 'hello') {
-		announce(
-			await markMachineOnline({
+	if (msg.type === 'pong') {
+		const rttMs = resolvePing({ commandId: msg.id, machineId: opts.machineId, at: Date.now() });
+
+		if (rttMs !== null) {
+			broadcastToUi({
+				userId: opts.userId,
+				message: { type: 'machine.pong', machineId: opts.machineId, id: msg.id, rttMs }
+			});
+		}
+
+		return;
+	}
+
+	const machine =
+		msg.type === 'hello'
+			? await markMachineOnline({
 				machineRepo,
 				id: opts.machineId,
 				agentVersion: msg.agentVersion,
 				repoPath: msg.repoPath
 			})
-		);
+			: await saveMachinePreflight({ machineRepo, id: opts.machineId, checks: msg.checks });
+
+	// The row can disappear mid-session: deleting the owner's account cascades to
+	// their machines. Leaving the socket up would keep a machine nobody can reach
+	// registered and counted as connected.
+	if (!machine) {
+		opts.log.warn({ machineId: opts.machineId }, 'machine row is gone; evicting agent socket');
+		opts.socket.terminate();
 
 		return;
 	}
 
-	if (msg.type === 'preflight') {
-		announce(
-			await saveMachinePreflight({ machineRepo, id: opts.machineId, checks: msg.checks })
-		);
+	announceUpdate(machine);
 
-		return;
-	}
-
-	const rttMs = resolvePing({ commandId: msg.id, machineId: opts.machineId, at: Date.now() });
-
-	if (rttMs !== null) {
-		broadcastToUi({ type: 'machine.pong', machineId: opts.machineId, id: msg.id, rttMs });
+	// A paused machine that reconnects is still paused — the row outranks the
+	// socket — so the agent is told again rather than left to infer from silence
+	// that bosun is not dispatching to it.
+	if (msg.type === 'hello' && machine.status === 'paused') {
+		sendToAgent({ machineId: machine.id, message: { type: 'pause' } });
 	}
 }
 
 const routes: FastifyPluginAsync = async function (fastify) {
 	fastify.addHook('preValidation', async (request, reply) => {
-		const machineId = await authenticateAgent({
+		const agent = await authenticateAgent({
 			machineRepo: fastify.repos.machineRepo,
 			authorization: request.headers.authorization
 		});
 
-		if (!machineId) {
+		if (!agent) {
 			return reply.status(401).send({ message: 'Unauthorized' });
 		}
 
-		request.machineId = machineId;
+		request.agent = agent;
 	});
 
 	fastify.get('/ws', { websocket: true }, (socket, request) => {
-		const machineId = request.machineId!;
+		const { machineId, userId } = request.agent!;
 
 		registerAgentSocket({ machineId, socket });
 		const stopHeartbeat = startHeartbeat(socket);
@@ -127,6 +143,8 @@ const routes: FastifyPluginAsync = async function (fastify) {
 			void handleMessage({
 				fastify,
 				machineId,
+				userId,
+				socket,
 				raw: raw.toString(),
 				log: request.log
 			});
@@ -138,7 +156,11 @@ const routes: FastifyPluginAsync = async function (fastify) {
 			if (unregisterAgentSocket({ machineId, socket })) {
 				const machineRepo = fastify.repos.machineRepo;
 
-				void markMachineOffline({ machineRepo, id: machineId }).then(announce);
+				void markMachineOffline({ machineRepo, id: machineId }).then((machine) => {
+					if (machine) {
+						announceUpdate(machine);
+					}
+				});
 			}
 		});
 	});

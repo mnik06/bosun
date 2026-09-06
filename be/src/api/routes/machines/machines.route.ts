@@ -4,11 +4,10 @@ import { CreateMachineReqSchema } from 'src/api/routes/schemas/machines/CreateMa
 import { CreateMachineRespSchema } from 'src/api/routes/schemas/machines/CreateMachineRespSchema';
 import { MachineIdParamsSchema } from 'src/api/routes/schemas/machines/MachineIdParamsSchema';
 import { MachineListRespSchema } from 'src/api/routes/schemas/machines/MachineListRespSchema';
-import { PingMachineRespSchema } from 'src/api/routes/schemas/machines/PingMachineRespSchema';
 import { createMachine } from 'src/controllers/machines/create-machine';
+import { deleteMachine } from 'src/controllers/machines/delete-machine';
 import { getMachine } from 'src/controllers/machines/get-machine';
 import { listMachines } from 'src/controllers/machines/list-machines';
-import { pingMachine } from 'src/controllers/machines/ping-machine';
 import { MachineSchema } from 'src/types/MachineSchema';
 
 const routes: FastifyPluginAsync = async function (f) {
@@ -25,6 +24,7 @@ const routes: FastifyPluginAsync = async function (f) {
 		async (req, reply) => {
 			const created = await createMachine({
 				machineRepo: fastify.repos.machineRepo,
+				userId: req.user!.id,
 				name: req.body.name,
 				serverUrl: process.env.PUBLIC_SERVER_URL!
 			});
@@ -40,8 +40,8 @@ const routes: FastifyPluginAsync = async function (f) {
 				response: { 200: MachineListRespSchema }
 			}
 		},
-		async () => {
-			return listMachines({ machineRepo: fastify.repos.machineRepo });
+		async (req) => {
+			return listMachines({ machineRepo: fastify.repos.machineRepo, userId: req.user!.id });
 		}
 	);
 
@@ -54,22 +54,29 @@ const routes: FastifyPluginAsync = async function (f) {
 			}
 		},
 		async (req) => {
-			return getMachine({ machineRepo: fastify.repos.machineRepo, id: req.params.id });
+			return getMachine({
+				machineRepo: fastify.repos.machineRepo,
+				id: req.params.id,
+				userId: req.user!.id
+			});
 		}
 	);
 
-	fastify.post(
-		'/:id/ping',
+	fastify.delete(
+		'/:id',
 		{
 			schema: {
-				params: MachineIdParamsSchema,
-				response: { 202: PingMachineRespSchema }
+				params: MachineIdParamsSchema
 			}
 		},
 		async (req, reply) => {
-			await getMachine({ machineRepo: fastify.repos.machineRepo, id: req.params.id });
+			await deleteMachine({
+				machineRepo: fastify.repos.machineRepo,
+				id: req.params.id,
+				userId: req.user!.id
+			});
 
-			return reply.status(202).send(pingMachine({ id: req.params.id }));
+			return reply.status(204).send(undefined);
 		}
 	);
 };

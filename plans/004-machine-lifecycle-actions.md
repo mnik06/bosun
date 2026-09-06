@@ -210,4 +210,62 @@ delete an offline one, start its agent, watch it exit on its own.
 
 ## Decisions taken
 
-_(populated during the build)_
+- **The scoped delete *is* the authorization check, and runs before anything is sent.** An earlier
+  shape sent `shutdown` first and then deleted; that let a caller who does not own the machine shut
+  its agent down and still be told `404`. `deleteOwned` returning false is what produces the 404, and
+  nothing reaches any agent before it succeeds. There is a test that fails if that order is swapped.
+- **Delete inverts the plan's stated ordering on purpose.** The row goes first, then the frame. The
+  plan worried about "the BE dies after sending `shutdown` but before deleting", which strands a
+  stopped agent under a live row and needs a human. This way round the only surviving failure is a
+  live agent with no row — which the 401 path resolves by itself.
+- **`socket.close()`, not `terminate()`, and unregistered first.** `terminate` discards the send
+  buffer, which would drop the `shutdown` frame that was just written. Unregistering before closing
+  rather than relying on the close event removes the window (AC-6) in which the row is gone and the
+  registry still has a socket.
+- **No wait between `shutdown` and closing.** AC-1's ten seconds is a property of a healthy
+  connection, and blocking the request to confirm would hang it for exactly the machine most likely
+  to be off the network already.
+- **`paused` survives disconnection, not just reconnection.** `markOnline` and `markOffline` both go
+  through one `case when status = 'paused'` guard in the repo, so reachability writes never
+  un-pause a row. Without that, an agent that merely dropped its socket would come back `online` and
+  AC-15 would hold only for the narrow case the plan literally describes.
+- **The paused check precedes the reachability check in `pingMachine`.** A paused machine is usually
+  still connected, so answering "machine offline" would send an operator looking at the wrong thing.
+- **`sendToAgent` returns a boolean instead of throwing.** Ping, refresh, pause and delete all mean
+  something different by "not delivered" — 409, 409, ignore, ignore — so the decision belongs to each
+  caller rather than to the registry.
+- **Only `401` terminates the agent; every other refusal still retries.** Widening it to "any refused
+  upgrade" would let a misconfigured proxy answering 403 uninstall a whole fleet.
+- **`systemctl --user disable`, not `disable --now`.** `--now` stops the unit the agent is running
+  inside, racing its own config removal. Exiting 0 under `Restart=on-failure` is what stops it;
+  `disable` only keeps it from returning on the next boot.
+- **A machines route cannot be added unauthenticated.** The owner hook moved from each route file to
+  `routes/machines/autohooks.ts`, which `@fastify/autoload` cascades over the folder. Verified: all
+  eight machine routes answer `401` with no token, while `/health`, `/enroll` and `/install.sh` are
+  unchanged.
+- **The refresh indicator is derived, not stored.** The `202` only says the frame was sent, so
+  "refreshing" is `flight.startedAt === machine.lastSeenAt` — true until the agent's own push moves
+  `lastSeenAt`. A 20s timeout is the floor, so a wedged agent cannot spin it forever.
+
+## Verification
+
+Proved against the running backend: every route in the plan's API contract is registered
+(`DELETE /machines/:id`, `POST /machines/:id/{ping,refresh,pause,resume}`), all eight machine routes
+answer `401` without a token, and the served `install.sh` carries `Restart=on-failure`. All three
+packages pass preflight; the backend has 34 tests.
+
+Unit tests lock the parts that are invisible in single-user testing: ping refuses a paused machine
+before it looks at reachability and sends nothing; ping refuses a machine with no socket; delete
+sends `shutdown`, closes the socket, leaves nothing in the registry to send to, and announces
+`machine.deleted`; delete of a machine the caller does not own sends **nothing** to that agent.
+
+Everything behavioural — AC-1 … AC-5, AC-8 … AC-16 — needs a VPS with an agent on it plus a signed-in
+browser, which is blocked behind the same browser pass as plans 002 and 003. AC-1 through AC-5 in
+particular cannot be faked locally: the systemd behaviour is the thing under test.
+
+## Consequences
+
+- The agent is `1.2.0`. `pnpm release` in `agent/` has to publish new binaries before `install.sh`
+  will hand out a build that understands `refresh`, `pause`, `resume` or `shutdown`.
+- Any agent installed before this plan has `Restart=always` and will restart-loop against a 401
+  instead of staying down. Re-run `install.sh` on those boxes, or edit the unit by hand.

@@ -21,11 +21,11 @@ lists, and neither can reach the other's machine by guessing its id.
 - [ ] **AC-2** — `GET /machines` returns only the caller's machines.
 - [ ] **AC-3** — `GET /machines/:id` for a machine owned by someone else returns `404`, not `403`.
 - [ ] **AC-4** — `POST /machines/:id/ping` for someone else's machine returns `404` and sends nothing over that machine's socket.
-- [ ] **AC-5** — `machines.user_id` is `not null` with a foreign key to `users.id`; the database rejects an ownerless machine.
+- [x] **AC-5** — `machines.user_id` is `not null` with a foreign key to `users.id`; the database rejects an ownerless machine.
 
 **Enrollment still works**
 
-- [ ] **AC-6** — `POST /enroll` is unchanged and unauthenticated: the enrollment token already implies the owner.
+- [x] **AC-6** — `POST /enroll` is unchanged and unauthenticated: the enrollment token already implies the owner.
 - [ ] **AC-7** — A machine enrolled with a token issued by user A belongs to user A, and appears in no other account.
 
 **The live channel**
@@ -36,7 +36,7 @@ lists, and neither can reach the other's machine by guessing its id.
 
 **Migration**
 
-- [ ] **AC-11** — The migration leaves no ownerless rows: pre-existing machines are removed.
+- [x] **AC-11** — The migration leaves no ownerless rows: pre-existing machines are removed.
 - [ ] **AC-12** — Deleting a user removes their machines by cascade, and any live socket for those machines is terminated rather than left orphaned in the registry.
 
 ## Architecture
@@ -153,4 +153,43 @@ Proof: AC-10 — an agent connecting for account A produces no frames at all in 
 
 ## Decisions taken
 
-_(populated during the build)_
+- **`userId` is part of `MachineSchema`, so the owner travels with the row.** Every announce site
+  needs to name an account, and the only way to make that impossible to get wrong is for the thing
+  being announced to carry it. The id reaches the browser in its own machines, which is not a
+  disclosure — it is the recipient's own id.
+- **`authenticateAgent` returns `{ machineId, userId }`.** A `machine.pong` frame has to be routed to
+  an owner, and the only alternatives were a database read on every latency measurement or a second
+  lookup table. The agent already authenticated against the row; carrying the owner out of that check
+  costs one extra column in a query that was already running.
+- **`handleMessage` branches on `pong` first.** `hello` and `preflight` then share one write and one
+  eviction check, so the "row is gone, drop the socket" rule exists in a single place instead of
+  being repeated per message type and forgotten on the next one added.
+- **A repo write that returns no row means the machine was deleted, and evicts the socket.** There is
+  no notification when Supabase deletes an account and the cascade takes its machines, so the absent
+  row is the only signal available. Without it the socket stays registered and the machine is counted
+  as connected while being unreachable (AC-12). Plan 004 does the deliberate version.
+- **`removeUiSocket` deletes a user's entry once its set is empty.** Otherwise the map keeps one empty
+  `Set` per account that has ever opened a tab, for the life of the process.
+- **The delete runs inside migration `0002`, before the `NOT NULL`.** Not as a separate script: a
+  migration that only works if somebody remembers to run something first is a migration that fails on
+  the next environment.
+
+## Verification
+
+Proved against the database: AC-5 — `user_id` is `NOT NULL` with `ON DELETE CASCADE` to `users.id`
+and an index; a direct insert with no `user_id` is rejected `23502`, one with an unknown `user_id`
+`23503`. AC-11 — the 16 pre-existing rows are gone, `count(*) = 0`. AC-6 — `POST /enroll` still
+answers unauthenticated (`400` validation, not `401`) while `/machines` still requires a token.
+
+Unit tests cover the fan-out directly: a broadcast reaches only the named account's sockets, reaches
+every tab that account has open, skips a socket that is not open, stops at a removed socket, and does
+nothing for an account with none.
+
+AC-1 … AC-4, AC-7, AC-8 … AC-10 and AC-12 need the two-account browser pass, which is blocked with
+plan 002's remaining criteria.
+
+## Consequences of the migration
+
+The 16 deleted rows included 5 enrolled machines, one of them online at the time. Their machine keys
+now authenticate against nothing, so those agents will take `401` on every reconnect. The VPS box
+from plan 001 has to be re-enrolled from a signed-in browser before it will reappear.

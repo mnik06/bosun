@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const MachineStatusSchema = z.enum(['pending', 'online', 'offline'])
+export const MachineStatusSchema = z.enum(['pending', 'online', 'offline', 'paused'])
 
 export type MachineStatus = z.infer<typeof MachineStatusSchema>
 

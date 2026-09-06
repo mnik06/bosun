@@ -10,13 +10,17 @@ import websocket from '@fastify/websocket';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import { errorHandler } from 'src/api/errors/error.handler';
 import { getLoggerOptions } from 'src/api/plugins/logger.plugin';
+import { getRequireUserHook } from 'src/api/plugins/auth.plugin';
+import { getSupabaseAuth } from 'src/services/auth/supabase-auth.service';
 import { getDb } from 'src/services/drizzle/drizzle.service';
 import { getRepos } from 'src/repos/index';
+import { parseCommaList } from 'src/utils/general';
 
 function registerCorePlugins(server: FastifyInstance): void {
 	server.register(helmet);
 	server.register(compress, { global: true, encodings: ['br', 'gzip'], threshold: 1024 });
 	server.register(cors, {
+		origin: parseCommaList(process.env.CORS_ORIGINS!),
 		methods: ['GET', 'HEAD', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS']
 	});
 	server.register(websocket);
@@ -27,9 +31,15 @@ function decorateContext(server: FastifyInstance): void {
 		databaseUrl: process.env.DATABASE_URL!,
 		logsEnabled: process.env.NODE_ENV === 'local'
 	});
+	const repos = getRepos(db);
+	const supabaseAuth = getSupabaseAuth({
+		url: process.env.SUPABASE_URL!,
+		publishableKey: process.env.SUPABASE_PUBLISHABLE_KEY!
+	});
 
 	server.decorate('db', db);
-	server.decorate('repos', getRepos(db));
+	server.decorate('repos', repos);
+	server.decorate('requireUser', getRequireUserHook({ supabaseAuth, userRepo: repos.userRepo }));
 }
 
 function registerRoutes(server: FastifyInstance): void {

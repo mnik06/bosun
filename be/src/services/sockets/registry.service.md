@@ -1,8 +1,29 @@
 # The socket registry
 
-Two collections held in module state: one `Map<machineId, WebSocket>` for agents, one `Set` for
-browsers. "Send a command to a machine" is a lookup in that map followed by `.send()` on a socket the
-machine itself opened. Nothing here dials outward.
+Two collections held in module state: one `Map<machineId, WebSocket>` for agents, one
+`Map<userId, Set<WebSocket>>` for browsers. "Send a command to a machine" is a lookup in the agent
+map followed by `.send()` on a socket the machine itself opened. Nothing here dials outward.
+
+## Why the browser side is keyed by user, not a flat set
+
+Every browser socket used to sit in one `Set` and receive every event. That is invisible with one
+account and a data leak with two: a `machine.updated` frame carries the whole machine row, so one
+account's machine names, repo paths and agent versions would land on another account's screen.
+
+The fix is not a filter at the point of send. A filter is a check, and a check can be forgotten by
+the next call site added six months from now. Keying the collection by owner makes the wrong thing
+hard to express: `broadcastToUi` cannot reach a socket without naming the account it belongs to, and
+the caller cannot name one without knowing who owns the machine it is announcing. That is why the
+announce helpers take the whole machine row rather than just its id — the row is where the owner is.
+
+The owner comes from the ticket presented at connect, which was issued to an authenticated bearer
+request, so it is never taken from anything the socket itself says.
+
+**Invariant:** `removeUiSocket` deletes the user's entry once its set is empty. Otherwise the map
+retains one empty `Set` per account that has ever opened a tab, for the life of the process.
+
+The agent map is untouched by any of this. It is keyed by machine id, which is already unique per
+owner, and agents have no notion of users.
 
 ## Why it can be in-memory
 
@@ -49,3 +70,11 @@ unconditional delete would drop the live connection and mark a connected machine
 - **Ping returns 409 for an online machine.** The row says online but the map has no socket — the
   disconnect path failed to write. The map is the truth for reachability; the row is a projection of
   it.
+- **A ping reaches a machine that was just deleted.** It cannot: `deleteMachine` unregisters the
+  socket before closing it, rather than waiting for the close event, so the entry is gone by the time
+  the delete returns. Relying on the close event would leave a window in which the row does not exist
+  and the socket still does.
+- **A machine is registered but its row is gone.** Deleting an account cascades to its machines while
+  their agent sockets are still open, leaving a connection that is authenticated against a row that
+  no longer exists. The agent route evicts it: any repo write that comes back with no row means the
+  machine has been deleted, and the socket is terminated rather than left counted as connected.

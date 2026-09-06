@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const MachineStatusSchema = z.enum(['pending', 'online', 'offline']);
+export const MachineStatusSchema = z.enum(['pending', 'online', 'offline', 'paused']);
 
 export type MachineStatus = z.infer<typeof MachineStatusSchema>;
 
@@ -14,6 +14,7 @@ export type PreflightCheck = z.infer<typeof PreflightCheckSchema>;
 
 export const MachineSchema = z.object({
 	id: z.string(),
+	userId: z.string(),
 	name: z.string(),
 	status: MachineStatusSchema,
 	lastSeenAt: z.date().nullable(),

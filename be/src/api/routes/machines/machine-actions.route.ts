@@ -1,0 +1,79 @@
+import { FastifyPluginAsync } from 'fastify';
+import { ZodTypeProvider } from 'fastify-type-provider-zod';
+import { MachineIdParamsSchema } from 'src/api/routes/schemas/machines/MachineIdParamsSchema';
+import { PingMachineRespSchema } from 'src/api/routes/schemas/machines/PingMachineRespSchema';
+import { RefreshMachineRespSchema } from 'src/api/routes/schemas/machines/RefreshMachineRespSchema';
+import { getMachine } from 'src/controllers/machines/get-machine';
+import { pingMachine } from 'src/controllers/machines/ping-machine';
+import { refreshMachine } from 'src/controllers/machines/refresh-machine';
+import { setMachinePaused } from 'src/controllers/machines/set-machine-paused';
+import { MachineSchema } from 'src/types/MachineSchema';
+
+const routes: FastifyPluginAsync = async function (f) {
+	const fastify = f.withTypeProvider<ZodTypeProvider>();
+
+	fastify.post(
+		'/:id/ping',
+		{
+			schema: {
+				params: MachineIdParamsSchema,
+				response: { 202: PingMachineRespSchema }
+			}
+		},
+		async (req, reply) => {
+			const machine = await getMachine({
+				machineRepo: fastify.repos.machineRepo,
+				id: req.params.id,
+				userId: req.user!.id
+			});
+
+			return reply.status(202).send(pingMachine({ machine }));
+		}
+	);
+
+	fastify.post(
+		'/:id/refresh',
+		{
+			schema: {
+				params: MachineIdParamsSchema,
+				response: { 202: RefreshMachineRespSchema }
+			}
+		},
+		async (req, reply) => {
+			const machine = await getMachine({
+				machineRepo: fastify.repos.machineRepo,
+				id: req.params.id,
+				userId: req.user!.id
+			});
+
+			refreshMachine({ machine });
+
+			return reply.status(202).send({ status: 'requested' as const });
+		}
+	);
+
+	for (const [path, paused] of [
+		['/:id/pause', true],
+		['/:id/resume', false]
+	] as const) {
+		fastify.post(
+			path,
+			{
+				schema: {
+					params: MachineIdParamsSchema,
+					response: { 200: MachineSchema }
+				}
+			},
+			async (req) => {
+				return setMachinePaused({
+					machineRepo: fastify.repos.machineRepo,
+					id: req.params.id,
+					userId: req.user!.id,
+					paused
+				});
+			}
+		);
+	}
+};
+
+export default routes;

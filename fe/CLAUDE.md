@@ -4,10 +4,15 @@ React Router v7 (framework mode, **SPA** — `ssr: false`, no server runtime), M
 TanStack Query v5, Mantine Form + Zod, axios. Architecture: capped Feature-Sliced Design, path alias
 `~/*` → `./app/*`. Dev server on **127.0.0.1:5373**.
 
-There is no client-side database and no client-side auth. Everything the UI shows comes from the
-bosun backend at `VITE_API_URL` (**127.0.0.1:1506** locally, and it must be `127.0.0.1`, not
-`localhost`), read over REST and — once plan 001 lands — pushed over a WebSocket that patches the
-React Query cache instead of polling.
+There is no client-side database. Everything the UI shows comes from the bosun backend at
+`VITE_API_URL` (**127.0.0.1:1506** locally, and it must be `127.0.0.1`, not `localhost`), read over
+REST and pushed over a WebSocket that patches the React Query cache instead of polling.
+
+Authentication is the one exception. `supabase-js` owns the whole session lifecycle — sign-up,
+sign-in, storage and silent refresh — and `app/shared/api/supabase.ts` is the only module allowed to
+touch it. Every REST call carries the access token via an axios request interceptor, and the
+WebSocket is opened with a single-use ticket fetched over REST. Nothing else reads or writes a token,
+and supabase-js is never used for data.
 
 ## Architecture — where code goes
 

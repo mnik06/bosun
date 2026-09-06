@@ -89,7 +89,10 @@ After=network-online.target
 
 [Service]
 ExecStart=$BIN run
-Restart=always
+# on-failure, not always: deleting a machine in bosun makes the agent disable
+# this unit and exit 0, and Restart=always would fight that and restart-loop it
+# against a 401 forever. A crash still restarts.
+Restart=on-failure
 RestartSec=5
 
 [Install]

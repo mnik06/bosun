@@ -6,6 +6,7 @@ const TOKEN_TTL_MS = 15 * 60 * 1000;
 
 export async function createMachine(opts: {
 	machineRepo: MachineRepo;
+	userId: string;
 	name: string;
 	serverUrl: string;
 }) {
@@ -13,6 +14,7 @@ export async function createMachine(opts: {
 	const tokenExpiresAt = new Date(Date.now() + TOKEN_TTL_MS);
 	const machine = await opts.machineRepo.create({
 		id: createMachineId(),
+		userId: opts.userId,
 		name: opts.name,
 		enrollmentToken: token,
 		tokenExpiresAt

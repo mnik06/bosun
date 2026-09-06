@@ -1,7 +1,15 @@
 import crypto from 'crypto';
 
+function randomToken(bytes: number): string {
+	return crypto.randomBytes(bytes).toString('base64url');
+}
+
 export function generateEnrollmentToken(): string {
-	return crypto.randomBytes(24).toString('base64url');
+	return randomToken(24);
+}
+
+export function generateUiTicket(): string {
+	return randomToken(18);
 }
 
 export function generateMachineKey(): string {

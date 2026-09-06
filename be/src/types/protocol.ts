@@ -32,7 +32,26 @@ export const PingMsgSchema = z.object({
 	id: z.string()
 });
 
-export type PingMsg = z.infer<typeof PingMsgSchema>;
+export const RefreshMsgSchema = z.object({ type: z.literal('refresh') });
+
+export const PauseMsgSchema = z.object({ type: z.literal('pause') });
+
+export const ResumeMsgSchema = z.object({ type: z.literal('resume') });
+
+export const ShutdownMsgSchema = z.object({
+	type: z.literal('shutdown'),
+	reason: z.string()
+});
+
+export const ServerMsgSchema = z.discriminatedUnion('type', [
+	PingMsgSchema,
+	RefreshMsgSchema,
+	PauseMsgSchema,
+	ResumeMsgSchema,
+	ShutdownMsgSchema
+]);
+
+export type ServerMsg = z.infer<typeof ServerMsgSchema>;
 
 export const MachineUpdatedMsgSchema = z.object({
 	type: z.literal('machine.updated'),
@@ -46,9 +65,15 @@ export const MachinePongMsgSchema = z.object({
 	rttMs: z.number()
 });
 
+export const MachineDeletedMsgSchema = z.object({
+	type: z.literal('machine.deleted'),
+	machineId: z.string()
+});
+
 export const UiMsgSchema = z.discriminatedUnion('type', [
 	MachineUpdatedMsgSchema,
-	MachinePongMsgSchema
+	MachinePongMsgSchema,
+	MachineDeletedMsgSchema
 ]);
 
 export type UiMsg = z.infer<typeof UiMsgSchema>;

@@ -1,19 +1,23 @@
 import { HttpError } from 'src/api/errors/HttpError';
 import { createCommandId } from 'src/services/ids/id.service';
 import { recordPing } from 'src/services/sockets/pending-pings.service';
-import { getAgentSocket } from 'src/services/sockets/registry.service';
+import { sendToAgent } from 'src/services/sockets/registry.service';
+import { type Machine } from 'src/types/MachineSchema';
 
-export function pingMachine(opts: { id: string }): { commandId: string } {
-	const socket = getAgentSocket(opts.id);
-
-	if (!socket || socket.readyState !== socket.OPEN) {
-		throw new HttpError(409, 'machine offline');
+export function pingMachine(opts: { machine: Machine }): { commandId: string } {
+	// Checked before reachability: a paused machine may well be connected, and
+	// "machine offline" would send the operator looking at the wrong thing.
+	if (opts.machine.status === 'paused') {
+		throw new HttpError(409, 'machine paused');
 	}
 
 	const commandId = createCommandId();
 
-	recordPing({ commandId, machineId: opts.id, sentAt: Date.now() });
-	socket.send(JSON.stringify({ type: 'ping', id: commandId }));
+	recordPing({ commandId, machineId: opts.machine.id, sentAt: Date.now() });
+
+	if (!sendToAgent({ machineId: opts.machine.id, message: { type: 'ping', id: commandId } })) {
+		throw new HttpError(409, 'machine offline');
+	}
 
 	return { commandId };
 }

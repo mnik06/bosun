@@ -49,7 +49,9 @@ program
 	.description('Hold an outbound connection to the bosun backend')
 	.option('--config <path>', 'path to the agent config', defaultConfigPath())
 	.action(async (opts: { config: string }) => {
-		await run(readConfig(path.resolve(opts.config)));
+		const configPath = path.resolve(opts.config);
+
+		await run({ config: readConfig(configPath), configPath });
 	});
 
 program.parseAsync(process.argv).catch((error: unknown) => {

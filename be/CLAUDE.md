@@ -5,9 +5,14 @@ remote machines connect back to. It owns all business logic, validates every req
 the HTTP boundary, and holds the only connection to Postgres (Drizzle ORM). File-based routing via
 `@fastify/autoload`; Zod everywhere for validation and type inference.
 
-Nothing but this service talks to the database. `fe/` reaches it over REST; the `agent/` daemon (not
-built yet — see `../plans/001-machine-connection-prototype.md`) will reach it over an outbound
-WebSocket that it dials and the BE never initiates.
+Nothing but this service talks to the database. `fe/` reaches it over REST; the `agent/` daemon
+reaches it over an outbound WebSocket that it dials and the BE never initiates.
+
+Identity is **not** ours: there is no login endpoint, no password column and no session table.
+Supabase Auth issues the tokens, and `fastify.requireUser` resolves each one by asking Supabase who
+it belongs to before provisioning our `users` row. `/enroll`, `/agent/ws`, `/install.sh` and
+`/health` stay unauthenticated by design — they are the agent's and the installer's surface. See
+`src/services/auth/supabase-auth.service.md`.
 
 ## Tech Stack
 
@@ -165,6 +170,23 @@ are never switched off for production code, size rules (Tier 2) are exemptible p
 are granted exactly two ways — a glob in `eslint.config.mjs` with the reason stated, or a one-off
 `// eslint-disable-next-line <rule> -- <reason>`. Silencing a Tier 1 rule instead of refactoring is
 not one of them.
+
+## Deployment
+
+`pnpm deploy` (`scripts/deploy.sh`) is the only supported way to ship the backend. Never
+`fly deploy` by hand: the script enforces two things that are invariants rather than preferences.
+
+- **Every variable `EnvSchema` requires must exist on Fly** before the image is built, as a `[env]`
+  entry in `fly.toml` or a secret. The list is derived from the schema at run time, so a new env var
+  is caught by the next deploy instead of crash-looping the app. Adding one therefore means
+  `EnvSchema.ts`, `.env.example`, **and** `fly secrets set`
+- **`--ha=false`.** The agent and browser socket registries live in process memory. A second machine
+  splits them, and a machine ends up online on one instance and unreachable on the other. See
+  `src/services/sockets/registry.service.md`
+
+Migrations are applied from your machine before the deploy, using the `DATABASE_URL` in your local
+`.env` — the script prints which database that is and asks, because nothing else can tell whether it
+is the one Fly points at.
 
 ## Testing
 

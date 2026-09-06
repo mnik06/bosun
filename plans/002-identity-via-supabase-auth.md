@@ -27,11 +27,11 @@ every request the browser makes carries a token the backend resolves to a user b
 
 **The backend's view**
 
-- [ ] **AC-6** — A request with no `Authorization` header to any `/machines` route returns `401`.
-- [ ] **AC-7** — A token with a valid shape but a bad signature returns `401`.
+- [x] **AC-6** — A request with no `Authorization` header to any `/machines` route returns `401`.
+- [x] **AC-7** — A token with a valid shape but a bad signature returns `401`.
 - [ ] **AC-8** — An expired token returns `401`; the browser refreshes it through `supabase-js` and the retried request succeeds without the user noticing.
 - [ ] **AC-9** — A token belonging to a user deleted in Supabase is rejected immediately, without waiting for the token to expire.
-- [ ] **AC-10** — When Supabase Auth is unreachable, protected routes fail with `503` and a clear message rather than admitting the request or hanging indefinitely.
+- [x] **AC-10** — When Supabase Auth is unreachable, protected routes fail with `503` and a clear message rather than admitting the request or hanging indefinitely.
 
 **Our user row**
 
@@ -41,8 +41,8 @@ every request the browser makes carries a token the backend resolves to a user b
 
 **Transport**
 
-- [ ] **AC-14** — CORS is an explicit origin allowlist; a request from an unlisted origin is refused.
-- [ ] **AC-15** — `/ui/ws` is authenticated by a single-use, short-lived ticket obtained over HTTPS, and a connection without one is rejected.
+- [x] **AC-14** — CORS is an explicit origin allowlist; a request from an unlisted origin is refused.
+- [x] **AC-15** — `/ui/ws` is authenticated by a single-use, short-lived ticket obtained over HTTPS, and a connection without one is rejected.
 
 ## Architecture
 
@@ -156,14 +156,14 @@ the installer's surface, and they authenticate with the machine key or nothing a
 - **Blocked by:** plan 001.
 - Supabase Auth enabled on the existing project, with email/password sign-in on.
 - The project URL and anon key, as `SUPABASE_URL` / `SUPABASE_ANON_KEY` on the BE and
-  `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` on the FE. Both are public values and the anon key
+  `VITE_SUPABASE_URL` / `VITE_PUBLISHABLE_KEY` on the FE. Both are public values and the anon key
   is safe in the frontend bundle.
 
 ## Slices
 
 - [ ] **Phase 1: Sign in and out** — AC-1 … AC-5
 - [ ] **Phase 2: The backend trusts the token** — AC-6 … AC-13
-- [ ] **Phase 3: Lock the transport** — AC-14, AC-15
+- [x] **Phase 3: Lock the transport** — AC-14, AC-15
 
 ### Phase 1 — Sign in and out
 
@@ -214,4 +214,55 @@ unlisted origin is blocked.
 
 ## Decisions taken
 
-_(populated during the build)_
+- **The failure taxonomy is an allowlist, not a denylist.** `resolveToken` returns `rejected` only for
+  the HTTP statuses on which Supabase actually adjudicated the token (400/401/403/404/422). Every
+  other outcome — a 5xx, a 429, DNS failure, an aborted socket, a throw from inside `supabase-js` —
+  falls through to `unavailable` and becomes a `503`. Written the other way round, a future edit that
+  adds an unhandled case would default it to "your token is bad" and misreport our own outages as the
+  caller's fault. Rationale in `be/src/services/auth/supabase-auth.service.md`.
+- **A 5s fetch timeout on the `getUser` call.** Neither `supabase-js` nor Node's `fetch` imposes a
+  deadline, so an auth service that accepts the connection and then stalls would park every request
+  behind it. AC-10 asks for "not hanging indefinitely", and only an explicit `AbortSignal.timeout`
+  delivers that.
+- **`errorHandler` no longer collapses a deliberate 5xx.** It used to rewrite every `>= 500` to
+  `Internal server error`, which would have swallowed AC-10's message. It now preserves the message of
+  an explicitly thrown `HttpError` at any status and collapses only unplanned 5xx — a message we wrote
+  ourselves cannot leak internals, and the client needs it to tell "retry later" from "you are wrong".
+- **JIT provisioning is a single `insert … on conflict (sub_id) do update`, not read-then-write.** The
+  concurrency requirement in AC-11 is then Postgres's problem rather than ours, and `do update` (not
+  `do nothing`) is what makes a losing race still receive the winner's row.
+- **The session provider subscribes to `onAuthStateChange` and never calls `getSession` itself.**
+  `supabase-js` emits `INITIAL_SESSION` once it has read storage, so a separate initial read would
+  only add a race against the first real event.
+- **The socket provider lives inside the authenticated layout, not at the root.** `POST /ui/ticket`
+  requires a bearer token, so mounting it above the session would leave the login screen in a
+  permanent retry loop of 401s.
+- **A fresh ticket per connection attempt.** Single-use means a reconnect cannot replay the previous
+  ticket, so `open()` fetches one on the first attempt and on every retry, and a failed ticket request
+  is handled identically to a failed connection.
+- **The ticket store is process-local, and that is a documented scaling limit.** It is correct while
+  the backend is one instance and breaks silently past that; recorded in
+  `be/src/services/tickets/ticket.service.md` so it surfaces as a design limit rather than an
+  intermittent network fault.
+- **The key is named for what Supabase calls it now, and the wrong one is refused at boot.** Supabase
+  renamed `anon` to *publishable* and `service_role` to *secret*, so the env vars are
+  `SUPABASE_PUBLISHABLE_KEY` / `VITE_SUPABASE_PUBLISHABLE_KEY`. `EnvSchema` rejects a value starting
+  `sb_secret_`: the plan's "anon key, not service role" decision is worth nothing if a paste can
+  silently undo it. The guard cannot catch a legacy pair — both are JWTs and are indistinguishable by
+  shape.
+- **The local CORS allowlist carries both `127.0.0.1:5373` and `localhost:5373`.** They are distinct
+  origins to a browser, and an allowlist that holds only one turns whichever the developer happens to
+  type into a CORS failure with no server-side error to read.
+- **Signup treats a missing session as "already registered".** Supabase deliberately does not error on
+  a taken address — that would allow account enumeration — so the absent session is the only signal
+  available for AC-3.
+
+## Verification
+
+Proved against a running backend: AC-6, AC-7, AC-10, AC-14, AC-15, plus `/health`, `/install.sh` and
+`/enroll` still answering unauthenticated. Unit tests cover the `resolveToken` failure taxonomy
+(including 5xx and 429 landing on `unavailable`), the ticket single-use and expiry invariants, and the
+`resolveRequestUser` mapping onto 401/503.
+
+The remaining criteria — AC-1 … AC-5, AC-8, AC-9, AC-11, AC-12, AC-13 — need a browser against the
+real project and are blocked on `SUPABASE_ANON_KEY` being filled into `be/.env` and `fe/.env`.

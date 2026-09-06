@@ -1,14 +1,13 @@
 import crypto from 'crypto';
 import { type MachineRepo } from 'src/repos/machines/machine.repo';
 import { hashMachineKey } from 'src/services/keys/key.service';
+import { readBearerToken } from 'src/utils/general';
 
 export async function authenticateAgent(opts: {
 	machineRepo: MachineRepo;
 	authorization?: string;
-}): Promise<string | null> {
-	const key = opts.authorization?.startsWith('Bearer ')
-		? opts.authorization.slice('Bearer '.length)
-		: null;
+}): Promise<{ machineId: string; userId: string } | null> {
+	const key = readBearerToken(opts.authorization);
 
 	if (!key) {
 		return null;
@@ -26,5 +25,5 @@ export async function authenticateAgent(opts: {
 		Buffer.from(auth.machineKeyHash, 'hex')
 	);
 
-	return matches ? auth.id : null;
+	return matches ? { machineId: auth.id, userId: auth.userId } : null;
 }

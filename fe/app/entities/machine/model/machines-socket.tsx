@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import { machineKeys } from '~/entities/machine/api/machine.queries'
 import type { Machine } from '~/entities/machine/model/machine'
 import { UiMsgSchema } from '~/entities/machine/model/ui-message'
-import { apiWsUrl } from '~/shared/api'
+import { apiWsUrl, fetchUiTicket } from '~/shared/api'
 
 const MAX_RECONNECT_DELAY_MS = 15_000
 
@@ -17,6 +17,13 @@ const PongContext = createContext<Record<string, PongResult>>({})
 
 export function useLastPong (machineId: string): PongResult | null {
 	return useContext(PongContext)[machineId] ?? null
+}
+
+function dropMachine (queryClient: QueryClient, machineId: string): void {
+	queryClient.removeQueries({ queryKey: machineKeys.detail(machineId) })
+	queryClient.setQueryData<Machine[]>(machineKeys.list(), (previous) =>
+		previous?.filter((entry) => entry.id !== machineId)
+	)
 }
 
 function patchMachine (queryClient: QueryClient, machine: Machine): void {
@@ -49,13 +56,36 @@ export function MachinesSocketProvider ({ children }: { children: ReactNode }) {
 				return
 			}
 
+			if (parsed.data.type === 'machine.deleted') {
+				dropMachine(queryClient, parsed.data.machineId)
+
+				return
+			}
+
 			const { machineId, rttMs } = parsed.data
 
 			setPongs((previous) => ({ ...previous, [machineId]: { rttMs, at: Date.now() } }))
 		}
 
-		const connect = () => {
-			socket = new WebSocket(apiWsUrl('/ui/ws'))
+		function scheduleReconnect () {
+			if (disposed) {
+				return
+			}
+
+			timer = setTimeout(connect, Math.min(1000 * 2 ** attempt, MAX_RECONNECT_DELAY_MS))
+			attempt += 1
+		}
+
+		// A ticket is single-use and lives for seconds, so every attempt — the first
+		// and every reconnect — has to buy a fresh one over HTTPS before dialling.
+		async function open () {
+			const ticket = await fetchUiTicket()
+
+			if (disposed) {
+				return
+			}
+
+			socket = new WebSocket(apiWsUrl(`/ui/ws?ticket=${encodeURIComponent(ticket)}`))
 
 			socket.onopen = () => {
 				attempt = 0
@@ -69,14 +99,11 @@ export function MachinesSocketProvider ({ children }: { children: ReactNode }) {
 				}
 			}
 
-			socket.onclose = () => {
-				if (disposed) {
-					return
-				}
+			socket.onclose = scheduleReconnect
+		}
 
-				timer = setTimeout(connect, Math.min(1000 * 2 ** attempt, MAX_RECONNECT_DELAY_MS))
-				attempt += 1
-			}
+		function connect () {
+			open().catch(scheduleReconnect)
 		}
 
 		connect()
