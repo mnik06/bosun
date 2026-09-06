@@ -7,14 +7,13 @@ _Bosun plan #002 · depends on 001_
 Email-and-password signup and login, with **Supabase Auth as the identity provider**. Bosun never
 sees a password, never issues a token and never stores a session. The browser talks to Supabase for
 authentication and to the BE for everything else, presenting the Supabase access token as a bearer
-credential the BE verifies offline against Supabase's public keys.
+credential the BE hands back to Supabase to resolve into a user.
 
 Our database keeps a `users` row per person, joined to Supabase's `auth.users` by `sub_id`. That row
 is what the rest of the product references — plan 003 hangs machines off it.
 
 **Success in one sentence:** you sign up with an email and password, land on the machines page, and
-every request the browser makes carries a token the backend verifies locally without calling
-Supabase at all.
+every request the browser makes carries a token the backend resolves to a user before it will answer.
 
 ## Acceptance criteria
 
@@ -31,8 +30,8 @@ Supabase at all.
 - [ ] **AC-6** — A request with no `Authorization` header to any `/machines` route returns `401`.
 - [ ] **AC-7** — A token with a valid shape but a bad signature returns `401`.
 - [ ] **AC-8** — An expired token returns `401`; the browser refreshes it through `supabase-js` and the retried request succeeds without the user noticing.
-- [ ] **AC-9** — Verification is local: after the first request, serving an authenticated request makes no outbound call to Supabase.
-- [ ] **AC-10** — A token signed with a key absent from the cached JWKS causes exactly one refetch of the key set, not one per request.
+- [ ] **AC-9** — A token belonging to a user deleted in Supabase is rejected immediately, without waiting for the token to expire.
+- [ ] **AC-10** — When Supabase Auth is unreachable, protected routes fail with `503` and a clear message rather than admitting the request or hanging indefinitely.
 
 **Our user row**
 
@@ -54,11 +53,18 @@ and silent refresh before expiry. The BE has no login endpoint, no password colu
 table, because it is not the identity provider.
 
 On every request the browser attaches the current access token as `Authorization: Bearer <jwt>`. The
-BE verifies it **offline** against the JSON Web Key Set published at
-`${SUPABASE_URL}/auth/v1/.well-known/jwks.json`, using Supabase's asymmetric signing keys. The key
-set is fetched once and cached; a token referencing an unknown `kid` triggers a single refetch, which
-is how key rotation is absorbed without downtime. Calling `/auth/v1/user` per request would work and
-is what HS256 projects must do, but it puts a network round-trip in front of every API call.
+BE resolves it with `supabase.auth.getUser(jwt)`, which asks Supabase Auth who the token belongs to.
+
+This is deliberately **not** local signature verification. Checking a signature proves only that the
+token was issued and has not expired — a user deleted or banned five minutes ago still presents a
+perfectly valid token until it lapses. Asking Supabase is authoritative about the account as it
+exists right now, and it works regardless of whether the project signs with a shared secret or
+asymmetric keys.
+
+The price is a network round-trip on every authenticated request, which makes Supabase Auth's
+availability part of ours. A short-lived cache keyed by the token would remove most of those calls
+at the cost of delaying revocation by its TTL; it is not in this plan, and the tradeoff should be
+made against a real latency measurement rather than in advance.
 
 The verified `sub` claim is the Supabase user id. `users` is provisioned **just in time**: the first
 authenticated request from an unknown `sub` inserts the row. The alternative — a trigger on
@@ -108,8 +114,9 @@ the installer's surface, and they authenticate with the machine key or nothing a
 
 ### New libs
 
-- `jose` (BE) — JWKS fetching, caching and JWT verification
-- `@supabase/supabase-js` (FE) — auth only; the BE still talks to Postgres through Drizzle
+- `@supabase/supabase-js` (BE) — `auth.getUser` only, built with the **anon** key; the BE still
+  reaches Postgres through Drizzle and never uses supabase-js for data
+- `@supabase/supabase-js` (FE) — auth only
 
 ## Key decisions
 
@@ -117,8 +124,13 @@ the installer's surface, and they authenticate with the machine key or nothing a
   the entire credential-handling surface — reset flows, rate limiting, breach response — is not ours.
   This amends plan 001's "supabase-js is not used at all": it is now used in the browser, for auth,
   and nowhere else.
-- **Offline JWT verification against the JWKS, not `/auth/v1/user`.** A network call per request
-  would make Supabase's availability our availability and add latency to every route.
+- **`auth.getUser(jwt)`, not local signature verification.** Authoritative about the account's
+  current state, so a deleted or banned user loses access immediately instead of at token expiry. It
+  also removes any dependency on which signing algorithm the project uses. The cost — a round-trip
+  per request, and Supabase Auth being in our availability path — is accepted knowingly, and is the
+  reason AC-10 pins down what happens when that call fails.
+- **The BE builds its Supabase client with the anon key.** `getUser` needs nothing more. A service
+  role key would grant the backend blanket authority over the auth schema for no benefit.
 - **Just-in-time provisioning of `users`, not a database trigger.** A trigger that fails blocks
   signup; a JIT insert that fails fails one request.
 - **Bearer token, not a cookie.** `supabase-js` already manages and refreshes the token, and a bearer
@@ -143,10 +155,9 @@ the installer's surface, and they authenticate with the machine key or nothing a
 
 - **Blocked by:** plan 001.
 - Supabase Auth enabled on the existing project, with email/password sign-in on.
-- The project's JWKS URL and anon key. Both are public values; the anon key is safe in the frontend
-  bundle.
-- Confirmation that the project uses asymmetric signing keys. A legacy HS256 project must be migrated
-  first, or AC-9 cannot hold.
+- The project URL and anon key, as `SUPABASE_URL` / `SUPABASE_ANON_KEY` on the BE and
+  `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` on the FE. Both are public values and the anon key
+  is safe in the frontend bundle.
 
 ## Slices
 
@@ -167,12 +178,14 @@ Proof: sign up, reload, still signed in; log out, reload, redirected to `/login`
 
 ### Phase 2 — The backend trusts the token
 
-- `be/` — `services/auth/jwt.service.ts`: JWKS cache, verification, single refetch on unknown `kid`
+- `be/` — `services/auth/supabase-auth.service.ts`: the anon-key client, `getUser`, and mapping its
+  failure modes onto `401` versus `503`
 - `be/` — `users` schema, repo, JIT provisioning controller
 - `be/` — an auth hook that verifies the token, provisions the user and decorates `request.user`
 - `be/` — the hook applied to `/machines` and `/me`; `/enroll`, `/agent/ws`, `/install.sh`,
   `/health` explicitly excluded
-- `be/src/services/auth/jwt.service.md` — the verification and rotation story
+- `be/src/services/auth/supabase-auth.service.md` — why resolution is remote, and what happens when
+  Supabase is down
 
 Proof: a request with no token gets 401; with a tampered token, 401; with a valid one, `/me` returns
 a row that exists exactly once after ten concurrent first requests.
@@ -190,10 +203,12 @@ unlisted origin is blocked.
 - **The `auth.users` foreign key couples our migrations to Supabase's schema.** It is the documented
   pattern and buys cascade deletes, but it means our database cannot be restored independently of
   theirs. Referencing only the primary key is what keeps this tolerable.
-- **HS256 projects cannot verify offline.** If the project still uses the legacy shared secret,
-  AC-9 is unreachable without migrating to asymmetric keys first.
-- **Clock skew rejects valid tokens.** `exp` and `iat` are checked against the BE's clock; a machine
-  with a drifting clock produces authentication failures that look like expiry bugs.
+- **Supabase Auth is now in the request path.** An outage there takes every authenticated route with
+  it, and its latency is added to each one. This is the accepted cost of authoritative resolution;
+  the mitigation, if it ever bites, is a short-TTL token cache that trades revocation speed for
+  independence.
+- **`getUser` failures must not fail open.** A network error resolving a token has to become a `503`,
+  never a pass. This is the single most dangerous line of code in the plan.
 - **Existing machine rows have no owner.** They are unreachable once plan 003 lands and must be dealt
   with in that migration, not this one.
 
