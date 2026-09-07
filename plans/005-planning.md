@@ -94,9 +94,10 @@ needs (`create_plan` must return the id `add_ac` then uses).
 
 Bosun owns its planning prompt and **inlines it as the session prompt**. Nothing is written to the
 user's repo and no skill is loaded from disk, so the prompt can never silently fail to load and leave
-a generic session nobody notices. The prompt is a generalized `plan-me`: it discovers whatever specs
-the repo has rather than assuming a path, judges design from the code already there rather than a
-named UI kit, and calls `bosun_ask` for every question.
+a generic session nobody notices. The prompt is a full port of the `plan-me` skill, generalized: it
+discovers whatever specification material the repo has rather than assuming a path, judges design
+from the code already there rather than a named UI kit, dispatches its own recon and unknowns-hunter
+subagents, and calls `bosun_ask` for every question.
 
 Streaming is not persisted verbatim. Text deltas are forwarded and dropped; the BE stores completed
 text blocks, questions and answers — enough to re-render a transcript, small enough that a 30-minute
@@ -260,11 +261,16 @@ call at one minute by default and returns `The operation timed out.` past it —
 - **Socket streams, HTTP writes.** A tool needs a response body; the socket has no request/response,
   and `pending-pings.service` is one-shot correlation.
 - **The prompt is inlined, not installed.** Writing into `.claude/skills/` would dirty the working
-  tree and trip the `git-clean` preflight.
+  tree and trip the `git-clean` preflight. It is a generalized port of `plan-me` — the grey-box
+  principle, the three grill rounds, the drivable-criteria pass and the unknowns hunter — with the
+  project-specific parts (a fixed spec path, a named UI kit, a design prototype, a standing-criteria
+  library) replaced by discovery, and the GitHub half replaced by bosun's own tools.
 - **A plan is tied to one machine.** A machine has exactly one `repoPath`, so machine ≈ repo today,
   and ACs only mean something against the checkout they were written from.
-- **Slices are cut without a confirmation gate**, unlike `plan-to-bullets`. The replacement is that
-  everything is editable afterwards.
+- **The plan is confirmed once before publishing, then everything is editable.** The prompt's last
+  `bosun_ask` summarises the title, the criteria count and the bullets it intends to cut, and offers
+  to publish or revise. That is one question, not the per-slice gate `plan-to-bullets` had; the
+  broader replacement for gating is still that every row can be edited afterwards.
 - **Unlimited concurrent sessions per machine.** No `busy` state. Revisit when execution lands, since
   a build run rewrites the checkout a concurrent recon is reading.
 - **The credential variable is not hardcoded.** The agent passes whichever of the supported variables

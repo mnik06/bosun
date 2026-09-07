@@ -10,6 +10,14 @@ The four modules split by responsibility: `process` owns the child, `stream` own
 `mcp` owns the tools it calls, `session` is the glue that wires those to the WebSocket. `prompt` is
 the text bosun sends as the session's first turn.
 
+`prompt.ts` is a generalized port of the `plan-me` skill, and it is inlined rather than installed
+into `.claude/skills/` — writing there would dirty the working tree and trip the `git-clean`
+preflight, and a skill that fails to load leaves a generic session nobody notices. Generalized means
+it names no path and no library: it discovers whatever specification material and component library
+the repository actually has, and does nothing when there is none. Every project-specific fixture in
+the original — a spec path, a named UI kit, a design prototype, a standing-criteria library, the
+GitHub and Jira halves — became either discovery or a bosun tool.
+
 ## Why the CLI and not the Agent SDK
 
 The CLI adds no npm dependency to a binary that is compiled with `bun build --compile`, and the same

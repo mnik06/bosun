@@ -138,6 +138,24 @@ async function checkClaudeCredential(): Promise<{
 	// The exit status is not the answer — the JSON is. `auth status` is read
 	// whenever it produced one, so a non-zero exit alongside a usable report is
 	// not turned into an unexplained failure.
+	// "Not logged in" under the service and "logged in" in a login shell is the
+	// normal case, not a strange one: `systemd --user` sources no shell rc and
+	// inherits nothing from an ssh session. Naming what the service can actually
+	// see is what turns that into a one-step fix instead of a bisect.
+	if (status.reported && !status.loggedIn) {
+		const credsPath = path.join(os.homedir(), '.claude', '.credentials.json');
+		const seen = fs.existsSync(credsPath) ? `${credsPath} present` : `${credsPath} missing`;
+
+		return {
+			check: {
+				name: 'claude-credential',
+				ok: false,
+				detail: `${status.detail} (service HOME=${os.homedir()}, ${seen})`
+			},
+			mode: null
+		};
+	}
+
 	if (!status.reported) {
 		return {
 			check: {
