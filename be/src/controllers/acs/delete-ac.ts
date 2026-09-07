@@ -4,11 +4,13 @@ import { announcePlanArtifact } from 'src/controllers/plans/shared/plan-broadcas
 import { type AcRepo } from 'src/repos/plans/ac.repo';
 import { type PlanRepo } from 'src/repos/plans/plan.repo';
 import { type SliceRepo } from 'src/repos/plans/slice.repo';
+import { type SocketRegistry } from 'src/services/sockets/registry.service';
 
 export async function deleteAc(opts: {
 	planRepo: PlanRepo;
 	acRepo: AcRepo;
 	sliceRepo: SliceRepo;
+	socketRegistry: SocketRegistry;
 	planId: string;
 	acId: string;
 	userId: string;
@@ -23,5 +25,10 @@ export async function deleteAc(opts: {
 		throw new HttpError(404, 'Acceptance criterion not found');
 	}
 
-	await announcePlanArtifact({ acRepo: opts.acRepo, sliceRepo: opts.sliceRepo, planId: plan.id });
+	await announcePlanArtifact({
+		socketRegistry: opts.socketRegistry,
+		acRepo: opts.acRepo,
+		sliceRepo: opts.sliceRepo,
+		planId: plan.id
+	});
 }

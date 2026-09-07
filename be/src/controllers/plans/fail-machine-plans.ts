@@ -1,6 +1,7 @@
 import { announcePlan } from 'src/controllers/plans/shared/plan-broadcast';
 import { type PlanRepo } from 'src/repos/plans/plan.repo';
-import { dropPlanText } from 'src/services/plans/plan-text.service';
+import { type PlanTextService } from 'src/services/plans/plan-text.service';
+import { type SocketRegistry } from 'src/services/sockets/registry.service';
 
 const REASON = 'the agent disconnected mid-session';
 
@@ -9,6 +10,8 @@ const REASON = 'the agent disconnected mid-session';
 // plan sits in `planning` forever with nothing on the other end to finish it.
 export async function failMachinePlans(opts: {
 	planRepo: PlanRepo;
+	planTextService: PlanTextService;
+	socketRegistry: SocketRegistry;
 	machineId: string;
 }): Promise<void> {
 	const running = await opts.planRepo.listPlanningOnMachine(opts.machineId);
@@ -23,7 +26,7 @@ export async function failMachinePlans(opts: {
 	});
 
 	for (const plan of failed) {
-		dropPlanText(plan.id);
-		announcePlan(plan);
+		opts.planTextService.drop(plan.id);
+		announcePlan({ socketRegistry: opts.socketRegistry, plan });
 	}
 }

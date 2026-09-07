@@ -32,6 +32,8 @@ const routes: FastifyPluginAsync = async function (f) {
 				planRepo: fastify.repos.planRepo,
 				planMessageRepo: fastify.repos.planMessageRepo,
 				machineRepo: fastify.repos.machineRepo,
+				idService: fastify.services.idService,
+				socketRegistry: fastify.services.socketRegistry,
 				userId: req.user!.id,
 				machineId: req.body.machineId,
 				input: req.body.input
@@ -77,6 +79,7 @@ const routes: FastifyPluginAsync = async function (f) {
 		async (req) => {
 			return updatePlan({
 				planRepo: fastify.repos.planRepo,
+				socketRegistry: fastify.services.socketRegistry,
 				id: req.params.id,
 				userId: req.user!.id,
 				...req.body
@@ -87,6 +90,8 @@ const routes: FastifyPluginAsync = async function (f) {
 	fastify.delete('/:id', { schema: { params: PlanIdParamsSchema } }, async (req, reply) => {
 		await discardPlan({
 			planRepo: fastify.repos.planRepo,
+			planTextService: fastify.services.planTextService,
+			socketRegistry: fastify.services.socketRegistry,
 			id: req.params.id,
 			userId: req.user!.id
 		});

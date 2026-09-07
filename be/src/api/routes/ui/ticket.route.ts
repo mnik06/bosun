@@ -1,7 +1,6 @@
 import { FastifyPluginAsync } from 'fastify';
 import { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { UiTicketRespSchema } from 'src/api/routes/schemas/ui/UiTicketRespSchema';
-import { issueTicket } from 'src/services/tickets/ticket.service';
 
 const routes: FastifyPluginAsync = async function (f) {
 	const fastify = f.withTypeProvider<ZodTypeProvider>();
@@ -16,7 +15,7 @@ const routes: FastifyPluginAsync = async function (f) {
 			}
 		},
 		async (req) => {
-			return issueTicket(req.user!.id);
+			return fastify.services.ticketService.issue(req.user!.id);
 		}
 	);
 };

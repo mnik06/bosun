@@ -1,14 +1,8 @@
 import { type WebSocket } from '@fastify/websocket';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { deleteMachine } from 'src/controllers/machines/delete-machine';
 import { type MachineRepo } from 'src/repos/machines/machine.repo';
-import {
-	addUiSocket,
-	registerAgentSocket,
-	removeUiSocket,
-	sendToAgent,
-	unregisterAgentSocket
-} from 'src/services/sockets/registry.service';
+import { getSocketRegistry } from 'src/services/sockets/registry.service';
 
 const OPEN = 1;
 
@@ -18,41 +12,32 @@ function fakeSocket() {
 }
 
 function build(deleted: boolean) {
+	const socketRegistry = getSocketRegistry();
 	const agent = fakeSocket();
 	const browser = fakeSocket();
 	const deleteOwned = vi.fn().mockResolvedValue(deleted);
 
-	registerAgentSocket({ machineId: 'm_1', socket: agent });
-	addUiSocket({ userId: 'u_alice', socket: browser });
+	socketRegistry.registerAgentSocket({ machineId: 'm_1', socket: agent });
+	socketRegistry.addUiSocket({ userId: 'u_alice', socket: browser });
 
 	return {
 		agent,
 		browser,
 		deleteOwned,
+		socketRegistry,
 		run: async () =>
 			deleteMachine({
 				machineRepo: { deleteOwned } as unknown as MachineRepo,
+				socketRegistry,
 				id: 'm_1',
 				userId: 'u_alice'
 			})
 	};
 }
 
-let cleanup: (() => void) | null = null;
-
-afterEach(() => {
-	cleanup?.();
-	cleanup = null;
-});
-
 describe('deleteMachine', () => {
 	it('shuts the agent down, drops its socket and tells the browser', async () => {
 		const { agent, browser, run } = build(true);
-
-		cleanup = () => {
-			unregisterAgentSocket({ machineId: 'm_1', socket: agent });
-			removeUiSocket({ userId: 'u_alice', socket: browser });
-		};
 
 		await run();
 
@@ -68,16 +53,13 @@ describe('deleteMachine', () => {
 	// AC-6: the registry entry has to go with the row. A ping arriving after the
 	// delete must not find a socket for a machine that no longer exists.
 	it('leaves nothing in the registry to send to afterwards', async () => {
-		const { agent, browser, run } = build(true);
-
-		cleanup = () => {
-			unregisterAgentSocket({ machineId: 'm_1', socket: agent });
-			removeUiSocket({ userId: 'u_alice', socket: browser });
-		};
+		const { socketRegistry, run } = build(true);
 
 		await run();
 
-		expect(sendToAgent({ machineId: 'm_1', message: { type: 'ping', id: 'cmd_x' } })).toBe(false);
+		expect(
+			socketRegistry.sendToAgent({ machineId: 'm_1', message: { type: 'ping', id: 'cmd_x' } })
+		).toBe(false);
 	});
 
 	// The scoped delete is the authorization check, so it has to run first: a
@@ -85,11 +67,6 @@ describe('deleteMachine', () => {
 	// down and merely be told 404.
 	it('sends nothing to the agent when the machine is not the caller\'s', async () => {
 		const { agent, browser, run } = build(false);
-
-		cleanup = () => {
-			unregisterAgentSocket({ machineId: 'm_1', socket: agent });
-			removeUiSocket({ userId: 'u_alice', socket: browser });
-		};
 
 		await expect(run()).rejects.toMatchObject({ statusCode: 404 });
 		expect(agent.send).not.toHaveBeenCalled();

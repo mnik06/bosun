@@ -1,4 +1,4 @@
-import 'src/services/env/env.service';
+import { getEnv } from 'src/services/env/env.service';
 import fastify, { FastifyInstance } from 'fastify';
 import autoload from '@fastify/autoload';
 import path from 'path';
@@ -11,9 +11,10 @@ import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod
 import { errorHandler } from 'src/api/errors/error.handler';
 import { getLoggerOptions } from 'src/api/plugins/logger.plugin';
 import { getRequireUserHook } from 'src/api/plugins/auth.plugin';
-import { getSupabaseAuth } from 'src/services/auth/supabase-auth.service';
 import { getDb } from 'src/services/drizzle/drizzle.service';
+import { getServices } from 'src/services/index';
 import { getRepos } from 'src/repos/index';
+import { type Env } from 'src/types/EnvSchema';
 
 function registerCorePlugins(server: FastifyInstance): void {
 	server.register(helmet);
@@ -31,20 +32,26 @@ function registerCorePlugins(server: FastifyInstance): void {
 	server.register(websocket);
 }
 
-function decorateContext(server: FastifyInstance): void {
+function decorateContext(server: FastifyInstance, env: Env): void {
 	const db = getDb({
-		databaseUrl: process.env.DATABASE_URL!,
-		logsEnabled: process.env.NODE_ENV === 'local'
+		databaseUrl: env.DATABASE_URL,
+		logsEnabled: env.NODE_ENV === 'local'
 	});
 	const repos = getRepos(db);
-	const supabaseAuth = getSupabaseAuth({
-		url: process.env.SUPABASE_URL!,
-		publishableKey: process.env.SUPABASE_PUBLISHABLE_KEY!
-	});
+	const services = getServices({ env });
 
 	server.decorate('db', db);
+	server.decorate('env', env);
 	server.decorate('repos', repos);
-	server.decorate('requireUser', getRequireUserHook({ supabaseAuth, userRepo: repos.userRepo }));
+	server.decorate('services', services);
+	server.decorate(
+		'requireUser',
+		getRequireUserHook({
+			supabaseAuth: services.supabaseAuth,
+			idService: services.idService,
+			userRepo: repos.userRepo
+		})
+	);
 }
 
 function registerRoutes(server: FastifyInstance): void {
@@ -58,18 +65,22 @@ function registerRoutes(server: FastifyInstance): void {
 }
 
 export async function buildServer(): Promise<FastifyInstance> {
+	// Before anything reads a variable: the server refuses to boot on a bad `.env`
+	// rather than failing later at the first request that needs one.
+	const env = getEnv();
+
 	const server = fastify({
 		genReqId: () => crypto.randomUUID(),
 		requestIdHeader: 'x-request-id',
 		trustProxy: true,
-		logger: getLoggerOptions(),
+		logger: getLoggerOptions(env),
 		exposeHeadRoutes: false,
 		pluginTimeout: 10_000
 	});
 
 	registerCorePlugins(server);
 
-	if (['local', 'staging'].includes(process.env.NODE_ENV!)) {
+	if (['local', 'staging'].includes(env.NODE_ENV)) {
 		const { setupSwagger } = await import('src/api/plugins/swagger.plugin');
 
 		await setupSwagger(server);
@@ -84,7 +95,7 @@ export async function buildServer(): Promise<FastifyInstance> {
 	server.setValidatorCompiler(validatorCompiler);
 	server.setSerializerCompiler(serializerCompiler);
 
-	decorateContext(server);
+	decorateContext(server, env);
 
 	registerRoutes(server);
 

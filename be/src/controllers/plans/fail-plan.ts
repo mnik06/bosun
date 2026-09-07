@@ -1,10 +1,13 @@
 import { announcePlan } from 'src/controllers/plans/shared/plan-broadcast';
 import { type PlanRepo } from 'src/repos/plans/plan.repo';
-import { dropPlanText } from 'src/services/plans/plan-text.service';
+import { type PlanTextService } from 'src/services/plans/plan-text.service';
+import { type SocketRegistry } from 'src/services/sockets/registry.service';
 import { type Plan } from 'src/types/PlanSchema';
 
 export async function failPlan(opts: {
 	planRepo: PlanRepo;
+	planTextService: PlanTextService;
+	socketRegistry: SocketRegistry;
 	plan: Plan;
 	reason: string;
 }): Promise<Plan | null> {
@@ -14,10 +17,10 @@ export async function failPlan(opts: {
 		failureReason: opts.reason
 	});
 
-	dropPlanText(opts.plan.id);
+	opts.planTextService.drop(opts.plan.id);
 
 	if (updated) {
-		announcePlan(updated);
+		announcePlan({ socketRegistry: opts.socketRegistry, plan: updated });
 	}
 
 	return updated;

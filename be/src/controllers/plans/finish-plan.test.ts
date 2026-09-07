@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { finishPlan } from 'src/controllers/plans/finish-plan';
 import { type AcRepo } from 'src/repos/plans/ac.repo';
 import { type PlanRepo } from 'src/repos/plans/plan.repo';
+import { getSocketRegistry } from 'src/services/sockets/registry.service';
 import { type Ac, type Plan } from 'src/types/PlanSchema';
 
 function plan(overrides: Partial<Plan> = {}): Plan {
@@ -30,6 +31,7 @@ function build(opts: { plan: Plan; unassigned: Ac[] }) {
 				acRepo: {
 					listUnassigned: vi.fn().mockResolvedValue(opts.unassigned)
 				} as unknown as AcRepo,
+				socketRegistry: getSocketRegistry(),
 				plan: opts.plan
 			})
 	};

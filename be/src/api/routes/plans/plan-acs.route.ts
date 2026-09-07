@@ -7,10 +7,11 @@ import { AcSchema } from 'src/types/PlanSchema';
 
 const routes: FastifyPluginAsync = async function (f) {
 	const fastify = f.withTypeProvider<ZodTypeProvider>();
-	const artifactRepos = {
+	const artifactDeps = {
 		planRepo: fastify.repos.planRepo,
 		acRepo: fastify.repos.acRepo,
-		sliceRepo: fastify.repos.sliceRepo
+		sliceRepo: fastify.repos.sliceRepo,
+		socketRegistry: fastify.services.socketRegistry
 	};
 
 	fastify.patch(
@@ -24,7 +25,7 @@ const routes: FastifyPluginAsync = async function (f) {
 		},
 		async (req) => {
 			return updateAc({
-				...artifactRepos,
+				...artifactDeps,
 				planId: req.params.id,
 				acId: req.params.acId,
 				userId: req.user!.id,
@@ -35,7 +36,7 @@ const routes: FastifyPluginAsync = async function (f) {
 
 	fastify.delete('/:id/acs/:acId', { schema: { params: AcParamsSchema } }, async (req, reply) => {
 		await deleteAc({
-			...artifactRepos,
+			...artifactDeps,
 			planId: req.params.id,
 			acId: req.params.acId,
 			userId: req.user!.id

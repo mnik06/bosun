@@ -1,7 +1,8 @@
 # The socket registry
 
-Two collections held in module state: one `Map<machineId, WebSocket>` for agents, one
-`Map<userId, Set<WebSocket>>` for browsers. "Send a command to a machine" is a lookup in the agent
+`getSocketRegistry()` closes over two collections: one `Map<machineId, WebSocket>` for agents, one
+`Map<userId, Set<WebSocket>>` for browsers. One instance is built in `build-server.ts` and decorated
+onto the Fastify instance, so the maps below are per-server rather than per-module. "Send a command to a machine" is a lookup in the agent
 map followed by `.send()` on a socket the machine itself opened. Nothing here dials outward.
 
 ## Why the browser side is keyed by user, not a flat set

@@ -9,6 +9,7 @@ const hooks: FastifyPluginAsync = async function (fastify) {
 	fastify.addHook('preValidation', async (request, reply) => {
 		const agent = await authenticateAgent({
 			machineRepo: fastify.repos.machineRepo,
+			keyService: fastify.services.keyService,
 			authorization: request.headers.authorization
 		});
 

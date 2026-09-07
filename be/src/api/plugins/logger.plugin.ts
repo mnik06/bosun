@@ -1,6 +1,7 @@
 import { FastifyLoggerOptions } from 'fastify';
+import { type Env } from 'src/types/EnvSchema';
 
-export function getLoggerOptions(): FastifyLoggerOptions {
+export function getLoggerOptions(env: Env): FastifyLoggerOptions {
 	const localPrintOpts = {
 		transport: {
 			target: 'pino-pretty',
@@ -29,5 +30,5 @@ export function getLoggerOptions(): FastifyLoggerOptions {
 		}
 	};
 
-	return process.env.NODE_ENV === 'local' ? { ...localPrintOpts, ...opts } : opts;
+	return env.NODE_ENV === 'local' ? { ...localPrintOpts, ...opts } : opts;
 }

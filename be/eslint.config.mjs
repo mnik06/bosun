@@ -122,6 +122,17 @@ export default [
     }
   },
 
+  // Service factories: `getXService()` returns an object of N small methods over
+  // its own closed-over state, so ESLint scores the whole factory as one long
+  // function. Same shape as the repo factories above; Tier 1 still applies.
+  {
+    files: ['**/*.service.ts'],
+    rules: {
+      'max-lines': 'off',
+      'max-lines-per-function': 'off'
+    }
+  },
+
   // Declaration catalog: length tracks the number of tables/columns declared,
   // not branching. No executable logic to simplify.
   {

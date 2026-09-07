@@ -3,6 +3,7 @@ import { HttpError } from 'src/api/errors/HttpError';
 import { resolveRequestUser } from 'src/controllers/auth/resolve-request-user';
 import { type UserRepo } from 'src/repos/users/user.repo';
 import { type ResolvedToken, type SupabaseAuth } from 'src/services/auth/supabase-auth.service';
+import { getIdService } from 'src/services/ids/id.service';
 import { type User } from 'src/types/UserSchema';
 
 const row: User = {
@@ -20,6 +21,7 @@ function build(resolved: ResolvedToken) {
 		run: async () =>
 			resolveRequestUser({
 				supabaseAuth: { resolveToken: async () => resolved } as SupabaseAuth,
+				idService: getIdService(),
 				userRepo: { provision } as unknown as UserRepo,
 				token: 'a.b.c'
 			})

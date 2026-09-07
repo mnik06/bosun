@@ -13,10 +13,11 @@ import { SliceSchema } from 'src/types/PlanSchema';
 
 const routes: FastifyPluginAsync = async function (f) {
 	const fastify = f.withTypeProvider<ZodTypeProvider>();
-	const artifactRepos = {
+	const artifactDeps = {
 		planRepo: fastify.repos.planRepo,
 		acRepo: fastify.repos.acRepo,
-		sliceRepo: fastify.repos.sliceRepo
+		sliceRepo: fastify.repos.sliceRepo,
+		socketRegistry: fastify.services.socketRegistry
 	};
 
 	fastify.post(
@@ -30,7 +31,8 @@ const routes: FastifyPluginAsync = async function (f) {
 		},
 		async (req, reply) => {
 			const slice = await createSlice({
-				...artifactRepos,
+				...artifactDeps,
+				idService: fastify.services.idService,
 				planId: req.params.id,
 				userId: req.user!.id,
 				...req.body
@@ -51,7 +53,7 @@ const routes: FastifyPluginAsync = async function (f) {
 		},
 		async (req) => {
 			return updateSlice({
-				...artifactRepos,
+				...artifactDeps,
 				planId: req.params.id,
 				sliceId: req.params.sliceId,
 				userId: req.user!.id,
@@ -65,7 +67,7 @@ const routes: FastifyPluginAsync = async function (f) {
 		{ schema: { params: SliceParamsSchema } },
 		async (req, reply) => {
 			await deleteSlice({
-				...artifactRepos,
+				...artifactDeps,
 				planId: req.params.id,
 				sliceId: req.params.sliceId,
 				userId: req.user!.id

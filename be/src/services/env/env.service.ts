@@ -1,4 +1,6 @@
 import 'dotenv/config';
-import { EnvSchema } from 'src/types/EnvSchema';
+import { EnvSchema, type Env } from 'src/types/EnvSchema';
 
-EnvSchema.parse(process.env);
+export function getEnv(): Env {
+	return EnvSchema.parse(process.env);
+}

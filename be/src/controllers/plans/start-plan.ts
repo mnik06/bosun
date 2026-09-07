@@ -3,8 +3,8 @@ import { announcePlan } from 'src/controllers/plans/shared/plan-broadcast';
 import { type MachineRepo } from 'src/repos/machines/machine.repo';
 import { type PlanMessageRepo } from 'src/repos/plans/plan-message.repo';
 import { type PlanRepo } from 'src/repos/plans/plan.repo';
-import { createPlanId, createPlanMessageId } from 'src/services/ids/id.service';
-import { getAgentSocket, sendToAgent } from 'src/services/sockets/registry.service';
+import { type IdService } from 'src/services/ids/id.service';
+import { type SocketRegistry } from 'src/services/sockets/registry.service';
 import { type Machine } from 'src/types/MachineSchema';
 import { type Plan } from 'src/types/PlanSchema';
 
@@ -34,6 +34,8 @@ export async function startPlan(opts: {
 	planRepo: PlanRepo;
 	planMessageRepo: PlanMessageRepo;
 	machineRepo: MachineRepo;
+	idService: IdService;
+	socketRegistry: SocketRegistry;
 	userId: string;
 	machineId: string;
 	input: string;
@@ -55,25 +57,25 @@ export async function startPlan(opts: {
 		throw new HttpError(409, refusal);
 	}
 
-	if (!getAgentSocket(machine.id)) {
+	if (!opts.socketRegistry.getAgentSocket(machine.id)) {
 		throw new HttpError(409, 'this machine is offline');
 	}
 
 	const plan = await opts.planRepo.create({
-		id: createPlanId(),
+		id: opts.idService.createPlanId(),
 		userId: opts.userId,
 		machineId: machine.id,
 		input: opts.input
 	});
 
 	await opts.planMessageRepo.append({
-		id: createPlanMessageId(),
+		id: opts.idService.createPlanMessageId(),
 		planId: plan.id,
 		role: 'user',
 		content: { text: opts.input }
 	});
 
-	const dispatched = sendToAgent({
+	const dispatched = opts.socketRegistry.sendToAgent({
 		machineId: machine.id,
 		message: { type: 'plan.start', planId: plan.id, input: opts.input }
 	});
@@ -85,12 +87,12 @@ export async function startPlan(opts: {
 			failureReason: 'the machine went offline before the session started'
 		});
 
-		announcePlan(failed ?? plan);
+		announcePlan({ socketRegistry: opts.socketRegistry, plan: failed ?? plan });
 
 		return failed ?? plan;
 	}
 
-	announcePlan(plan);
+	announcePlan({ socketRegistry: opts.socketRegistry, plan });
 
 	return plan;
 }

@@ -4,12 +4,14 @@ import { announcePlanArtifact } from 'src/controllers/plans/shared/plan-broadcas
 import { type AcRepo } from 'src/repos/plans/ac.repo';
 import { type PlanRepo } from 'src/repos/plans/plan.repo';
 import { type SliceRepo } from 'src/repos/plans/slice.repo';
+import { type SocketRegistry } from 'src/services/sockets/registry.service';
 import { type Slice } from 'src/types/PlanSchema';
 
 export async function updateSlice(opts: {
 	planRepo: PlanRepo;
 	acRepo: AcRepo;
 	sliceRepo: SliceRepo;
+	socketRegistry: SocketRegistry;
 	planId: string;
 	sliceId: string;
 	userId: string;
@@ -34,7 +36,12 @@ export async function updateSlice(opts: {
 		throw new HttpError(404, 'Tracer bullet not found');
 	}
 
-	await announcePlanArtifact({ acRepo: opts.acRepo, sliceRepo: opts.sliceRepo, planId: plan.id });
+	await announcePlanArtifact({
+		socketRegistry: opts.socketRegistry,
+		acRepo: opts.acRepo,
+		sliceRepo: opts.sliceRepo,
+		planId: plan.id
+	});
 
 	return updated;
 }

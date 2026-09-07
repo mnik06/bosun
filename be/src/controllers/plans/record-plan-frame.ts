@@ -4,9 +4,9 @@ import { announcePlanMessage } from 'src/controllers/plans/shared/plan-broadcast
 import { type AcRepo } from 'src/repos/plans/ac.repo';
 import { type PlanMessageRepo } from 'src/repos/plans/plan-message.repo';
 import { type PlanRepo } from 'src/repos/plans/plan.repo';
-import { createPlanMessageId } from 'src/services/ids/id.service';
-import { appendPlanText, takePlanText } from 'src/services/plans/plan-text.service';
-import { broadcastToPlan } from 'src/services/sockets/registry.service';
+import { type IdService } from 'src/services/ids/id.service';
+import { type PlanTextService } from 'src/services/plans/plan-text.service';
+import { type SocketRegistry } from 'src/services/sockets/registry.service';
 import { type AgentMsg } from 'src/types/protocol';
 import { type Plan } from 'src/types/PlanSchema';
 
@@ -16,39 +16,50 @@ interface Deps {
 	planRepo: PlanRepo;
 	planMessageRepo: PlanMessageRepo;
 	acRepo: AcRepo;
+	idService: IdService;
+	planTextService: PlanTextService;
+	socketRegistry: SocketRegistry;
 }
 
 // Whatever prose the session produced since its last tool call, question or
 // terminal frame is one complete assistant turn. Flushing it here is what makes
 // the transcript re-renderable without persisting a row per delta.
 async function flushText(opts: Deps & { planId: string }): Promise<void> {
-	const text = takePlanText(opts.planId);
+	const text = opts.planTextService.take(opts.planId);
 
 	if (!text) {
 		return;
 	}
 
 	const message = await opts.planMessageRepo.append({
-		id: createPlanMessageId(),
+		id: opts.idService.createPlanMessageId(),
 		planId: opts.planId,
 		role: 'assistant',
 		content: { text }
 	});
 
-	announcePlanMessage({ planId: opts.planId, message });
+	announcePlanMessage({
+		socketRegistry: opts.socketRegistry,
+		planId: opts.planId,
+		message
+	});
 }
 
 async function recordQuestion(
 	opts: Deps & { plan: Plan; frame: Extract<PlanFrame, { type: 'plan.question' }> }
 ): Promise<void> {
 	const message = await opts.planMessageRepo.append({
-		id: createPlanMessageId(),
+		id: opts.idService.createPlanMessageId(),
 		planId: opts.plan.id,
 		role: 'question',
 		content: { questionId: opts.frame.questionId, questions: opts.frame.questions }
 	});
 
-	announcePlanMessage({ planId: opts.plan.id, message });
+	announcePlanMessage({
+		socketRegistry: opts.socketRegistry,
+		planId: opts.plan.id,
+		message
+	});
 }
 
 export async function recordPlanFrame(
@@ -66,10 +77,10 @@ export async function recordPlanFrame(
 		return;
 	}
 
-	broadcastToPlan({ planId: plan.id, message: opts.frame });
+	opts.socketRegistry.broadcastToPlan({ planId: plan.id, message: opts.frame });
 
 	if (opts.frame.type === 'plan.text') {
-		appendPlanText({ planId: plan.id, delta: opts.frame.delta });
+		opts.planTextService.append({ planId: plan.id, delta: opts.frame.delta });
 
 		return;
 	}
@@ -83,12 +94,23 @@ export async function recordPlanFrame(
 	}
 
 	if (opts.frame.type === 'plan.done') {
-		await finishPlan({ planRepo: opts.planRepo, acRepo: opts.acRepo, plan });
+		await finishPlan({
+			planRepo: opts.planRepo,
+			acRepo: opts.acRepo,
+			socketRegistry: opts.socketRegistry,
+			plan
+		});
 
 		return;
 	}
 
 	if (opts.frame.type === 'plan.error') {
-		await failPlan({ planRepo: opts.planRepo, plan, reason: opts.frame.message });
+		await failPlan({
+			planRepo: opts.planRepo,
+			planTextService: opts.planTextService,
+			socketRegistry: opts.socketRegistry,
+			plan,
+			reason: opts.frame.message
+		});
 	}
 }

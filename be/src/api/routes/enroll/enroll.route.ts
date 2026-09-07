@@ -18,9 +18,10 @@ const routes: FastifyPluginAsync = async function (f) {
 		async (req) => {
 			return enrollMachine({
 				machineRepo: fastify.repos.machineRepo,
+				keyService: fastify.services.keyService,
 				token: req.body.token,
 				repoPath: req.body.repoPath,
-				serverUrl: process.env.PUBLIC_SERVER_URL!
+				serverUrl: fastify.env.PUBLIC_SERVER_URL
 			});
 		}
 	);

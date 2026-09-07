@@ -5,7 +5,8 @@ import { getAcRepo, type AcRepo } from 'src/repos/plans/ac.repo';
 import { type PlanRepo } from 'src/repos/plans/plan.repo';
 import { getSliceRepo, type SliceRepo } from 'src/repos/plans/slice.repo';
 import { type Db } from 'src/services/drizzle/drizzle.service';
-import { createSliceId } from 'src/services/ids/id.service';
+import { type IdService } from 'src/services/ids/id.service';
+import { type SocketRegistry } from 'src/services/sockets/registry.service';
 import { type Ac, type Slice, type SliceKind } from 'src/types/PlanSchema';
 
 // Every AC belongs to exactly one tracer bullet. Claiming one twice is rejected
@@ -33,6 +34,8 @@ export async function createPlanSlice(opts: {
 	planRepo: PlanRepo;
 	acRepo: AcRepo;
 	sliceRepo: SliceRepo;
+	idService: IdService;
+	socketRegistry: SocketRegistry;
 	id: string;
 	machineId: string;
 	ordinal: number;
@@ -56,7 +59,7 @@ export async function createPlanSlice(opts: {
 		const acRepo = getAcRepo(tx);
 		const sliceRepo = getSliceRepo(tx);
 		const created = await sliceRepo.create({
-			id: createSliceId(),
+			id: opts.idService.createSliceId(),
 			planId: plan.id,
 			ordinal: opts.ordinal,
 			kind: opts.kind,
@@ -69,7 +72,12 @@ export async function createPlanSlice(opts: {
 		return created;
 	});
 
-	await announcePlanArtifact({ acRepo: opts.acRepo, sliceRepo: opts.sliceRepo, planId: plan.id });
+	await announcePlanArtifact({
+		socketRegistry: opts.socketRegistry,
+		acRepo: opts.acRepo,
+		sliceRepo: opts.sliceRepo,
+		planId: plan.id
+	});
 
 	return slice;
 }

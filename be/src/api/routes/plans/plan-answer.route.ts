@@ -23,6 +23,8 @@ const routes: FastifyPluginAsync = async function (f) {
 			await answerPlanQuestion({
 				planRepo: fastify.repos.planRepo,
 				planMessageRepo: fastify.repos.planMessageRepo,
+				idService: fastify.services.idService,
+				socketRegistry: fastify.services.socketRegistry,
 				id: req.params.id,
 				userId: req.user!.id,
 				questionId: req.body.questionId,

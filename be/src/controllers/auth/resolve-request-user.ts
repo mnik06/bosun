@@ -1,11 +1,12 @@
 import { HttpError } from 'src/api/errors/HttpError';
 import { type UserRepo } from 'src/repos/users/user.repo';
 import { type SupabaseAuth } from 'src/services/auth/supabase-auth.service';
-import { createUserId } from 'src/services/ids/id.service';
+import { type IdService } from 'src/services/ids/id.service';
 import { type User } from 'src/types/UserSchema';
 
 export async function resolveRequestUser(opts: {
 	supabaseAuth: SupabaseAuth;
+	idService: IdService;
 	userRepo: UserRepo;
 	token: string;
 }): Promise<User> {
@@ -20,7 +21,7 @@ export async function resolveRequestUser(opts: {
 	}
 
 	return opts.userRepo.provision({
-		id: createUserId(),
+		id: opts.idService.createUserId(),
 		subId: resolved.subId,
 		email: resolved.email
 	});

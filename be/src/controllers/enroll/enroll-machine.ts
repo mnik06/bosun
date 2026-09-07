@@ -1,6 +1,6 @@
 import { HttpError } from 'src/api/errors/HttpError';
 import { type MachineRepo } from 'src/repos/machines/machine.repo';
-import { generateMachineKey, hashMachineKey } from 'src/services/keys/key.service';
+import { type KeyService } from 'src/services/keys/key.service';
 
 async function enrollmentRejection(opts: {
 	machineRepo: MachineRepo;
@@ -21,15 +21,16 @@ async function enrollmentRejection(opts: {
 
 export async function enrollMachine(opts: {
 	machineRepo: MachineRepo;
+	keyService: KeyService;
 	token: string;
 	repoPath: string;
 	serverUrl: string;
 }) {
 	const now = new Date();
-	const machineKey = generateMachineKey();
+	const machineKey = opts.keyService.generateMachineKey();
 	const machine = await opts.machineRepo.consumeEnrollmentToken({
 		token: opts.token,
-		machineKeyHash: hashMachineKey(machineKey),
+		machineKeyHash: opts.keyService.hashMachineKey(machineKey),
 		repoPath: opts.repoPath,
 		now
 	});

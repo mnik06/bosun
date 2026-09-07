@@ -1,16 +1,12 @@
 import { HttpError } from 'src/api/errors/HttpError';
 import { type MachineRepo } from 'src/repos/machines/machine.repo';
-import {
-	broadcastToUi,
-	getAgentSocket,
-	sendToAgent,
-	unregisterAgentSocket
-} from 'src/services/sockets/registry.service';
+import { type SocketRegistry } from 'src/services/sockets/registry.service';
 
 const SHUTDOWN_REASON = 'this machine was deleted in bosun';
 
 export async function deleteMachine(opts: {
 	machineRepo: MachineRepo;
+	socketRegistry: SocketRegistry;
 	id: string;
 	userId: string;
 }): Promise<void> {
@@ -21,23 +17,26 @@ export async function deleteMachine(opts: {
 		throw new HttpError(404, 'Machine not found');
 	}
 
-	const socket = getAgentSocket(opts.id);
+	const socket = opts.socketRegistry.getAgentSocket(opts.id);
 
 	// Fire-and-forget: waiting for the agent to confirm would hang this request
 	// for exactly the machine most likely to be off the network already. An agent
 	// that never receives it terminates itself on the 401 it gets when it next
 	// reconnects, which is what makes a missed frame self-correcting.
-	sendToAgent({ machineId: opts.id, message: { type: 'shutdown', reason: SHUTDOWN_REASON } });
+	opts.socketRegistry.sendToAgent({
+		machineId: opts.id,
+		message: { type: 'shutdown', reason: SHUTDOWN_REASON }
+	});
 
 	if (socket) {
 		// Unregistered before closing, so a ping racing this delete cannot find a
 		// socket for a machine whose row is already gone. `close` rather than
 		// `terminate` because the shutdown frame still has to be flushed.
-		unregisterAgentSocket({ machineId: opts.id, socket });
+		opts.socketRegistry.unregisterAgentSocket({ machineId: opts.id, socket });
 		socket.close();
 	}
 
-	broadcastToUi({
+	opts.socketRegistry.broadcastToUi({
 		userId: opts.userId,
 		message: { type: 'machine.deleted', machineId: opts.id }
 	});

@@ -1,14 +1,12 @@
 import { type WebSocket } from '@fastify/websocket';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { HttpError } from 'src/api/errors/HttpError';
 import { startPlan } from 'src/controllers/plans/start-plan';
 import { type MachineRepo } from 'src/repos/machines/machine.repo';
 import { type PlanMessageRepo } from 'src/repos/plans/plan-message.repo';
 import { type PlanRepo } from 'src/repos/plans/plan.repo';
-import {
-	registerAgentSocket,
-	unregisterAgentSocket
-} from 'src/services/sockets/registry.service';
+import { getIdService } from 'src/services/ids/id.service';
+import { getSocketRegistry, type SocketRegistry } from 'src/services/sockets/registry.service';
 import { type Machine, type MachineStatus, type PreflightCheck } from 'src/types/MachineSchema';
 
 const OPEN = 1;
@@ -53,6 +51,8 @@ function build(found: Machine | null) {
 				planRepo: { create, update } as unknown as PlanRepo,
 				planMessageRepo: { append } as unknown as PlanMessageRepo,
 				machineRepo: { getOwnedById: vi.fn().mockResolvedValue(found) } as unknown as MachineRepo,
+				idService: getIdService(),
+				socketRegistry,
 				userId: 'u_alice',
 				machineId: 'm_1',
 				input: 'make the thing'
@@ -60,18 +60,17 @@ function build(found: Machine | null) {
 	};
 }
 
+let socketRegistry: SocketRegistry;
 let socket: ReturnType<typeof fakeSocket> | null = null;
 
-afterEach(() => {
-	if (socket) {
-		unregisterAgentSocket({ machineId: 'm_1', socket });
-		socket = null;
-	}
+beforeEach(() => {
+	socketRegistry = getSocketRegistry();
+	socket = null;
 });
 
 function connect() {
 	socket = fakeSocket();
-	registerAgentSocket({ machineId: 'm_1', socket });
+	socketRegistry.registerAgentSocket({ machineId: 'm_1', socket });
 }
 
 describe('startPlan refusals', () => {

@@ -27,7 +27,14 @@ const routes: FastifyPluginAsync = async function (f) {
 				userId: req.user!.id
 			});
 
-			return reply.status(202).send(pingMachine({ machine }));
+			return reply.status(202).send(
+				pingMachine({
+					idService: fastify.services.idService,
+					pendingPings: fastify.services.pendingPings,
+					socketRegistry: fastify.services.socketRegistry,
+					machine
+				})
+			);
 		}
 	);
 
@@ -46,7 +53,7 @@ const routes: FastifyPluginAsync = async function (f) {
 				userId: req.user!.id
 			});
 
-			refreshMachine({ machine });
+			refreshMachine({ socketRegistry: fastify.services.socketRegistry, machine });
 
 			return reply.status(202).send({ status: 'requested' as const });
 		}
@@ -67,6 +74,7 @@ const routes: FastifyPluginAsync = async function (f) {
 			async (req) => {
 				return setMachinePaused({
 					machineRepo: fastify.repos.machineRepo,
+					socketRegistry: fastify.services.socketRegistry,
 					id: req.params.id,
 					userId: req.user!.id,
 					paused

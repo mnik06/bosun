@@ -4,13 +4,16 @@ import { announcePlanArtifact } from 'src/controllers/plans/shared/plan-broadcas
 import { type AcRepo } from 'src/repos/plans/ac.repo';
 import { type PlanRepo } from 'src/repos/plans/plan.repo';
 import { type SliceRepo } from 'src/repos/plans/slice.repo';
-import { createAcId } from 'src/services/ids/id.service';
+import { type IdService } from 'src/services/ids/id.service';
+import { type SocketRegistry } from 'src/services/sockets/registry.service';
 import { type Ac } from 'src/types/PlanSchema';
 
 export async function addPlanAc(opts: {
 	planRepo: PlanRepo;
 	acRepo: AcRepo;
 	sliceRepo: SliceRepo;
+	idService: IdService;
+	socketRegistry: SocketRegistry;
 	id: string;
 	machineId: string;
 	code: string;
@@ -28,14 +31,19 @@ export async function addPlanAc(opts: {
 	}
 
 	const created = await opts.acRepo.create({
-		id: createAcId(),
+		id: opts.idService.createAcId(),
 		planId: plan.id,
 		code: opts.code,
 		text: opts.text,
 		ordinal: existing.length + 1
 	});
 
-	await announcePlanArtifact({ acRepo: opts.acRepo, sliceRepo: opts.sliceRepo, planId: plan.id });
+	await announcePlanArtifact({
+		socketRegistry: opts.socketRegistry,
+		acRepo: opts.acRepo,
+		sliceRepo: opts.sliceRepo,
+		planId: plan.id
+	});
 
 	return created;
 }

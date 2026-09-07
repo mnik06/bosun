@@ -30,6 +30,7 @@ const routes: FastifyPluginAsync = async function (f) {
 		async (req) => {
 			const plan = await savePlanTitle({
 				planRepo: fastify.repos.planRepo,
+				socketRegistry: fastify.services.socketRegistry,
 				id: req.params.id,
 				machineId: req.agent!.machineId,
 				title: req.body.title,
@@ -54,6 +55,8 @@ const routes: FastifyPluginAsync = async function (f) {
 				planRepo: fastify.repos.planRepo,
 				acRepo: fastify.repos.acRepo,
 				sliceRepo: fastify.repos.sliceRepo,
+				idService: fastify.services.idService,
+				socketRegistry: fastify.services.socketRegistry,
 				id: req.params.id,
 				machineId: req.agent!.machineId,
 				code: req.body.code,
@@ -79,6 +82,8 @@ const routes: FastifyPluginAsync = async function (f) {
 				planRepo: fastify.repos.planRepo,
 				acRepo: fastify.repos.acRepo,
 				sliceRepo: fastify.repos.sliceRepo,
+				idService: fastify.services.idService,
+				socketRegistry: fastify.services.socketRegistry,
 				id: req.params.id,
 				machineId: req.agent!.machineId,
 				...req.body

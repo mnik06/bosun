@@ -1,19 +1,22 @@
 import { type MachineRepo } from 'src/repos/machines/machine.repo';
-import { createMachineId } from 'src/services/ids/id.service';
-import { generateEnrollmentToken } from 'src/services/keys/key.service';
+import { type IdService } from 'src/services/ids/id.service';
+import { type KeyService } from 'src/services/keys/key.service';
 
 const TOKEN_TTL_MS = 15 * 60 * 1000;
 
 export async function createMachine(opts: {
 	machineRepo: MachineRepo;
+	idService: IdService;
+	keyService: KeyService;
 	userId: string;
 	name: string;
 	serverUrl: string;
 }) {
-	const token = generateEnrollmentToken();
+	const token = opts.keyService.generateEnrollmentToken();
 	const tokenExpiresAt = new Date(Date.now() + TOKEN_TTL_MS);
+
 	const machine = await opts.machineRepo.create({
-		id: createMachineId(),
+		id: opts.idService.createMachineId(),
 		userId: opts.userId,
 		name: opts.name,
 		enrollmentToken: token,

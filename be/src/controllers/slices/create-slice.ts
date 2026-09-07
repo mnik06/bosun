@@ -3,7 +3,8 @@ import { announcePlanArtifact } from 'src/controllers/plans/shared/plan-broadcas
 import { type AcRepo } from 'src/repos/plans/ac.repo';
 import { type PlanRepo } from 'src/repos/plans/plan.repo';
 import { type SliceRepo } from 'src/repos/plans/slice.repo';
-import { createSliceId } from 'src/services/ids/id.service';
+import { type IdService } from 'src/services/ids/id.service';
+import { type SocketRegistry } from 'src/services/sockets/registry.service';
 import { type Slice, type SliceKind } from 'src/types/PlanSchema';
 
 // Splitting a tracer bullet is adding an empty one and moving acceptance
@@ -13,6 +14,8 @@ export async function createSlice(opts: {
 	planRepo: PlanRepo;
 	acRepo: AcRepo;
 	sliceRepo: SliceRepo;
+	idService: IdService;
+	socketRegistry: SocketRegistry;
 	planId: string;
 	userId: string;
 	title: string;
@@ -25,7 +28,7 @@ export async function createSlice(opts: {
 	});
 	const existing = await opts.sliceRepo.listByPlan(plan.id);
 	const created = await opts.sliceRepo.create({
-		id: createSliceId(),
+		id: opts.idService.createSliceId(),
 		planId: plan.id,
 		ordinal: Math.max(0, ...existing.map((slice) => slice.ordinal)) + 1,
 		kind: opts.kind,
@@ -33,7 +36,12 @@ export async function createSlice(opts: {
 		bodyMd: null
 	});
 
-	await announcePlanArtifact({ acRepo: opts.acRepo, sliceRepo: opts.sliceRepo, planId: plan.id });
+	await announcePlanArtifact({
+		socketRegistry: opts.socketRegistry,
+		acRepo: opts.acRepo,
+		sliceRepo: opts.sliceRepo,
+		planId: plan.id
+	});
 
 	return created;
 }

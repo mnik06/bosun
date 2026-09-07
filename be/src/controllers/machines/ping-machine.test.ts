@@ -1,10 +1,9 @@
 import { type WebSocket } from '@fastify/websocket';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { pingMachine } from 'src/controllers/machines/ping-machine';
-import {
-	registerAgentSocket,
-	unregisterAgentSocket
-} from 'src/services/sockets/registry.service';
+import { getIdService } from 'src/services/ids/id.service';
+import { getPendingPingsService } from 'src/services/sockets/pending-pings.service';
+import { getSocketRegistry, type SocketRegistry } from 'src/services/sockets/registry.service';
 import { type Machine, type MachineStatus } from 'src/types/MachineSchema';
 
 const OPEN = 1;
@@ -29,26 +28,33 @@ function machine(status: MachineStatus): Machine {
 	};
 }
 
-let connected: ReturnType<typeof fakeSocket> | null = null;
+let socketRegistry: SocketRegistry;
+
+beforeEach(() => {
+	socketRegistry = getSocketRegistry();
+});
 
 function connect() {
-	connected = fakeSocket();
-	registerAgentSocket({ machineId: 'm_1', socket: connected });
+	const socket = fakeSocket();
 
-	return connected;
+	socketRegistry.registerAgentSocket({ machineId: 'm_1', socket });
+
+	return socket;
 }
 
-afterEach(() => {
-	if (connected) {
-		unregisterAgentSocket({ machineId: 'm_1', socket: connected });
-		connected = null;
-	}
-});
+function ping(status: MachineStatus) {
+	return pingMachine({
+		idService: getIdService(),
+		pendingPings: getPendingPingsService(),
+		socketRegistry,
+		machine: machine(status)
+	});
+}
 
 describe('pingMachine', () => {
 	it('sends a ping frame to a connected machine', () => {
 		const socket = connect();
-		const { commandId } = pingMachine({ machine: machine('online') });
+		const { commandId } = ping('online');
 
 		expect(commandId).toMatch(/^cmd_/);
 		expect(socket.send).toHaveBeenCalledWith(JSON.stringify({ type: 'ping', id: commandId }));
@@ -60,11 +66,11 @@ describe('pingMachine', () => {
 	it('refuses a paused machine before it looks at reachability', () => {
 		const socket = connect();
 
-		expect(() => pingMachine({ machine: machine('paused') })).toThrowError('machine paused');
+		expect(() => ping('paused')).toThrowError('machine paused');
 		expect(socket.send).not.toHaveBeenCalled();
 	});
 
 	it('refuses a machine with no socket', () => {
-		expect(() => pingMachine({ machine: machine('online') })).toThrowError('machine offline');
+		expect(() => ping('online')).toThrowError('machine offline');
 	});
 });

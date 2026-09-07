@@ -13,11 +13,11 @@ HTTPS (`POST /ui/ticket`), so the real credential never leaves the header.
 
 ## The invariants
 
-- **Single use.** `consumeTicket` deletes before it validates. A ticket that has been presented once
+- **Single use.** `consume` deletes before it validates. A ticket that has been presented once
   is gone whether or not the presentation succeeded, so a logged URL cannot be replayed.
 - **Short life.** `TICKET_TTL_MS` is a handshake budget, not a session length. It only has to cover
   the gap between the POST returning and the socket dialling.
-- **Swept, not accumulated.** `issueTicket` drops expired entries first. Without that the map is an
+- **Swept, not accumulated.** `issue` drops expired entries first. Without that the map is an
   unbounded leak, because the common path — a ticket that is consumed — is not the only path: a
   ticket issued for a socket the browser never opens is never read again.
 

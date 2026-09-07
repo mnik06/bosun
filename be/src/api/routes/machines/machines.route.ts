@@ -24,9 +24,11 @@ const routes: FastifyPluginAsync = async function (f) {
 		async (req, reply) => {
 			const created = await createMachine({
 				machineRepo: fastify.repos.machineRepo,
+				idService: fastify.services.idService,
+				keyService: fastify.services.keyService,
 				userId: req.user!.id,
 				name: req.body.name,
-				serverUrl: process.env.PUBLIC_SERVER_URL!
+				serverUrl: fastify.env.PUBLIC_SERVER_URL
 			});
 
 			return reply.status(201).send(created);
@@ -72,6 +74,7 @@ const routes: FastifyPluginAsync = async function (f) {
 		async (req, reply) => {
 			await deleteMachine({
 				machineRepo: fastify.repos.machineRepo,
+				socketRegistry: fastify.services.socketRegistry,
 				id: req.params.id,
 				userId: req.user!.id
 			});

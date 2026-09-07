@@ -1,10 +1,11 @@
 import crypto from 'crypto';
 import { type MachineRepo } from 'src/repos/machines/machine.repo';
-import { hashMachineKey } from 'src/services/keys/key.service';
+import { type KeyService } from 'src/services/keys/key.service';
 import { readBearerToken } from 'src/utils/general';
 
 export async function authenticateAgent(opts: {
 	machineRepo: MachineRepo;
+	keyService: KeyService;
 	authorization?: string;
 }): Promise<{ machineId: string; userId: string } | null> {
 	const key = readBearerToken(opts.authorization);
@@ -13,7 +14,7 @@ export async function authenticateAgent(opts: {
 		return null;
 	}
 
-	const hash = hashMachineKey(key);
+	const hash = opts.keyService.hashMachineKey(key);
 	const auth = await opts.machineRepo.findAuthByKeyHash(hash);
 
 	if (!auth) {

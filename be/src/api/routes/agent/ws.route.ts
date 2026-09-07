@@ -6,13 +6,7 @@ import { markMachineOnline } from 'src/controllers/machines/mark-machine-online'
 import { saveMachinePreflight } from 'src/controllers/machines/save-machine-preflight';
 import { failMachinePlans } from 'src/controllers/plans/fail-machine-plans';
 import { recordPlanFrame } from 'src/controllers/plans/record-plan-frame';
-import {
-	broadcastToUi,
-	registerAgentSocket,
-	sendToAgent,
-	unregisterAgentSocket
-} from 'src/services/sockets/registry.service';
-import { resolvePing } from 'src/services/sockets/pending-pings.service';
+import { type SocketRegistry } from 'src/services/sockets/registry.service';
 import { type Machine } from 'src/types/MachineSchema';
 import { AgentMsgSchema, type AgentMsg } from 'src/types/protocol';
 
@@ -25,8 +19,11 @@ function isPlanFrame(msg: AgentMsg): msg is PlanFrame {
 	return msg.type.startsWith('plan.');
 }
 
-function announceUpdate(machine: Machine): void {
-	broadcastToUi({ userId: machine.userId, message: { type: 'machine.updated', machine } });
+function announceUpdate(opts: { socketRegistry: SocketRegistry; machine: Machine }): void {
+	opts.socketRegistry.broadcastToUi({
+		userId: opts.machine.userId,
+		message: { type: 'machine.updated', machine: opts.machine }
+	});
 }
 
 // Protocol-level ping frames, not the application ping: this is what catches a
@@ -88,6 +85,7 @@ async function applyMachineFrame(opts: {
 	log: FastifyBaseLogger;
 }): Promise<void> {
 	const machineRepo = opts.fastify.repos.machineRepo;
+	const socketRegistry = opts.fastify.services.socketRegistry;
 	const machine =
 		opts.msg.type === 'hello'
 			? await markMachineOnline({
@@ -113,13 +111,13 @@ async function applyMachineFrame(opts: {
 		return;
 	}
 
-	announceUpdate(machine);
+	announceUpdate({ socketRegistry, machine });
 
 	// A paused machine that reconnects is still paused — the row outranks the
 	// socket — so the agent is told again rather than left to infer from silence
 	// that bosun is not dispatching to it.
 	if (opts.msg.type === 'hello' && machine.status === 'paused') {
-		sendToAgent({ machineId: machine.id, message: { type: 'pause' } });
+		socketRegistry.sendToAgent({ machineId: machine.id, message: { type: 'pause' } });
 	}
 }
 
@@ -132,12 +130,17 @@ async function handleMessage(opts: {
 	log: FastifyBaseLogger;
 }): Promise<void> {
 	const { msg } = opts;
+	const { pendingPings, socketRegistry, idService, planTextService } = opts.fastify.services;
 
 	if (msg.type === 'pong') {
-		const rttMs = resolvePing({ commandId: msg.id, machineId: opts.machineId, at: Date.now() });
+		const rttMs = pendingPings.resolve({
+			commandId: msg.id,
+			machineId: opts.machineId,
+			at: Date.now()
+		});
 
 		if (rttMs !== null) {
-			broadcastToUi({
+			socketRegistry.broadcastToUi({
 				userId: opts.userId,
 				message: { type: 'machine.pong', machineId: opts.machineId, id: msg.id, rttMs }
 			});
@@ -151,6 +154,9 @@ async function handleMessage(opts: {
 			planRepo: opts.fastify.repos.planRepo,
 			planMessageRepo: opts.fastify.repos.planMessageRepo,
 			acRepo: opts.fastify.repos.acRepo,
+			idService,
+			planTextService,
+			socketRegistry,
 			machineId: opts.machineId,
 			frame: msg
 		});
@@ -177,11 +183,38 @@ function createFrameQueue(log: FastifyBaseLogger) {
 	};
 }
 
+function handleClose(opts: {
+	fastify: FastifyInstance;
+	machineId: string;
+	socket: WebSocket;
+}): void {
+	const { socketRegistry, planTextService } = opts.fastify.services;
+
+	if (!socketRegistry.unregisterAgentSocket({ machineId: opts.machineId, socket: opts.socket })) {
+		return;
+	}
+
+	void markMachineOffline({
+		machineRepo: opts.fastify.repos.machineRepo,
+		id: opts.machineId
+	}).then((machine) => {
+		if (machine) {
+			announceUpdate({ socketRegistry, machine });
+		}
+	});
+	void failMachinePlans({
+		planRepo: opts.fastify.repos.planRepo,
+		planTextService,
+		socketRegistry,
+		machineId: opts.machineId
+	});
+}
+
 const routes: FastifyPluginAsync = async function (fastify) {
 	fastify.get('/ws', { websocket: true }, (socket, request) => {
 		const { machineId, userId } = request.agent!;
 
-		registerAgentSocket({ machineId, socket });
+		fastify.services.socketRegistry.registerAgentSocket({ machineId, socket });
 		const stopHeartbeat = startHeartbeat(socket);
 		const enqueue = createFrameQueue(request.log);
 
@@ -206,17 +239,7 @@ const routes: FastifyPluginAsync = async function (fastify) {
 
 		socket.on('close', () => {
 			stopHeartbeat();
-
-			if (unregisterAgentSocket({ machineId, socket })) {
-				const machineRepo = fastify.repos.machineRepo;
-
-				void markMachineOffline({ machineRepo, id: machineId }).then((machine) => {
-					if (machine) {
-						announceUpdate(machine);
-					}
-				});
-				void failMachinePlans({ planRepo: fastify.repos.planRepo, machineId });
-			}
+			handleClose({ fastify, machineId, socket });
 		});
 	});
 };
