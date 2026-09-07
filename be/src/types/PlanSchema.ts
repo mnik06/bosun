@@ -10,6 +10,7 @@ export const PlanSchema = z.object({
 	machineId: z.string(),
 	title: z.string().nullable(),
 	bodyMd: z.string().nullable(),
+	number: z.number().int(),
 	status: PlanStatusSchema,
 	failureReason: z.string().nullable(),
 	input: z.string(),

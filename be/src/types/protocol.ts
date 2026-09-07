@@ -1,6 +1,21 @@
 import { z } from 'zod';
 import { PreflightCheckSchema } from 'src/types/MachineSchema';
 import { PlanAnswerSchema, PlanQuestionSchema } from 'src/types/PlanSchema';
+import {
+	PlanActivityMsgSchema,
+	PlanDoneMsgSchema,
+	PlanErrorMsgSchema,
+	PlanQuestionMsgSchema,
+	PlanTextMsgSchema
+} from 'src/types/plan-stream';
+
+export {
+	PlanActivityMsgSchema,
+	PlanDoneMsgSchema,
+	PlanErrorMsgSchema,
+	PlanQuestionMsgSchema,
+	PlanTextMsgSchema
+};
 
 export const HelloMsgSchema = z.object({
 	type: z.literal('hello'),
@@ -21,36 +36,6 @@ export const PongMsgSchema = z.object({
 	type: z.literal('pong'),
 	id: z.string(),
 	at: z.number()
-});
-
-export const PlanTextMsgSchema = z.object({
-	type: z.literal('plan.text'),
-	planId: z.string(),
-	delta: z.string()
-});
-
-export const PlanActivityMsgSchema = z.object({
-	type: z.literal('plan.activity'),
-	planId: z.string(),
-	label: z.string()
-});
-
-export const PlanQuestionMsgSchema = z.object({
-	type: z.literal('plan.question'),
-	planId: z.string(),
-	questionId: z.string(),
-	questions: z.array(PlanQuestionSchema).min(1)
-});
-
-export const PlanDoneMsgSchema = z.object({
-	type: z.literal('plan.done'),
-	planId: z.string()
-});
-
-export const PlanErrorMsgSchema = z.object({
-	type: z.literal('plan.error'),
-	planId: z.string(),
-	message: z.string()
 });
 
 export const ExecTextMsgSchema = z.object({

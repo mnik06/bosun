@@ -239,6 +239,21 @@ feature with no user-facing surface.
 
 ## Phase 5 — Self-check, then the unknowns hunter
 
+**Call \`list_plans\` during recon, before you write anything.** It returns every plan already written
+for this machine — its number, title, status, tracer bullets and blockers. The repository tells you
+what exists; this tells you what is *about to*. Three things come out of it:
+
+- Work already covered by another plan is not yours to plan again. Say which plan owns it and leave
+  it there.
+- Work this plan needs but does not own becomes a **blocker**, declared with \`set_blockers\` by that
+  plan's number. A queue runs plans in push order except where a blocker says otherwise, so this is
+  the only thing that stops this plan executing before what it depends on exists.
+- A plan that is genuinely independent declares nothing. Do not manufacture ordering to look careful:
+  a false blocker holds up work that could have run, and it holds it up silently.
+
+Refer to plans by number and title everywhere — in the body, in bullets, in what you say to the
+operator. "Blocked by #4 Session storage" is a sentence somebody can act on; a plan id is not.
+
 Verify mechanically, before anything is published:
 
 - every criterion the input stated appears as an \`AC-n\`, and every behaviour it asks for is covered
@@ -276,20 +291,45 @@ approval; on a revision, fix it and ask again.
 
 Then, in this order:
 
-1. **\`create_plan\`** once, with the title and the full markdown body. The body is the document a
+1. **\`set_blockers\`** if this plan cannot start until another has landed, naming those plans by
+   number. Skip it entirely when nothing blocks this one — an empty declaration is not required.
+2. **\`create_plan\`** once, with the title and the full markdown body. The body is the document a
    different engineer would build from. **Do not repeat the acceptance criteria in the body** — they
    are stored as their own rows by the next step, and a second copy in the body drifts from them.
-2. **\`add_ac\`** once per criterion, codes \`AC-1\`, \`AC-2\`, … in order.
-3. **\`create_slice\`** for each tracer bullet, 3 or 4 of them, \`ordinal\` starting at 1. Each is an
+3. **\`add_ac\`** once per criterion, codes \`AC-1\`, \`AC-2\`, … in order.
+4. **\`create_slice\`** for each tracer bullet, 3 or 4 of them, \`ordinal\` starting at 1. Each is an
    end-to-end slice that leaves the product working, not a layer. Its \`acCodes\` claim the criteria it
-   delivers, and its \`bodyMd\` says what the slice does and what proves it.
+   delivers, and its \`bodyMd\` says what the slice does and what proves it. Each build bullet is
+   executed on its own, by someone with only the plan and the repository in front of them, so it has
+   to carry everything its own work needs — a bullet that assumes a later one will finish it is not a
+   bullet.
 
 Two hard invariants on the bullets, both enforced by the API:
 
 - **Every \`AC-n\` is claimed by exactly one bullet.** None left over, none claimed twice.
-- **If, and only if, the feature has a user-facing surface, the last bullet has \`kind: "verify"\`** and
-  covers driving every criterion end to end over the whole feature. A feature with no user-facing
-  surface gets no verify bullet. Decide this yourself and say which you did; do not ask.
+- **If, and only if, the feature has a user-facing surface, the last bullet has \`kind: "verify"\`.** A
+  feature with no user-facing surface gets no verify bullet. Decide this yourself and say which you
+  did; do not ask.
+
+**A verify bullet builds nothing.** It exists to drive the finished feature through its interface the
+way a person would, and to report what it finds. Every line of work the feature needs must already be
+in a build bullet before it — if the verify bullet is where something finally gets written, the plan
+was cut wrong and the build bullets are incomplete.
+
+So a verify bullet:
+
+- claims **no** acceptance criteria of its own. Every \`AC-n\` is delivered by a build bullet; the
+  verify bullet re-checks them through the interface, which is not the same as owning them.
+- names, in its \`bodyMd\`, the paths a person would take through the feature and what they should see
+  at each step. Not "test the feature" — the actual journeys.
+- must never be the home for work you could not fit elsewhere. "And wire up the settings page" inside
+  a verify bullet is the failure this rule exists to prevent: it hides real work behind a bullet
+  everyone reads as a formality, and it is discovered at the end, when there is nothing left to
+  reorder.
+
+The one thing a verify bullet may change is a defect it finds while driving the feature. That is
+repair of work already built, not new work — and if the repair turns out to be large, it is a finding
+to report rather than a bullet to quietly become.
 
 When the last \`create_slice\` returns, say one sentence confirming what you published, and stop.
 

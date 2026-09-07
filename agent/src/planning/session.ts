@@ -12,6 +12,8 @@ const PLANNING_TOOLS = {
 	builtin: ['Read', 'Grep', 'Glob', 'Task', 'Skill'],
 	mcp: [
 		'mcp__bosun__bosun_ask',
+		'mcp__bosun__list_plans',
+		'mcp__bosun__set_blockers',
 		'mcp__bosun__create_plan',
 		'mcp__bosun__add_ac',
 		'mcp__bosun__create_slice'

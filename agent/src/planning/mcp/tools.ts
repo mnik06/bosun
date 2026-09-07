@@ -15,6 +15,10 @@ export const CreatePlanArgsSchema = z.object({
 
 export const AddAcArgsSchema = z.object({ code: z.string().min(1), text: z.string().min(1) });
 
+export const SetBlockersArgsSchema = z.object({
+	blockedByNumbers: z.array(z.number().int().positive())
+});
+
 export const CreateSliceArgsSchema = z.object({
 	ordinal: z.number().int().min(1),
 	kind: z.enum(['build', 'verify']),
@@ -24,6 +28,10 @@ export const CreateSliceArgsSchema = z.object({
 });
 
 const DESCRIPTIONS: Record<string, string> = {
+	list_plans:
+		'List every plan already written for this machine — number, title, status, its tracer bullets and what it is blocked by. Call this during recon, before you write anything: it is the only way to see whether the work you are planning is already covered, already underway, or waiting on something. Bodies are truncated to a summary.',
+	set_blockers:
+		'Declare which plans this one cannot start until. Names them by plan number, replacing whatever was declared before — pass an empty list to clear. A queue runs plans in push order except where a blocker says otherwise, so this is what stops a plan executing before the work it depends on exists.',
 	create_plan:
 		'Publish the plan title and its markdown body. Call this once, before add_ac, and only after every question is resolved.',
 	add_ac:
@@ -33,6 +41,8 @@ const DESCRIPTIONS: Record<string, string> = {
 };
 
 export const TOOL_SCHEMAS = {
+	list_plans: z.object({}),
+	set_blockers: SetBlockersArgsSchema,
 	create_plan: CreatePlanArgsSchema,
 	add_ac: AddAcArgsSchema,
 	create_slice: CreateSliceArgsSchema
@@ -63,6 +73,19 @@ export function createPlanDispatch(opts: {
 		return async function dispatch(name: string, args: unknown) {
 			if (name === 'bosun_ask') {
 				return ask(args);
+			}
+
+			if (name === 'list_plans') {
+				return textToolResult(JSON.stringify(await opts.bosunApi.listMachinePlans()));
+			}
+
+			if (name === 'set_blockers') {
+				const saved = await opts.bosunApi.setPlanBlockers({
+					planId: opts.planId,
+					...SetBlockersArgsSchema.parse(args)
+				});
+
+				return textToolResult(JSON.stringify(saved));
 			}
 
 			if (name === 'create_plan') {

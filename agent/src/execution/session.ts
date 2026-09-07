@@ -127,6 +127,7 @@ export function createExecutionSessions(opts: {
 			definitions: executionDefinitions(msg.afk),
 			createDispatch: createExecutionDispatch({
 				afk: msg.afk,
+				bosunApi: opts.services.bosunApi,
 				onQuestion: ({ questionId, questions }) => {
 					opts.send({ type: 'exec.question', runId: msg.runId, questionId, questions });
 				}

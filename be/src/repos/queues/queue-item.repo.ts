@@ -59,7 +59,12 @@ export function getQueueItemRepo(db: DbOrTx) {
 		// The status transition is the claim. Two schedulers racing to start the
 		// same queue both run this, and only the one whose UPDATE matches a `queued`
 		// row gets an item back — which is what stops a plan being dispatched twice.
-		async claimNext(queueId: string): Promise<QueueItem | null> {
+		//
+		// `skipPlanIds` are the plans still waiting on a blocker. They stay queued
+		// and keep their place; the queue simply takes the next one that can
+		// actually run, so push order decides between plans that are equally ready
+		// and dependency order decides the rest.
+		async claimNext(queueId: string, skipPlanIds: string[] = []): Promise<QueueItem | null> {
 			const [row] = await db
 				.update(queueItems)
 				.set({ status: 'running', startedAt: new Date() })
@@ -69,7 +74,12 @@ export function getQueueItemRepo(db: DbOrTx) {
 						eq(queueItems.status, 'queued'),
 						eq(
 							queueItems.id,
-							sql`(select id from ${queueItems} where queue_id = ${queueId} and status = 'queued' order by ordinal asc limit 1)`
+							skipPlanIds.length === 0
+								? sql`(select id from ${queueItems} where queue_id = ${queueId} and status = 'queued' order by ordinal asc limit 1)`
+								: sql`(select id from ${queueItems} where queue_id = ${queueId} and status = 'queued' and plan_id not in ${sql`(${sql.join(
+									skipPlanIds.map((id) => sql`${id}`),
+									sql`, `
+								)})`} order by ordinal asc limit 1)`
 						)
 					)
 				)

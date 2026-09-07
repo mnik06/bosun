@@ -4,6 +4,7 @@ import { Link } from 'react-router'
 
 import { useMachinesQuery } from '~/entities/machine'
 import { PlanStatusBadge, usePlansQuery, type Plan } from '~/entities/plan'
+import { DiscardPlanAction } from '~/features/discard-plan'
 import { PushToQueueModal } from '~/features/push-to-queue'
 import { formatRelativeTime, toErrorMessage } from '~/shared/lib'
 
@@ -94,7 +95,10 @@ export function PlansList () {
 								· {formatRelativeTime(plan.createdAt)}
 								</Text>
 							</Stack>
-							<PlanStatusBadge plan={plan} />
+							<Group gap="xs" wrap="nowrap">
+								<PlanStatusBadge plan={plan} />
+								<DiscardPlanAction planId={plan.id} title={`#${plan.number}`} />
+							</Group>
 						</Group>
 					</Card>
 				</Group>

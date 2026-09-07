@@ -59,6 +59,7 @@ const routes: FastifyPluginAsync = async function (f) {
 			return getPlanDetail({
 				planRepo: fastify.repos.planRepo,
 				planMessageRepo: fastify.repos.planMessageRepo,
+				planBlockerRepo: fastify.repos.planBlockerRepo,
 				acRepo: fastify.repos.acRepo,
 				sliceRepo: fastify.repos.sliceRepo,
 				id: req.params.id,

@@ -10,6 +10,7 @@ export const PlanSchema = z.object({
 	machineId: z.string(),
 	title: z.string().nullable(),
 	bodyMd: z.string().nullable(),
+	number: z.number().int(),
 	status: PlanStatusSchema,
 	failureReason: z.string().nullable(),
 	input: z.string(),
@@ -90,7 +91,8 @@ export const PlanDetailSchema = z.object({
 	plan: PlanSchema,
 	messages: z.array(PlanMessageSchema),
 	acs: z.array(AcSchema),
-	slices: z.array(SliceSchema)
+	slices: z.array(SliceSchema),
+	blockedBy: z.array(PlanSchema)
 })
 
 export type PlanDetail = z.infer<typeof PlanDetailSchema>

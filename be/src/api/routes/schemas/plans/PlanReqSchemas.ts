@@ -51,3 +51,7 @@ export const AgentSliceReqSchema = z.object({
 	bodyMd: z.string().optional(),
 	acCodes: z.array(z.string().min(1))
 });
+
+export const AgentBlockersReqSchema = z.object({
+	blockedByNumbers: z.array(z.number().int().positive())
+});

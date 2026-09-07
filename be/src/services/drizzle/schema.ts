@@ -4,6 +4,7 @@ import {
 	integer,
 	jsonb,
 	pgTable,
+	primaryKey,
 	text,
 	timestamp,
 	unique,
@@ -61,6 +62,10 @@ export const plans = pgTable(
 		machineId: text()
 			.notNull()
 			.references(() => machines.id, { onDelete: 'cascade' }),
+		// A number a person can say out loud. Plans are referred to across machines,
+		// in prompts and in blocker lists, and a nanoid is not something anyone can
+		// hold in their head or read back to you.
+		number: integer().notNull(),
 		title: text(),
 		bodyMd: text(),
 		status: text().$type<PlanStatus>().notNull().default('planning'),
@@ -68,7 +73,13 @@ export const plans = pgTable(
 		input: text().notNull(),
 		createdAt: timestamp({ withTimezone: true }).notNull().defaultNow()
 	},
-	(table) => [index('plans_user_id_idx').on(table.userId), index('plans_machine_id_idx').on(table.machineId)]
+	(table) => [
+		index('plans_user_id_idx').on(table.userId),
+		index('plans_machine_id_idx').on(table.machineId),
+		// Unique so two concurrent creates cannot both take max+1 — one loses and
+		// retries rather than two plans quietly sharing a number.
+		unique('plans_user_number_key').on(table.userId, table.number)
+	]
 );
 
 export const planMessages = pgTable(
@@ -199,4 +210,23 @@ export const sliceRuns = pgTable(
 		finishedAt: timestamp({ withTimezone: true })
 	},
 	(table) => [index('slice_runs_queue_item_id_idx').on(table.queueItemId)]
+);
+
+// A plan that cannot start until another one has landed. An edge rather than a
+// column because a plan is routinely waiting on more than one, and because the
+// pair is the fact — neither side owns it.
+export const planBlockers = pgTable(
+	'plan_blockers',
+	{
+		planId: text()
+			.notNull()
+			.references(() => plans.id, { onDelete: 'cascade' }),
+		blockedByPlanId: text()
+			.notNull()
+			.references(() => plans.id, { onDelete: 'cascade' })
+	},
+	(table) => [
+		primaryKey({ columns: [table.planId, table.blockedByPlanId] }),
+		index('plan_blockers_blocked_by_idx').on(table.blockedByPlanId)
+	]
 );

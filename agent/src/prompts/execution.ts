@@ -27,10 +27,16 @@ function alreadyDone(slices: ExecutionContext['doneSlices']): string {
 // problem into another step that hides one.
 function work(context: ExecutionContext): string {
 	return context.sliceKind === 'verify'
-		? `This is a **verify** bullet. Run the checks this repository actually has — its test command, its typecheck, its linter, whatever \`package.json\`, the Makefile or the CI config names. Report what passed and what failed.
+		? `This is a **verify** bullet, and it builds nothing. Every bullet before it has already been executed in this worktree; your job is to drive the finished feature the way a person would and report what you find.
 
-Do not change code to make a check pass. If a check fails, say so plainly and stop: a failing check is the finding, and hiding it is the one outcome that makes this bullet worthless.`
+Run the repository's own checks first — its test command, its typecheck, its linter, whatever \`package.json\`, the Makefile or the CI config names. Then walk the journeys this bullet names, through the interface rather than around it.
+
+**The only change you may make is repairing a defect you found doing that.** Not "while I was in there"; not a piece of the feature an earlier bullet left unfinished. If something was never built, that is a finding to report, not work to quietly absorb — the plan was cut wrong and somebody needs to know, and burying it here is how that stays hidden until it is expensive. The same goes for a repair that turns out to be large: report it rather than becoming the bullet that rewrote half the feature.
+
+A failing check is a result, not an obstacle. Never change code to make one pass.`
 		: `This is a **build** bullet. Implement exactly what it describes and nothing beyond it — the later bullets are somebody's plan, not scope you have been handed early.
+
+It has to leave the repository working on its own: the verify bullet at the end is a review, not the place your work gets finished. Run whatever checks the repository has before you call it done.
 
 Match the surrounding code: its naming, its structure, its idiom, its comment density. Read neighbouring files before you write. If the repository has a CLAUDE.md or equivalent, it outranks your habits.`;
 }
@@ -71,6 +77,12 @@ ${asking(context.afk)}
 Do not commit, and do not touch git at all — bosun commits this bullet for you once you finish, and a commit of your own splits the history it is keeping.
 
 Do not start the next bullet. Finishing yours is the whole job.
+
+The plan you are executing is not the only one written for this repository. If your bullet runs into
+something you suspect another plan owns, call \`list_plans\` and look: it returns every plan for this
+machine with its number, title, bullets and blockers. Work that belongs to another plan is left to
+it — building it here duplicates it, and building it *differently* here is worse. Say in your report
+which plan you left it to.
 
 # When you are done
 

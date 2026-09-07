@@ -14,7 +14,7 @@ import {
 	PlanErrorMsgSchema,
 	PlanQuestionMsgSchema,
 	PlanTextMsgSchema
-} from 'src/types/protocol';
+} from 'src/types/plan-stream';
 
 export const MachineUpdatedMsgSchema = z.object({
 	type: z.literal('machine.updated'),

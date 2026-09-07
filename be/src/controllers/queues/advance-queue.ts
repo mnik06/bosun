@@ -4,6 +4,7 @@ import { type PlanRepo } from 'src/repos/plans/plan.repo';
 import { type SliceRepo } from 'src/repos/plans/slice.repo';
 import { type QueueItemRepo } from 'src/repos/queues/queue-item.repo';
 import { type QueueRepo } from 'src/repos/queues/queue.repo';
+import { type PlanBlockerRepo } from 'src/repos/plans/plan-blocker.repo';
 import { type SliceRunRepo } from 'src/repos/queues/slice-run.repo';
 import { type SocketRegistry } from 'src/services/sockets/registry.service';
 import { type Queue, type QueueItem } from 'src/types/QueueSchema';
@@ -19,6 +20,7 @@ export interface AdvanceDeps {
 	planRepo: PlanRepo;
 	sliceRepo: SliceRepo;
 	acRepo: AcRepo;
+	planBlockerRepo: PlanBlockerRepo;
 	socketRegistry: SocketRegistry;
 }
 
@@ -110,6 +112,41 @@ async function dispatch(
 	return true;
 }
 
+// A plan waits for its blockers to have finished *in this queue*. A blocker that
+// was never queued here cannot be waited for at all — nothing will ever complete
+// it in this worktree — so it does not hold the plan back. That is deliberate: a
+// dependency nobody queued is a planning mistake, and stalling a queue forever
+// over it is worse than running in push order and letting the result show it.
+async function blockedPlanIds(deps: AdvanceDeps, items: QueueItem[]): Promise<string[]> {
+	const queued = items.filter((item) => item.status === 'queued');
+
+	if (queued.length === 0) {
+		return [];
+	}
+
+	const edges = await deps.planBlockerRepo.listEdges(queued.map((item) => item.planId));
+
+	if (edges.length === 0) {
+		return [];
+	}
+
+	const finished = new Set(
+		items.filter((item) => item.status === 'done').map((item) => item.planId)
+	);
+	const present = new Set(items.map((item) => item.planId));
+
+	return queued
+		.filter((item) =>
+			edges.some(
+				(edge) =>
+					edge.planId === item.planId &&
+					present.has(edge.blockedByPlanId) &&
+					!finished.has(edge.blockedByPlanId)
+			)
+		)
+		.map((item) => item.planId);
+}
+
 // Asked for only when every bullet landed. A plan that failed keeps its branch
 // and its partial commits for somebody to look at, but opening a pull request
 // for work that did not finish would put it in front of reviewers as though it
@@ -187,7 +224,7 @@ export async function advanceQueue(deps: AdvanceDeps, opts: { queueId: string })
 		await requestPublish(deps, { queue, item: running });
 	}
 
-	const next = await deps.queueItemRepo.claimNext(queue.id);
+	const next = await deps.queueItemRepo.claimNext(queue.id, await blockedPlanIds(deps, items));
 
 	if (!next) {
 		await setStatus(deps, { queue, status: 'idle' });

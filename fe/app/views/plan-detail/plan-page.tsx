@@ -1,4 +1,16 @@
-import { Alert, Anchor, Center, Container, Group, Loader, Stack, Tabs, Text } from '@mantine/core'
+import {
+	Alert,
+	Anchor,
+	Badge,
+	Center,
+	Container,
+	Group,
+	Loader,
+	Stack,
+	Tabs,
+	Text,
+	Tooltip
+} from '@mantine/core'
 import { Link } from 'react-router'
 
 import { useMachineQuery } from '~/entities/machine'
@@ -43,7 +55,7 @@ export default function PlanPage ({ params }: Route.ComponentProps) {
 		)
 	}
 
-	const { plan, messages, acs, slices } = data
+	const { plan, messages, acs, slices, blockedBy } = data
 	const planning = plan.status === 'planning'
 
 	const header = (
@@ -53,10 +65,27 @@ export default function PlanPage ({ params }: Route.ComponentProps) {
 					← Plans
 				</Anchor>
 				<Text size="sm" fw={600}>
+					<Text component="span" c="dimmed" fw={500}>
+						#{plan.number}
+					</Text>{' '}
 					{plan.title ?? 'Untitled'}
 				</Text>
 				<MachineLine machineId={plan.machineId} />
 				<PlanStatusBadge plan={plan} />
+				{blockedBy.map((blocker) => (
+					<Tooltip key={blocker.id} label={blocker.title ?? 'Untitled'}>
+						<Badge
+							component={Link}
+							to={`/plans/${blocker.id}`}
+							size="sm"
+							color="orange"
+							variant="light"
+							className="cursor-pointer"
+						>
+							blocked by #{blocker.number}
+						</Badge>
+					</Tooltip>
+				))}
 			</Group>
 			<DiscardPlanButton planId={plan.id} />
 		</Group>

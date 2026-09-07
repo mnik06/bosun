@@ -63,8 +63,10 @@ export function getBosunApiService(deps: { serverUrl: string; machineKey?: strin
 		return payload;
 	}
 
-	async function get(path: string): Promise<unknown> {
-		const res = await fetch(`${base}${path}`);
+	async function get(path: string, authorized = false): Promise<unknown> {
+		const res = await fetch(`${base}${path}`, {
+			headers: authorized ? { authorization: `Bearer ${deps.machineKey ?? ''}` } : {}
+		});
 		const payload: unknown = await res.json().catch(() => null);
 
 		if (!res.ok) {
@@ -106,6 +108,18 @@ export function getBosunApiService(deps: { serverUrl: string; machineKey?: strin
 				path: `/agent/plans/${opts.planId}/acs`,
 				authorized: true,
 				body: { code: opts.code, text: opts.text }
+			});
+		},
+
+		async listMachinePlans(): Promise<unknown> {
+			return get('/agent/plans', true);
+		},
+
+		async setPlanBlockers(opts: { planId: string; blockedByNumbers: number[] }): Promise<unknown> {
+			return post({
+				path: `/agent/plans/${opts.planId}/blockers`,
+				body: { blockedByNumbers: opts.blockedByNumbers },
+				authorized: true
 			});
 		},
 

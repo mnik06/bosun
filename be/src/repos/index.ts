@@ -1,6 +1,7 @@
 import { type getDb } from 'src/services/drizzle/drizzle.service';
 import { getMachineRepo } from 'src/repos/machines/machine.repo';
 import { getAcRepo } from 'src/repos/plans/ac.repo';
+import { getPlanBlockerRepo } from 'src/repos/plans/plan-blocker.repo';
 import { getPlanMessageRepo } from 'src/repos/plans/plan-message.repo';
 import { getPlanRepo } from 'src/repos/plans/plan.repo';
 import { getSliceRepo } from 'src/repos/plans/slice.repo';
@@ -13,6 +14,7 @@ export function getRepos(db: ReturnType<typeof getDb>) {
 	return {
 		acRepo: getAcRepo(db),
 		machineRepo: getMachineRepo(db),
+		planBlockerRepo: getPlanBlockerRepo(db),
 		planMessageRepo: getPlanMessageRepo(db),
 		planRepo: getPlanRepo(db),
 		queueItemRepo: getQueueItemRepo(db),

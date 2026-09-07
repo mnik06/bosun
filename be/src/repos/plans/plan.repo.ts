@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import { type DbOrTx } from 'src/services/drizzle/drizzle.service';
 import { plans } from 'src/services/drizzle/schema';
 import { PlanSchema, type Plan, type PlanStatus } from 'src/types/PlanSchema';
@@ -6,6 +6,7 @@ import { PlanSchema, type Plan, type PlanStatus } from 'src/types/PlanSchema';
 const columns = {
 	id: plans.id,
 	userId: plans.userId,
+	number: plans.number,
 	machineId: plans.machineId,
 	title: plans.title,
 	bodyMd: plans.bodyMd,
@@ -20,15 +21,50 @@ const columns = {
 // waiting for the first careless caller.
 export function getPlanRepo(db: DbOrTx) {
 	return {
+		// The number is taken in the insert rather than read first and written
+		// second: two creates racing would otherwise both read the same max. The
+		// unique index is what makes the loser fail, and the caller retries.
 		async create(opts: {
 			id: string;
 			userId: string;
 			machineId: string;
 			input: string;
 		}): Promise<Plan> {
-			const [row] = await db.insert(plans).values(opts).returning(columns);
+			const [row] = await db
+				.insert(plans)
+				.values({
+					...opts,
+					number: sql`(select coalesce(max(${plans.number}), 0) + 1 from ${plans} where ${plans.userId} = ${opts.userId})`
+				})
+				.returning(columns);
 
 			return PlanSchema.parse(row);
+		},
+
+		// Everything a session may reason about when it asks what else exists for
+		// this machine. Owner-scoped as well as machine-scoped: the agent asks with
+		// a machine key, and a machine belongs to exactly one person.
+		async listForMachineContext(machineId: string): Promise<Plan[]> {
+			const rows = await db
+				.select(columns)
+				.from(plans)
+				.where(eq(plans.machineId, machineId))
+				.orderBy(asc(plans.number));
+
+			return rows.map((row) => PlanSchema.parse(row));
+		},
+
+		async getByNumbers(opts: { userId: string; numbers: number[] }): Promise<Plan[]> {
+			if (opts.numbers.length === 0) {
+				return [];
+			}
+
+			const rows = await db
+				.select(columns)
+				.from(plans)
+				.where(and(eq(plans.userId, opts.userId), inArray(plans.number, opts.numbers)));
+
+			return rows.map((row) => PlanSchema.parse(row));
 		},
 
 		async listOwned(userId: string): Promise<Plan[]> {

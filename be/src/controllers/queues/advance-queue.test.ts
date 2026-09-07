@@ -61,6 +61,7 @@ function build(opts: {
 	claimRun?: SliceRun | null;
 	runs?: SliceRun[];
 	busy?: number;
+	edges?: { planId: string; blockedByPlanId: string }[];
 }) {
 	const sendToAgent = vi.fn();
 
@@ -93,6 +94,7 @@ function build(opts: {
 			])
 		},
 		acRepo: { listBySlice: vi.fn().mockResolvedValue([]) },
+		planBlockerRepo: { listEdges: vi.fn().mockResolvedValue(opts.edges ?? []) },
 		socketRegistry: { sendToAgent, broadcastToUi: vi.fn() }
 	} as unknown as AdvanceDeps;
 
@@ -167,6 +169,58 @@ describe('advanceQueue', () => {
 		await advanceQueue(deps, { queueId: 'q_1' });
 
 		expect(dispatched(sendToAgent).afk).toBe(true);
+	});
+
+	// Push order decides between plans that are equally ready; a declared blocker
+	// decides the rest. Without this a plan runs before the work it needs exists.
+	it('skips a plan whose blocker is queued and unfinished', async () => {
+		const { deps } = build({
+			items: [
+				item({ id: 'qi_1', planId: 'p_blocker', status: 'queued' }),
+				item({ id: 'qi_2', planId: 'p_blocked', ordinal: 2, status: 'queued' })
+			],
+			edges: [{ planId: 'p_blocked', blockedByPlanId: 'p_blocker' }],
+			claimItem: item(),
+			claimRun: run(),
+			runs: [run()]
+		});
+
+		await advanceQueue(deps, { queueId: 'q_1' });
+
+		expect(deps.queueItemRepo.claimNext).toHaveBeenCalledWith('q_1', ['p_blocked']);
+	});
+
+	it('stops skipping once the blocker has finished', async () => {
+		const { deps } = build({
+			items: [
+				item({ id: 'qi_1', planId: 'p_blocker', status: 'done' }),
+				item({ id: 'qi_2', planId: 'p_blocked', ordinal: 2, status: 'queued' })
+			],
+			edges: [{ planId: 'p_blocked', blockedByPlanId: 'p_blocker' }],
+			claimItem: item(),
+			claimRun: run(),
+			runs: [run()]
+		});
+
+		await advanceQueue(deps, { queueId: 'q_1' });
+
+		expect(deps.queueItemRepo.claimNext).toHaveBeenCalledWith('q_1', []);
+	});
+
+	// Nothing in this worktree will ever complete a plan that was never pushed to
+	// it, so waiting on one stalls the queue for good.
+	it('does not wait on a blocker that is not in this queue', async () => {
+		const { deps } = build({
+			items: [item({ id: 'qi_2', planId: 'p_blocked', status: 'queued' })],
+			edges: [{ planId: 'p_blocked', blockedByPlanId: 'p_elsewhere' }],
+			claimItem: item(),
+			claimRun: run(),
+			runs: [run()]
+		});
+
+		await advanceQueue(deps, { queueId: 'q_1' });
+
+		expect(deps.queueItemRepo.claimNext).toHaveBeenCalledWith('q_1', []);
 	});
 
 	it('goes idle when there is nothing left to run', async () => {
