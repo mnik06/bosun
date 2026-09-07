@@ -1,5 +1,10 @@
 const VERSION_PLACEHOLDER = '{version}';
-const LATEST_TTL_MS = 5 * 60 * 1000;
+// Short on purpose. The lookup is one unauthenticated HEAD, so the cache is only
+// there to keep a fleet refreshing at once from making a burst of them — and a
+// long window means publishing a release and refreshing straight away silently
+// does nothing, which reads as the upgrade being broken rather than as the
+// backend not having noticed yet.
+const LATEST_TTL_MS = 30 * 1000;
 
 // A base pointing at `releases/latest` cannot express "this exact build", so a
 // bad release could not be rolled back by changing configuration — every machine
@@ -38,6 +43,12 @@ export function getAgentReleaseService(deps: {
 }) {
 	const resolveLatest = deps.resolveLatest ?? followToTag;
 	const now = deps.now ?? Date.now;
+	// A base with no {version} in it fetches whatever `latest` has become, which
+	// need not be the version a machine was told to install — the agent's own
+	// version probe then rejects the download and the upgrade fails on every
+	// attempt. Offering nothing is the honest answer, and it fails where somebody
+	// can see it rather than on a box with no inbound port.
+	const canNameVersion = deps.downloadBaseUrl.includes(VERSION_PLACEHOLDER);
 
 	let cached: { version: string; at: number } | null = null;
 
@@ -83,7 +94,15 @@ export function getAgentReleaseService(deps: {
 		// Not a semver comparison: "different from what we publish" is the useful
 		// question, and it is what lets a downgrade roll a fleet back by pinning
 		// AGENT_EXPECTED_VERSION rather than needing a new release above the bad one.
+		misconfigured: canNameVersion
+			? null
+			: `AGENT_DOWNLOAD_BASE_URL has no ${VERSION_PLACEHOLDER} in it, so a machine cannot be sent a specific build — no upgrade will be offered`,
+
 		async target(reported: string | null): Promise<{ version: string; downloadBaseUrl: string } | null> {
+			if (!canNameVersion) {
+				return null;
+			}
+
 			const version = await currentVersion();
 
 			if (version === null || reported === null || reported === version) {

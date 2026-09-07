@@ -117,6 +117,49 @@ describe('resolving what to run', () => {
 		expect(resolveLatest).toHaveBeenCalledOnce();
 	});
 
+	// Publishing a release and refreshing straight afterwards is the normal way to
+	// ship an agent, and a cache that outlives that makes it look like nothing
+	// happened — no offer, no log line, nothing to chase.
+	it('notices a release published since the last lookup', async () => {
+		const resolveLatest = vi
+			.fn()
+			.mockResolvedValueOnce('2.1.0')
+			.mockResolvedValueOnce('2.1.1');
+		let clock = 1_000;
+		const release = getAgentReleaseService({
+			latestReleaseUrl: 'https://h/releases/latest',
+			downloadBaseUrl: DOWNLOAD,
+			resolveLatest,
+			now: () => clock
+		});
+
+		await release.target('2.0.0');
+		clock += 31_000;
+
+		expect(await release.target('2.1.0')).toMatchObject({ version: '2.1.1' });
+	});
+
+	// The exact shape that broke a live fleet: the backend names 2.0.11, a base
+	// pointing at `latest` hands the agent 2.0.12, and the agent's version probe
+	// rejects it. Every upgrade fails, and nothing anywhere says why.
+	it('offers nothing when the download base cannot name a version', async () => {
+		const resolveLatest = vi.fn().mockResolvedValue('2.1.0');
+		const release = getAgentReleaseService({
+			latestReleaseUrl: 'https://h/releases/latest',
+			downloadBaseUrl: 'https://h/releases/latest/download',
+			resolveLatest
+		});
+
+		expect(await release.target('2.0.0')).toBeNull();
+		expect(release.misconfigured).toContain('AGENT_DOWNLOAD_BASE_URL');
+	});
+
+	it('has nothing to complain about when the base names a version', () => {
+		expect(
+			getAgentReleaseService({ pinnedVersion: '2.1.0', downloadBaseUrl: DOWNLOAD }).misconfigured
+		).toBeNull();
+	});
+
 	// A brief outage at the release host must not make every machine look current.
 	it('falls back to the last good answer when a later lookup fails', async () => {
 		const resolveLatest = vi

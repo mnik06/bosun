@@ -44,6 +44,10 @@ function decorateContext(server: FastifyInstance, env: Env): void {
 	server.decorate('env', env);
 	server.decorate('repos', repos);
 	server.decorate('services', services);
+
+	if (services.agentRelease.misconfigured) {
+		server.log.warn(services.agentRelease.misconfigured);
+	}
 	server.decorate(
 		'requireUser',
 		getRequireUserHook({

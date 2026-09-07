@@ -32,7 +32,7 @@ export function MachineActions ({
 						disabled={isRefreshing}
 						onClick={onRefresh}
 					>
-						Refresh checks
+						Refresh machine
 					</Menu.Item>
 
 					<PauseMenuItem machine={machine} />
