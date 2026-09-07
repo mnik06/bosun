@@ -35,7 +35,7 @@ export interface RouterDeps {
 	configPath: string;
 	state: AgentState;
 	sessions: PlanningSessions;
-	sendPreflight: () => Promise<void>;
+	announce: () => Promise<void>;
 }
 
 // A switch rather than a chain with a fallthrough: the chain's last branch was
@@ -49,7 +49,7 @@ export async function routeServerFrame(deps: RouterDeps, msg: ServerMsg): Promis
 			return;
 
 		case 'refresh':
-			await deps.sendPreflight();
+			await deps.announce();
 
 			return;
 

@@ -2,6 +2,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { z } from 'zod';
+import { type EnvService } from './env.service';
 
 export const MCP_CONFIG_FILENAME = 'mcp.json';
 
@@ -113,7 +114,7 @@ export function readMcpConfigFile(opts: {
 	};
 }
 
-export function getMcpConfigService(deps: { env: NodeJS.ProcessEnv; homeDir?: string }) {
+export function getMcpConfigService(deps: { env: EnvService; homeDir?: string }) {
 	const configPath = path.join(deps.homeDir ?? os.homedir(), '.bosun', MCP_CONFIG_FILENAME);
 
 	return {
@@ -127,7 +128,10 @@ export function getMcpConfigService(deps: { env: NodeJS.ProcessEnv; homeDir?: st
 			}
 
 			try {
-				return readMcpConfigFile({ raw: fs.readFileSync(configPath, 'utf8'), env: deps.env });
+				return readMcpConfigFile({
+					raw: fs.readFileSync(configPath, 'utf8'),
+					env: deps.env.current()
+				});
 			} catch {
 				return { ...EMPTY, present: true, error: `could not read ${configPath}` };
 			}

@@ -34,8 +34,27 @@ interface ConnectionDeps {
 	state: AgentState;
 }
 
-function createPreflightSender(deps: ConnectionDeps & { socket: WebSocket }) {
-	return async function sendPreflight(): Promise<void> {
+// What `refresh` runs is deliberately the same thing `open` runs. Everything the
+// agent reports is read from disk at this moment — the env file, the MCP config,
+// the skills directories — so a token pasted in after the agent started, or a
+// server added since, takes effect without a restart.
+function createAnnouncer(deps: ConnectionDeps & { socket: WebSocket }) {
+	return async function announce(): Promise<void> {
+		if (deps.socket.readyState !== WebSocket.OPEN) {
+			return;
+		}
+
+		// `markOnline` leaves a paused row paused, so re-announcing cannot silently
+		// un-pause a machine.
+		deps.socket.send(
+			JSON.stringify({
+				type: 'hello',
+				agentVersion: AGENT_VERSION,
+				hostname: os.hostname(),
+				repoPath: deps.config.repoPath
+			})
+		);
+
 		const checks = await deps.services.preflight.collect();
 
 		// Also logged, not only sent: preflight results otherwise exist solely in the
@@ -69,7 +88,7 @@ async function connectOnce(deps: ConnectionDeps): Promise<void> {
 				}
 			}
 		});
-		const sendPreflight = createPreflightSender({ ...deps, socket });
+		const announce = createAnnouncer({ ...deps, socket });
 		let settled = false;
 
 		const settle = (error?: Error) => {
@@ -85,15 +104,7 @@ async function connectOnce(deps: ConnectionDeps): Promise<void> {
 			const paused = deps.state.paused ? ' (paused by bosun)' : '';
 
 			console.log(`connected to ${deps.config.serverUrl}${paused}`);
-			socket.send(
-				JSON.stringify({
-					type: 'hello',
-					agentVersion: AGENT_VERSION,
-					hostname: os.hostname(),
-					repoPath: deps.config.repoPath
-				})
-			);
-			void sendPreflight();
+			void announce();
 		});
 
 		socket.on('message', (raw: RawData) => {
@@ -110,7 +121,7 @@ async function connectOnce(deps: ConnectionDeps): Promise<void> {
 					configPath: deps.configPath,
 					state: deps.state,
 					sessions,
-					sendPreflight
+					announce
 				},
 				msg
 			);

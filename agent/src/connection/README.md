@@ -79,3 +79,22 @@ reconnects in about a second rather than inheriting the delay from an earlier ou
   the same config, each one evicting the other on connect.
 - **Green in the browser but no pong** — the socket is alive and the ping frame arrived, but the
   agent's message handler threw. Check the agent log; the loop keeps the socket open.
+
+## Refresh is the same thing as connecting
+
+`refresh` runs the identical announce the `open` handler runs: `hello` followed by a freshly
+collected preflight. It is not a cheaper subset, and that is the point — every source it reports on
+is read from disk at that moment, so a credential pasted into `~/.bosun/env`, a server added to
+`~/.bosun/mcp.json` or a skill pulled into the repo takes effect without restarting the unit.
+
+The agent re-reads `~/.bosun/env` itself rather than relying on `process.env`, because systemd
+consults `EnvironmentFile=` only at unit start; a value added afterwards is otherwise invisible for
+the life of the process. `PATH` is excluded from that overlay: the unit's `Environment=PATH=` is
+resolved at install time from the shell that ran the installer, and letting the env file win would
+silently break tool discovery.
+
+Re-sending `hello` is safe because `markOnline` writes reachability through a `case` that leaves a
+`paused` row paused. A refresh cannot un-pause a machine.
+
+What refresh cannot do is change the running binary. `AGENT_VERSION` is compiled in, so a new build
+requires a restart — which is a reconnect, and therefore an announce anyway.

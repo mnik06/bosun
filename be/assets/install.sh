@@ -72,7 +72,7 @@ if [ ! -f "$ENV_FILE" ]; then
 # none) and paste the one-year token it prints here:
 # CLAUDE_CODE_OAUTH_TOKEN=
 ENVFILE
-	note "seeded $ENV_FILE — run \`claude setup-token\` on your own machine, paste the token in, then: systemctl --user restart bosun-agent"
+	note "seeded $ENV_FILE — run \`claude setup-token\` on your own machine, paste the token in, then hit Refresh on the machine in bosun"
 fi
 # Custom MCP servers, merged into every planning session alongside bosun's own.
 # Kept here rather than in the repo's .mcp.json: this file holds credentials and
@@ -85,7 +85,7 @@ if [ ! -f "$MCP_FILE" ]; then
   "mcpServers": {}
 }
 MCPFILE
-	note "seeded $MCP_FILE — add MCP servers there; put their tokens in $ENV_FILE and reference them as \${VAR}"
+	note "seeded $MCP_FILE — add MCP servers there; put their tokens in $ENV_FILE and reference them as \${VAR}, then hit Refresh in bosun"
 fi
 
 chmod 700 "$HOME/.bosun"

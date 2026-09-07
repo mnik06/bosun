@@ -31,10 +31,15 @@ function failureReason(error: unknown): string {
 
 export function getExecService() {
 	return {
-		async run(command: string, args: string[], opts?: { cwd?: string }): Promise<ExecResult> {
+		async run(
+			command: string,
+			args: string[],
+			opts?: { cwd?: string; env?: NodeJS.ProcessEnv }
+		): Promise<ExecResult> {
 			try {
 				const { stdout } = await exec(command, args, {
 					cwd: opts?.cwd,
+					env: opts?.env,
 					timeout: EXEC_TIMEOUT_MS
 				});
 

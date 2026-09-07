@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { type EnvService } from './env.service';
 import { type ExecService } from './exec.service';
 
 export const CLAUDE_TOKEN_VARIABLE = 'CLAUDE_CODE_OAUTH_TOKEN';
@@ -62,16 +63,20 @@ export function readClaudeAuthStatus(opts: { raw: string; tokenPresent: boolean 
 	};
 }
 
-export function getClaudeAuthService(deps: { exec: ExecService; env: NodeJS.ProcessEnv }) {
+export function getClaudeAuthService(deps: { exec: ExecService; env: EnvService }) {
 	function readToken(): string | null {
-		return deps.env[CLAUDE_TOKEN_VARIABLE] || null;
+		return deps.env.current()[CLAUDE_TOKEN_VARIABLE] || null;
 	}
 
 	return {
 		readToken,
 
 		async readStatus(): Promise<ClaudeAuthStatus> {
-			const result = await deps.exec.run('claude', ['auth', 'status', '--json']);
+			// Run against the freshly read environment, so a credential pasted into
+			// ~/.bosun/env since the agent started is the one being verified.
+			const result = await deps.exec.run('claude', ['auth', 'status', '--json'], {
+				env: deps.env.current()
+			});
 
 			// The exit status is not the answer — the JSON is. `auth status` is read
 			// whenever it produced one, so a non-zero exit alongside a usable report is
@@ -92,7 +97,7 @@ export function getClaudeAuthService(deps: { exec: ExecService; env: NodeJS.Proc
 		// account bosun checked at preflight rather than whichever variable the CLI
 		// happens to prefer.
 		sessionEnv(): NodeJS.ProcessEnv {
-			const env: NodeJS.ProcessEnv = { ...deps.env };
+			const env: NodeJS.ProcessEnv = deps.env.current();
 
 			for (const variable of CONFLICTING_VARIABLES) {
 				delete env[variable];

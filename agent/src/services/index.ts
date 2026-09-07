@@ -1,5 +1,6 @@
 import { getBosunApiService } from './bosun-api.service';
 import { getClaudeAuthService } from './claude-auth.service';
+import { getEnvService } from './env.service';
 import { getExecService } from './exec.service';
 import { getMcpConfigService } from './mcp-config.service';
 import { getPreflightService } from './preflight.service';
@@ -9,8 +10,9 @@ import { type AgentConfig } from '../config/config';
 
 export function getServices(opts: { config: AgentConfig; env: NodeJS.ProcessEnv }) {
 	const exec = getExecService();
-	const claudeAuth = getClaudeAuthService({ exec, env: opts.env });
-	const mcpConfig = getMcpConfigService({ env: opts.env });
+	const env = getEnvService({ baseEnv: opts.env });
+	const claudeAuth = getClaudeAuthService({ exec, env });
+	const mcpConfig = getMcpConfigService({ env });
 	const skills = getSkillsService({ repoPath: opts.config.repoPath });
 
 	return {
@@ -19,6 +21,7 @@ export function getServices(opts: { config: AgentConfig; env: NodeJS.ProcessEnv 
 			machineKey: opts.config.machineKey
 		}),
 		claudeAuth,
+		env,
 		exec,
 		mcpConfig,
 		preflight: getPreflightService({ exec, claudeAuth, mcpConfig, skills }),

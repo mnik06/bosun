@@ -135,6 +135,31 @@ repo-controlled text that instructs the model rather than data it looks at. On y
 the point — a repo carrying its own planning conventions is the use case. Treat it as a reason to
 review skills in a pull request like any other code.
 
+### Refreshing a machine
+
+Refresh in the browser re-runs exactly what the agent runs when it connects: it re-sends `hello` and
+re-collects every preflight check, reading each source from disk at that moment. So all of this
+takes effect without restarting the agent or re-enrolling:
+
+| changed | picked up by Refresh |
+| ------- | -------------------- |
+| `~/.bosun/env` — a Claude token, an MCP server's credential | yes |
+| `~/.bosun/mcp.json` — a server added or edited | yes |
+| `.claude/skills/` in the repo, or `~/.claude/skills/` | yes |
+| the repo's contents, branch, working tree | yes |
+
+`systemd` reads `EnvironmentFile=` only when the unit starts, so the agent re-reads `~/.bosun/env`
+itself rather than trusting the environment it was launched with. `PATH` is the one key the file
+cannot override — the unit resolves it at install time and that is what lets the service find
+`claude` and `node` at all.
+
+**The one thing Refresh cannot change is the running binary.** `agentVersion` is compiled in, so a
+new agent build needs a restart (`systemctl --user restart bosun-agent`) or a re-run of
+`install.sh`. Refresh re-reports the version it has; it cannot replace it.
+
+Refreshing never un-pauses a machine — `paused` is a property of the machine, not of its socket, and
+every reachability write leaves a paused row alone.
+
 ### Custom MCP servers
 
 Planning sessions run with `--strict-mcp-config`, so the only MCP servers a session sees are the
@@ -158,6 +183,9 @@ Secrets go in `~/.bosun/env` and are referenced as `${VAR}` or `${VAR:-default}`
 them itself before spawning the session, so `mcp.json` never has to hold a literal token. A variable
 the environment never supplied is left as written and reported by the `mcp` preflight check rather
 than silently becoming an empty string.
+
+Both files are re-read on demand, so adding a server or pasting in a token takes effect on the next
+Refresh — see [Refreshing a machine](#refreshing-a-machine).
 
 Every tool of a configured server is allowed (`mcp__<name>__*`). That widens what a session can do:
 a planning session with Jira attached can write to Jira. Planning is a read-and-ask activity, so
