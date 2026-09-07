@@ -7,10 +7,15 @@ primary_region = "lhr"
   NODE_ENV = "production"
   HOST = "0.0.0.0"
   PORT = "8080"
-  # The agent build machines are expected to run. Machines are offered an upgrade
-  # to this version when their operator hits Refresh, so lowering it and
-  # redeploying is how a bad agent release is rolled back across the fleet.
-  AGENT_EXPECTED_VERSION = "2.0.7"
+  # Which agent build machines are told to run is discovered, not configured:
+  # `releases/latest` redirects to the newest tag and the version is read out of
+  # it, so releasing an agent is the whole procedure. Rolling a bad release back
+  # is adding AGENT_EXPECTED_VERSION here — the pin wins over discovery.
+  AGENT_LATEST_RELEASE_URL = "https://github.com/mnik06/bosun/releases/latest"
+  # {version} is what makes "this exact build" expressible. A base ending in
+  # `releases/latest/download` fetches whatever latest has become, which is a
+  # rollback that quietly reinstalls the release it was rolling back from.
+  AGENT_DOWNLOAD_BASE_URL = "https://github.com/mnik06/bosun/releases/download/agent-v{version}"
 
 # auto_stop is off on purpose: this process holds long-lived agent WebSockets,
 # and a proxy-stopped machine drops every one of them.
