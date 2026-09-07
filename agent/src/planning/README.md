@@ -57,6 +57,22 @@ one hop away from the socket, and every answer would need a second channel to ge
 Loopback is not on the network, but every process on the box shares it, so the config carries a
 per-session bearer token and the server rejects anything without it.
 
+## Activity comes from two narrators
+
+A recon sweep runs for minutes and produces no prose, so the activity line is the only thing telling
+the browser the session is alive. Most of that work happens inside a subagent, and its frames arrive
+on the same stream carrying `parent_tool_use_id`.
+
+Those frames are **shown, but attributed** — `Exploring the codebase — read 47 files`, on their own
+counters. The two obvious alternatives are both wrong: folding them into the session's counters makes
+a session that read ten files claim it read a hundred, and dropping them the way subagent *text* is
+dropped leaves one static line for four minutes, which is the silence the activity line exists to
+prevent.
+
+Counting is keyed by the label a tool renders, not by the tool's name. `Grep` and `Glob` both read as
+"searched the codebase", and separate counters made the number visibly count backwards as the two
+interleaved.
+
 ## Invariants
 
 - **At most one credential variable reaches the session.** `process.ts` strips every supported

@@ -89,7 +89,11 @@ export function createPlanningSessions(opts: {
 				}
 
 				if (event.kind === 'tool') {
-					opts.send({ type: 'plan.activity', planId, label: activity.label(event.name) });
+					opts.send({
+						type: 'plan.activity',
+						planId,
+						label: activity.label({ tool: event.name, subagent: event.subagent })
+					});
 
 					return;
 				}
