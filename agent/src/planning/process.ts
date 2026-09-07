@@ -1,5 +1,5 @@
 import { spawn } from 'child_process';
-import { SUPPORTED_CREDENTIAL_VARIABLES, type ClaudeCredential } from '../claude-credential';
+import { type ClaudeAuthService } from '../services/claude-auth.service';
 
 // A human can sit on a question for ten minutes. The CLI's default MCP tool-call
 // timeout is a minute, and `bosun_ask` blocking past it is what the whole grill
@@ -19,27 +19,6 @@ const MCP_TOOLS = [
 
 export interface ClaudeSession {
 	kill(): void;
-}
-
-function sessionEnv(credential: ClaudeCredential | null): NodeJS.ProcessEnv {
-	const env: NodeJS.ProcessEnv = { ...process.env };
-
-	// At most one credential variable reaches the session, so the mode reported at
-	// preflight is the mode it authenticates with rather than whichever variable
-	// the CLI happens to prefer. With none configured, nothing is injected and the
-	// CLI authenticates from its own store, which preflight has already confirmed.
-	for (const variable of SUPPORTED_CREDENTIAL_VARIABLES) {
-		delete env[variable];
-	}
-
-	if (credential) {
-		env[credential.variable] = credential.value;
-	}
-
-	env.MCP_TOOL_TIMEOUT = String(TOOL_TIMEOUT_MS);
-	env.MCP_TIMEOUT = String(STARTUP_TIMEOUT_MS);
-
-	return env;
 }
 
 function sessionArgs(mcpConfig: string): string[] {
@@ -68,7 +47,7 @@ export function spawnClaudeSession(opts: {
 	cwd: string;
 	prompt: string;
 	mcpConfig: string;
-	credential: ClaudeCredential | null;
+	claudeAuth: ClaudeAuthService;
 	onStdout: (chunk: string) => void;
 	onStderr: (chunk: string) => void;
 	onExit: (code: number | null) => void;
@@ -77,7 +56,11 @@ export function spawnClaudeSession(opts: {
 	// instead of leaving a subagent holding a port and a credential.
 	const child = spawn('claude', sessionArgs(opts.mcpConfig), {
 		cwd: opts.cwd,
-		env: sessionEnv(opts.credential),
+		env: {
+			...opts.claudeAuth.sessionEnv(),
+			MCP_TOOL_TIMEOUT: String(TOOL_TIMEOUT_MS),
+			MCP_TIMEOUT: String(STARTUP_TIMEOUT_MS)
+		},
 		detached: true,
 		stdio: ['pipe', 'pipe', 'pipe']
 	});

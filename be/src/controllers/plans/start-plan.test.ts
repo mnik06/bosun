@@ -11,10 +11,7 @@ import { type Machine, type MachineStatus, type PreflightCheck } from 'src/types
 
 const OPEN = 1;
 
-const GREEN: PreflightCheck[] = [
-	{ name: 'claude-cli', ok: true },
-	{ name: 'claude-credential', ok: true }
-];
+const GREEN: PreflightCheck[] = [{ name: 'claude', ok: true }];
 
 function fakeSocket() {
 	return { OPEN, readyState: OPEN, send: vi.fn() } as unknown as WebSocket & {
@@ -31,7 +28,6 @@ function machine(overrides: Partial<Machine> & { status: MachineStatus }): Machi
 		repoPath: '/srv/repo',
 		agentVersion: '1.2.0',
 		capabilities: GREEN,
-		claudeAuthMode: 'oauth',
 		createdAt: new Date('2026-01-01T00:00:00.000Z'),
 		...overrides
 	};
@@ -82,8 +78,8 @@ describe('startPlan refusals', () => {
 		['paused', machine({ status: 'paused' }), 'this machine is paused'],
 		[
 			'a red claude check',
-			machine({ status: 'online', capabilities: [{ name: 'claude-cli', ok: false }] }),
-			'preflight is red: claude-cli, claude-credential'
+			machine({ status: 'online', capabilities: [{ name: 'claude', ok: false }] }),
+			'preflight is red: claude'
 		],
 		[
 			'no preflight yet',

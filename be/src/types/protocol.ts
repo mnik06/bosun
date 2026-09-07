@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ClaudeAuthModeSchema, MachineSchema, PreflightCheckSchema } from 'src/types/MachineSchema';
+import { MachineSchema, PreflightCheckSchema } from 'src/types/MachineSchema';
 import {
 	AcSchema,
 	PlanAnswerSchema,
@@ -18,8 +18,7 @@ export const HelloMsgSchema = z.object({
 
 export const PreflightMsgSchema = z.object({
 	type: z.literal('preflight'),
-	checks: z.array(PreflightCheckSchema),
-	claudeAuthMode: ClaudeAuthModeSchema.nullable()
+	checks: z.array(PreflightCheckSchema)
 });
 
 export const PongMsgSchema = z.object({

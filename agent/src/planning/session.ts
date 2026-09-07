@@ -1,9 +1,10 @@
-import { resolveClaudeCredential } from '../claude-credential';
-import { type AgentConfig } from '../config';
+import { type AgentConfig } from '../config/config';
 import { type AgentMsg, type PlanAnswer } from '../protocol';
-import { startSessionMcpServer, type SessionMcpServer } from './mcp';
+import { type Services } from '../services/index';
+import { createActivityTracker } from './activity-labels';
+import { startSessionMcpServer, type SessionMcpServer } from './mcp/server';
 import { spawnClaudeSession, type ClaudeSession } from './process';
-import { createActivityTracker, createStreamParser } from './stream';
+import { createStreamParser } from './stream-parser';
 
 const STDERR_KEPT_CHARS = 500;
 
@@ -23,6 +24,7 @@ export interface PlanningSessions {
 
 export function createPlanningSessions(opts: {
 	config: AgentConfig;
+	services: Services;
 	send: (message: AgentMsg) => void;
 	prompt: (input: string) => string;
 }): PlanningSessions {
@@ -57,15 +59,9 @@ export function createPlanningSessions(opts: {
 	};
 
 	const startProcess = async (planId: string, input: string): Promise<void> => {
-		// May be null, and that is a supported setup: a machine logged in with
-		// `claude auth login` has no credential in its environment and the CLI
-		// authenticates from its own store. Preflight is what establishes that the
-		// box can authenticate at all, and the backend refuses to start a session
-		// when that check is red.
-		const credential = resolveClaudeCredential(process.env);
 		const mcp = await startSessionMcpServer({
 			planId,
-			config: opts.config,
+			bosunApi: opts.services.bosunApi,
 			onQuestion: ({ questionId, questions }) => {
 				opts.send({ type: 'plan.question', planId, questionId, questions });
 			},
@@ -109,7 +105,7 @@ export function createPlanningSessions(opts: {
 			cwd: opts.config.repoPath,
 			prompt: opts.prompt(input),
 			mcpConfig: mcp.config,
-			credential,
+			claudeAuth: opts.services.claudeAuth,
 			onStdout: (chunk) => {
 				parser.push(chunk);
 			},

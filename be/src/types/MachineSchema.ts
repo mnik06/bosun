@@ -12,12 +12,6 @@ export const PreflightCheckSchema = z.object({
 
 export type PreflightCheck = z.infer<typeof PreflightCheckSchema>;
 
-// 'subscription' is a machine logged in with `claude auth login`, where the
-// credential lives in the CLI's own store and never appears in the environment.
-export const ClaudeAuthModeSchema = z.enum(['oauth', 'api-key', 'subscription']);
-
-export type ClaudeAuthMode = z.infer<typeof ClaudeAuthModeSchema>;
-
 export const MachineSchema = z.object({
 	id: z.string(),
 	userId: z.string(),
@@ -27,7 +21,6 @@ export const MachineSchema = z.object({
 	repoPath: z.string().nullable(),
 	agentVersion: z.string().nullable(),
 	capabilities: z.array(PreflightCheckSchema).nullable(),
-	claudeAuthMode: ClaudeAuthModeSchema.nullable(),
 	createdAt: z.date()
 });
 

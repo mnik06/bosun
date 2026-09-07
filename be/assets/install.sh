@@ -66,13 +66,13 @@ ENV_FILE="$HOME/.bosun/env"
 if [ ! -f "$ENV_FILE" ]; then
 	mkdir -p "$HOME/.bosun"
 	cat > "$ENV_FILE" <<'ENVFILE'
-# Bosun agent environment, read by the systemd unit. Set exactly one credential.
-# A Claude subscription:
+# Bosun agent environment, read by the systemd unit.
+#
+# Run `claude setup-token` on your OWN machine (it needs a browser, this box has
+# none) and paste the one-year token it prints here:
 # CLAUDE_CODE_OAUTH_TOKEN=
-# Or an Anthropic API key:
-# ANTHROPIC_API_KEY=
 ENVFILE
-	note "seeded $ENV_FILE — put a Claude credential in it, then: systemctl --user restart bosun-agent"
+	note "seeded $ENV_FILE — run \`claude setup-token\` on your own machine, paste the token in, then: systemctl --user restart bosun-agent"
 fi
 chmod 700 "$HOME/.bosun"
 chmod 600 "$ENV_FILE"

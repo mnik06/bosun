@@ -8,7 +8,7 @@ import { type SocketRegistry } from 'src/services/sockets/registry.service';
 import { type Machine } from 'src/types/MachineSchema';
 import { type Plan } from 'src/types/PlanSchema';
 
-const REQUIRED_CHECKS = ['claude-cli', 'claude-credential'];
+const REQUIRED_CHECKS = ['claude'];
 
 function hostingRefusal(machine: Machine): string | null {
 	if (machine.status === 'paused') {

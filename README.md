@@ -77,7 +77,7 @@ node dist/index.js enroll --server http://127.0.0.1:1506 --token <code from the 
 
 `run` holds the outbound WebSocket, re-sending `hello` and `preflight` on every connect and
 reconnecting with jittered backoff. Deleting the machine in the browser makes the agent disable its
-own systemd unit, discard `~/.bosun/config.json` and exit — see `agent/src/run.md` for the two
+own systemd unit, discard `~/.bosun/config.json` and exit — see `agent/src/connection/README.md` for the two
 termination paths. Agents installed before that change carry `Restart=always` and need `install.sh`
 re-run before they can be deleted cleanly.
 
@@ -87,21 +87,32 @@ path. `--repo` defaults to the current directory, `--config` overrides the path.
 ### The machine's Claude credential
 
 Planning sessions run the `claude` CLI on the machine, so the box needs the binary on its PATH and a
-working login. Any of these counts, and preflight reports which one is in effect:
+working login. There is exactly one supported way to give it one:
 
-| Setup | `claudeAuthMode` |
-| ----- | ---------------- |
-| `claude auth login` on the box — credential in the CLI's own store | `subscription` |
-| `CLAUDE_CODE_OAUTH_TOKEN` in `~/.bosun/env` | `oauth` |
-| `ANTHROPIC_API_KEY` in `~/.bosun/env` | `api-key` |
+```bash
+# on your own machine, which has a browser:
+claude setup-token
+# then paste the token into ~/.bosun/env on the VPS:
+CLAUDE_CODE_OAUTH_TOKEN=...
+systemctl --user restart bosun-agent
+```
 
-`~/.bosun/env` (mode `0600`, seeded by `install.sh`) is only needed for the last two — a box that is
-already logged in needs nothing there. Set at most one variable: the agent injects exactly the one it
-resolved into each session and strips the other, so the reported mode is always the mode the session
-authenticates with.
+`claude setup-token` mints a **one-year** OAuth token against a Pro, Max, Team or Enterprise plan,
+for exactly this case — CI and machines with no browser. It can only make model requests, which is
+all a planning session needs.
 
-Bosun never sees the value. The agent asks `claude auth status --json` and reports the mode and
-whether the box is logged in; `machines.claudeAuthMode` stores that much and no more.
+Interactive `claude auth login` on the box is deliberately **not** the documented path even though
+the CLI supports it over SSH. The session it creates has to renew itself, and headless renewal
+failing (`OAuth session expired and could not be refreshed`) is the failure mode an unattended agent
+hits after weeks of working. A minted token has no renewal step to fail.
+
+`~/.bosun/env` (mode `0600`, seeded by `install.sh`) is where the token goes. The agent strips
+`ANTHROPIC_API_KEY` from every session it spawns, so a stray key on the box cannot quietly decide
+which account a session bills to.
+
+Bosun never sees the value. The agent asks `claude auth status --json` and reports only whether the
+box is logged in. A token that is present but refused is reported differently from no token at all —
+the first means re-run `setup-token`, the second means the file was never filled in.
 
 `systemctl --user` sources no shell rc, so the unit carries an explicit `Environment=PATH=` resolved
 at install time and `EnvironmentFile=-%h/.bosun/env`. A machine that passes preflight by hand but was

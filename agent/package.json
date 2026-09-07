@@ -1,6 +1,6 @@
 {
   "name": "bosun-agent",
-  "version": "1.5.0",
+  "version": "2.0.0",
   "private": true,
   "description": "Bosun agent \u2014 enrolls a machine and holds the outbound connection back to the bosun backend",
   "bin": {
@@ -11,9 +11,10 @@
     "build": "rm -R -f dist && tsc -p tsconfig.json",
     "dev": "ts-node src/index.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "preflight": "pnpm typecheck && pnpm build",
+    "preflight": "pnpm typecheck && pnpm test && pnpm build",
     "build:binaries": "rm -rf release && mkdir -p release && bun build --compile --target=bun-linux-x64 ./src/index.ts --outfile release/bosun-agent-linux-x64 && bun build --compile --target=bun-linux-arm64 ./src/index.ts --outfile release/bosun-agent-linux-arm64 && cd release && shasum -a 256 bosun-agent-* > SHA256SUMS",
-    "release": "pnpm build:binaries && gh release create \"agent-v$npm_package_version\" release/bosun-agent-linux-x64 release/bosun-agent-linux-arm64 release/SHA256SUMS --repo mnik06/bosun --title \"agent v$npm_package_version\" --notes \"Bosun agent binaries\""
+    "release": "pnpm build:binaries && gh release create \"agent-v$npm_package_version\" release/bosun-agent-linux-x64 release/bosun-agent-linux-arm64 release/SHA256SUMS --repo mnik06/bosun --title \"agent v$npm_package_version\" --notes \"Bosun agent binaries\"",
+    "test": "vitest run"
   },
   "license": "ISC",
   "dependencies": {
@@ -25,7 +26,8 @@
     "@types/node": "^24.10.1",
     "@types/ws": "^8.18.1",
     "ts-node": "^10.9.2",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.11"
   },
   "engines": {
     "node": ">=24.15"

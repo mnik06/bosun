@@ -29,6 +29,13 @@
       "when": 1788770926123,
       "tag": "0003_spotty_black_panther",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1788778339063,
+      "tag": "0004_fixed_zombie",
+      "breakpoints": true
     }
   ]
 }

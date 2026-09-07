@@ -97,8 +97,7 @@ async function applyMachineFrame(opts: {
 			: await saveMachinePreflight({
 				machineRepo,
 				id: opts.machineId,
-				checks: opts.msg.checks,
-				claudeAuthMode: opts.msg.claudeAuthMode
+				checks: opts.msg.checks
 			});
 
 	// The row can disappear mid-session: deleting the owner's account cascades to

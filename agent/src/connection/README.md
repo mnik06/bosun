@@ -26,7 +26,7 @@ The second path is what makes a missed `shutdown` self-correcting, which is why 
 than a nicety. If the backend dies between deleting the row and the frame arriving, the agent keeps
 running against a backend that has never heard of it — until its next reconnect, which is a 401.
 
-`terminateSelf` disables the systemd unit, removes `config.json` and exits 0. It uses `disable`, not
+`systemd.service.ts` disables the unit, removes `config.json` and exits 0. It uses `disable`, not
 `disable --now`: `--now` stops the unit this very process is running inside, racing the config
 removal. Exiting 0 is what stops it; `disable` is only what keeps it from returning on the next boot.
 

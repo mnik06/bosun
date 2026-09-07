@@ -1,10 +1,9 @@
 #!/usr/bin/env node
 import path from 'path';
 import { Command } from 'commander';
-import { defaultConfigPath } from './config';
-import { enroll } from './enroll';
-import { readConfig } from './config';
-import { run } from './run';
+import { enroll } from './commands/enroll';
+import { run } from './commands/run';
+import { defaultConfigPath, readConfig } from './config/config';
 import { AGENT_VERSION } from './version';
 
 const program = new Command();

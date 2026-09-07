@@ -8,10 +8,6 @@ export const PreflightCheckSchema = z.object({
 
 export type PreflightCheck = z.infer<typeof PreflightCheckSchema>;
 
-export const ClaudeAuthModeSchema = z.enum(['oauth', 'api-key', 'subscription']);
-
-export type ClaudeAuthMode = z.infer<typeof ClaudeAuthModeSchema>;
-
 export const HelloMsgSchema = z.object({
 	type: z.literal('hello'),
 	agentVersion: z.string(),
@@ -21,8 +17,7 @@ export const HelloMsgSchema = z.object({
 
 export const PreflightMsgSchema = z.object({
 	type: z.literal('preflight'),
-	checks: z.array(PreflightCheckSchema),
-	claudeAuthMode: ClaudeAuthModeSchema.nullable()
+	checks: z.array(PreflightCheckSchema)
 });
 
 export const PongMsgSchema = z.object({

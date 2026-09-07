@@ -1,5 +1,5 @@
 import { index, integer, jsonb, pgTable, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
-import { type ClaudeAuthMode, type MachineStatus, type PreflightCheck } from 'src/types/MachineSchema';
+import { type MachineStatus, type PreflightCheck } from 'src/types/MachineSchema';
 import {
 	type PlanMessageContent,
 	type PlanMessageRole,
@@ -31,7 +31,6 @@ export const machines = pgTable(
 		repoPath: text(),
 		agentVersion: text(),
 		capabilities: jsonb().$type<PreflightCheck[]>(),
-		claudeAuthMode: text().$type<ClaudeAuthMode>(),
 		createdAt: timestamp({ withTimezone: true }).notNull().defaultNow()
 	},
 	(table) => [index('machines_user_id_idx').on(table.userId)]

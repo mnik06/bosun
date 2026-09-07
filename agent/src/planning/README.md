@@ -10,7 +10,7 @@ The four modules split by responsibility: `process` owns the child, `stream` own
 `mcp` owns the tools it calls, `session` is the glue that wires those to the WebSocket. `prompt` is
 the text bosun sends as the session's first turn.
 
-`prompt.ts` is a generalized port of the `plan-me` skill, and it is inlined rather than installed
+`prompts/planning.ts` is a generalized port of the `plan-me` skill, and it is inlined rather than installed
 into `.claude/skills/` — writing there would dirty the working tree and trip the `git-clean`
 preflight, and a skill that fails to load leaves a generic session nobody notices. Generalized means
 it names no path and no library: it discovers whatever specification material and component library
@@ -24,10 +24,10 @@ The CLI adds no npm dependency to a binary that is compiled with `bun build --co
 harness will have to drive unattended execution later. One stream parser and one process model for
 both halves of the product beats two.
 
-The cost is the contract: `--output-format stream-json` is a shape, not a typed package. `stream.ts`
+The cost is the contract: `--output-format stream-json` is a shape, not a typed package. `stream-parser.ts`
 therefore recognises the frames it knows and **drops everything else with a log line**. A new event
 type in a future `claude` release must not be able to kill a grill, so there is no `default: throw`.
-`preflight.ts` reports the CLI's major version for the same reason.
+`services/preflight.service.ts` reports the CLI's major version for the same reason.
 
 ## `bosun_ask` and the tool-call timeout
 
@@ -46,7 +46,7 @@ listening.
 
 ## Why the MCP server runs in this process
 
-`mcp.ts` starts an HTTP server on loopback, on an ephemeral port, one per session. `claude` is handed
+`mcp/server.ts` starts an HTTP server on loopback, on an ephemeral port, one per session. `claude` is handed
 a generated `--mcp-config` pointing at it.
 
 It lives in the agent process rather than under `claude` as a stdio server because `bosun_ask` has to
@@ -75,16 +75,17 @@ interleaved.
 
 ## Invariants
 
-- **At most one credential variable reaches the session.** `process.ts` strips every supported
-  variable from the child environment and then sets the one that was resolved, so two variables can
-  never be present at once and leave Claude Code to pick between them. When none is configured,
-  nothing is injected and the CLI authenticates from its own store — a machine set up with
-  `claude auth login` is a supported machine, not a broken one.
-- **Whether the box can authenticate is asked, not inferred.** `preflight.ts` runs
+- **One credential, and the conflicting one is stripped.** `CLAUDE_CODE_OAUTH_TOKEN` is the only
+  supported credential. `claude-auth.service.ts` removes `ANTHROPIC_API_KEY` from every session it
+  spawns, because Claude Code applies its own precedence between the two and a stray key would
+  otherwise decide which account a session bills to without anything saying so.
+- **Whether the box can authenticate is asked, not inferred.** `preflight.service.ts` runs
   `claude auth status --json` and reports what it says. An earlier version guessed from the presence
   of an environment variable, which called a perfectly working machine red and refused to start
-  sessions on it.
-- **A red check carries the command's own words.** `tryExec` keeps the exit code, the signal and the
+  sessions on it. A token that is present but refused is reported apart from no token at all: the
+  first is an expired token needing `claude setup-token` again, the second is an unfilled env file,
+  and a box that looks configured and still fails is where an operator otherwise stops looking.
+- **A red check carries the command's own words.** `exec.service.ts` keeps the exit code, the signal and the
   tail of stderr, and every failing check is logged to the journal as well as sent to the browser.
   These checks are read by someone who cannot see the box; "it failed" is indistinguishable from every
   other cause, and the service environment is where these commands fail while the same command in a
@@ -92,7 +93,8 @@ interleaved.
   answering "not logged in" is an answer, not a broken command.
 - **The prompt travels on stdin, never argv.** `/proc/<pid>/cmdline` is world-readable and the input
   is the user's own ticket.
-- **A session dies with its socket.** `run.ts` cancels every session when the connection drops. A
+- **A session dies with its socket.** `connection/socket.ts` cancels every session when the
+  connection drops. A
   grill is answered over that socket, so one that has gone cannot deliver an answer to a question
   already in flight; keeping the process alive across a reconnect would leak it and its port. The
   backend fails those plans on the same event, which is what stops a plan sitting in `planning`

@@ -1,0 +1,1 @@
+ALTER TABLE "machines" DROP COLUMN "claude_auth_mode";
