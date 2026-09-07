@@ -59,6 +59,24 @@ note "installed $BIN"
 
 BOSUN_TOKEN="$TOKEN" "$BIN" enroll --server "$SERVER_URL" --repo "$REPO_PATH"
 
+# The agent's Claude credential lives here and never leaves the box. Seeded empty
+# rather than left missing, so there is one documented file to edit rather than a
+# guess about where the service reads its environment from.
+ENV_FILE="$HOME/.bosun/env"
+if [ ! -f "$ENV_FILE" ]; then
+	mkdir -p "$HOME/.bosun"
+	cat > "$ENV_FILE" <<'ENVFILE'
+# Bosun agent environment, read by the systemd unit. Set exactly one credential.
+# A Claude subscription:
+# CLAUDE_CODE_OAUTH_TOKEN=
+# Or an Anthropic API key:
+# ANTHROPIC_API_KEY=
+ENVFILE
+	note "seeded $ENV_FILE — put a Claude credential in it, then: systemctl --user restart bosun-agent"
+fi
+chmod 700 "$HOME/.bosun"
+chmod 600 "$ENV_FILE"
+
 case ":$PATH:" in
 	*":$INSTALL_DIR:"*) ;;
 	*) note "add $INSTALL_DIR to your PATH to run bosun-agent directly" ;;
@@ -80,6 +98,24 @@ if ! "$BIN" --help 2>/dev/null | grep -qE '^[[:space:]]+run'; then
 	exit 0
 fi
 
+# `systemctl --user` sources no shell rc, so the unit sees a minimal PATH and
+# none of the tooling the agent shells out to. Resolving the tools here, in the
+# shell that is doing the install, is what makes a machine that passes preflight
+# by hand also pass it under the service.
+SERVICE_PATH="$INSTALL_DIR"
+for tool in node pnpm git gh claude; do
+	tool_path="$(command -v "$tool" 2>/dev/null || true)"
+	[ -n "$tool_path" ] || continue
+	tool_dir="$(dirname "$tool_path")"
+	case ":$SERVICE_PATH:" in
+		*":$tool_dir:"*) ;;
+		*) SERVICE_PATH="$SERVICE_PATH:$tool_dir" ;;
+	esac
+done
+SERVICE_PATH="$SERVICE_PATH:/usr/local/bin:/usr/bin:/bin"
+
+command -v claude >/dev/null 2>&1 || note "claude is not on this shell's PATH — planning sessions will fail preflight"
+
 UNIT_DIR="$HOME/.config/systemd/user"
 mkdir -p "$UNIT_DIR"
 cat > "$UNIT_DIR/bosun-agent.service" <<UNIT
@@ -89,6 +125,10 @@ After=network-online.target
 
 [Service]
 ExecStart=$BIN run
+Environment=PATH=$SERVICE_PATH
+# Leading '-' so a machine with no credential yet still starts and reports that
+# through preflight, instead of the unit refusing to launch with nothing to see.
+EnvironmentFile=-%h/.bosun/env
 # on-failure, not always: deleting a machine in bosun makes the agent disable
 # this unit and exit 0, and Restart=always would fight that and restart-loop it
 # against a 401 forever. A crash still restarts.

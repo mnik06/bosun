@@ -1,6 +1,7 @@
 import { Navigate, Outlet } from 'react-router'
 
 import { MachinesSocketProvider } from '~/entities/machine'
+import { PlansSocketProvider } from '~/entities/plan'
 import { useSession } from '~/entities/session'
 import { FullPageLoader } from '~/shared/ui'
 import { AppHeader } from '~/widgets/app-header'
@@ -22,7 +23,9 @@ export default function AppLayout () {
 		<>
 			<AppHeader email={state.session.email} />
 			<MachinesSocketProvider>
-				<Outlet />
+				<PlansSocketProvider>
+					<Outlet />
+				</PlansSocketProvider>
 			</MachinesSocketProvider>
 		</>
 	)

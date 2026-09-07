@@ -8,6 +8,13 @@ const agentSockets = new Map<string, WebSocket>();
 // another account's screen.
 const uiSockets = new Map<string, Set<WebSocket>>();
 
+// Plan frames are high-volume and belong to one open chat, so they go to the
+// sockets watching that plan rather than to every tab the owner has open.
+// The reverse index exists so closing a socket costs one lookup instead of a
+// scan of every plan anyone is watching.
+const planSubscribers = new Map<string, Set<WebSocket>>();
+const socketPlans = new Map<WebSocket, Set<string>>();
+
 export function registerAgentSocket(opts: { machineId: string; socket: WebSocket }): void {
 	const existing = agentSockets.get(opts.machineId);
 
@@ -57,7 +64,69 @@ export function addUiSocket(opts: { userId: string; socket: WebSocket }): void {
 	uiSockets.set(opts.userId, sockets);
 }
 
+export function subscribeUiToPlan(opts: { planId: string; socket: WebSocket }): void {
+	const subscribers = planSubscribers.get(opts.planId) ?? new Set<WebSocket>();
+
+	subscribers.add(opts.socket);
+	planSubscribers.set(opts.planId, subscribers);
+
+	const plans = socketPlans.get(opts.socket) ?? new Set<string>();
+
+	plans.add(opts.planId);
+	socketPlans.set(opts.socket, plans);
+}
+
+export function unsubscribeUiFromPlan(opts: { planId: string; socket: WebSocket }): void {
+	const subscribers = planSubscribers.get(opts.planId);
+
+	if (subscribers) {
+		subscribers.delete(opts.socket);
+
+		if (subscribers.size === 0) {
+			planSubscribers.delete(opts.planId);
+		}
+	}
+
+	const plans = socketPlans.get(opts.socket);
+
+	if (plans) {
+		plans.delete(opts.planId);
+
+		if (plans.size === 0) {
+			socketPlans.delete(opts.socket);
+		}
+	}
+}
+
+export function broadcastToPlan(opts: { planId: string; message: UiMsg }): void {
+	const subscribers = planSubscribers.get(opts.planId);
+
+	if (!subscribers) {
+		return;
+	}
+
+	const payload = JSON.stringify(opts.message);
+
+	for (const socket of subscribers) {
+		if (socket.readyState === socket.OPEN) {
+			socket.send(payload);
+		}
+	}
+}
+
 export function removeUiSocket(opts: { userId: string; socket: WebSocket }): void {
+	for (const planId of socketPlans.get(opts.socket) ?? []) {
+		const subscribers = planSubscribers.get(planId);
+
+		subscribers?.delete(opts.socket);
+
+		if (subscribers?.size === 0) {
+			planSubscribers.delete(planId);
+		}
+	}
+
+	socketPlans.delete(opts.socket);
+
 	const sockets = uiSockets.get(opts.userId);
 
 	if (!sockets) {

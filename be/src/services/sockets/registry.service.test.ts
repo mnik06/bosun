@@ -1,6 +1,13 @@
 import { type WebSocket } from '@fastify/websocket';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { addUiSocket, broadcastToUi, removeUiSocket } from 'src/services/sockets/registry.service';
+import {
+	addUiSocket,
+	broadcastToPlan,
+	broadcastToUi,
+	removeUiSocket,
+	subscribeUiToPlan,
+	unsubscribeUiFromPlan
+} from 'src/services/sockets/registry.service';
 import { type UiMsg } from 'src/types/protocol';
 
 const OPEN = 1;
@@ -79,5 +86,42 @@ describe('browser fan-out', () => {
 		broadcastToUi({ userId: 'u_bob', message });
 
 		expect(bob.send).toHaveBeenCalledOnce();
+	});
+});
+
+const planMessage: UiMsg = { type: 'plan.activity', planId: 'p_1', label: 'Reading 3 files' };
+
+describe('per-plan fan-out', () => {
+	// Plan frames carry a transcript, so reaching a socket that is not watching
+	// that plan is the same class of leak as reaching the wrong account.
+	it('delivers only to the sockets subscribed to that plan', () => {
+		subscribeUiToPlan({ planId: 'p_1', socket: alice });
+		broadcastToPlan({ planId: 'p_1', message: planMessage });
+
+		expect(alice.send).toHaveBeenCalledWith(JSON.stringify(planMessage));
+		expect(bob.send).not.toHaveBeenCalled();
+
+		unsubscribeUiFromPlan({ planId: 'p_1', socket: alice });
+	});
+
+	it('stops delivering once the socket unsubscribes', () => {
+		subscribeUiToPlan({ planId: 'p_1', socket: alice });
+		unsubscribeUiFromPlan({ planId: 'p_1', socket: alice });
+		broadcastToPlan({ planId: 'p_1', message: planMessage });
+
+		expect(alice.send).not.toHaveBeenCalled();
+	});
+
+	// Closing a tab has to drop its subscriptions too, or the registry keeps a
+	// growing set of dead sockets that every later broadcast walks.
+	it('drops every subscription a socket held when it is removed', () => {
+		subscribeUiToPlan({ planId: 'p_1', socket: alice });
+		subscribeUiToPlan({ planId: 'p_2', socket: alice });
+		removeUiSocket({ userId: 'u_alice', socket: alice });
+
+		broadcastToPlan({ planId: 'p_1', message: planMessage });
+		broadcastToPlan({ planId: 'p_2', message: planMessage });
+
+		expect(alice.send).not.toHaveBeenCalled();
 	});
 });

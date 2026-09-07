@@ -1,10 +1,11 @@
 import { type WebSocket } from '@fastify/websocket';
 import { type RawData } from 'ws';
 import { FastifyBaseLogger, FastifyInstance, FastifyPluginAsync } from 'fastify';
-import { authenticateAgent } from 'src/controllers/agent/authenticate-agent';
 import { markMachineOffline } from 'src/controllers/machines/mark-machine-offline';
 import { markMachineOnline } from 'src/controllers/machines/mark-machine-online';
 import { saveMachinePreflight } from 'src/controllers/machines/save-machine-preflight';
+import { failMachinePlans } from 'src/controllers/plans/fail-machine-plans';
+import { recordPlanFrame } from 'src/controllers/plans/record-plan-frame';
 import {
 	broadcastToUi,
 	registerAgentSocket,
@@ -13,10 +14,16 @@ import {
 } from 'src/services/sockets/registry.service';
 import { resolvePing } from 'src/services/sockets/pending-pings.service';
 import { type Machine } from 'src/types/MachineSchema';
-import { AgentMsgSchema } from 'src/types/protocol';
+import { AgentMsgSchema, type AgentMsg } from 'src/types/protocol';
 
 const HEARTBEAT_MS = 15_000;
 const MAX_MISSED = 2;
+
+type PlanFrame = Extract<AgentMsg, { type: `plan.${string}` }>;
+
+function isPlanFrame(msg: AgentMsg): msg is PlanFrame {
+	return msg.type.startsWith('plan.');
+}
 
 function announceUpdate(machine: Machine): void {
 	broadcastToUi({ userId: machine.userId, message: { type: 'machine.updated', machine } });
@@ -47,15 +54,11 @@ function startHeartbeat(socket: WebSocket): () => void {
 	};
 }
 
-async function handleMessage(opts: {
-	fastify: FastifyInstance;
-	machineId: string;
-	userId: string;
-	socket: WebSocket;
+function parseFrame(opts: {
 	raw: string;
+	machineId: string;
 	log: FastifyBaseLogger;
-}): Promise<void> {
-	const machineRepo = opts.fastify.repos.machineRepo;
+}): AgentMsg | null {
 	let json: unknown;
 
 	try {
@@ -63,7 +66,7 @@ async function handleMessage(opts: {
 	} catch {
 		opts.log.warn({ machineId: opts.machineId }, 'agent sent unparseable frame');
 
-		return;
+		return null;
 	}
 
 	const parsed = AgentMsgSchema.safeParse(json);
@@ -71,33 +74,34 @@ async function handleMessage(opts: {
 	if (!parsed.success) {
 		opts.log.warn({ machineId: opts.machineId }, 'agent sent frame failing schema');
 
-		return;
+		return null;
 	}
 
-	const msg = parsed.data;
+	return parsed.data;
+}
 
-	if (msg.type === 'pong') {
-		const rttMs = resolvePing({ commandId: msg.id, machineId: opts.machineId, at: Date.now() });
-
-		if (rttMs !== null) {
-			broadcastToUi({
-				userId: opts.userId,
-				message: { type: 'machine.pong', machineId: opts.machineId, id: msg.id, rttMs }
-			});
-		}
-
-		return;
-	}
-
+async function applyMachineFrame(opts: {
+	fastify: FastifyInstance;
+	machineId: string;
+	socket: WebSocket;
+	msg: Extract<AgentMsg, { type: 'hello' | 'preflight' }>;
+	log: FastifyBaseLogger;
+}): Promise<void> {
+	const machineRepo = opts.fastify.repos.machineRepo;
 	const machine =
-		msg.type === 'hello'
+		opts.msg.type === 'hello'
 			? await markMachineOnline({
 				machineRepo,
 				id: opts.machineId,
-				agentVersion: msg.agentVersion,
-				repoPath: msg.repoPath
+				agentVersion: opts.msg.agentVersion,
+				repoPath: opts.msg.repoPath
 			})
-			: await saveMachinePreflight({ machineRepo, id: opts.machineId, checks: msg.checks });
+			: await saveMachinePreflight({
+				machineRepo,
+				id: opts.machineId,
+				checks: opts.msg.checks,
+				claudeAuthMode: opts.msg.claudeAuthMode
+			});
 
 	// The row can disappear mid-session: deleting the owner's account cascades to
 	// their machines. Leaving the socket up would keep a machine nobody can reach
@@ -114,40 +118,90 @@ async function handleMessage(opts: {
 	// A paused machine that reconnects is still paused — the row outranks the
 	// socket — so the agent is told again rather than left to infer from silence
 	// that bosun is not dispatching to it.
-	if (msg.type === 'hello' && machine.status === 'paused') {
+	if (opts.msg.type === 'hello' && machine.status === 'paused') {
 		sendToAgent({ machineId: machine.id, message: { type: 'pause' } });
 	}
 }
 
-const routes: FastifyPluginAsync = async function (fastify) {
-	fastify.addHook('preValidation', async (request, reply) => {
-		const agent = await authenticateAgent({
-			machineRepo: fastify.repos.machineRepo,
-			authorization: request.headers.authorization
-		});
+async function handleMessage(opts: {
+	fastify: FastifyInstance;
+	machineId: string;
+	userId: string;
+	socket: WebSocket;
+	msg: AgentMsg;
+	log: FastifyBaseLogger;
+}): Promise<void> {
+	const { msg } = opts;
 
-		if (!agent) {
-			return reply.status(401).send({ message: 'Unauthorized' });
+	if (msg.type === 'pong') {
+		const rttMs = resolvePing({ commandId: msg.id, machineId: opts.machineId, at: Date.now() });
+
+		if (rttMs !== null) {
+			broadcastToUi({
+				userId: opts.userId,
+				message: { type: 'machine.pong', machineId: opts.machineId, id: msg.id, rttMs }
+			});
 		}
 
-		request.agent = agent;
-	});
+		return;
+	}
 
+	if (isPlanFrame(msg)) {
+		await recordPlanFrame({
+			planRepo: opts.fastify.repos.planRepo,
+			planMessageRepo: opts.fastify.repos.planMessageRepo,
+			acRepo: opts.fastify.repos.acRepo,
+			machineId: opts.machineId,
+			frame: msg
+		});
+
+		return;
+	}
+
+	await applyMachineFrame({ ...opts, msg });
+}
+
+// Plan frames are handled one at a time, in arrival order. They append to a
+// transcript whose sequence numbers come from `max(seq) + 1`, so two overlapping
+// appends would collide on the unique index — and an answer recorded before the
+// question it answers is a transcript that cannot be replayed. Machine frames and
+// pongs stay off this queue: nothing about them is ordered, and a pong waiting
+// behind a database write is a round-trip time that measures the wrong thing.
+function createFrameQueue(log: FastifyBaseLogger) {
+	let tail = Promise.resolve();
+
+	return function enqueue(run: () => Promise<void>): void {
+		tail = tail.then(run).catch((error: unknown) => {
+			log.error({ error }, 'failed handling an agent frame');
+		});
+	};
+}
+
+const routes: FastifyPluginAsync = async function (fastify) {
 	fastify.get('/ws', { websocket: true }, (socket, request) => {
 		const { machineId, userId } = request.agent!;
 
 		registerAgentSocket({ machineId, socket });
 		const stopHeartbeat = startHeartbeat(socket);
+		const enqueue = createFrameQueue(request.log);
 
 		socket.on('message', (raw: RawData) => {
-			void handleMessage({
-				fastify,
-				machineId,
-				userId,
-				socket,
-				raw: raw.toString(),
-				log: request.log
-			});
+			const msg = parseFrame({ raw: raw.toString(), machineId, log: request.log });
+
+			if (!msg) {
+				return;
+			}
+
+			const handle = async () =>
+				handleMessage({ fastify, machineId, userId, socket, msg, log: request.log });
+
+			if (isPlanFrame(msg)) {
+				enqueue(handle);
+
+				return;
+			}
+
+			void handle();
 		});
 
 		socket.on('close', () => {
@@ -161,6 +215,7 @@ const routes: FastifyPluginAsync = async function (fastify) {
 						announceUpdate(machine);
 					}
 				});
+				void failMachinePlans({ planRepo: fastify.repos.planRepo, machineId });
 			}
 		});
 	});

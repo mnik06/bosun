@@ -9,9 +9,17 @@ export function AppHeader ({ email }: { email: string }) {
 	return (
 		<Container size="md" pt="lg">
 			<Group justify="space-between">
-				<Anchor component={Link} to="/" fw={600} underline="never">
-					bosun
-				</Anchor>
+				<Group gap="lg">
+					<Anchor component={Link} to="/" fw={600} underline="never">
+						bosun
+					</Anchor>
+					<Anchor component={Link} to="/" size="sm" c="dimmed">
+						Machines
+					</Anchor>
+					<Anchor component={Link} to="/plans" size="sm" c="dimmed">
+						Plans
+					</Anchor>
+				</Group>
 
 				<Group gap="sm">
 					<Text size="sm" c="dimmed">

@@ -1,8 +1,10 @@
 import os from 'os';
 import WebSocket, { type RawData } from 'ws';
 import { type AgentConfig } from './config';
+import { createPlanningSessions, type PlanningSessions } from './planning/session';
+import { planningPrompt } from './planning/prompt';
 import { collectPreflight } from './preflight';
-import { ServerMsgSchema } from './protocol';
+import { ServerMsgSchema, type AgentMsg } from './protocol';
 import { terminateSelf } from './terminate';
 import { AGENT_VERSION } from './version';
 
@@ -41,10 +43,10 @@ async function sleep(ms: number): Promise<void> {
 }
 
 async function sendPreflight(socket: WebSocket, repoPath: string): Promise<void> {
-	const checks = await collectPreflight(repoPath);
+	const report = await collectPreflight(repoPath);
 
 	if (socket.readyState === WebSocket.OPEN) {
-		socket.send(JSON.stringify({ type: 'preflight', checks }));
+		socket.send(JSON.stringify({ type: 'preflight', ...report }));
 	}
 }
 
@@ -66,6 +68,7 @@ async function handleServerFrame(opts: {
 	config: AgentConfig;
 	configPath: string;
 	state: AgentState;
+	sessions: PlanningSessions;
 	raw: RawData;
 }): Promise<void> {
 	let json: unknown;
@@ -88,33 +91,63 @@ async function handleServerFrame(opts: {
 
 	const msg = parsed.data;
 
-	if (msg.type === 'ping') {
-		opts.socket.send(JSON.stringify({ type: 'pong', id: msg.id, at: Date.now() }));
+	// A switch rather than a chain with a fallthrough: the chain's last branch was
+	// `shutdown`, so every frame type added to the union terminated the agent until
+	// somebody remembered to add a case for it.
+	switch (msg.type) {
+		case 'ping':
+			opts.socket.send(JSON.stringify({ type: 'pong', id: msg.id, at: Date.now() }));
 
-		return;
+			return;
+
+		case 'refresh':
+			await sendPreflight(opts.socket, opts.config.repoPath);
+
+			return;
+
+		case 'pause':
+			opts.state.paused = true;
+			console.log('paused by bosun — holding the connection, taking no work');
+
+			return;
+
+		case 'resume':
+			opts.state.paused = false;
+			console.log('resumed by bosun');
+
+			return;
+
+		case 'plan.start':
+			if (opts.state.paused) {
+				opts.socket.send(
+					JSON.stringify({
+						type: 'plan.error',
+						planId: msg.planId,
+						message: 'this machine is paused'
+					})
+				);
+
+				return;
+			}
+
+			await opts.sessions.start({ planId: msg.planId, input: msg.input });
+
+			return;
+
+		case 'plan.answer':
+			opts.sessions.answer(msg);
+
+			return;
+
+		case 'plan.cancel':
+			opts.sessions.cancel(msg.planId);
+
+			return;
+
+		case 'shutdown':
+			opts.sessions.cancelAll();
+			await terminateSelf({ configPath: opts.configPath, reason: msg.reason });
 	}
-
-	if (msg.type === 'refresh') {
-		await sendPreflight(opts.socket, opts.config.repoPath);
-
-		return;
-	}
-
-	if (msg.type === 'pause') {
-		opts.state.paused = true;
-		console.log('paused by bosun — holding the connection, taking no work');
-
-		return;
-	}
-
-	if (msg.type === 'resume') {
-		opts.state.paused = false;
-		console.log('resumed by bosun');
-
-		return;
-	}
-
-	await terminateSelf({ configPath: opts.configPath, reason: msg.reason });
 }
 
 async function connectOnce(opts: {
@@ -125,6 +158,18 @@ async function connectOnce(opts: {
 	return new Promise<void>((resolve, reject) => {
 		const socket = new WebSocket(socketUrl(opts.config.serverUrl), {
 			headers: { Authorization: `Bearer ${opts.config.machineKey}` }
+		});
+		// Sessions are per-connection. A grill is answered over this socket, so one
+		// that has gone cannot deliver an answer to a question already in flight —
+		// keeping the process alive across a reconnect would only leak it.
+		const sessions = createPlanningSessions({
+			config: opts.config,
+			prompt: planningPrompt,
+			send: (message: AgentMsg) => {
+				if (socket.readyState === WebSocket.OPEN) {
+					socket.send(JSON.stringify(message));
+				}
+			}
 		});
 		let settled = false;
 
@@ -150,6 +195,7 @@ async function connectOnce(opts: {
 				config: opts.config,
 				configPath: opts.configPath,
 				state: opts.state,
+				sessions,
 				raw
 			});
 		});
@@ -163,10 +209,12 @@ async function connectOnce(opts: {
 		});
 
 		socket.on('error', (error) => {
+			sessions.cancelAll();
 			settle(error);
 		});
 
 		socket.on('close', () => {
+			sessions.cancelAll();
 			settle();
 		});
 	});

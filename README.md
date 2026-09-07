@@ -7,6 +7,12 @@ results back live without the box ever needing an inbound port, a public IP, or 
 app is where you see which machines are online, what state each one is in, and what its agents are
 doing.
 
+**Planning** is the first thing you can actually do with a machine. Paste a ticket, pick an online
+box, and a `claude` session runs in that machine's checkout and grills you — option cards in the
+browser, one decision at a time — until it publishes a plan, its acceptance criteria and its tracer
+bullets as rows in bosun, all editable afterwards. See `plans/005-planning.md` and
+`agent/src/planning/README.md`.
+
 Accounts are email and password, with **Supabase Auth** as the identity provider. Bosun never sees a
 password and never mints a session: the browser authenticates against Supabase and presents the
 resulting access token to `be/`, which hands it back to Supabase to resolve into a user on every
@@ -77,6 +83,24 @@ re-run before they can be deleted cleanly.
 
 `enroll` writes `~/.bosun/config.json` at mode `0600` — server URL, machine id, machine key, repo
 path. `--repo` defaults to the current directory, `--config` overrides the path.
+
+### The machine's Claude credential
+
+Planning sessions run the `claude` CLI on the machine, so the box needs the binary on its PATH and one
+credential in `~/.bosun/env` (mode `0600`, seeded by `install.sh`):
+
+```
+CLAUDE_CODE_OAUTH_TOKEN=...   # a Claude subscription
+# or
+ANTHROPIC_API_KEY=...         # an Anthropic API key
+```
+
+Set exactly one. Bosun never sees the value — the agent reports only which mode is configured and
+whether the variable is present, and `machines.claudeAuthMode` stores that much and no more.
+
+`systemctl --user` sources no shell rc, so the unit carries an explicit `Environment=PATH=` resolved
+at install time and `EnvironmentFile=-%h/.bosun/env`. A machine that passes preflight by hand but was
+enrolled with an agent older than 1.3.0 will fail it under the service until `install.sh` is re-run.
 
 ### Before you push
 

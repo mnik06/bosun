@@ -20,43 +20,43 @@ editable.
 
 **The machine can host a session**
 
-- [ ] **AC-1** — Preflight reports a `claude-cli` check; a machine without the `claude` binary on the service's PATH shows it red.
-- [ ] **AC-2** — Preflight reports which credential mode the machine is configured for and whether that credential is present.
-- [ ] **AC-3** — The systemd unit sees the same `PATH` and credentials as the shell that installed it: a machine that passes preflight by hand also passes it under the service.
-- [ ] **AC-4** — Starting a session on a machine that is offline or `paused`, or whose `claude-cli` or credential check is red, is refused with that reason and writes nothing.
+- [x] **AC-1** — Preflight reports a `claude-cli` check; a machine without the `claude` binary on the service's PATH shows it red.
+- [x] **AC-2** — Preflight reports which credential mode the machine is configured for and whether that credential is present.
+- [x] **AC-3** — The systemd unit sees the same `PATH` and credentials as the shell that installed it: a machine that passes preflight by hand also passes it under the service.
+- [x] **AC-4** — Starting a session on a machine that is offline or `paused`, or whose `claude-cli` or credential check is red, is refused with that reason and writes nothing.
 
 **Starting a session**
 
-- [ ] **AC-5** — A `Plans` page lists the caller's plans with title, machine, status and created-at; another account's plans are invisible.
-- [ ] **AC-6** — "New plan" offers only machines that are `online` and owned by the caller; picking one and pasting text opens a full-screen chat.
-- [ ] **AC-7** — A `plans` row is created the moment the session starts, with `status = 'planning'` and a null title, and appears on the Plans page immediately.
-- [ ] **AC-8** — Two sessions run on one machine at once with separate `claude` processes and separate tool endpoints; their frames never cross.
+- [x] **AC-5** — A `Plans` page lists the caller's plans with title, machine, status and created-at; another account's plans are invisible.
+- [x] **AC-6** — "New plan" offers only machines that are `online` and owned by the caller; picking one and pasting text opens a full-screen chat.
+- [x] **AC-7** — A `plans` row is created the moment the session starts, with `status = 'planning'` and a null title, and appears on the Plans page immediately.
+- [x] **AC-8** — Two sessions run on one machine at once with separate `claude` processes and separate tool endpoints; their frames never cross.
 
 **The chat**
 
-- [ ] **AC-9** — Assistant text streams into the chat as it is produced, not in one block at the end.
-- [ ] **AC-10** — While the recon agent runs, an activity line shows what the session is doing; the chat never sits silent with no indication it is alive.
-- [ ] **AC-11** — A question renders as cards: header, question text, one clickable option per choice with its description; multi-select questions accept several.
-- [ ] **AC-12** — Every question also accepts a free-text answer instead of an option.
-- [ ] **AC-13** — Answering resumes the grill, and the answered question stays in the transcript with the chosen option shown.
-- [ ] **AC-14** — Closing the tab and reopening the plan re-renders the full transcript and any unanswered question, and answering it still works.
-- [ ] **AC-15** — If the agent process dies mid-grill, the plan moves to `status = 'failed'` with a reason on the Plans page, rather than hanging in `planning` forever.
-- [ ] **AC-16** — Discarding a plan mid-grill kills its `claude` process on the VPS; no orphan is left behind.
+- [x] **AC-9** — Assistant text streams into the chat as it is produced, not in one block at the end.
+- [x] **AC-10** — While the recon agent runs, an activity line shows what the session is doing; the chat never sits silent with no indication it is alive.
+- [x] **AC-11** — A question renders as cards: header, question text, one clickable option per choice with its description; multi-select questions accept several.
+- [x] **AC-12** — Every question also accepts a free-text answer instead of an option.
+- [x] **AC-13** — Answering resumes the grill, and the answered question stays in the transcript with the chosen option shown.
+- [x] **AC-14** — Closing the tab and reopening the plan re-renders the full transcript and any unanswered question, and answering it still works.
+- [x] **AC-15** — If the agent process dies mid-grill, the plan moves to `status = 'failed'` with a reason on the Plans page, rather than hanging in `planning` forever.
+- [x] **AC-16** — Discarding a plan mid-grill kills its `claude` process on the VPS; no orphan is left behind.
 
 **The artifact**
 
-- [ ] **AC-17** — As the session writes the plan, a side panel fills in live: the title, then each `AC-n`, then each tracer bullet.
-- [ ] **AC-18** — On success the plan holds a markdown body, one row per `AC-n`, and 3–4 tracer-bullet rows, and `status` becomes `ready`.
-- [ ] **AC-19** — Every `AC-n` is assigned to exactly one tracer bullet; the API rejects a bullet set leaving an AC unassigned or assigning one twice.
-- [ ] **AC-20** — A feature with a UI surface also gets a final bullet with `kind = 'verify'`, ordered last; a feature with no UI surface does not.
-- [ ] **AC-21** — The plan detail page renders body, ACs and bullets, and links back to the chat transcript.
+- [x] **AC-17** — As the session writes the plan, a side panel fills in live: the title, then each `AC-n`, then each tracer bullet.
+- [x] **AC-18** — On success the plan holds a markdown body, one row per `AC-n`, and 3–4 tracer-bullet rows, and `status` becomes `ready`.
+- [x] **AC-19** — Every `AC-n` is assigned to exactly one tracer bullet; the API rejects a bullet set leaving an AC unassigned or assigning one twice.
+- [x] **AC-20** — A feature with a UI surface also gets a final bullet with `kind = 'verify'`, ordered last; a feature with no UI surface does not.
+- [x] **AC-21** — The plan detail page renders body, ACs and bullets, and links back to the chat transcript.
 
 **Editing**
 
-- [ ] **AC-22** — Plan title and body can be edited after publish.
-- [ ] **AC-23** — An `AC-n` can be edited, deleted, or moved to a different tracer bullet.
-- [ ] **AC-24** — A tracer bullet can be renamed, reordered, split or deleted; deleting one is refused while it still owns an AC.
-- [ ] **AC-25** — A plan can be discarded, removing it, its ACs, its bullets and its transcript.
+- [x] **AC-22** — Plan title and body can be edited after publish.
+- [x] **AC-23** — An `AC-n` can be edited, deleted, or moved to a different tracer bullet.
+- [x] **AC-24** — A tracer bullet can be renamed, reordered, split or deleted; deleting one is refused while it still owns an AC.
+- [x] **AC-25** — A plan can be discarded, removing it, its ACs, its bullets and its transcript.
 
 ## Architecture
 
@@ -186,6 +186,7 @@ DELETE /plans/:id                                         -> 204
 PATCH  /plans/:id             { title?, bodyMd? }         -> { plan }
 PATCH  /plans/:id/acs/:acId   { text?, sliceId? }         -> { ac }
 DELETE /plans/:id/acs/:acId                               -> 204
+POST   /plans/:id/slices      { title, kind? }            -> { slice }
 PATCH  /plans/:id/slices/:sliceId  { title?, bodyMd?, ordinal? } -> { slice }
 DELETE /plans/:id/slices/:sliceId                         -> 204 | 409 while it owns an AC
 
@@ -234,9 +235,9 @@ One MCP server, four tools:
 | `add_ac` | no | `POST /agent/plans/:id/acs`, returns the AC id |
 | `create_slice` | no | `POST /agent/plans/:id/slices` with its `acCodes` |
 
-`bosun_ask` blocking for minutes is the load-bearing behaviour of this design. Whatever tool-call
-timeout the CLI applies must be raised or disabled for this server; confirm the mechanism in phase 2
-before building the UI on top of it.
+`bosun_ask` blocking for minutes is the load-bearing behaviour of this design. The CLI caps a tool
+call at one minute by default and returns `The operation timed out.` past it — measured, not assumed.
+`MCP_TOOL_TIMEOUT` in the session's environment raises that cap; the agent sets it to 30 minutes.
 
 ### New modules
 
@@ -288,20 +289,21 @@ before building the UI on top of it.
   routes answering `404` rather than `403` for someone else's machine. Planning inherits that scoping
   and must not widen it: every plan route is owner-scoped, and `plan.*` frames go only to sockets
   subscribed to that plan.
-- `broadcastToUi` still fans to every open UI socket. Per-plan subscription replaces it for planning
-  frames; the existing `machine.updated` fan-out is scoped in the same pass.
+- `broadcastToUi` is already scoped by owner. Per-plan subscription is added alongside it for the
+  high-volume planning frames rather than replacing it — the plans list needs owner-wide `plan.updated`
+  without being subscribed to any one plan.
 - A machine with the `claude` binary and a working credential, both visible to the systemd service.
-- **#004's agent half is not landed.** The BE sends `refresh`/`pause`/`resume`/`shutdown`, but the
-  agent's `ServerMsgSchema` is still `[PingMsgSchema]`, so those frames fail its schema and are
-  dropped. Phase 1 touches that same union and that same handler — land #004's agent side first, or
-  do both in one pass, rather than editing it twice.
+- **#004's agent half had landed after all** — `ServerMsgSchema` already carried
+  `refresh`/`pause`/`resume`/`shutdown`. What was still true is the hazard behind the warning: the
+  handler was an `if` chain whose last branch was `shutdown`, so any frame added to the union
+  terminated the agent. It is a `switch` on `type` now.
 
 ## Slices
 
-- [ ] **Phase 1: A machine that can host a session** — AC-1 … AC-4, AC-9, AC-10
-- [ ] **Phase 2: The grill** — AC-5 … AC-8, AC-11 … AC-16
-- [ ] **Phase 3: The artifact** — AC-17 … AC-21
-- [ ] **Phase 4: Editing** — AC-22 … AC-25
+- [x] **Phase 1: A machine that can host a session** — AC-1 … AC-4, AC-9, AC-10
+- [x] **Phase 2: The grill** — AC-5 … AC-8, AC-11 … AC-16
+- [x] **Phase 3: The artifact** — AC-17 … AC-21
+- [x] **Phase 4: Editing** — AC-22 … AC-25
 
 ### Phase 1 — A machine that can host a session
 
@@ -373,10 +375,10 @@ Proof: AC-22 through AC-25.
 
 ## Risks
 
-- **A blocking MCP tool is the whole design.** If the CLI caps how long a tool call may take and that
-  cap cannot be raised, `bosun_ask` fails and the grill has no mechanism. Establish this in phase 2
-  before any UI is built on it. Fallback is the Agent SDK's `canUseTool`, which has no such cap —
-  which is why the SDK stays documented here rather than deleted.
+- **A blocking MCP tool is the whole design.** Settled: the cap is real (one minute) and it is
+  raisable (`MCP_TOOL_TIMEOUT`). The residual risk is that the cap is silent — past it the model reads
+  a timeout as an answer and keeps going — so the constant in `process.ts` is load-bearing, and the
+  Agent SDK fallback is no longer needed.
 - **The stream-json shape is a looser contract than an npm package.** Owning the parser means owning
   it across CLI versions. Log and drop unrecognised event types rather than failing the session, and
   pin the agent to a tested `claude` version range in preflight.
@@ -394,4 +396,38 @@ Proof: AC-22 through AC-25.
 
 ## Decisions taken
 
-_(populated during the build)_
+- **`MCP_TOOL_TIMEOUT` is what makes `bosun_ask` possible.** Measured before anything was built on it:
+  a 90-second tool call against a stub MCP server returns `The operation timed out.` under the default
+  and returns the real answer with the variable set. The agent sets it to 30 minutes per session.
+  Because the failure is silent — the session keeps running and simply stops listening — this is
+  called out in `agent/src/planning/README.md` rather than left as a constant.
+- **The MCP server is hand-rolled, not `@modelcontextprotocol/sdk`.** Four tools over JSON-RPC needs
+  `initialize`, `tools/list`, `tools/call` and a 202 for notifications — about 120 lines. Taking the
+  SDK would have put an npm dependency back into a binary built with `bun build --compile`, which is
+  the risk choosing the CLI over the Agent SDK was meant to remove.
+- **The loopback MCP server requires a bearer token.** Loopback is not on the network, but every
+  process on the box shares it. The token is generated per session and travels in the `--mcp-config`.
+- **Exactly one credential variable reaches the session.** The agent strips every supported variable
+  from the child environment and sets the resolved one. With two present, Claude Code applies its own
+  precedence and the mode reported at preflight would not be the mode the session authenticated with.
+- **A session dies with its socket.** Both sides act on the same event: the agent cancels its
+  processes, the backend fails the machine's `planning` plans. A grill is answered over that socket, so
+  one that has gone cannot deliver an answer to a question already in flight, and keeping the process
+  alive across a reconnect would only leak it.
+- **One WebSocket in the browser, with per-plan subscription on top.** Slices may not import each
+  other, so a single message union shared by `entities/machine` and `entities/plan` was not available.
+  `shared/api/ui-socket.ts` fans every frame to every subscriber and each parses what it recognises.
+  Subscriptions are re-sent on `onOpen`, because the server keeps them per socket and a reconnect
+  starts with no memory of them.
+- **`plans.status` has no "awaiting answer" value and `planMessages` has no `answered` column.** The
+  pending question is the last `question` with no `answer` carrying the same `questionId`. Answers are
+  matched by `questionId` rather than by position, because two questions can be outstanding at once.
+- **The plan body is rendered as preformatted text, not parsed markdown.** Parsing it would mean a
+  markdown dependency plus an HTML sanitiser for text an agent wrote.
+- **The browser can create a tracer bullet**, which the API contract above did not originally allow.
+  AC-24 asks for a bullet to be *splittable*, and a split is an empty bullet plus moving ACs into it
+  with the picker already on each row — so `POST /plans/:id/slices` was added rather than a bespoke
+  split endpoint.
+- **Agent bumped to 1.3.0.** `install.sh` now writes `Environment=PATH=…` and
+  `EnvironmentFile=-%h/.bosun/env` into the unit, so an agent installed before this change cannot host
+  a session until the installer is re-run.

@@ -1,4 +1,5 @@
 export { apiClient } from './api-client'
 export { apiWsUrl } from './ws-url'
+export { sendUiCommand, subscribeToUiSocket } from './ui-socket'
 export { fetchUiTicket } from './ui-ticket'
 export { supabase } from './supabase'

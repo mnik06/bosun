@@ -4,6 +4,7 @@ import { machines } from 'src/services/drizzle/schema';
 import {
 	EnrollmentSchema,
 	MachineSchema,
+	type ClaudeAuthMode,
 	type Enrollment,
 	type Machine,
 	type MachineStatus,
@@ -21,6 +22,7 @@ const publicColumns = {
 	repoPath: machines.repoPath,
 	agentVersion: machines.agentVersion,
 	capabilities: machines.capabilities,
+	claudeAuthMode: machines.claudeAuthMode,
 	createdAt: machines.createdAt
 };
 
@@ -179,11 +181,16 @@ export function getMachineRepo(db: Db) {
 		async saveCapabilities(opts: {
 			id: string;
 			checks: PreflightCheck[];
+			claudeAuthMode: ClaudeAuthMode | null;
 			now: Date;
 		}): Promise<Machine | null> {
 			const [row] = await db
 				.update(machines)
-				.set({ capabilities: opts.checks, lastSeenAt: opts.now })
+				.set({
+					capabilities: opts.checks,
+					claudeAuthMode: opts.claudeAuthMode,
+					lastSeenAt: opts.now
+				})
 				.where(eq(machines.id, opts.id))
 				.returning(publicColumns);
 

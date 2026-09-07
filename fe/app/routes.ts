@@ -7,6 +7,8 @@ export default [
 	]),
 	layout('views/app-layout/app-layout.tsx', [
 		index('views/machines/machines-page.tsx'),
-		route('machines/:machineId', 'views/machine-detail/machine-detail-page.tsx')
+		route('machines/:machineId', 'views/machine-detail/machine-detail-page.tsx'),
+		route('plans', 'views/plans/plans-page.tsx'),
+		route('plans/:planId', 'views/plan-detail/plan-page.tsx')
 	])
 ] satisfies RouteConfig

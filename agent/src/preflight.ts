@@ -3,11 +3,13 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { promisify } from 'util';
-import { type PreflightCheck } from './protocol';
+import { resolveClaudeCredential, SUPPORTED_CREDENTIAL_VARIABLES } from './claude-credential';
+import { type ClaudeAuthMode, type PreflightCheck } from './protocol';
 
 const exec = promisify(execFile);
 
 const MIN_NODE = [24, 15];
+const MIN_CLAUDE_MAJOR = 2;
 
 async function tryExec(
 	command: string,
@@ -79,13 +81,36 @@ async function checkGhAuth(): Promise<PreflightCheck> {
 	};
 }
 
-function checkClaudeToken(): PreflightCheck {
-	const present = Boolean(process.env.CLAUDE_CODE_OAUTH_TOKEN);
+async function checkClaudeCli(): Promise<PreflightCheck> {
+	const result = await tryExec('claude', ['--version']);
+
+	if (!result.ok) {
+		return { name: 'claude-cli', ok: false, detail: 'claude not found on PATH' };
+	}
+
+	// The stream-json event shape is a looser contract than a package version, so
+	// a major the parser has never seen is reported rather than assumed to work.
+	const major = Number(result.stdout.match(/(\d+)\./)?.[1] ?? 0);
 
 	return {
-		name: 'claude-token',
-		ok: present,
-		detail: present ? 'CLAUDE_CODE_OAUTH_TOKEN set' : 'CLAUDE_CODE_OAUTH_TOKEN missing'
+		name: 'claude-cli',
+		ok: major >= MIN_CLAUDE_MAJOR,
+		detail:
+			major >= MIN_CLAUDE_MAJOR
+				? result.stdout
+				: `${result.stdout} — bosun is tested against claude ${MIN_CLAUDE_MAJOR}.x`
+	};
+}
+
+function checkClaudeCredential(): PreflightCheck {
+	const credential = resolveClaudeCredential(process.env);
+
+	return {
+		name: 'claude-credential',
+		ok: credential !== null,
+		detail: credential
+			? `${credential.mode} via ${credential.variable}`
+			: `none of ${SUPPORTED_CREDENTIAL_VARIABLES.join(', ')} is set in the service environment`
 	};
 }
 
@@ -97,7 +122,7 @@ function checkClaudeCredsShadow(): PreflightCheck {
 		name: 'claude-creds-shadow',
 		ok: !shadowed,
 		detail: shadowed
-			? `${credsPath} exists and silently outranks CLAUDE_CODE_OAUTH_TOKEN`
+			? `${credsPath} exists and silently outranks the configured credential`
 			: 'no shadowing credentials file'
 	};
 }
@@ -151,23 +176,33 @@ function checkViteEnv(repoPath: string): PreflightCheck {
 	};
 }
 
-export async function collectPreflight(repoPath: string): Promise<PreflightCheck[]> {
-	const [node, pnpm, gitClean, ghAuth] = await Promise.all([
+export interface PreflightReport {
+	checks: PreflightCheck[];
+	claudeAuthMode: ClaudeAuthMode | null;
+}
+
+export async function collectPreflight(repoPath: string): Promise<PreflightReport> {
+	const [node, pnpm, gitClean, ghAuth, claudeCli] = await Promise.all([
 		checkNode(),
 		checkPnpm(),
 		checkGitClean(repoPath),
-		checkGhAuth()
+		checkGhAuth(),
+		checkClaudeCli()
 	]);
 
-	return [
-		node,
-		pnpm,
-		gitClean,
-		ghAuth,
-		checkClaudeToken(),
-		checkClaudeCredsShadow(),
-		checkPlaywright(),
-		checkMcpJson(repoPath),
-		checkViteEnv(repoPath)
-	];
+	return {
+		checks: [
+			node,
+			pnpm,
+			gitClean,
+			ghAuth,
+			claudeCli,
+			checkClaudeCredential(),
+			checkClaudeCredsShadow(),
+			checkPlaywright(),
+			checkMcpJson(repoPath),
+			checkViteEnv(repoPath)
+		],
+		claudeAuthMode: resolveClaudeCredential(process.env)?.mode ?? null
+	};
 }

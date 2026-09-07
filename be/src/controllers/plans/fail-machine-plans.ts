@@ -1,0 +1,29 @@
+import { announcePlan } from 'src/controllers/plans/shared/plan-broadcast';
+import { type PlanRepo } from 'src/repos/plans/plan.repo';
+import { dropPlanText } from 'src/services/plans/plan-text.service';
+
+const REASON = 'the agent disconnected mid-session';
+
+// A session is answered over the socket it was started on, so a dropped
+// connection is the end of the grill rather than a pause in it. Without this a
+// plan sits in `planning` forever with nothing on the other end to finish it.
+export async function failMachinePlans(opts: {
+	planRepo: PlanRepo;
+	machineId: string;
+}): Promise<void> {
+	const running = await opts.planRepo.listPlanningOnMachine(opts.machineId);
+
+	if (running.length === 0) {
+		return;
+	}
+
+	const failed = await opts.planRepo.failMany({
+		ids: running.map((plan) => plan.id),
+		reason: REASON
+	});
+
+	for (const plan of failed) {
+		dropPlanText(plan.id);
+		announcePlan(plan);
+	}
+}
