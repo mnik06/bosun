@@ -72,7 +72,7 @@ Then open http://127.0.0.1:5373.
 cd agent
 pnpm install
 pnpm build
-node dist/index.js enroll --server http://127.0.0.1:1506 --token <code from the browser>
+node dist/src/index.js enroll --server http://127.0.0.1:1506 --token <code from the browser>
 ```
 
 `run` holds the outbound WebSocket, re-sending `hello` and `preflight` on every connect and
@@ -168,9 +168,18 @@ itself rather than trusting the environment it was launched with. `PATH` is the 
 cannot override — the unit resolves it at install time and that is what lets the service find
 `claude` and `node` at all.
 
-**The one thing Refresh cannot change is the running binary.** `agentVersion` is compiled in, so a
-new agent build needs a restart (`systemctl --user restart bosun-agent`) or a re-run of
-`install.sh`. Refresh re-reports the version it has; it cannot replace it.
+**Refresh also upgrades the agent.** If the machine reports a version other than the backend's
+`AGENT_EXPECTED_VERSION`, Refresh offers it that build: the agent downloads it, verifies the
+published checksum, runs the staged binary to confirm it reports the expected version, swaps it in
+and restarts. Only Refresh does this — reconnecting never triggers an upgrade, so one bad release
+cannot take a fleet down without somebody choosing it.
+
+A build that installs but never connects rolls itself back to the binary it replaced and refuses to
+retry that version, because a machine with no inbound port cannot be rescued from the browser. An
+upgrade offered while a planning session is running is deferred to the next Refresh. See
+`agent/src/connection/README.md`.
+
+Rolling back the fleet is a config change: lower `AGENT_EXPECTED_VERSION` and redeploy.
 
 Refreshing never un-pauses a machine — `paused` is a property of the machine, not of its socket, and
 every reachability write leaves a paused row alone.
@@ -198,6 +207,11 @@ A preset needing HTTP Basic (Atlassian's personal-token path, `base64(email:toke
 `${VAR}` substitution cannot express, so the agent composes the header value from the two answers and
 stores only the encoded result. The raw token is never written anywhere. Nothing is typed into the browser, so the token never reaches bosun, and
 nothing is passed as an argument, so it never lands in shell history or `/proc/<pid>/cmdline`.
+
+Re-running `mcp add` on a server that is already there updates it: the config is rewritten and you
+are asked whether to replace the stored credential or keep it, which is how a token gets rotated
+without editing the file by hand. A variable already set by a *different* server is refused rather
+than overwritten — that would break the other integration silently.
 
 `mcp add` prints the resolved server and waits for a `y` before writing anything. That matters most
 for a `stdio` preset, which is a command that will run on the machine — a preset comes from bosun,

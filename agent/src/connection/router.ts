@@ -35,7 +35,8 @@ export interface RouterDeps {
 	configPath: string;
 	state: AgentState;
 	sessions: PlanningSessions;
-	announce: () => Promise<void>;
+	announce: (reason: 'connect' | 'refresh') => Promise<void>;
+	onUpgrade: (opts: { version: string; downloadBaseUrl: string }) => Promise<void>;
 }
 
 // A switch rather than a chain with a fallthrough: the chain's last branch was
@@ -49,7 +50,12 @@ export async function routeServerFrame(deps: RouterDeps, msg: ServerMsg): Promis
 			return;
 
 		case 'refresh':
-			await deps.announce();
+			await deps.announce('refresh');
+
+			return;
+
+		case 'upgrade':
+			await deps.onUpgrade({ version: msg.version, downloadBaseUrl: msg.downloadBaseUrl });
 
 			return;
 

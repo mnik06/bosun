@@ -20,6 +20,7 @@ export interface PlanningSessions {
 	answer(opts: { planId: string; questionId: string; answers: PlanAnswer[] }): void;
 	cancel(planId: string): void;
 	cancelAll(): void;
+	running(): number;
 }
 
 export function createPlanningSessions(opts: {
@@ -170,6 +171,10 @@ export function createPlanningSessions(opts: {
 			for (const planId of [...sessions.keys()]) {
 				this.cancel(planId);
 			}
+		},
+
+		running(): number {
+			return sessions.size;
 		}
 	};
 }

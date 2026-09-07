@@ -11,6 +11,72 @@ export function encodeBasicAuth(opts: { user: string; secret: string }): string 
 	return Buffer.from(`${opts.user}:${opts.secret}`).toString('base64');
 }
 
+// Nothing is produced when the stored credential is being kept. Composing one
+// from an empty answer set would write base64(":") over a working token, which is
+// a silent credential loss rather than a visible failure.
+export function buildSecrets(opts: {
+	preset: { requires: { env: string }[]; basicAuth?: { user: string; secret: string; into: string } };
+	answers: Map<string, string>;
+	replace: boolean;
+}): { variable: string; value: string }[] {
+	if (!opts.replace) {
+		return [];
+	}
+
+	const { basicAuth } = opts.preset;
+
+	if (basicAuth) {
+		// Only the encoded header value is stored. Keeping the raw pair as well
+		// would mean two places to rotate and one of them silently stale.
+		return [
+			{
+				variable: basicAuth.into,
+				value: encodeBasicAuth({
+					user: opts.answers.get(basicAuth.user) ?? '',
+					secret: opts.answers.get(basicAuth.secret) ?? ''
+				})
+			}
+		];
+	}
+
+	return [...opts.answers].map(([variable, value]) => ({ variable, value }));
+}
+
+// The variables this preset owns. With `basicAuth` the raw answers are combined
+// and only the encoded header is stored, so that is the single variable it writes.
+export function credentialVariables(preset: {
+	requires: { env: string }[];
+	basicAuth?: { into: string };
+}): string[] {
+	return preset.basicAuth ? [preset.basicAuth.into] : preset.requires.map((entry) => entry.env);
+}
+
+export interface CredentialPlan {
+	writes: string[];
+	collision: string[];
+	mustPrompt: boolean;
+}
+
+// Whether a variable that is already set belongs to this server or to a different
+// one is the only thing separating a token rotation from silently breaking
+// somebody else's integration, and the server being configured already is what
+// tells them apart.
+export function planCredentials(opts: {
+	writes: string[];
+	installed: boolean;
+	isSet: (variable: string) => boolean;
+}): CredentialPlan {
+	const taken = opts.writes.filter(opts.isSet);
+
+	return {
+		writes: opts.writes,
+		collision: opts.installed ? [] : taken,
+		// Nothing stored yet means there is nothing to keep, so it is asked for
+		// outright rather than offering a choice with one option.
+		mustPrompt: taken.length < opts.writes.length
+	};
+}
+
 function describeServer(server: unknown): string {
 	const definition = server as { type?: string; url?: string; command?: string; args?: string[] };
 
@@ -43,21 +109,28 @@ async function runAdd(deps: {
 }): Promise<void> {
 	const { preset, mcpConfig, env, prompt } = deps;
 	const secrets: { variable: string; value: string }[] = [];
+	const installed = mcpConfig.listConfigured().includes(preset.id);
+	const plan = planCredentials({
+		writes: credentialVariables(preset),
+		installed,
+		isSet: (variable) => env.has(variable)
+	});
 
-	// Checked before anything is asked for. Two servers can share a variable, so
-	// replacing one silently would break the other — and there is no point taking
-	// a token that is going to be refused.
-	for (const variable of [...preset.requires.map((entry) => entry.env), preset.basicAuth?.into]) {
-		if (variable !== undefined && env.has(variable)) {
-			throw new Error(
-				`${variable} is already set in ${env.envPath} — edit it there rather than adding a second one`
-			);
-		}
+	// A variable owned by a server that is not this one must not be overwritten:
+	// two presets can want the same name, and clobbering it silently breaks the
+	// other. Re-adding a server that is already here is the opposite case — that
+	// is a deliberate update, and refusing it is what made rotating a token
+	// require editing the file by hand.
+	if (plan.collision.length > 0) {
+		throw new Error(
+			`${plan.collision.join(', ')} is already set in ${env.envPath} by another server — remove that server first, or edit the file by hand`
+		);
 	}
 
+	const replace = plan.mustPrompt || (await prompt.confirm('Replace the stored credential?'));
 	const answers = new Map<string, string>();
 
-	for (const requirement of preset.requires) {
+	for (const requirement of replace ? preset.requires : []) {
 		const value =
 			requirement.secret === false
 				? await prompt.ask(`${requirement.label}: `)
@@ -70,21 +143,7 @@ async function runAdd(deps: {
 		answers.set(requirement.env, value);
 	}
 
-	if (preset.basicAuth) {
-		// Only the encoded header value is stored. Keeping the raw pair as well
-		// would mean two places to rotate and one of them silently stale.
-		secrets.push({
-			variable: preset.basicAuth.into,
-			value: encodeBasicAuth({
-				user: answers.get(preset.basicAuth.user) ?? '',
-				secret: answers.get(preset.basicAuth.secret) ?? ''
-			})
-		});
-	} else {
-		for (const [variable, value] of answers) {
-			secrets.push({ variable, value });
-		}
-	}
+	secrets.push(...buildSecrets({ preset, answers, replace }));
 
 	// Shown before anything is written. A preset comes from bosun, but a stdio
 	// server is a command that will run on this machine, and that is the user's
@@ -96,7 +155,13 @@ async function runAdd(deps: {
 		console.log(`  ${secret.variable} → ${env.envPath}`);
 	}
 
-	if (!(await prompt.confirm(`\nWrite this to ${mcpConfig.configPath}?`))) {
+	if (!replace && plan.writes.length > 0) {
+		console.log(`  keeping the credential already in ${env.envPath}`);
+	}
+
+	const verb = installed ? 'Update' : 'Write';
+
+	if (!(await prompt.confirm(`\n${verb} this in ${mcpConfig.configPath}?`))) {
 		console.log('nothing written');
 
 		return;
@@ -108,7 +173,9 @@ async function runAdd(deps: {
 
 	mcpConfig.upsert({ name: preset.id, server: preset.server });
 
-	console.log(`\n✓ added "${preset.id}". Hit Refresh on this machine in bosun to pick it up.`);
+	console.log(
+		`\n✓ ${installed ? 'updated' : 'added'} "${preset.id}". Hit Refresh on this machine in bosun to pick it up.`
+	);
 }
 
 export async function listMcpServers(opts: { config: AgentConfig }): Promise<void> {

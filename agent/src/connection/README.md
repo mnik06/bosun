@@ -98,3 +98,55 @@ Re-sending `hello` is safe because `markOnline` writes reachability through a `c
 
 What refresh cannot do is change the running binary. `AGENT_VERSION` is compiled in, so a new build
 requires a restart — which is a reconnect, and therefore an announce anyway.
+
+## Self-update
+
+An agent replaces its own binary only when somebody hits Refresh. The `hello` frame carries a
+`reason`, and the backend offers an `upgrade` frame solely for `reason: 'refresh'` — never on
+connect. A connect-triggered upgrade would push a new build to every machine the moment it
+reconnects, which turns one bad release into a fleet-wide outage that nobody chose.
+
+`AGENT_EXPECTED_VERSION` on the backend is the version machines are told to run. The comparison is
+equality, not "newer than": lowering it and redeploying is how a bad release is rolled back across
+the fleet, and a newer-only check would strand every machine on the broken build.
+
+### The order things happen in, and why
+
+Nothing touches the live binary until every check has passed:
+
+1. Download the asset and `SHA256SUMS`, verify the hash. Not optional — without it, anyone who can
+   tamper with the download base gets arbitrary code execution on every machine that upgrades.
+2. Run the staged binary's `--version` and require it to equal the target. A truncated or wrong-arch
+   download has a valid checksum *of whatever it is*, and would still brick the machine.
+3. `rename()` the live binary to `.previous`, then the staged one into place. Atomic on one
+   filesystem, and safe to do to a running executable on Linux because the running process keeps its
+   inode.
+4. Write the probation file and exit `75`.
+
+Exit `75` rather than `0` because `terminateSelf` exits `0` precisely so `Restart=on-failure` leaves
+a deleted machine down. A distinct non-zero code gets the unit restarted onto the new binary without
+touching the unit file — which is what lets agents already installed upgrade without re-running
+`install.sh`.
+
+### Rollback, and the loop it has to avoid
+
+A machine has no inbound port, so a build that cannot connect cannot be fixed from the browser. The
+probation file is the only thing standing between a bad release and a fleet that is gone for good:
+
+- Written when the swap commits, naming the version just installed.
+- Deleted the moment a socket actually opens — a working connection is the only evidence that counts.
+- On startup, a probation file naming the *running* version means the previous boot installed it and
+  never connected. The previous binary is restored and the process exits 75 again.
+
+The rolled-back version is recorded in `upgrade-blocked` and never retried. Without that the backend
+re-offers it on the next Refresh, the rollback restores the old binary again, and the machine flaps
+between the two indefinitely.
+
+### What it will not do
+
+- **Upgrade mid-session.** A running planning session has a question on somebody's screen; the
+  restart would drop it. The upgrade is skipped with a log line and happens on the next Refresh.
+- **Replace anything but a packaged binary.** Under `node dist/src/index.js` the running executable
+  is node itself. The agent checks its own executable name and refuses.
+- **Fix the unit file.** `Environment=PATH=` is resolved at install time. A future agent needing a
+  new tool on PATH still requires re-running `install.sh`.

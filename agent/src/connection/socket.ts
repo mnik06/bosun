@@ -1,6 +1,7 @@
 import os from 'os';
 import WebSocket, { type RawData } from 'ws';
 import { backoffDelay, nextAttempt } from './backoff';
+import { UPGRADE_EXIT_CODE } from '../services/upgrade.service';
 import { parseServerFrame, routeServerFrame, type AgentState } from './router';
 import { type AgentConfig } from '../config/config';
 import { createPlanningSessions } from '../planning/session';
@@ -39,7 +40,7 @@ interface ConnectionDeps {
 // the skills directories — so a token pasted in after the agent started, or a
 // server added since, takes effect without a restart.
 function createAnnouncer(deps: ConnectionDeps & { socket: WebSocket }) {
-	return async function announce(): Promise<void> {
+	return async function announce(reason: 'connect' | 'refresh'): Promise<void> {
 		if (deps.socket.readyState !== WebSocket.OPEN) {
 			return;
 		}
@@ -51,7 +52,8 @@ function createAnnouncer(deps: ConnectionDeps & { socket: WebSocket }) {
 				type: 'hello',
 				agentVersion: AGENT_VERSION,
 				hostname: os.hostname(),
-				repoPath: deps.config.repoPath
+				repoPath: deps.config.repoPath,
+				reason
 			})
 		);
 
@@ -89,6 +91,30 @@ async function connectOnce(deps: ConnectionDeps): Promise<void> {
 			}
 		});
 		const announce = createAnnouncer({ ...deps, socket });
+
+		// Exits rather than restarting itself: `Restart=on-failure` is what brings
+		// the unit back, now running the binary that was just swapped in.
+		const onUpgrade = async (target: { version: string; downloadBaseUrl: string }) => {
+			const decision = deps.services.upgrade.decide({
+				current: AGENT_VERSION,
+				target: target.version,
+				sessionsRunning: sessions.running()
+			});
+
+			console.log(`upgrade: ${decision.reason}`);
+
+			if (!decision.proceed) {
+				return;
+			}
+
+			try {
+				await deps.services.upgrade.apply(target);
+				console.log(`upgrade: installed ${target.version}, restarting`);
+				process.exit(UPGRADE_EXIT_CODE);
+			} catch (error) {
+				console.error(`upgrade failed: ${error instanceof Error ? error.message : error}`);
+			}
+		};
 		let settled = false;
 
 		const settle = (error?: Error) => {
@@ -104,7 +130,8 @@ async function connectOnce(deps: ConnectionDeps): Promise<void> {
 			const paused = deps.state.paused ? ' (paused by bosun)' : '';
 
 			console.log(`connected to ${deps.config.serverUrl}${paused}`);
-			void announce();
+			deps.services.upgrade.clearProbation();
+			void announce('connect');
 		});
 
 		socket.on('message', (raw: RawData) => {
@@ -121,7 +148,8 @@ async function connectOnce(deps: ConnectionDeps): Promise<void> {
 					configPath: deps.configPath,
 					state: deps.state,
 					sessions,
-					announce
+					announce,
+					onUpgrade
 				},
 				msg
 			);

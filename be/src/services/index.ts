@@ -1,3 +1,4 @@
+import { getAgentReleaseService } from 'src/services/agent-release/agent-release.service';
 import { getSupabaseAuth } from 'src/services/auth/supabase-auth.service';
 import { getIdService } from 'src/services/ids/id.service';
 import { getInstallerService } from 'src/services/installer/installer.service';
@@ -13,6 +14,10 @@ export function getServices(opts: { env: Env }) {
 	const keyService = getKeyService();
 
 	return {
+		agentRelease: getAgentReleaseService({
+			version: opts.env.AGENT_EXPECTED_VERSION,
+			downloadBaseUrl: opts.env.AGENT_DOWNLOAD_BASE_URL
+		}),
 		idService: getIdService(),
 		installerService: getInstallerService(),
 		keyService,

@@ -12,7 +12,10 @@ export const HelloMsgSchema = z.object({
 	type: z.literal('hello'),
 	agentVersion: z.string(),
 	hostname: z.string(),
-	repoPath: z.string()
+	repoPath: z.string(),
+	// Absent from agents older than self-update, which is why it is optional and
+	// why anything but an explicit refresh is never offered an upgrade.
+	reason: z.enum(['connect', 'refresh']).optional()
 });
 
 export const PreflightMsgSchema = z.object({
@@ -91,6 +94,12 @@ export const PingMsgSchema = z.object({
 
 export const RefreshMsgSchema = z.object({ type: z.literal('refresh') });
 
+export const UpgradeMsgSchema = z.object({
+	type: z.literal('upgrade'),
+	version: z.string(),
+	downloadBaseUrl: z.string()
+});
+
 export const PauseMsgSchema = z.object({ type: z.literal('pause') });
 
 export const ResumeMsgSchema = z.object({ type: z.literal('resume') });
@@ -121,6 +130,7 @@ export const PlanCancelMsgSchema = z.object({
 export const ServerMsgSchema = z.discriminatedUnion('type', [
 	PingMsgSchema,
 	RefreshMsgSchema,
+	UpgradeMsgSchema,
 	PauseMsgSchema,
 	ResumeMsgSchema,
 	ShutdownMsgSchema,

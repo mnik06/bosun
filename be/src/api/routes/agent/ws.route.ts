@@ -112,6 +112,24 @@ async function applyMachineFrame(opts: {
 
 	announceUpdate({ socketRegistry, machine });
 
+	// Offered only when the operator asked for it. A connect-triggered upgrade
+	// would push a new build to every machine the moment it reconnects, which
+	// turns one bad release into a fleet-wide outage with nobody having chosen it.
+	if (opts.msg.type === 'hello' && opts.msg.reason === 'refresh') {
+		const release = opts.fastify.services.agentRelease;
+
+		if (release.isOutdated(opts.msg.agentVersion)) {
+			socketRegistry.sendToAgent({
+				machineId: machine.id,
+				message: {
+					type: 'upgrade',
+					version: release.version,
+					downloadBaseUrl: release.downloadBaseUrl
+				}
+			});
+		}
+	}
+
 	// A paused machine that reconnects is still paused — the row outranks the
 	// socket — so the agent is told again rather than left to infer from silence
 	// that bosun is not dispatching to it.

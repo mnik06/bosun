@@ -5,6 +5,7 @@ import { getExecService } from './exec.service';
 import { getMcpConfigService } from './mcp-config.service';
 import { getPreflightService } from './preflight.service';
 import { getSkillsService } from './skills.service';
+import { getUpgradeService } from './upgrade.service';
 import { getSystemdService } from './systemd.service';
 import { type AgentConfig } from '../config/config';
 
@@ -26,7 +27,8 @@ export function getServices(opts: { config: AgentConfig; env: NodeJS.ProcessEnv 
 		mcpConfig,
 		preflight: getPreflightService({ exec, claudeAuth, mcpConfig, skills }),
 		skills,
-		systemd: getSystemdService()
+		systemd: getSystemdService(),
+		upgrade: getUpgradeService({ exec })
 	};
 }
 

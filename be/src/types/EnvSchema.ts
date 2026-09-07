@@ -17,6 +17,10 @@ export const EnvSchema = z.object({
 	DATABASE_URL: z.string(),
 	PUBLIC_SERVER_URL: z.url(),
 	AGENT_DOWNLOAD_BASE_URL: z.url(),
+	// The agent build machines are expected to run. A machine reporting anything
+	// else is offered an upgrade when its operator hits Refresh — so rolling a bad
+	// release back is a matter of putting the old value here and redeploying.
+	AGENT_EXPECTED_VERSION: z.string().min(1),
 	SUPABASE_URL: z.url(),
 	SUPABASE_PUBLISHABLE_KEY: PublishableKeySchema
 });

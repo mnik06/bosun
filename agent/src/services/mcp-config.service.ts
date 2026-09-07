@@ -22,9 +22,9 @@ export const DEFAULT_SERVERS: Record<string, unknown> = {
 		args: ['-y', '@playwright/mcp@latest']
 	},
 	context7: {
-			type: 'stdio',
-			command: 'npx',
-			args: ['ctx7', 'setup']
+		type: 'stdio',
+		command: 'npx',
+		args: ['-y', '@upstash/context7-mcp']
 	}
 };
 
