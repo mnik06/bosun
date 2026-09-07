@@ -60,6 +60,12 @@ per-session bearer token and the server rejects anything without it.
   `claude auth status --json` and reports what it says. An earlier version guessed from the presence
   of an environment variable, which called a perfectly working machine red and refused to start
   sessions on it.
+- **A red check carries the command's own words.** `tryExec` keeps the exit code, the signal and the
+  tail of stderr, and every failing check is logged to the journal as well as sent to the browser.
+  These checks are read by someone who cannot see the box; "it failed" is indistinguishable from every
+  other cause, and the service environment is where these commands fail while the same command in a
+  login shell succeeds. A report that parses is always preferred to the exit status — `auth status`
+  answering "not logged in" is an answer, not a broken command.
 - **The prompt travels on stdin, never argv.** `/proc/<pid>/cmdline` is world-readable and the input
   is the user's own ticket.
 - **A session dies with its socket.** `run.ts` cancels every session when the connection drops. A

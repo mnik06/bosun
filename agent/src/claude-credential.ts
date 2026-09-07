@@ -30,6 +30,22 @@ export function resolveClaudeCredential(env: NodeJS.ProcessEnv): ClaudeCredentia
 	return null;
 }
 
+// The CLI may print a notice before its JSON, so the object is located rather
+// than assumed to start at the first byte.
+function readJson(raw: string): unknown {
+	const start = raw.indexOf('{');
+
+	if (start === -1) {
+		return null;
+	}
+
+	try {
+		return JSON.parse(raw.slice(start));
+	} catch {
+		return null;
+	}
+}
+
 const AuthStatusSchema = z.object({
 	loggedIn: z.boolean(),
 	authMethod: z.string().optional(),
@@ -38,6 +54,10 @@ const AuthStatusSchema = z.object({
 });
 
 export interface ClaudeAuthStatus {
+	// Whether a report was read at all, as distinct from what it said. "Not logged
+	// in" is an answer; "no answer" is a broken command, and the two need different
+	// things done about them.
+	reported: boolean;
 	loggedIn: boolean;
 	mode: ClaudeAuthMode | null;
 	detail: string;
@@ -48,16 +68,25 @@ export interface ClaudeAuthStatus {
 // logged in through `claude auth login` is authenticated just as completely as
 // one holding a token in `~/.bosun/env`.
 export function readClaudeAuthStatus(raw: string): ClaudeAuthStatus {
-	const parsed = AuthStatusSchema.safeParse(JSON.parse(raw));
+	// Parsed defensively rather than with a bare JSON.parse: this runs inside
+	// `Promise.all` over every preflight check, so a throw here would take the
+	// whole report down and the machine would report nothing at all.
+	const parsed = AuthStatusSchema.safeParse(readJson(raw));
 
 	if (!parsed.success) {
-		return { loggedIn: false, mode: null, detail: 'could not read `claude auth status`' };
+		return {
+			reported: false,
+			loggedIn: false,
+			mode: null,
+			detail: 'could not read `claude auth status`'
+		};
 	}
 
 	const status = parsed.data;
 
 	if (!status.loggedIn) {
 		return {
+			reported: true,
 			loggedIn: false,
 			mode: null,
 			detail: 'claude is not logged in — run `claude auth login`, or set a credential in ~/.bosun/env'
@@ -65,14 +94,25 @@ export function readClaudeAuthStatus(raw: string): ClaudeAuthStatus {
 	}
 
 	if (status.apiKeySource) {
-		return { loggedIn: true, mode: 'api-key', detail: `api key via ${status.apiKeySource}` };
+		return {
+			reported: true,
+			loggedIn: true,
+			mode: 'api-key',
+			detail: `api key via ${status.apiKeySource}`
+		};
 	}
 
 	if (status.authMethod === 'oauth_token') {
-		return { loggedIn: true, mode: 'oauth', detail: 'oauth token from the service environment' };
+		return {
+			reported: true,
+			loggedIn: true,
+			mode: 'oauth',
+			detail: 'oauth token from the service environment'
+		};
 	}
 
 	return {
+		reported: true,
 		loggedIn: true,
 		mode: 'subscription',
 		detail: status.subscriptionType

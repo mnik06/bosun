@@ -45,6 +45,13 @@ async function sleep(ms: number): Promise<void> {
 async function sendPreflight(socket: WebSocket, repoPath: string): Promise<void> {
 	const report = await collectPreflight(repoPath);
 
+	// Also logged, not only sent: preflight results otherwise exist solely in the
+	// browser, and the person debugging a red check is usually on the box reading
+	// journalctl.
+	for (const check of report.checks.filter((entry) => !entry.ok)) {
+		console.error(`preflight ${check.name}: ${check.detail ?? 'failed'}`);
+	}
+
 	if (socket.readyState === WebSocket.OPEN) {
 		socket.send(JSON.stringify({ type: 'preflight', ...report }));
 	}
