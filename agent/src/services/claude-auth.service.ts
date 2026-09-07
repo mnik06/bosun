@@ -9,15 +9,22 @@ export const CLAUDE_TOKEN_VARIABLE = 'CLAUDE_CODE_OAUTH_TOKEN';
 // Stripped from every session rather than merely ignored here.
 export const CONFLICTING_VARIABLES = ['ANTHROPIC_API_KEY'];
 
-const AuthStatusSchema = z.object({ loggedIn: z.boolean(), authMethod: z.string().optional() });
+// nullish, not optional, throughout: the CLI emits absent fields as explicit
+// nulls, and `optional()` rejects null. A single null anywhere fails the whole
+// object, which reads as "claude said nothing readable" for output that was
+// perfectly readable and said the credential works.
+const AuthStatusSchema = z.object({
+	loggedIn: z.boolean(),
+	authMethod: z.string().nullish()
+});
 
 // A real turn against the API. `claude auth status` reports only that a
 // credential is *present* — it answers `loggedIn: true` for a token the API will
 // reject — so proving a credential works means actually using it.
 const VerifyResultSchema = z.object({
-	is_error: z.boolean().optional(),
-	api_error_status: z.number().optional(),
-	result: z.string().optional()
+	is_error: z.boolean().nullish(),
+	api_error_status: z.number().nullish(),
+	result: z.string().nullish()
 });
 
 const VERIFY_TIMEOUT_MS = 60_000;

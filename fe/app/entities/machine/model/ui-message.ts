@@ -19,10 +19,18 @@ export const MachineDeletedMsgSchema = z.object({
 	machineId: z.string()
 })
 
+export const MachineUpgradingMsgSchema = z.object({
+	type: z.literal('machine.upgrading'),
+	machineId: z.string(),
+	from: z.string().nullable(),
+	to: z.string()
+})
+
 export const UiMsgSchema = z.discriminatedUnion('type', [
 	MachineUpdatedMsgSchema,
 	MachinePongMsgSchema,
-	MachineDeletedMsgSchema
+	MachineDeletedMsgSchema,
+	MachineUpgradingMsgSchema
 ])
 
 export type UiMsg = z.infer<typeof UiMsgSchema>

@@ -131,6 +131,15 @@ async function applyMachineFrame(opts: {
 				machineId: machine.id,
 				message: { type: 'upgrade', ...target }
 			});
+			socketRegistry.broadcastToUi({
+				userId: machine.userId,
+				message: {
+					type: 'machine.upgrading',
+					machineId: machine.id,
+					from: opts.msg.agentVersion,
+					to: target.version
+				}
+			});
 		}
 	}
 

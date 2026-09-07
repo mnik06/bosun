@@ -144,6 +144,17 @@ export const MachineDeletedMsgSchema = z.object({
 	machineId: z.string()
 });
 
+// An upgrade takes tens of seconds and spans a restart, so the machine's own row
+// says nothing useful for most of it. Without this the browser shows a refresh
+// that settled and then a machine that goes quiet, which reads as nothing having
+// happened at all.
+export const MachineUpgradingMsgSchema = z.object({
+	type: z.literal('machine.upgrading'),
+	machineId: z.string(),
+	from: z.string().nullable(),
+	to: z.string()
+});
+
 export const PlanUpdatedMsgSchema = z.object({
 	type: z.literal('plan.updated'),
 	plan: PlanSchema
@@ -171,6 +182,7 @@ export const UiMsgSchema = z.discriminatedUnion('type', [
 	MachineUpdatedMsgSchema,
 	MachinePongMsgSchema,
 	MachineDeletedMsgSchema,
+	MachineUpgradingMsgSchema,
 	PlanTextMsgSchema,
 	PlanActivityMsgSchema,
 	PlanQuestionMsgSchema,

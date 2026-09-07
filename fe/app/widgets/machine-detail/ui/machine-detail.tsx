@@ -1,6 +1,12 @@
 import { Alert, Card, Center, Group, Loader, Stack, Text, Title } from '@mantine/core'
+import { Download } from 'lucide-react'
 
-import { MachineStatusDot, PreflightChecklist, useMachineQuery } from '~/entities/machine'
+import {
+	MachineStatusDot,
+	PreflightChecklist,
+	useMachineQuery,
+	useUpgradingTo
+} from '~/entities/machine'
 import { AddMcpServerButton } from '~/features/add-mcp-server'
 import { PausedBanner } from '~/features/pause-machine'
 import { useRefreshMachine } from '~/features/refresh-machine'
@@ -10,6 +16,7 @@ import { MachineActions } from '~/widgets/machine-detail/ui/machine-actions'
 
 export function MachineDetail ({ machineId }: { machineId: string }) {
 	const { data, isPending, error } = useMachineQuery(machineId)
+	const upgradingTo = useUpgradingTo(machineId)
 	// The agent stamps lastSeenAt on every push, so a change to it is the signal
 	// that its answer to the refresh has landed.
 	const refresh = useRefreshMachine({ machineId, settleKey: data?.lastSeenAt ?? null })
@@ -52,6 +59,23 @@ export function MachineDetail ({ machineId }: { machineId: string }) {
 			</Group>
 
 			<PausedBanner machine={data} />
+
+			{upgradingTo === null ? null : (
+				<Alert
+					color="blue"
+					variant="light"
+					icon={<Download size={18} />}
+					title={`Upgrading the agent to ${upgradingTo}`}
+				>
+					<Group gap="xs" align="center">
+						<Loader size={14} />
+						<Text size="sm">
+							It downloads the build, verifies it, swaps its own binary and restarts. The machine
+							drops offline for a few seconds and comes back on its own — nothing to do here.
+						</Text>
+					</Group>
+				</Alert>
+			)}
 
 			<Card withBorder padding="md" radius="md">
 				<Stack gap="sm">

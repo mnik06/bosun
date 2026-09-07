@@ -139,3 +139,52 @@ describe('readVerifyResult without a JSON result', () => {
 		expect(result.detail).toBe('not found on the service PATH');
 	});
 });
+
+describe('readVerifyResult against the shape claude actually emits', () => {
+	// The real payload of a *successful* run: `api_error_status` is present and
+	// null rather than absent. Under `optional()` that one field failed the whole
+	// object, and a working credential was reported as unreadable output.
+	const success = JSON.stringify({
+		type: 'result',
+		subtype: 'success',
+		is_error: false,
+		api_error_status: null,
+		result: 'Ready.',
+		duration_ms: 1366,
+		usage: { input_tokens: 2 }
+	});
+
+	it('accepts a credential the API accepted', () => {
+		expect(readVerifyResult({ raw: success, reason: '' })).toMatchObject({ ok: true });
+	});
+
+	it('still reports a refusal', () => {
+		const refused = JSON.stringify({
+			is_error: true,
+			api_error_status: 401,
+			result: 'Invalid API key'
+		});
+
+		expect(readVerifyResult({ raw: refused, reason: '' })).toMatchObject({
+			ok: false,
+			detail: 'Invalid API key'
+		});
+	});
+
+	it('falls back to the status when a refusal carries no message', () => {
+		const refused = JSON.stringify({ is_error: true, api_error_status: 403, result: null });
+
+		expect(readVerifyResult({ raw: refused, reason: '' }).detail).toContain('403');
+	});
+});
+
+describe('readClaudeAuthStatus against explicit nulls', () => {
+	it('reads a logged-in report whose authMethod is null', () => {
+		const status = readClaudeAuthStatus({
+			raw: '{"loggedIn":true,"authMethod":null}',
+			tokenPresent: true
+		});
+
+		expect(status).toMatchObject({ reported: true, loggedIn: true });
+	});
+});
