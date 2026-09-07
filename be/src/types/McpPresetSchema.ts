@@ -5,7 +5,10 @@ export const McpRequirementSchema = z.object({
 	// references as ${VAR}. The value never travels through bosun.
 	env: z.string().min(1),
 	label: z.string().min(1),
-	helpUrl: z.url().optional()
+	helpUrl: z.url().optional(),
+	// Echoed at the prompt rather than hidden. An account name or a site URL is
+	// not a credential, and masking it only makes it harder to check for a typo.
+	secret: z.boolean().optional()
 });
 
 export type McpRequirement = z.infer<typeof McpRequirementSchema>;
@@ -34,12 +37,25 @@ export const McpServerDefSchema = z.discriminatedUnion('type', [
 
 export type McpServerDef = z.infer<typeof McpServerDefSchema>;
 
+// HTTP Basic is common enough among third-party servers to name, and it is the
+// one shape `${VAR}` substitution cannot express: the header carries
+// base64(user:secret), and no amount of variable expansion will encode it. The
+// agent combines the two prompted values and writes the encoded result as `into`.
+export const McpBasicAuthSchema = z.object({
+	user: z.string().min(1),
+	secret: z.string().min(1),
+	into: z.string().min(1)
+});
+
+export type McpBasicAuth = z.infer<typeof McpBasicAuthSchema>;
+
 export const McpPresetSchema = z.object({
 	id: z.string().min(1),
 	name: z.string().min(1),
 	description: z.string().min(1),
 	docsUrl: z.url().optional(),
 	requires: z.array(McpRequirementSchema),
+	basicAuth: McpBasicAuthSchema.optional(),
 	server: McpServerDefSchema
 });
 

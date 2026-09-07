@@ -12,10 +12,21 @@ export const MCP_CONFIG_FILENAME = 'mcp.json';
 export const RESERVED_SERVER_NAME = 'bosun';
 
 // Bosun's opinion about what a session should have, merged underneath the user's
-// file so a server of the same name in ~/.bosun/mcp.json wins. Empty by default:
-// every server costs startup budget against MCP_TIMEOUT and widens what a session
-// can do, so being enabled everywhere has to be earned rather than assumed.
-export const DEFAULT_SERVERS: Record<string, unknown> = {};
+// file so an entry of the same name in ~/.bosun/mcp.json wins. Setting one to
+// `null` there is how a machine opts out of a default it cannot use — a box with
+// no chromium installed, say.
+export const DEFAULT_SERVERS: Record<string, unknown> = {
+	playwright: {
+		type: 'stdio',
+		command: 'npx',
+		args: ['-y', '@playwright/mcp@latest']
+	},
+	context7: {
+			type: 'stdio',
+			command: 'npx',
+			args: ['ctx7', 'setup']
+	}
+};
 
 const McpConfigFileSchema = z.object({
 	mcpServers: z.record(z.string(), z.unknown())
@@ -71,6 +82,14 @@ export function expandVariables(value: unknown, env: NodeJS.ProcessEnv): ExpandR
 	return { value: walk(value), unresolved: [...unresolved] };
 }
 
+// A `null` entry is an opt-out, not a server. Dropping it after the merge is what
+// lets ~/.bosun/mcp.json switch off a default it cannot satisfy.
+export function withDefaults(userServers: Record<string, unknown>): Record<string, unknown> {
+	return Object.fromEntries(
+		Object.entries({ ...DEFAULT_SERVERS, ...userServers }).filter(([, server]) => server !== null)
+	);
+}
+
 export interface McpConfigResult {
 	present: boolean;
 	servers: Record<string, unknown>;
@@ -106,7 +125,7 @@ export function readMcpConfigFile(opts: {
 	}
 
 	const { [RESERVED_SERVER_NAME]: reserved, ...userServers } = validated.data.mcpServers;
-	const expanded = expandVariables({ ...DEFAULT_SERVERS, ...userServers }, opts.env);
+	const expanded = expandVariables(withDefaults(userServers), opts.env);
 
 	return {
 		present: true,
@@ -150,7 +169,7 @@ export function getMcpConfigService(deps: { env: EnvService; homeDir?: string })
 		// tools, and the reason shows up in preflight instead of as a dead session.
 		read(): McpConfigResult {
 			if (!fs.existsSync(configPath)) {
-				const expanded = expandVariables(DEFAULT_SERVERS, deps.env.current());
+				const expanded = expandVariables(withDefaults({}), deps.env.current());
 				const servers = expanded.value as Record<string, unknown>;
 
 				return {

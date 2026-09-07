@@ -4,6 +4,13 @@ import { getEnvService } from '../services/env.service';
 import { expandVariables, getMcpConfigService } from '../services/mcp-config.service';
 import { getPromptService } from '../services/prompt.service';
 
+// base64(user:secret) is the one header shape `${VAR}` substitution cannot
+// express, so the agent composes it from two prompted values and stores only the
+// result. The raw token is never written anywhere.
+export function encodeBasicAuth(opts: { user: string; secret: string }): string {
+	return Buffer.from(`${opts.user}:${opts.secret}`).toString('base64');
+}
+
 function describeServer(server: unknown): string {
 	const definition = server as { type?: string; url?: string; command?: string; args?: string[] };
 
@@ -40,22 +47,43 @@ async function runAdd(deps: {
 	// Checked before anything is asked for. Two servers can share a variable, so
 	// replacing one silently would break the other — and there is no point taking
 	// a token that is going to be refused.
-	for (const requirement of preset.requires) {
-		if (env.has(requirement.env)) {
+	for (const variable of [...preset.requires.map((entry) => entry.env), preset.basicAuth?.into]) {
+		if (variable !== undefined && env.has(variable)) {
 			throw new Error(
-				`${requirement.env} is already set in ${env.envPath} — edit it there rather than adding a second one`
+				`${variable} is already set in ${env.envPath} — edit it there rather than adding a second one`
 			);
 		}
 	}
 
+	const answers = new Map<string, string>();
+
 	for (const requirement of preset.requires) {
-		const value = await prompt.secret(requirement.label);
+		const value =
+			requirement.secret === false
+				? await prompt.ask(`${requirement.label}: `)
+				: await prompt.secret(requirement.label);
 
 		if (!value) {
 			throw new Error(`${requirement.env} is required — nothing was written`);
 		}
 
-		secrets.push({ variable: requirement.env, value });
+		answers.set(requirement.env, value);
+	}
+
+	if (preset.basicAuth) {
+		// Only the encoded header value is stored. Keeping the raw pair as well
+		// would mean two places to rotate and one of them silently stale.
+		secrets.push({
+			variable: preset.basicAuth.into,
+			value: encodeBasicAuth({
+				user: answers.get(preset.basicAuth.user) ?? '',
+				secret: answers.get(preset.basicAuth.secret) ?? ''
+			})
+		});
+	} else {
+		for (const [variable, value] of answers) {
+			secrets.push({ variable, value });
+		}
 	}
 
 	// Shown before anything is written. A preset comes from bosun, but a stdio

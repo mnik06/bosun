@@ -190,9 +190,13 @@ bosun-agent mcp add playwright # prompts for any credential, confirms, writes
 bosun-agent mcp remove jira
 ```
 
-**The command carries no secret.** A preset names the variable it needs, never a value: the agent
-prompts for it on the box with echo off, writes it to `~/.bosun/env`, and puts only the `${VAR}`
-reference in `mcp.json`. Nothing is typed into the browser, so the token never reaches bosun, and
+**The command carries no secret.** A preset names the variables it needs, never their values: the
+agent prompts for each on the box — hidden for a credential, echoed for something like an account
+email — writes them to `~/.bosun/env`, and puts only the `${VAR}` reference in `mcp.json`.
+
+A preset needing HTTP Basic (Atlassian's personal-token path, `base64(email:token)`) is the one shape
+`${VAR}` substitution cannot express, so the agent composes the header value from the two answers and
+stores only the encoded result. The raw token is never written anywhere. Nothing is typed into the browser, so the token never reaches bosun, and
 nothing is passed as an argument, so it never lands in shell history or `/proc/<pid>/cmdline`.
 
 `mcp add` prints the resolved server and waits for a `y` before writing anything. That matters most
@@ -230,11 +234,19 @@ Bosun never sees any of this. The file lives on the box, the expansion happens o
 backend learns only the server names, through preflight.
 
 **Defaults.** `DEFAULT_SERVERS` in `agent/src/services/mcp-config.service.ts` is merged *underneath*
-`~/.bosun/mcp.json`, so a server of the same name in the user's file wins and `mcp list` labels each
-one `(yours)` or `(bosun default)`. It ships empty on purpose: every server costs startup budget
-against `MCP_TIMEOUT` and widens what a session can do, so being enabled on every machine has to be
-earned rather than assumed. Playwright is in the preset catalogue instead — one command away, and
-opted into per machine.
+`~/.bosun/mcp.json`, so an entry of the same name in the user's file wins and `mcp list` labels each
+one `(yours)` or `(bosun default)`. Playwright ships as a default, so every machine can inspect a
+running app without being configured for it.
+
+Two things a machine needs for that default to work: `npx` on the service PATH (the `package-manager`
+check covers it) and a browser build — `npx playwright install chromium`, once per machine. Without
+the browser the server starts and its tools fail when called.
+
+A machine that cannot use a default switches it off by naming it `null`:
+
+```json
+{ "mcpServers": { "playwright": null } }
+```
 
 `systemctl --user` sources no shell rc, so the unit carries an explicit `Environment=PATH=` resolved
 at install time and `EnvironmentFile=-%h/.bosun/env`. A machine that passes preflight by hand but was

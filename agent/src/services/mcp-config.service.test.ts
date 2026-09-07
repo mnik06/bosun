@@ -5,6 +5,7 @@ import path from 'path';
 import { afterEach, beforeEach } from 'vitest';
 import { getEnvService } from './env.service';
 import {
+	DEFAULT_SERVERS,
 	RESERVED_SERVER_NAME,
 	expandVariables,
 	getMcpConfigService,
@@ -59,8 +60,8 @@ describe('readMcpConfigFile', () => {
 			mcpServers: { atlassian: { type: 'http', url: '${BASE}/mcp' } }
 		});
 
-		expect(result).toMatchObject({ present: true, error: null, serverNames: ['atlassian'] });
-		expect(result.servers).toEqual({ atlassian: { type: 'http', url: 'https://example.test/mcp' } });
+		expect(result).toMatchObject({ present: true, error: null });
+		expect(result.servers.atlassian).toEqual({ type: 'http', url: 'https://example.test/mcp' });
 	});
 
 	// A user server under this key would shadow bosun's own planning tools and take
@@ -70,7 +71,8 @@ describe('readMcpConfigFile', () => {
 			mcpServers: { bosun: { type: 'http', url: 'http://evil' }, atlassian: { type: 'http' } }
 		});
 
-		expect(result.serverNames).toEqual(['atlassian']);
+		expect(result.serverNames).toContain('atlassian');
+		expect(result.serverNames).not.toContain('bosun');
 		expect(result.error).toContain(RESERVED_SERVER_NAME);
 	});
 
@@ -154,7 +156,44 @@ describe('getMcpConfigService writes', () => {
 		expect(mcp.listConfigured()).toEqual([]);
 	});
 
-	it('reports no servers when nothing has been configured', () => {
-		expect(service().read()).toMatchObject({ present: false, serverNames: [] });
+	it('still reports the defaults when nothing has been configured', () => {
+		expect(service().read()).toMatchObject({
+			present: false,
+			serverNames: Object.keys(DEFAULT_SERVERS)
+		});
+	});
+});
+
+describe('default servers', () => {
+	const defaults = Object.keys(DEFAULT_SERVERS);
+
+	it('ships the defaults without any config file', () => {
+		const result = readMcpConfigFile({ raw: '{"mcpServers":{}}', env });
+
+		expect(result.serverNames).toEqual(defaults);
+	});
+
+	it('merges a user server alongside the defaults', () => {
+		const result = read({ mcpServers: { atlassian: { type: 'http', url: '${BASE}' } } });
+
+		expect(result.serverNames.sort()).toEqual([...defaults, 'atlassian'].sort());
+	});
+
+	// A default the machine cannot satisfy — no chromium on the box — has to be
+	// switchable off, or it is a permanently broken server nobody can remove.
+	it('lets null in the user file switch a default off', () => {
+		const [first] = defaults;
+		const result = read({ mcpServers: { [first!]: null } });
+
+		expect(result.serverNames).not.toContain(first);
+		expect(result.serverNames).toHaveLength(defaults.length - 1);
+	});
+
+	it('lets the user file override a default of the same name', () => {
+		const [first] = defaults;
+		const override = { type: 'stdio', command: 'my-own' };
+		const result = read({ mcpServers: { [first!]: override } });
+
+		expect(result.servers[first!]).toEqual(override);
 	});
 });

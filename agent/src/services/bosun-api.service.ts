@@ -12,7 +12,16 @@ const ErrorRespSchema = z.object({ message: z.string() });
 const McpRequirementSchema = z.object({
 	env: z.string(),
 	label: z.string(),
-	helpUrl: z.string().optional()
+	helpUrl: z.string().optional(),
+	secret: z.boolean().optional()
+});
+
+export type McpRequirement = z.infer<typeof McpRequirementSchema>;
+
+const McpBasicAuthSchema = z.object({
+	user: z.string(),
+	secret: z.string(),
+	into: z.string()
 });
 
 export const McpPresetSchema = z.object({
@@ -21,6 +30,7 @@ export const McpPresetSchema = z.object({
 	description: z.string(),
 	docsUrl: z.string().optional(),
 	requires: z.array(McpRequirementSchema),
+	basicAuth: McpBasicAuthSchema.optional(),
 	server: z.unknown()
 });
 
