@@ -1,5 +1,8 @@
 import crypto from 'crypto';
+import fs from 'fs';
 import http from 'http';
+import os from 'os';
+import path from 'path';
 import { z } from 'zod';
 import {
 	AddAcArgsSchema,
@@ -21,7 +24,7 @@ interface PendingQuestion {
 }
 
 export interface SessionMcpServer {
-	config: string;
+	configPath: string;
 	answer(opts: { questionId: string; answers: PlanAnswer[] }): boolean;
 	close(): Promise<void>;
 }
@@ -140,9 +143,27 @@ async function handleRpc(opts: {
 	throw new Error(`unsupported method ${message.method}`);
 }
 
+// The config is written to a private file rather than passed on the command line.
+// `/proc/<pid>/cmdline` is world-readable, so an inline `--mcp-config` would hand
+// this session's bearer token — and any token in the user's own server config —
+// to every other account on the box, which is exactly what the token exists to
+// prevent.
+function writeConfigFile(opts: { planId: string; config: unknown }): string {
+	const configPath = path.join(
+		os.tmpdir(),
+		`bosun-mcp-${opts.planId}-${crypto.randomBytes(6).toString('hex')}.json`
+	);
+
+	fs.writeFileSync(configPath, JSON.stringify(opts.config), { mode: 0o600 });
+	fs.chmodSync(configPath, 0o600);
+
+	return configPath;
+}
+
 export async function startSessionMcpServer(opts: {
 	planId: string;
 	bosunApi: BosunApiService;
+	userServers?: Record<string, unknown>;
 	onQuestion: (payload: { questionId: string; questions: PlanQuestion[] }) => void;
 	log: (message: string) => void;
 }): Promise<SessionMcpServer> {
@@ -212,16 +233,22 @@ export async function startSessionMcpServer(opts: {
 
 	opts.log(`mcp server for ${opts.planId} on 127.0.0.1:${port}`);
 
-	return {
-		config: JSON.stringify({
+	const configPath = writeConfigFile({
+		planId: opts.planId,
+		config: {
 			mcpServers: {
+				...opts.userServers,
 				bosun: {
 					type: 'http',
 					url: `http://127.0.0.1:${port}/mcp`,
 					headers: { authorization: `Bearer ${token}` }
 				}
 			}
-		}),
+		}
+	});
+
+	return {
+		configPath,
 
 		answer(payload): boolean {
 			const question = pending.get(payload.questionId);
@@ -237,6 +264,10 @@ export async function startSessionMcpServer(opts: {
 		},
 
 		async close(): Promise<void> {
+			// The file holds this session's bearer token and whatever credentials the
+			// user's own servers carry, so it does not outlive the session.
+			fs.rmSync(configPath, { force: true });
+
 			// A question still waiting has to be released or the `claude` process
 			// blocks on a promise that can no longer be resolved and never exits.
 			for (const [questionId, question] of pending) {

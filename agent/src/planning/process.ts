@@ -8,7 +8,10 @@ const TOOL_TIMEOUT_MS = 30 * 60 * 1000;
 const STARTUP_TIMEOUT_MS = 30 * 1000;
 const SIGKILL_GRACE_MS = 5_000;
 
-const BUILTIN_TOOLS = ['Read', 'Grep', 'Glob', 'Task'];
+// `Skill` has to be named explicitly: `--tools` replaces the built-in set, and a
+// session without it still loads every skill description at startup and simply
+// cannot invoke them, which reads to the model as a tool that keeps failing.
+const BUILTIN_TOOLS = ['Read', 'Grep', 'Glob', 'Task', 'Skill'];
 
 const MCP_TOOLS = [
 	'mcp__bosun__bosun_ask',
@@ -21,7 +24,11 @@ export interface ClaudeSession {
 	kill(): void;
 }
 
-function sessionArgs(mcpConfig: string): string[] {
+function sessionArgs(opts: { mcpConfigPath: string; userServerNames: string[] }): string[] {
+	// One wildcard per user server rather than an enumerated list: the tools a
+	// third-party server exposes are its own business and change with its version.
+	const userTools = opts.userServerNames.map((name) => `mcp__${name}__*`);
+
 	return [
 		'--print',
 		'--output-format',
@@ -33,20 +40,21 @@ function sessionArgs(mcpConfig: string): string[] {
 		'--no-session-persistence',
 		'--strict-mcp-config',
 		'--mcp-config',
-		mcpConfig,
+		opts.mcpConfigPath,
 		'--permission-prompts',
 		'none',
 		'--tools',
 		BUILTIN_TOOLS.join(','),
 		'--allowed-tools',
-		[...BUILTIN_TOOLS, ...MCP_TOOLS].join(',')
+		[...BUILTIN_TOOLS, ...MCP_TOOLS, ...userTools].join(',')
 	];
 }
 
 export function spawnClaudeSession(opts: {
 	cwd: string;
 	prompt: string;
-	mcpConfig: string;
+	mcpConfigPath: string;
+	userServerNames: string[];
 	claudeAuth: ClaudeAuthService;
 	onStdout: (chunk: string) => void;
 	onStderr: (chunk: string) => void;
@@ -54,16 +62,20 @@ export function spawnClaudeSession(opts: {
 }): ClaudeSession {
 	// Its own process group, so cancelling reaps whatever the session spawned
 	// instead of leaving a subagent holding a port and a credential.
-	const child = spawn('claude', sessionArgs(opts.mcpConfig), {
-		cwd: opts.cwd,
-		env: {
-			...opts.claudeAuth.sessionEnv(),
-			MCP_TOOL_TIMEOUT: String(TOOL_TIMEOUT_MS),
-			MCP_TIMEOUT: String(STARTUP_TIMEOUT_MS)
-		},
-		detached: true,
-		stdio: ['pipe', 'pipe', 'pipe']
-	});
+	const child = spawn(
+		'claude',
+		sessionArgs({ mcpConfigPath: opts.mcpConfigPath, userServerNames: opts.userServerNames }),
+		{
+			cwd: opts.cwd,
+			env: {
+				...opts.claudeAuth.sessionEnv(),
+				MCP_TOOL_TIMEOUT: String(TOOL_TIMEOUT_MS),
+				MCP_TIMEOUT: String(STARTUP_TIMEOUT_MS)
+			},
+			detached: true,
+			stdio: ['pipe', 'pipe', 'pipe']
+		}
+	);
 	let killTimer: NodeJS.Timeout | null = null;
 
 	child.stdout.setEncoding('utf8');

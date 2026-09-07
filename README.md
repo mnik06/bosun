@@ -114,6 +114,59 @@ Bosun never sees the value. The agent asks `claude auth status --json` and repor
 box is logged in. A token that is present but refused is reported differently from no token at all —
 the first means re-run `setup-token`, the second means the file was never filled in.
 
+### Skills
+
+Planning sessions can invoke [Agent Skills](https://code.claude.com/docs/en/skills). Claude Code
+discovers them itself from `<repo>/.claude/skills/` and `~/.claude/skills/` on the machine; bosun's
+part is naming `Skill` in the session's tool list, because `--tools` replaces the built-in set and a
+session without it loads every skill description and then cannot invoke any of them.
+
+A project skill shadows a user skill of the same name. The `skills` preflight check reports what a
+machine picked up and from where, so a skill that is present but never loaded is visible instead of
+a mystery.
+
+**Skills only get the session's tools.** A planning session runs with `Read`, `Grep`, `Glob`, `Task`
+and `Skill` — nothing that writes files or runs commands. A skill that is a checklist or a set of
+conventions works; one that shells out will fail partway through. That is a deliberate limit:
+planning reads and asks, it does not build.
+
+**A committed skill steers the session.** The session already reads the repo, but a skill is
+repo-controlled text that instructs the model rather than data it looks at. On your own repo that is
+the point — a repo carrying its own planning conventions is the use case. Treat it as a reason to
+review skills in a pull request like any other code.
+
+### Custom MCP servers
+
+Planning sessions run with `--strict-mcp-config`, so the only MCP servers a session sees are the
+ones bosun assembles: its own loopback server, plus whatever is in `~/.bosun/mcp.json` (mode `0600`,
+seeded by `install.sh`). A repo's `.mcp.json` is deliberately **not** read — that file is committed,
+and a credential in it goes to your git host.
+
+```json
+{
+  "mcpServers": {
+    "atlassian": {
+      "type": "http",
+      "url": "<endpoint from the vendor's docs>",
+      "headers": { "Authorization": "Bearer ${ATLASSIAN_TOKEN}" }
+    }
+  }
+}
+```
+
+Secrets go in `~/.bosun/env` and are referenced as `${VAR}` or `${VAR:-default}`. The agent expands
+them itself before spawning the session, so `mcp.json` never has to hold a literal token. A variable
+the environment never supplied is left as written and reported by the `mcp` preflight check rather
+than silently becoming an empty string.
+
+Every tool of a configured server is allowed (`mcp__<name>__*`). That widens what a session can do:
+a planning session with Jira attached can write to Jira. Planning is a read-and-ask activity, so
+prefer a read-only token wherever the server offers one. `bosun` is a reserved server name and a
+config using it is ignored.
+
+Bosun never sees any of this. The file lives on the box, the expansion happens on the box, and the
+backend learns only the server names, through preflight.
+
 `systemctl --user` sources no shell rc, so the unit carries an explicit `Environment=PATH=` resolved
 at install time and `EnvironmentFile=-%h/.bosun/env`. A machine that passes preflight by hand but was
 enrolled with an agent older than 1.3.0 will fail it under the service until `install.sh` is re-run.

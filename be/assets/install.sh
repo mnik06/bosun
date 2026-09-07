@@ -74,8 +74,23 @@ if [ ! -f "$ENV_FILE" ]; then
 ENVFILE
 	note "seeded $ENV_FILE — run \`claude setup-token\` on your own machine, paste the token in, then: systemctl --user restart bosun-agent"
 fi
+# Custom MCP servers, merged into every planning session alongside bosun's own.
+# Kept here rather than in the repo's .mcp.json: this file holds credentials and
+# the repo gets committed.
+MCP_FILE="$HOME/.bosun/mcp.json"
+if [ ! -f "$MCP_FILE" ]; then
+	mkdir -p "$HOME/.bosun"
+	cat > "$MCP_FILE" <<'MCPFILE'
+{
+  "mcpServers": {}
+}
+MCPFILE
+	note "seeded $MCP_FILE — add MCP servers there; put their tokens in $ENV_FILE and reference them as \${VAR}"
+fi
+
 chmod 700 "$HOME/.bosun"
 chmod 600 "$ENV_FILE"
+chmod 600 "$MCP_FILE"
 
 case ":$PATH:" in
 	*":$INSTALL_DIR:"*) ;;

@@ -59,9 +59,16 @@ export function createPlanningSessions(opts: {
 	};
 
 	const startProcess = async (planId: string, input: string): Promise<void> => {
+		const userMcp = opts.services.mcpConfig.read();
+
+		if (userMcp.error) {
+			console.error(`custom mcp config ignored: ${userMcp.error}`);
+		}
+
 		const mcp = await startSessionMcpServer({
 			planId,
 			bosunApi: opts.services.bosunApi,
+			userServers: userMcp.servers,
 			onQuestion: ({ questionId, questions }) => {
 				opts.send({ type: 'plan.question', planId, questionId, questions });
 			},
@@ -104,7 +111,8 @@ export function createPlanningSessions(opts: {
 		session.process = spawnClaudeSession({
 			cwd: opts.config.repoPath,
 			prompt: opts.prompt(input),
-			mcpConfig: mcp.config,
+			mcpConfigPath: mcp.configPath,
+			userServerNames: userMcp.serverNames,
 			claudeAuth: opts.services.claudeAuth,
 			onStdout: (chunk) => {
 				parser.push(chunk);

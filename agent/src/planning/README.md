@@ -91,6 +91,19 @@ interleaved.
   other cause, and the service environment is where these commands fail while the same command in a
   login shell succeeds. A report that parses is always preferred to the exit status — `auth status`
   answering "not logged in" is an answer, not a broken command.
+- **`Skill` is named in the tool list on purpose.** `--tools` replaces the built-in set rather than
+  adding to it. Leaving `Skill` out does not hide skills — Claude Code still discovers them and
+  loads their descriptions at startup — it only makes them impossible to invoke, which reads to the
+  model as a tool that keeps failing. Skills get the session's tools and nothing more, so one that
+  shells out fails partway; that is the same read-and-ask limit the rest of the session runs under.
+- **The MCP config is a file, not an argv string.** `/proc/<pid>/cmdline` is world-readable, so an
+  inline `--mcp-config` would publish this session's loopback bearer token — and any credential in
+  the user's own server config — to every other account on the box. That token exists precisely
+  because loopback is shared, so putting it in argv would defeat the thing it is there for. The
+  config is written to a `0600` file in the temp directory and unlinked when the session closes.
+- **A broken `~/.bosun/mcp.json` does not stop planning.** The session still gets bosun's own tools
+  and the reason is reported through preflight. A typo in a third-party server's config is not a
+  reason for a machine to stop being able to plan.
 - **The prompt travels on stdin, never argv.** `/proc/<pid>/cmdline` is world-readable and the input
   is the user's own ticket.
 - **A session dies with its socket.** `connection/socket.ts` cancels every session when the

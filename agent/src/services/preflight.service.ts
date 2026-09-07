@@ -1,5 +1,7 @@
 import { type ClaudeAuthService } from './claude-auth.service';
 import { type ExecService } from './exec.service';
+import { type McpConfigService } from './mcp-config.service';
+import { type SkillsService } from './skills.service';
 import { type PreflightCheck } from '../protocol';
 
 const MIN_NODE = [24, 15] as const;
@@ -21,7 +23,12 @@ export function claudeVersionIsSupported(version: string): boolean {
 	return Number(version.match(/(\d+)\./)?.[1] ?? 0) >= MIN_CLAUDE_MAJOR;
 }
 
-export function getPreflightService(deps: { exec: ExecService; claudeAuth: ClaudeAuthService }) {
+export function getPreflightService(deps: {
+	exec: ExecService;
+	claudeAuth: ClaudeAuthService;
+	mcpConfig: McpConfigService;
+	skills: SkillsService;
+}) {
 	async function checkNode(): Promise<PreflightCheck> {
 		const result = await deps.exec.run('node', ['--version']);
 
@@ -82,9 +89,61 @@ export function getPreflightService(deps: { exec: ExecService; claudeAuth: Claud
 		};
 	}
 
+	// Reports what is configured and parseable, not what connects: `claude mcp list`
+	// reads the CLI's own config sources rather than the one bosun assembles, so it
+	// would answer a different question. A server that parses but refuses to start
+	// surfaces in the session's own stderr.
+	function checkCustomMcp(): PreflightCheck {
+		const config = deps.mcpConfig.read();
+
+		if (!config.present) {
+			return { name: 'mcp', ok: true, detail: 'no custom servers configured' };
+		}
+
+		if (config.error) {
+			return { name: 'mcp', ok: false, detail: `${deps.mcpConfig.configPath}: ${config.error}` };
+		}
+
+		if (config.unresolved.length > 0) {
+			return {
+				name: 'mcp',
+				ok: false,
+				detail: `unset in ~/.bosun/env: ${config.unresolved.join(', ')}`
+			};
+		}
+
+		return {
+			name: 'mcp',
+			ok: true,
+			detail: config.serverNames.length > 0 ? config.serverNames.join(', ') : 'no servers declared'
+		};
+	}
+
+	// Informational, never red: a repo with no skills is the normal case, not a
+	// misconfigured machine. It is reported so that a skill which is present but
+	// never picked up is visible rather than a mystery.
+	function checkSkills(): PreflightCheck {
+		const found = deps.skills.list();
+
+		return {
+			name: 'skills',
+			ok: true,
+			detail:
+				found.length === 0
+					? 'none found'
+					: found.map((skill) => `${skill.name} (${skill.source})`).join(', ')
+		};
+	}
+
 	return {
 		async collect(): Promise<PreflightCheck[]> {
-			return Promise.all([checkNode(), checkPackageManager(), checkClaude()]);
+			const [node, packageManager, claude] = await Promise.all([
+				checkNode(),
+				checkPackageManager(),
+				checkClaude()
+			]);
+
+			return [node, packageManager, claude, checkCustomMcp(), checkSkills()];
 		}
 	};
 }
