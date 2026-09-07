@@ -173,10 +173,24 @@ touching the unit file — which is what lets agents already installed upgrade w
 A machine has no inbound port, so a build that cannot connect cannot be fixed from the browser. The
 probation file is the only thing standing between a bad release and a fleet that is gone for good:
 
-- Written when the swap commits, naming the version just installed.
+- Written when the swap commits, naming the version just installed and a boot count of zero.
 - Deleted the moment a socket actually opens — a working connection is the only evidence that counts.
-- On startup, a probation file naming the *running* version means the previous boot installed it and
-  never connected. The previous binary is restored and the process exits 75 again.
+- On startup, a probation file naming the *running* version at zero boots is the new build's first
+  start. The count goes to one and the agent carries on: it has not failed at anything yet.
+- On startup at one boot, the previous start of this version ran and never reached a socket. The
+  previous binary is restored and the process exits 75 again.
+
+The boot count is the whole mechanism, and leaving it out is not a simplification. Probation is
+written by the boot that *installs* and read by the boot that *follows* it, so treating the file's
+mere presence as failure rolls the new build back before it has run a line — every upgrade installs,
+restarts, reverts and blocks itself, and the machine sits on the old version being re-offered the new
+one forever. From the browser that is indistinguishable from an upgrade that never happened.
+
+A build that starts cleanly and simply cannot reach bosun would never get that second boot on its
+own — it would retry behind the backoff indefinitely. `PROBATION_DEADLINE_MS` (five minutes, about
+ten attempts at the 30s backoff cap) is what turns "still not connected" into the exit that produces
+one. It is deliberately far longer than a backend restart takes, because a false positive here
+blocks a good version on that machine permanently.
 
 The rolled-back version is recorded in `upgrade-blocked` and never retried. Without that the backend
 re-offers it on the next Refresh, the rollback restores the old binary again, and the machine flaps

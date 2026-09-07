@@ -91,8 +91,10 @@ describe('probation and rollback', () => {
 		return getUpgradeService({ exec: getExecService(), homeDir: home, execPath: binPath });
 	}
 
+	// The state a build is in on its *second* boot: installed, started once, and
+	// still never seen on a socket.
 	function underProbation(version: string) {
-		fs.writeFileSync(path.join(home, '.bosun', 'upgrade-probation'), version);
+		fs.writeFileSync(path.join(home, '.bosun', 'upgrade-probation'), `${version}\n1\n`);
 		fs.writeFileSync(`${binPath}.previous`, 'OLD', { mode: 0o755 });
 	}
 

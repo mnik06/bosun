@@ -15,6 +15,10 @@ const BLOCKED_FILE = 'upgrade-blocked';
 const VERIFY_TIMEOUT_MS = 30_000;
 const DOWNLOAD_TIMEOUT_MS = 120_000;
 
+// Long enough that a backend restart or a slow boot is not mistaken for a broken
+// build — the reconnect backoff caps at 30s, so this is roughly ten attempts.
+export const PROBATION_DEADLINE_MS = 300_000;
+
 export function assetNameFor(arch: string): string | null {
 	if (arch === 'x64') {
 		return 'bosun-agent-linux-x64';
@@ -105,6 +109,16 @@ export function getUpgradeService(deps: { exec: ExecService; homeDir?: string; e
 		return readLines(blockedPath);
 	}
 
+	function readProbation(): { version: string; boots: number } | null {
+		const [version, boots] = readLines(probationPath);
+
+		return version === undefined ? null : { version, boots: Number(boots) || 0 };
+	}
+
+	function writeProbation(opts: { version: string; boots: number }): void {
+		fs.writeFileSync(probationPath, `${opts.version}\n${opts.boots}\n`, { mode: 0o600 });
+	}
+
 	function block(version: string): void {
 		const all = new Set([...blocked(), version]);
 
@@ -185,9 +199,9 @@ export function getUpgradeService(deps: { exec: ExecService; homeDir?: string; e
 			fs.renameSync(binPath, previousPath);
 			fs.renameSync(stagedPath, binPath);
 
-			// Written last. Its presence on the next start means the previous boot
-			// installed this version and never reached a working connection.
-			fs.writeFileSync(probationPath, opts.version, { mode: 0o600 });
+			// Written last, with no boots against it yet: the start that follows is
+			// the new build's one chance to prove itself.
+			writeProbation({ version: opts.version, boots: 0 });
 		},
 
 		// Called once a connection is actually open, which is the only evidence
@@ -196,12 +210,31 @@ export function getUpgradeService(deps: { exec: ExecService; homeDir?: string; e
 			fs.rmSync(probationPath, { force: true });
 		},
 
+		underProbation(): boolean {
+			return readProbation() !== null;
+		},
+
 		// A machine has no inbound port, so a build that cannot connect cannot be
 		// fixed from the browser. Restoring the previous binary is the only way back.
+		//
+		// The boot count is what separates "just installed" from "installed and
+		// already failed once". Rolling back on the file's mere presence would fire
+		// on the new build's very first start, before it has run a line, and no
+		// upgrade could ever stick.
 		rollbackIfFailed(currentVersion: string): string | null {
-			const probation = readLines(probationPath)[0];
+			const probation = readProbation();
 
-			if (probation !== currentVersion || !fs.existsSync(previousPath)) {
+			if (probation === null || probation.version !== currentVersion) {
+				return null;
+			}
+
+			if (probation.boots === 0) {
+				writeProbation({ version: currentVersion, boots: 1 });
+
+				return null;
+			}
+
+			if (!fs.existsSync(previousPath)) {
 				return null;
 			}
 

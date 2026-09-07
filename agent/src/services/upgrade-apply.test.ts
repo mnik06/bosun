@@ -87,7 +87,9 @@ describe('upgrade apply', () => {
 	it('leaves the machine on probation for the version it installed', async () => {
 		await apply({ binary: fakeBinary('2.1.0') });
 
-		expect(fs.readFileSync(path.join(home, '.bosun', 'upgrade-probation'), 'utf8')).toBe('2.1.0');
+		expect(fs.readFileSync(path.join(home, '.bosun', 'upgrade-probation'), 'utf8')).toBe(
+			'2.1.0\n0\n'
+		);
 	});
 
 	// Not optional. Anyone who can tamper with the download base would otherwise
@@ -132,6 +134,68 @@ describe('upgrade apply', () => {
 
 	it('rolls back to the replaced binary when the new one never connects', async () => {
 		await apply({ binary: fakeBinary('2.1.0') });
+		service().rollbackIfFailed('2.1.0');
+
+		expect(service().rollbackIfFailed('2.1.0')).toBe('2.1.0');
+		expect(fs.readFileSync(binPath, 'utf8')).toContain('2.0.0');
+		expect(service().blocked()).toEqual(['2.1.0']);
+	});
+});
+
+describe('the first boot of a freshly installed build', () => {
+	let home: string;
+	let binPath: string;
+	let release: { url: string; close: () => void } | null = null;
+
+	beforeEach(() => {
+		home = fs.mkdtempSync(path.join(os.tmpdir(), 'bosun-boot-'));
+		fs.mkdirSync(path.join(home, '.bosun'));
+		binPath = path.join(home, 'bosun-agent');
+		fs.writeFileSync(binPath, fakeBinary('2.0.0'), { mode: 0o755 });
+	});
+
+	afterEach(() => {
+		release?.close();
+		release = null;
+		fs.rmSync(home, { recursive: true, force: true });
+	});
+
+	function service() {
+		return getUpgradeService({ exec: getExecService(), homeDir: home, execPath: binPath });
+	}
+
+	async function installNewBuild() {
+		const binary = fakeBinary('2.1.0');
+
+		release = await serve({ binary, sums: sumsFor(binary) });
+		await service().apply({ version: '2.1.0', downloadBaseUrl: release.url });
+	}
+
+	// The probation file is written by the boot that installs, and read by the boot
+	// that follows it. Treating its mere presence as failure rolls back before the
+	// new build has run a single line, so no upgrade can ever stick.
+	it('gets to run rather than being rolled back before it has tried', async () => {
+		await installNewBuild();
+
+		expect(service().rollbackIfFailed('2.1.0')).toBeNull();
+		expect(fs.readFileSync(binPath, 'utf8')).toContain('2.1.0');
+		expect(service().blocked()).toEqual([]);
+	});
+
+	it('is kept once it connects', async () => {
+		await installNewBuild();
+		service().rollbackIfFailed('2.1.0');
+		service().clearProbation();
+
+		expect(service().rollbackIfFailed('2.1.0')).toBeNull();
+		expect(fs.readFileSync(binPath, 'utf8')).toContain('2.1.0');
+	});
+
+	// The second boot is the evidence: it means the first one started and died
+	// without ever reaching a socket.
+	it('is rolled back when a second boot finds it still unproven', async () => {
+		await installNewBuild();
+		service().rollbackIfFailed('2.1.0');
 
 		expect(service().rollbackIfFailed('2.1.0')).toBe('2.1.0');
 		expect(fs.readFileSync(binPath, 'utf8')).toContain('2.0.0');
