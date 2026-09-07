@@ -1,27 +1,96 @@
 const VERSION_PLACEHOLDER = '{version}';
+const LATEST_TTL_MS = 5 * 60 * 1000;
 
 // A base pointing at `releases/latest` cannot express "this exact build", so a
 // bad release could not be rolled back by changing configuration — every machine
-// would keep fetching whatever `latest` had become. A `{version}` placeholder
-// makes the download and the version bosun asked for the same thing.
+// would keep fetching whatever `latest` had become.
 export function resolveDownloadBase(opts: { baseUrl: string; version: string }): string {
 	return opts.baseUrl.replaceAll(VERSION_PLACEHOLDER, opts.version);
 }
 
-export function getAgentReleaseService(deps: { version: string; downloadBaseUrl: string }) {
-	return {
-		version: deps.version,
+// `https://host/owner/repo/releases/latest` redirects to the newest tag, so the
+// final URL names it: `.../releases/tag/agent-v2.0.7`. Reading the version out of
+// the tag rather than calling an API keeps this free of API rate limits and of
+// any credential.
+export function parseTagVersion(finalUrl: string): string | null {
+	const tag = finalUrl.split('/').filter(Boolean).pop() ?? '';
+	const match = /(\d+\.\d+\.\d+[^/]*)$/.exec(tag);
 
-		downloadBaseUrl: resolveDownloadBase({
-			baseUrl: deps.downloadBaseUrl,
-			version: deps.version
-		}),
+	return match ? match[1]! : null;
+}
+
+async function followToTag(url: string): Promise<string | null> {
+	const response = await fetch(url, {
+		method: 'HEAD',
+		redirect: 'follow',
+		signal: AbortSignal.timeout(10_000)
+	});
+
+	return response.ok ? parseTagVersion(response.url) : null;
+}
+
+export function getAgentReleaseService(deps: {
+	pinnedVersion?: string;
+	latestReleaseUrl?: string;
+	downloadBaseUrl: string;
+	resolveLatest?: (url: string) => Promise<string | null>;
+	now?: () => number;
+}) {
+	const resolveLatest = deps.resolveLatest ?? followToTag;
+	const now = deps.now ?? Date.now;
+
+	let cached: { version: string; at: number } | null = null;
+
+	// Pinning wins over discovery on purpose: AGENT_EXPECTED_VERSION is the lever
+	// that rolls a bad release back, and a lever that "latest" could override is
+	// not a lever.
+	async function currentVersion(): Promise<string | null> {
+		if (deps.pinnedVersion) {
+			return deps.pinnedVersion;
+		}
+
+		if (!deps.latestReleaseUrl) {
+			return null;
+		}
+
+		if (cached && now() - cached.at < LATEST_TTL_MS) {
+			return cached.version;
+		}
+
+		try {
+			const version = await resolveLatest(deps.latestReleaseUrl);
+
+			if (version) {
+				cached = { version, at: now() };
+			}
+
+			// A failed lookup falls through to the last good answer rather than to
+			// nothing, so a brief outage at the release host does not make every
+			// machine look up to date.
+			return version ?? cached?.version ?? null;
+		} catch {
+			return cached?.version ?? null;
+		}
+	}
+
+	return {
+		currentVersion,
+
+		downloadBaseFor(version: string): string {
+			return resolveDownloadBase({ baseUrl: deps.downloadBaseUrl, version });
+		},
 
 		// Not a semver comparison: "different from what we publish" is the useful
-		// question, and it is what lets a downgrade roll a fleet back by lowering
+		// question, and it is what lets a downgrade roll a fleet back by pinning
 		// AGENT_EXPECTED_VERSION rather than needing a new release above the bad one.
-		isOutdated(reported: string | null): boolean {
-			return reported !== null && reported !== deps.version;
+		async target(reported: string | null): Promise<{ version: string; downloadBaseUrl: string } | null> {
+			const version = await currentVersion();
+
+			if (version === null || reported === null || reported === version) {
+				return null;
+			}
+
+			return { version, downloadBaseUrl: this.downloadBaseFor(version) };
 		}
 	};
 }

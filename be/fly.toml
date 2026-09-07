@@ -10,7 +10,7 @@ primary_region = "lhr"
   # The agent build machines are expected to run. Machines are offered an upgrade
   # to this version when their operator hits Refresh, so lowering it and
   # redeploying is how a bad agent release is rolled back across the fleet.
-  AGENT_EXPECTED_VERSION = "2.0.5"
+  AGENT_EXPECTED_VERSION = "2.0.7"
 
 # auto_stop is off on purpose: this process holds long-lived agent WebSockets,
 # and a proxy-stopped machine drops every one of them.

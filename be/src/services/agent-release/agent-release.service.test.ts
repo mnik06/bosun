@@ -1,41 +1,139 @@
-import { describe, expect, it } from 'vitest';
-import { getAgentReleaseService, resolveDownloadBase } from 'src/services/agent-release/agent-release.service';
+import { describe, expect, it, vi } from 'vitest';
+import {
+	getAgentReleaseService,
+	parseTagVersion,
+	resolveDownloadBase
+} from 'src/services/agent-release/agent-release.service';
 
-describe('resolveDownloadBase', () => {
-	it('pins the base to the version bosun is asking for', () => {
-		expect(
-			resolveDownloadBase({ baseUrl: 'https://h/releases/download/agent-v{version}', version: '2.1.0' })
-		).toBe('https://h/releases/download/agent-v2.1.0');
+describe('parseTagVersion', () => {
+	it.each([
+		['https://h/o/r/releases/tag/agent-v2.0.7', '2.0.7'],
+		['https://h/o/r/releases/tag/v1.2.3', '1.2.3'],
+		['https://h/o/r/releases/tag/agent-v2.1.0-rc.1', '2.1.0-rc.1']
+	])('%s -> %s', (url, expected) => {
+		expect(parseTagVersion(url)).toBe(expected);
 	});
 
-	// A base with no placeholder still works, so an existing deployment keeps
-	// serving installs while the pinned form is rolled out.
-	it('leaves a base without a placeholder alone', () => {
-		expect(resolveDownloadBase({ baseUrl: 'https://h/releases/latest/download', version: '2.1.0' })).toBe(
-			'https://h/releases/latest/download'
-		);
+	// A redirect that did not land on a tag must not be read as a version, or
+	// every machine gets offered an upgrade to nonsense.
+	it.each([['https://h/o/r/releases'], ['https://h/o/r/releases/tag/nightly'], ['']])(
+		'refuses %j',
+		(url) => {
+			expect(parseTagVersion(url)).toBeNull();
+		}
+	);
+});
+
+describe('resolveDownloadBase', () => {
+	it('pins the base to the version being offered', () => {
+		expect(
+			resolveDownloadBase({ baseUrl: 'https://h/download/agent-v{version}', version: '2.1.0' })
+		).toBe('https://h/download/agent-v2.1.0');
 	});
 });
 
-describe('agent release', () => {
-	const release = getAgentReleaseService({
-		version: '2.1.0',
-		downloadBaseUrl: 'https://h/agent-v{version}'
+const DOWNLOAD = 'https://h/download/agent-v{version}';
+
+describe('resolving what to run', () => {
+	it('offers the newest published release without any version configured here', async () => {
+		const release = getAgentReleaseService({
+			latestReleaseUrl: 'https://h/releases/latest',
+			downloadBaseUrl: DOWNLOAD,
+			resolveLatest: async () => '2.1.0'
+		});
+
+		expect(await release.target('2.0.0')).toEqual({
+			version: '2.1.0',
+			downloadBaseUrl: 'https://h/download/agent-v2.1.0'
+		});
 	});
 
-	it('treats a matching version as current', () => {
-		expect(release.isOutdated('2.1.0')).toBe(false);
+	it('offers nothing to a machine already on the newest release', async () => {
+		const release = getAgentReleaseService({
+			latestReleaseUrl: 'https://h/releases/latest',
+			downloadBaseUrl: DOWNLOAD,
+			resolveLatest: async () => '2.1.0'
+		});
+
+		expect(await release.target('2.1.0')).toBeNull();
 	});
 
-	// Deliberately not a semver comparison: lowering AGENT_EXPECTED_VERSION is how
-	// a bad release is rolled back across the fleet, and a "newer only" check would
-	// leave every machine stranded on the broken build.
-	it.each([['2.0.0'], ['3.0.0']])('offers %s an upgrade in either direction', (reported) => {
-		expect(release.isOutdated(reported)).toBe(true);
+	// The rollback lever. A pin below what a machine runs is a deliberate
+	// downgrade, so it has to win over whatever "latest" says.
+	it('lets a pinned version override the newest release, in either direction', async () => {
+		const release = getAgentReleaseService({
+			pinnedVersion: '2.0.0',
+			latestReleaseUrl: 'https://h/releases/latest',
+			downloadBaseUrl: DOWNLOAD,
+			resolveLatest: async () => '2.1.0'
+		});
+
+		expect(await release.target('2.1.0')).toMatchObject({ version: '2.0.0' });
 	});
 
-	// A machine that has never said what it runs is not told to replace it.
-	it('says nothing about a machine that has not reported a version', () => {
-		expect(release.isOutdated(null)).toBe(false);
+	// Fail closed. Guessing here would offer every machine an upgrade to nothing.
+	it.each([
+		['the lookup fails', async () => null],
+		['the lookup throws', async () => { throw new Error('offline'); }]
+	])('offers nothing when %s', async (_case, resolveLatest) => {
+		const release = getAgentReleaseService({
+			latestReleaseUrl: 'https://h/releases/latest',
+			downloadBaseUrl: DOWNLOAD,
+			resolveLatest: resolveLatest as () => Promise<string | null>
+		});
+
+		expect(await release.target('2.0.0')).toBeNull();
+	});
+
+	it('offers nothing when neither a pin nor a lookup URL is configured', async () => {
+		const release = getAgentReleaseService({ downloadBaseUrl: DOWNLOAD });
+
+		expect(await release.target('2.0.0')).toBeNull();
+	});
+
+	it('says nothing about a machine that has not reported a version', async () => {
+		const release = getAgentReleaseService({
+			pinnedVersion: '2.1.0',
+			downloadBaseUrl: DOWNLOAD
+		});
+
+		expect(await release.target(null)).toBeNull();
+	});
+
+	// Refresh is a button a person clicks; without a cache each click is a request
+	// to the release host.
+	it('caches the lookup rather than asking on every refresh', async () => {
+		const resolveLatest = vi.fn().mockResolvedValue('2.1.0');
+		const release = getAgentReleaseService({
+			latestReleaseUrl: 'https://h/releases/latest',
+			downloadBaseUrl: DOWNLOAD,
+			resolveLatest,
+			now: () => 1_000
+		});
+
+		await release.target('2.0.0');
+		await release.target('2.0.0');
+
+		expect(resolveLatest).toHaveBeenCalledOnce();
+	});
+
+	// A brief outage at the release host must not make every machine look current.
+	it('falls back to the last good answer when a later lookup fails', async () => {
+		const resolveLatest = vi
+			.fn()
+			.mockResolvedValueOnce('2.1.0')
+			.mockRejectedValue(new Error('offline'));
+		let clock = 0;
+		const release = getAgentReleaseService({
+			latestReleaseUrl: 'https://h/releases/latest',
+			downloadBaseUrl: DOWNLOAD,
+			resolveLatest,
+			now: () => clock
+		});
+
+		await release.target('2.0.0');
+		clock = 10 * 60 * 1000;
+
+		expect(await release.target('2.0.0')).toMatchObject({ version: '2.1.0' });
 	});
 });

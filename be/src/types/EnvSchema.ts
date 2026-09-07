@@ -17,10 +17,13 @@ export const EnvSchema = z.object({
 	DATABASE_URL: z.string(),
 	PUBLIC_SERVER_URL: z.url(),
 	AGENT_DOWNLOAD_BASE_URL: z.url(),
-	// The agent build machines are expected to run. A machine reporting anything
-	// else is offered an upgrade when its operator hits Refresh — so rolling a bad
-	// release back is a matter of putting the old value here and redeploying.
-	AGENT_EXPECTED_VERSION: z.string().min(1),
+	// Followed to find the newest published agent build, so releasing an agent is
+	// the only step: machines pick it up on the next Refresh with no redeploy here.
+	AGENT_LATEST_RELEASE_URL: z.url().optional(),
+	// Pins machines to one build, overriding the lookup above. This is the rollback
+	// lever: set it to the last good version and redeploy to pull a fleet back off
+	// a bad release. Left unset in normal operation.
+	AGENT_EXPECTED_VERSION: z.string().min(1).optional(),
 	SUPABASE_URL: z.url(),
 	SUPABASE_PUBLISHABLE_KEY: PublishableKeySchema
 });

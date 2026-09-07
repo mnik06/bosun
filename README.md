@@ -179,7 +179,10 @@ retry that version, because a machine with no inbound port cannot be rescued fro
 upgrade offered while a planning session is running is deferred to the next Refresh. See
 `agent/src/connection/README.md`.
 
-Rolling back the fleet is a config change: lower `AGENT_EXPECTED_VERSION` and redeploy.
+Which build machines are told to run is discovered from the release host, so publishing an agent
+release is the whole procedure — the backend needs no redeploy and no version is kept in two places.
+To roll a bad release back, pin `AGENT_EXPECTED_VERSION` to the last good version and redeploy; it
+overrides the lookup.
 
 Refreshing never un-pauses a machine — `paused` is a property of the machine, not of its socket, and
 every reachability write leaves a paused row alone.
@@ -195,9 +198,16 @@ The quickest way to add one is a preset — bosun serves a catalogue and the age
 
 ```bash
 bosun-agent mcp list           # configured servers, plus what is available
-bosun-agent mcp add playwright # prompts for any credential, confirms, writes
+bosun-agent mcp check          # connect to each one and report what answers
+bosun-agent mcp add atlassian  # prompts for any credential, confirms, writes
 bosun-agent mcp remove jira
 ```
+
+`mcp check` is the one to reach for when a session says it cannot see something it should. The `mcp`
+preflight row reports what is *configured and parseable* — it says nothing about whether a server
+answers, because preflight runs on every reconnect and every Refresh and cannot afford a network
+round trip per server. `mcp check` does exactly that round trip, on demand, and separates a refused
+credential (401) from one that is not permitted (403) from an endpoint that is not there (404).
 
 **The command carries no secret.** A preset names the variables it needs, never their values: the
 agent prompts for each on the box — hidden for a credential, echoed for something like an account

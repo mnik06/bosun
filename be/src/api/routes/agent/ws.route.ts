@@ -116,16 +116,20 @@ async function applyMachineFrame(opts: {
 	// would push a new build to every machine the moment it reconnects, which
 	// turns one bad release into a fleet-wide outage with nobody having chosen it.
 	if (opts.msg.type === 'hello' && opts.msg.reason === 'refresh') {
-		const release = opts.fastify.services.agentRelease;
+		const target = await opts.fastify.services.agentRelease.target(opts.msg.agentVersion);
 
-		if (release.isOutdated(opts.msg.agentVersion)) {
+		if (target) {
+			// Logged with both versions because the comparison is equality, not
+			// "newer than": a pinned version below what a machine runs is a
+			// deliberate rollback, and it should read as one rather than as an
+			// upgrade that quietly went backwards.
+			opts.log.info(
+				{ machineId: machine.id, from: opts.msg.agentVersion, to: target.version },
+				'offering the agent an upgrade'
+			);
 			socketRegistry.sendToAgent({
 				machineId: machine.id,
-				message: {
-					type: 'upgrade',
-					version: release.version,
-					downloadBaseUrl: release.downloadBaseUrl
-				}
+				message: { type: 'upgrade', ...target }
 			});
 		}
 	}

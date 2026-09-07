@@ -15,7 +15,8 @@ export function getServices(opts: { env: Env }) {
 
 	return {
 		agentRelease: getAgentReleaseService({
-			version: opts.env.AGENT_EXPECTED_VERSION,
+			pinnedVersion: opts.env.AGENT_EXPECTED_VERSION,
+			latestReleaseUrl: opts.env.AGENT_LATEST_RELEASE_URL,
 			downloadBaseUrl: opts.env.AGENT_DOWNLOAD_BASE_URL
 		}),
 		idService: getIdService(),
