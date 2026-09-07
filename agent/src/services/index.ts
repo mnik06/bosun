@@ -3,10 +3,11 @@ import { getClaudeAuthService } from './claude-auth.service';
 import { getEnvService } from './env.service';
 import { getExecService } from './exec.service';
 import { getMcpConfigService } from './mcp-config.service';
+import { getMcpProbeService } from './mcp-probe.service';
 import { getPreflightService } from './preflight.service';
 import { getSkillsService } from './skills.service';
 import { getUpgradeService } from './upgrade.service';
-import { getSystemdService } from './systemd.service';
+import { getTeardownService } from './teardown.service';
 import { type AgentConfig } from '../config/config';
 
 export function getServices(opts: { config: AgentConfig; env: NodeJS.ProcessEnv }) {
@@ -25,9 +26,10 @@ export function getServices(opts: { config: AgentConfig; env: NodeJS.ProcessEnv 
 		env,
 		exec,
 		mcpConfig,
+		mcpProbe: getMcpProbeService(),
 		preflight: getPreflightService({ exec, claudeAuth, mcpConfig, skills }),
 		skills,
-		systemd: getSystemdService(),
+		teardown: getTeardownService({}),
 		upgrade: getUpgradeService({ exec })
 	};
 }

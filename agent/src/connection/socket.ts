@@ -190,7 +190,7 @@ export async function holdConnection(opts: {
 			attempt = 0;
 		} catch (error) {
 			if (error instanceof RevokedError) {
-				await opts.services.systemd.terminateSelf({
+				await opts.services.teardown.terminateSelf({
 					configPath: opts.configPath,
 					reason: error.message
 				});

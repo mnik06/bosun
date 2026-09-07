@@ -20,7 +20,7 @@ function build (opts?: { paused?: boolean }) {
 
 	const deps = {
 		socket: { send } as unknown as RouterDeps['socket'],
-		services: { systemd: { terminateSelf } } as unknown as Services,
+		services: { teardown: { terminateSelf } } as unknown as Services,
 		configPath: '/home/u/.bosun/config.json',
 		state,
 		sessions: sessions as unknown as PlanningSessions,

@@ -100,7 +100,7 @@ export async function routeServerFrame(deps: RouterDeps, msg: ServerMsg): Promis
 
 		case 'shutdown':
 			deps.sessions.cancelAll();
-			await deps.services.systemd.terminateSelf({
+			await deps.services.teardown.terminateSelf({
 				configPath: deps.configPath,
 				reason: msg.reason
 			});

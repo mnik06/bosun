@@ -2,6 +2,7 @@ import { type AgentConfig } from '../config/config';
 import { getBosunApiService, type McpPreset } from '../services/bosun-api.service';
 import { getEnvService } from '../services/env.service';
 import { expandVariables, getMcpConfigService } from '../services/mcp-config.service';
+import { getMcpProbeService } from '../services/mcp-probe.service';
 import { getPromptService } from '../services/prompt.service';
 
 // base64(user:secret) is the one header shape `${VAR}` substitution cannot
@@ -229,3 +230,39 @@ export function removeMcpServer(opts: { name: string }): void {
 }
 
 export { expandVariables };
+
+export async function checkMcpServers(): Promise<void> {
+	const env = getEnvService({ baseEnv: process.env });
+	const mcpConfig = getMcpConfigService({ env });
+	const probe = getMcpProbeService();
+	const resolved = mcpConfig.read();
+
+	if (resolved.error) {
+		console.log(`${mcpConfig.configPath}: ${resolved.error}`);
+	}
+
+	if (resolved.unresolved.length > 0) {
+		console.log(`unset in ${env.envPath}: ${resolved.unresolved.join(', ')}\n`);
+	}
+
+	if (resolved.serverNames.length === 0) {
+		console.log('no MCP servers configured');
+
+		return;
+	}
+
+	let failed = 0;
+
+	// Sequential on purpose: a stdio server may be downloading itself through npx,
+	// and racing several of those makes every one of them look like a timeout.
+	for (const name of resolved.serverNames) {
+		const result = await probe.probe(resolved.servers[name]);
+
+		failed += result.ok ? 0 : 1;
+		console.log(`  ${result.ok ? '✓' : '✗'} ${name.padEnd(14)} ${result.detail}`);
+	}
+
+	if (failed > 0) {
+		console.log(`\n${failed} server(s) unreachable. A session gets only the servers that answer.`);
+	}
+}

@@ -76,10 +76,17 @@ node dist/src/index.js enroll --server http://127.0.0.1:1506 --token <code from 
 ```
 
 `run` holds the outbound WebSocket, re-sending `hello` and `preflight` on every connect and
-reconnecting with jittered backoff. Deleting the machine in the browser makes the agent disable its
-own systemd unit, discard `~/.bosun/config.json` and exit — see `agent/src/connection/README.md` for the two
-termination paths. Agents installed before that change carry `Restart=always` and need `install.sh`
-re-run before they can be deleted cleanly.
+reconnecting with jittered backoff.
+
+**Deleting the machine in the browser removes bosun from the box.** The agent disables and deletes
+its systemd unit, erases `~/.bosun` entirely — machine key, Claude credential, every MCP server's
+token — and removes its own binary before exiting. Nothing of bosun's is left behind, because a
+de-provisioned host holding live credentials is the thing worth avoiding. `~/.claude` and the repo
+are not touched: bosun did not install them. See `agent/src/connection/README.md` for the two
+termination paths and what is deliberately spared.
+
+Agents installed before this carry `Restart=always` and need `install.sh` re-run before they can be
+deleted cleanly.
 
 `enroll` writes `~/.bosun/config.json` at mode `0600` — server URL, machine id, machine key, repo
 path. `--repo` defaults to the current directory, `--config` overrides the path.

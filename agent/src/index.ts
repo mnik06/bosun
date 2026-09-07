@@ -3,7 +3,7 @@ import path from 'path';
 import { Command } from 'commander';
 import { setClaudeToken, showClaudeAuth } from './commands/auth';
 import { enroll } from './commands/enroll';
-import { addMcpPreset, listMcpServers, removeMcpServer } from './commands/mcp';
+import { addMcpPreset, checkMcpServers, listMcpServers, removeMcpServer } from './commands/mcp';
 import { run } from './commands/run';
 import { defaultConfigPath, readConfig } from './config/config';
 import { AGENT_VERSION } from './version';
@@ -69,6 +69,13 @@ mcp
 	.option('--config <path>', 'path to the agent config', defaultConfigPath())
 	.action(async (opts: { config: string }) => {
 		await listMcpServers({ config: readConfig(path.resolve(opts.config)) });
+	});
+
+mcp
+	.command('check')
+	.description('Connect to every configured MCP server and report what answers')
+	.action(async () => {
+		await checkMcpServers();
 	});
 
 mcp

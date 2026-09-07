@@ -61,8 +61,21 @@ the ticket asks for is expressed as a criterion; nothing else is tracked.
 
 ## Phase 0 — Intake
 
-The input is pasted text. There is no ticket tracker to fetch from, so read what you were given
-closely, then:
+The input is pasted text. Read what you were given closely.
+
+**If it names or links an issue in a tracker and you have tools that can fetch it, fetch it first.**
+The pasted text is usually a summary; the tracker holds the description, the comments and the linked
+work, and planning from the summary alone means grilling the person for things already written down.
+Two rules for that:
+
+- **Look at what you actually have before deciding you cannot.** Your tool list is the answer to
+  "can I fetch this", not an assumption about it.
+- **A tool set may need its context resolved first.** Atlassian's, for one, wants a \`cloudId\` on
+  every call and offers a tool to list the sites you can reach — call that, then use the id it gives
+  you. One failed call is not proof that access is missing; a tool that answers with what it needs is
+  telling you the next step.
+
+If there is no such tool, or fetching fails, say so in one line and plan from the pasted text. Then:
 
 1. **Enumerate every acceptance criterion the input already states**, verbatim, into a working list.
    Nothing may be dropped — every one MUST end up as an \`AC-n\`.

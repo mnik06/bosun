@@ -26,9 +26,33 @@ The second path is what makes a missed `shutdown` self-correcting, which is why 
 than a nicety. If the backend dies between deleting the row and the frame arriving, the agent keeps
 running against a backend that has never heard of it — until its next reconnect, which is a 401.
 
-`systemd.service.ts` disables the unit, removes `config.json` and exits 0. It uses `disable`, not
-`disable --now`: `--now` stops the unit this very process is running inside, racing the config
-removal. Exiting 0 is what stops it; `disable` is only what keeps it from returning on the next boot.
+`teardown.service.ts` removes bosun from the machine and exits 0. It uses `disable`, not
+`disable --now`: `--now` stops the unit this very process is running inside, racing the rest of the
+teardown. Exiting 0 is what stops it; `disable` is only what keeps it from returning on the next boot.
+
+### Deleting a machine erases it, not just its config
+
+An earlier version removed `config.json` and left everything else. That is worse than untidy: a
+de-provisioned box kept `~/.bosun/env`, which holds the Claude credential and every MCP server's
+token. Removing a machine in the browser is the only signal the operator gets to give, and after it
+those secrets are litter on a host bosun no longer manages.
+
+So the teardown removes the systemd unit, the whole `~/.bosun` directory, the config path named on
+the command line (which `--config` may have put elsewhere), and the binary along with the
+`.previous`/`.next` files an upgrade leaves behind. Every removal is attempted even when an earlier
+one fails — a machine must not keep its credentials because its unit file happened to be gone
+already. What could not be removed is named on stdout so it can be finished by hand.
+
+Two things are deliberately left:
+
+- **`~/.claude`** is Claude Code's own store. The operator set it up, it is useful without bosun, and
+  bosun did not install it.
+- **`loginctl enable-linger`** is a user-wide setting other services may depend on.
+
+The binary is removed last and only when the running executable is a packaged `bosun-agent`. Under
+`node dist/src/index.js` the running executable is node, and deleting a user's node install because a
+machine was removed in a browser is not a trade anyone would accept. Unlinking the running binary is
+safe on Linux — the process keeps its inode until it exits.
 
 **This depends on `Restart=on-failure` in the unit.** Under `Restart=always` — what `install.sh`
 wrote before this plan — systemd restarts the agent no matter why it exited, so a deliberate shutdown
@@ -106,7 +130,23 @@ An agent replaces its own binary only when somebody hits Refresh. The `hello` fr
 connect. A connect-triggered upgrade would push a new build to every machine the moment it
 reconnects, which turns one bad release into a fleet-wide outage that nobody chose.
 
-`AGENT_EXPECTED_VERSION` on the backend is the version machines are told to run. The comparison is
+**Which build a machine is told to run is discovered, not configured.** The backend follows
+`AGENT_LATEST_RELEASE_URL` — `.../releases/latest`, which redirects to the newest tag — and reads the
+version out of the tag it lands on. Releasing an agent is therefore the whole procedure; the backend
+needs no redeploy and there is no version kept in two places to drift.
+
+That drift is not a hypothetical. The first cut of this pinned the version by hand in `fly.toml`, it
+fell behind the published release, and because the comparison is equality rather than "newer than",
+the backend spent a deploy telling machines to move *backwards* to an older build — which from the
+browser is indistinguishable from an upgrade that did not happen.
+
+`AGENT_EXPECTED_VERSION` still exists and still wins when set. That is the rollback lever: pin it to
+the last good version, redeploy, and the fleet comes off a bad release on the next Refresh. A lever
+that "latest" could override would not be a lever, which is why the pin is checked first.
+
+The lookup is cached for five minutes and fails closed — a lookup that returns nothing offers no
+upgrade rather than guessing, and a lookup that fails after a good one falls back to the last answer
+so a brief outage at the release host does not make every machine look current. The comparison is
 equality, not "newer than": lowering it and redeploying is how a bad release is rolled back across
 the fleet, and a newer-only check would strand every machine on the broken build.
 
