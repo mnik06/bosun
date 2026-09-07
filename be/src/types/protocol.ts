@@ -1,13 +1,6 @@
 import { z } from 'zod';
-import { MachineSchema, PreflightCheckSchema } from 'src/types/MachineSchema';
-import {
-	AcSchema,
-	PlanAnswerSchema,
-	PlanMessageSchema,
-	PlanQuestionSchema,
-	PlanSchema,
-	SliceSchema
-} from 'src/types/PlanSchema';
+import { PreflightCheckSchema } from 'src/types/MachineSchema';
+import { PlanAnswerSchema, PlanQuestionSchema } from 'src/types/PlanSchema';
 
 export const HelloMsgSchema = z.object({
 	type: z.literal('hello'),
@@ -60,6 +53,63 @@ export const PlanErrorMsgSchema = z.object({
 	message: z.string()
 });
 
+export const ExecTextMsgSchema = z.object({
+	type: z.literal('exec.text'),
+	runId: z.string(),
+	delta: z.string()
+});
+
+export const ExecActivityMsgSchema = z.object({
+	type: z.literal('exec.activity'),
+	runId: z.string(),
+	label: z.string()
+});
+
+export const ExecQuestionMsgSchema = z.object({
+	type: z.literal('exec.question'),
+	runId: z.string(),
+	questionId: z.string(),
+	questions: z.array(PlanQuestionSchema).min(1)
+});
+
+export const ExecDoneMsgSchema = z.object({
+	type: z.literal('exec.done'),
+	runId: z.string(),
+	commitSha: z.string().nullable(),
+	report: z.string()
+});
+
+export const ExecErrorMsgSchema = z.object({
+	type: z.literal('exec.error'),
+	runId: z.string(),
+	message: z.string()
+});
+
+export const QueuePublishedMsgSchema = z.object({
+	type: z.literal('queue.published'),
+	itemId: z.string(),
+	prUrl: z.string()
+});
+
+export const QueuePublishErrorMsgSchema = z.object({
+	type: z.literal('queue.publish.error'),
+	itemId: z.string(),
+	message: z.string()
+});
+
+export const QueueWorktreeReadyMsgSchema = z.object({
+	type: z.literal('queue.worktree.ready'),
+	queueId: z.string(),
+	worktreePath: z.string(),
+	baseRef: z.string()
+});
+
+export const QueueWorktreeErrorMsgSchema = z.object({
+	type: z.literal('queue.worktree.error'),
+	queueId: z.string(),
+	message: z.string()
+});
+
 export const AgentMsgSchema = z.discriminatedUnion('type', [
 	HelloMsgSchema,
 	PreflightMsgSchema,
@@ -68,7 +118,16 @@ export const AgentMsgSchema = z.discriminatedUnion('type', [
 	PlanActivityMsgSchema,
 	PlanQuestionMsgSchema,
 	PlanDoneMsgSchema,
-	PlanErrorMsgSchema
+	PlanErrorMsgSchema,
+	QueueWorktreeReadyMsgSchema,
+	QueueWorktreeErrorMsgSchema,
+	ExecTextMsgSchema,
+	ExecActivityMsgSchema,
+	ExecQuestionMsgSchema,
+	ExecDoneMsgSchema,
+	ExecErrorMsgSchema,
+	QueuePublishedMsgSchema,
+	QueuePublishErrorMsgSchema
 ]);
 
 export type AgentMsg = z.infer<typeof AgentMsgSchema>;
@@ -113,6 +172,66 @@ export const PlanCancelMsgSchema = z.object({
 	planId: z.string()
 });
 
+// The slug rather than a path: where a worktree lives is the agent's decision,
+// because only it knows the home directory it is running under.
+export const ExecSliceSchema = z.object({
+	ordinal: z.number().int(),
+	kind: z.enum(['build', 'verify']),
+	title: z.string(),
+	bodyMd: z.string().nullable()
+});
+
+// Everything the session needs travels in the frame. The agent holds no plan
+// state of its own, so a slice dispatched after a reconnect needs no lookup and
+// no cache that could disagree with the row the backend scheduled from.
+export const ExecStartMsgSchema = z.object({
+	type: z.literal('exec.start'),
+	runId: z.string(),
+	worktreePath: z.string(),
+	branch: z.string(),
+	baseRef: z.string(),
+	// True only for the first slice of a plan: later slices build on the commits
+	// the earlier ones made rather than resetting over them.
+	freshBranch: z.boolean(),
+	afk: z.boolean(),
+	planTitle: z.string(),
+	planBodyMd: z.string(),
+	slice: ExecSliceSchema,
+	acs: z.array(z.object({ code: z.string(), text: z.string() })),
+	doneSlices: z.array(z.object({ ordinal: z.number().int(), title: z.string() }))
+});
+
+export const ExecCancelMsgSchema = z.object({ type: z.literal('exec.cancel'), runId: z.string() });
+
+export const ExecAnswerMsgSchema = z.object({
+	type: z.literal('exec.answer'),
+	runId: z.string(),
+	questionId: z.string(),
+	answers: z.array(PlanAnswerSchema).min(1)
+});
+
+export const QueuePublishMsgSchema = z.object({
+	type: z.literal('queue.publish'),
+	itemId: z.string(),
+	worktreePath: z.string(),
+	branch: z.string(),
+	baseRef: z.string(),
+	title: z.string(),
+	body: z.string()
+});
+
+export const QueueWorktreeEnsureMsgSchema = z.object({
+	type: z.literal('queue.worktree.ensure'),
+	queueId: z.string(),
+	slug: z.string()
+});
+
+export const QueueWorktreeRemoveMsgSchema = z.object({
+	type: z.literal('queue.worktree.remove'),
+	queueId: z.string(),
+	slug: z.string()
+});
+
 export const ServerMsgSchema = z.discriminatedUnion('type', [
 	PingMsgSchema,
 	RefreshMsgSchema,
@@ -122,83 +241,15 @@ export const ServerMsgSchema = z.discriminatedUnion('type', [
 	ShutdownMsgSchema,
 	PlanStartMsgSchema,
 	PlanAnswerMsgSchema,
-	PlanCancelMsgSchema
+	PlanCancelMsgSchema,
+	QueueWorktreeEnsureMsgSchema,
+	QueueWorktreeRemoveMsgSchema,
+	ExecStartMsgSchema,
+	ExecCancelMsgSchema,
+	ExecAnswerMsgSchema,
+	QueuePublishMsgSchema
 ]);
 
 export type ServerMsg = z.infer<typeof ServerMsgSchema>;
 
-export const MachineUpdatedMsgSchema = z.object({
-	type: z.literal('machine.updated'),
-	machine: MachineSchema
-});
-
-export const MachinePongMsgSchema = z.object({
-	type: z.literal('machine.pong'),
-	machineId: z.string(),
-	id: z.string(),
-	rttMs: z.number()
-});
-
-export const MachineDeletedMsgSchema = z.object({
-	type: z.literal('machine.deleted'),
-	machineId: z.string()
-});
-
-// An upgrade takes tens of seconds and spans a restart, so the machine's own row
-// says nothing useful for most of it. Without this the browser shows a refresh
-// that settled and then a machine that goes quiet, which reads as nothing having
-// happened at all.
-export const MachineUpgradingMsgSchema = z.object({
-	type: z.literal('machine.upgrading'),
-	machineId: z.string(),
-	from: z.string().nullable(),
-	to: z.string()
-});
-
-export const PlanUpdatedMsgSchema = z.object({
-	type: z.literal('plan.updated'),
-	plan: PlanSchema
-});
-
-export const PlanMessageMsgSchema = z.object({
-	type: z.literal('plan.message'),
-	planId: z.string(),
-	message: PlanMessageSchema
-});
-
-export const PlanDeletedMsgSchema = z.object({
-	type: z.literal('plan.deleted'),
-	planId: z.string()
-});
-
-export const PlanArtifactMsgSchema = z.object({
-	type: z.literal('plan.artifact'),
-	planId: z.string(),
-	acs: z.array(AcSchema),
-	slices: z.array(SliceSchema)
-});
-
-export const UiMsgSchema = z.discriminatedUnion('type', [
-	MachineUpdatedMsgSchema,
-	MachinePongMsgSchema,
-	MachineDeletedMsgSchema,
-	MachineUpgradingMsgSchema,
-	PlanTextMsgSchema,
-	PlanActivityMsgSchema,
-	PlanQuestionMsgSchema,
-	PlanDoneMsgSchema,
-	PlanErrorMsgSchema,
-	PlanUpdatedMsgSchema,
-	PlanDeletedMsgSchema,
-	PlanMessageMsgSchema,
-	PlanArtifactMsgSchema
-]);
-
-export type UiMsg = z.infer<typeof UiMsgSchema>;
-
-export const UiCommandSchema = z.discriminatedUnion('type', [
-	z.object({ type: z.literal('plan.subscribe'), planId: z.string() }),
-	z.object({ type: z.literal('plan.unsubscribe'), planId: z.string() })
-]);
-
-export type UiCommand = z.infer<typeof UiCommandSchema>;
+export { UiMsgSchema, UiCommandSchema, type UiMsg, type UiCommand } from 'src/types/ui-protocol';

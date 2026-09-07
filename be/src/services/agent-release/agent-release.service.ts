@@ -98,7 +98,9 @@ export function getAgentReleaseService(deps: {
 			? null
 			: `AGENT_DOWNLOAD_BASE_URL has no ${VERSION_PLACEHOLDER} in it, so a machine cannot be sent a specific build — no upgrade will be offered`,
 
-		async target(reported: string | null): Promise<{ version: string; downloadBaseUrl: string } | null> {
+		async target(
+			reported: string | null
+		): Promise<{ version: string; downloadBaseUrl: string } | null> {
 			if (!canNameVersion) {
 				return null;
 			}

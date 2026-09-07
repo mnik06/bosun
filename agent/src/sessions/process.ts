@@ -8,23 +8,25 @@ const TOOL_TIMEOUT_MS = 30 * 60 * 1000;
 const STARTUP_TIMEOUT_MS = 30 * 1000;
 const SIGKILL_GRACE_MS = 5_000;
 
-// `Skill` has to be named explicitly: `--tools` replaces the built-in set, and a
-// session without it still loads every skill description at startup and simply
-// cannot invoke them, which reads to the model as a tool that keeps failing.
-const BUILTIN_TOOLS = ['Read', 'Grep', 'Glob', 'Task', 'Skill'];
-
-const MCP_TOOLS = [
-	'mcp__bosun__bosun_ask',
-	'mcp__bosun__create_plan',
-	'mcp__bosun__add_ac',
-	'mcp__bosun__create_slice'
-];
+// Named by the caller because planning and execution want different sets:
+// planning reads, execution writes. `Skill` has to appear explicitly in either —
+// `--tools` replaces the built-in set, and a session without it still loads every
+// skill description at startup and simply cannot invoke them, which reads to the
+// model as a tool that keeps failing.
+export interface SessionTools {
+	builtin: string[];
+	mcp: string[];
+}
 
 export interface ClaudeSession {
 	kill(): void;
 }
 
-function sessionArgs(opts: { mcpConfigPath: string; userServerNames: string[] }): string[] {
+function sessionArgs(opts: {
+	mcpConfigPath: string;
+	userServerNames: string[];
+	tools: SessionTools;
+}): string[] {
 	// One wildcard per user server rather than an enumerated list: the tools a
 	// third-party server exposes are its own business and change with its version.
 	const userTools = opts.userServerNames.map((name) => `mcp__${name}__*`);
@@ -44,9 +46,9 @@ function sessionArgs(opts: { mcpConfigPath: string; userServerNames: string[] })
 		'--permission-prompts',
 		'none',
 		'--tools',
-		BUILTIN_TOOLS.join(','),
+		opts.tools.builtin.join(','),
 		'--allowed-tools',
-		[...BUILTIN_TOOLS, ...MCP_TOOLS, ...userTools].join(',')
+		[...opts.tools.builtin, ...opts.tools.mcp, ...userTools].join(',')
 	];
 }
 
@@ -55,6 +57,7 @@ export function spawnClaudeSession(opts: {
 	prompt: string;
 	mcpConfigPath: string;
 	userServerNames: string[];
+	tools: SessionTools;
 	claudeAuth: ClaudeAuthService;
 	onStdout: (chunk: string) => void;
 	onStderr: (chunk: string) => void;
@@ -64,7 +67,11 @@ export function spawnClaudeSession(opts: {
 	// instead of leaving a subagent holding a port and a credential.
 	const child = spawn(
 		'claude',
-		sessionArgs({ mcpConfigPath: opts.mcpConfigPath, userServerNames: opts.userServerNames }),
+		sessionArgs({
+			mcpConfigPath: opts.mcpConfigPath,
+			userServerNames: opts.userServerNames,
+			tools: opts.tools
+		}),
 		{
 			cwd: opts.cwd,
 			env: {

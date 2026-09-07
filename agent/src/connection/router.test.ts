@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { parseServerFrame, routeServerFrame, type AgentState, type RouterDeps } from './router';
+import { type ExecutionSessions } from '../execution/session';
 import { type PlanningSessions } from '../planning/session';
 import { type ServerMsg } from '../protocol';
 import { type Services } from '../services/index';
@@ -16,6 +17,13 @@ function build (opts?: { paused?: boolean }) {
 		cancelAll: vi.fn(),
 		running: vi.fn().mockReturnValue(0)
 	};
+	const executions = {
+		start: vi.fn().mockResolvedValue(undefined),
+		answer: vi.fn(),
+		cancel: vi.fn(),
+		cancelAll: vi.fn(),
+		running: vi.fn().mockReturnValue(0)
+	};
 	const state: AgentState = { paused: opts?.paused ?? false };
 
 	const deps = {
@@ -24,6 +32,7 @@ function build (opts?: { paused?: boolean }) {
 		configPath: '/home/u/.bosun/config.json',
 		state,
 		sessions: sessions as unknown as PlanningSessions,
+		executions: executions as unknown as ExecutionSessions,
 		announce,
 		onUpgrade
 	} satisfies RouterDeps;
@@ -31,6 +40,7 @@ function build (opts?: { paused?: boolean }) {
 	return {
 		announce,
 		onUpgrade,
+		executions,
 		send,
 		sessions,
 		state,
@@ -160,5 +170,61 @@ describe('parseServerFrame', () => {
 		['[]']
 	])('drops %j', (raw) => {
 		expect(parseServerFrame(raw)).toBeNull();
+	});
+});
+
+describe('exec frames', () => {
+	const start = {
+		type: 'exec.start',
+		runId: 'sr_1',
+		worktreePath: '/w',
+		branch: 'bosun/q/p_1',
+		baseRef: 'main',
+		freshBranch: true,
+		afk: false,
+		planTitle: 'Auth',
+		planBodyMd: 'body',
+		slice: { ordinal: 1, kind: 'build', title: 'token table', bodyMd: null },
+		acs: [],
+		doneSlices: []
+	} satisfies ServerMsg;
+
+	it('starts a run', async () => {
+		const harness = build();
+
+		await harness.route(start);
+
+		expect(harness.executions.start).toHaveBeenCalledWith(expect.objectContaining({ runId: 'sr_1' }));
+	});
+
+	// A paused machine takes no work of either kind. Silently dropping the frame
+	// would leave the slice_run row running forever with nothing to settle it.
+	it('refuses a run while paused, and says so', async () => {
+		const harness = build({ paused: true });
+
+		await harness.route(start);
+
+		expect(harness.executions.start).not.toHaveBeenCalled();
+		expect(sent(harness.send)).toEqual([
+			{ type: 'exec.error', runId: 'sr_1', message: 'this machine is paused' }
+		]);
+	});
+
+	it('cancels a run', async () => {
+		const harness = build();
+
+		await harness.route({ type: 'exec.cancel', runId: 'sr_1' });
+
+		expect(harness.executions.cancel).toHaveBeenCalledWith('sr_1');
+	});
+
+	// A slice mid-edit is a worktree in an unknown state; reaping only planning
+	// sessions would leave a `claude` process writing to it after teardown.
+	it('reaps execution runs on shutdown too', async () => {
+		const harness = build();
+
+		await harness.route({ type: 'shutdown', reason: 'deleted' });
+
+		expect(harness.executions.cancelAll).toHaveBeenCalled();
 	});
 });

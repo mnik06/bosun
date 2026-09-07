@@ -4,6 +4,7 @@ import { backoffDelay, nextAttempt } from './backoff';
 import { UPGRADE_EXIT_CODE } from '../services/upgrade.service';
 import { parseServerFrame, routeServerFrame, type AgentState } from './router';
 import { type AgentConfig } from '../config/config';
+import { createExecutionSessions } from '../execution/session';
 import { createPlanningSessions } from '../planning/session';
 import { planningPrompt } from '../prompts/planning';
 import { type AgentMsg } from '../protocol';
@@ -90,6 +91,14 @@ async function connectOnce(deps: ConnectionDeps): Promise<void> {
 				}
 			}
 		});
+		const executions = createExecutionSessions({
+			services: deps.services,
+			send: (message: AgentMsg) => {
+				if (socket.readyState === WebSocket.OPEN) {
+					socket.send(JSON.stringify(message));
+				}
+			}
+		});
 		const announce = createAnnouncer({ ...deps, socket });
 
 		// Exits rather than restarting itself: `Restart=on-failure` is what brings
@@ -98,7 +107,7 @@ async function connectOnce(deps: ConnectionDeps): Promise<void> {
 			const decision = deps.services.upgrade.decide({
 				current: AGENT_VERSION,
 				target: target.version,
-				sessionsRunning: sessions.running()
+				sessionsRunning: sessions.running() + executions.running()
 			});
 
 			console.log(`upgrade: ${decision.reason}`);
@@ -148,6 +157,7 @@ async function connectOnce(deps: ConnectionDeps): Promise<void> {
 					configPath: deps.configPath,
 					state: deps.state,
 					sessions,
+					executions,
 					announce,
 					onUpgrade
 				},
@@ -165,11 +175,13 @@ async function connectOnce(deps: ConnectionDeps): Promise<void> {
 
 		socket.on('error', (error) => {
 			sessions.cancelAll();
+			executions.cancelAll();
 			settle(error);
 		});
 
 		socket.on('close', () => {
 			sessions.cancelAll();
+			executions.cancelAll();
 			settle();
 		});
 	});

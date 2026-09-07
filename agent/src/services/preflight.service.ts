@@ -28,6 +28,7 @@ export function getPreflightService(deps: {
 	claudeAuth: ClaudeAuthService;
 	mcpConfig: McpConfigService;
 	skills: SkillsService;
+	repoPath: string;
 }) {
 	async function checkNode(): Promise<PreflightCheck> {
 		const result = await deps.exec.run('node', ['--version']);
@@ -135,15 +136,64 @@ export function getPreflightService(deps: {
 		};
 	}
 
+	// Queues are git worktrees of this checkout, so a repo path that is not a
+	// repository is not a queue that fails later — it is a queue that can never be
+	// created at all.
+	async function checkGit(): Promise<PreflightCheck> {
+		const version = await deps.exec.run('git', ['--version'], {});
+
+		if (!version.ok) {
+			return { name: 'git', ok: false, detail: `git: ${version.reason}` };
+		}
+
+		const inside = await deps.exec.run(
+			'git',
+			['-C', deps.repoPath, 'rev-parse', '--is-inside-work-tree'],
+			{}
+		);
+
+		return inside.ok && inside.stdout.trim() === 'true'
+			? { name: 'git', ok: true, detail: `${version.stdout} · ${deps.repoPath}` }
+			: { name: 'git', ok: false, detail: `${deps.repoPath} is not a git repository` };
+	}
+
+	// `gh auth status` is the whole check: bosun holds no GitHub credential of its
+	// own, so what matters is whether the CLI on this box has one. Never red —
+	// queues run fine without it, they simply cannot open a pull request, and a
+	// machine used only for building should not look broken for that.
+	async function checkGh(): Promise<PreflightCheck> {
+		const version = await deps.exec.run('gh', ['--version'], {});
+
+		if (!version.ok) {
+			return {
+				name: 'gh',
+				ok: true,
+				detail: 'not installed — queues will commit but cannot open pull requests'
+			};
+		}
+
+		const status = await deps.exec.run('gh', ['auth', 'status'], {});
+
+		return {
+			name: 'gh',
+			ok: true,
+			detail: status.ok
+				? 'signed in'
+				: 'installed but not signed in — run `gh auth login`, then `gh auth setup-git`'
+		};
+	}
+
 	return {
 		async collect(): Promise<PreflightCheck[]> {
-			const [node, packageManager, claude] = await Promise.all([
+			const [node, packageManager, claude, git, gh] = await Promise.all([
 				checkNode(),
 				checkPackageManager(),
-				checkClaude()
+				checkClaude(),
+				checkGit(),
+				checkGh()
 			]);
 
-			return [node, packageManager, claude, checkCustomMcp(), checkSkills()];
+			return [node, packageManager, claude, git, gh, checkCustomMcp(), checkSkills()];
 		}
 	};
 }

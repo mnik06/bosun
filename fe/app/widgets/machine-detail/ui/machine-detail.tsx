@@ -11,8 +11,10 @@ import { AddMcpServerButton } from '~/features/add-mcp-server'
 import { PausedBanner } from '~/features/pause-machine'
 import { useRefreshMachine } from '~/features/refresh-machine'
 import { SetupClaudeButton } from '~/features/setup-claude'
+import { SetupGithubButton } from '~/features/setup-github'
 import { formatRelativeTime, toErrorMessage } from '~/shared/lib'
 import { MachineActions } from '~/widgets/machine-detail/ui/machine-actions'
+import { QueuesPanel } from '~/widgets/queues-panel'
 
 export function MachineDetail ({ machineId }: { machineId: string }) {
 	const { data, isPending, error } = useMachineQuery(machineId)
@@ -103,7 +105,10 @@ export function MachineDetail ({ machineId }: { machineId: string }) {
 						</Text>
 					</Stack>
 
-					<SetupClaudeButton machineName={data.name} />
+					<Group gap="xs">
+						<SetupClaudeButton machineName={data.name} />
+						<SetupGithubButton machineName={data.name} />
+					</Group>
 				</Group>
 			</Card>
 
@@ -119,6 +124,8 @@ export function MachineDetail ({ machineId }: { machineId: string }) {
 					<AddMcpServerButton machineName={data.name} />
 				</Group>
 			</Card>
+
+			<QueuesPanel machineId={data.id} />
 
 			{data.repoPath === null ? null : (
 				<Text size="sm" c="dimmed" className="font-mono">

@@ -5,19 +5,15 @@ import { markMachineOffline } from 'src/controllers/machines/mark-machine-offlin
 import { markMachineOnline } from 'src/controllers/machines/mark-machine-online';
 import { saveMachinePreflight } from 'src/controllers/machines/save-machine-preflight';
 import { failMachinePlans } from 'src/controllers/plans/fail-machine-plans';
-import { recordPlanFrame } from 'src/controllers/plans/record-plan-frame';
+import { pauseMachineQueues } from 'src/controllers/queues/pause-machine-queues';
+import { schedulerDeps } from 'src/controllers/queues/scheduler-deps';
 import { type SocketRegistry } from 'src/services/sockets/registry.service';
 import { type Machine } from 'src/types/MachineSchema';
 import { AgentMsgSchema, type AgentMsg } from 'src/types/protocol';
+import { handleAgentFrame, isExecFrame, isPlanFrame } from 'src/api/routes/agent/frame-router';
 
 const HEARTBEAT_MS = 15_000;
 const MAX_MISSED = 2;
-
-type PlanFrame = Extract<AgentMsg, { type: `plan.${string}` }>;
-
-function isPlanFrame(msg: AgentMsg): msg is PlanFrame {
-	return msg.type.startsWith('plan.');
-}
 
 function announceUpdate(opts: { socketRegistry: SocketRegistry; machine: Machine }): void {
 	opts.socketRegistry.broadcastToUi({
@@ -77,7 +73,7 @@ function parseFrame(opts: {
 	return parsed.data;
 }
 
-async function applyMachineFrame(opts: {
+export async function applyMachineFrame(opts: {
 	fastify: FastifyInstance;
 	machineId: string;
 	socket: WebSocket;
@@ -143,58 +139,27 @@ async function applyMachineFrame(opts: {
 		}
 	}
 
+	// A queue created while its machine was offline has a row and no directory.
+	// The ensure is idempotent, so re-sending it on every announce is what makes a
+	// frame the machine never received self-correcting rather than a queue stuck
+	// in `provisioning` with nothing left to retry it.
+	if (opts.msg.type === 'hello') {
+		const pending = await opts.fastify.repos.queueRepo.listProvisioningForMachine(machine.id);
+
+		for (const queue of pending) {
+			socketRegistry.sendToAgent({
+				machineId: machine.id,
+				message: { type: 'queue.worktree.ensure', queueId: queue.id, slug: queue.slug }
+			});
+		}
+	}
+
 	// A paused machine that reconnects is still paused — the row outranks the
 	// socket — so the agent is told again rather than left to infer from silence
 	// that bosun is not dispatching to it.
 	if (opts.msg.type === 'hello' && machine.status === 'paused') {
 		socketRegistry.sendToAgent({ machineId: machine.id, message: { type: 'pause' } });
 	}
-}
-
-async function handleMessage(opts: {
-	fastify: FastifyInstance;
-	machineId: string;
-	userId: string;
-	socket: WebSocket;
-	msg: AgentMsg;
-	log: FastifyBaseLogger;
-}): Promise<void> {
-	const { msg } = opts;
-	const { pendingPings, socketRegistry, idService, planTextService } = opts.fastify.services;
-
-	if (msg.type === 'pong') {
-		const rttMs = pendingPings.resolve({
-			commandId: msg.id,
-			machineId: opts.machineId,
-			at: Date.now()
-		});
-
-		if (rttMs !== null) {
-			socketRegistry.broadcastToUi({
-				userId: opts.userId,
-				message: { type: 'machine.pong', machineId: opts.machineId, id: msg.id, rttMs }
-			});
-		}
-
-		return;
-	}
-
-	if (isPlanFrame(msg)) {
-		await recordPlanFrame({
-			planRepo: opts.fastify.repos.planRepo,
-			planMessageRepo: opts.fastify.repos.planMessageRepo,
-			acRepo: opts.fastify.repos.acRepo,
-			idService,
-			planTextService,
-			socketRegistry,
-			machineId: opts.machineId,
-			frame: msg
-		});
-
-		return;
-	}
-
-	await applyMachineFrame({ ...opts, msg });
 }
 
 // Plan frames are handled one at a time, in arrival order. They append to a
@@ -232,6 +197,7 @@ function handleClose(opts: {
 			announceUpdate({ socketRegistry, machine });
 		}
 	});
+	void pauseMachineQueues(schedulerDeps(opts.fastify), { machineId: opts.machineId });
 	void failMachinePlans({
 		planRepo: opts.fastify.repos.planRepo,
 		planTextService,
@@ -256,9 +222,9 @@ const routes: FastifyPluginAsync = async function (fastify) {
 			}
 
 			const handle = async () =>
-				handleMessage({ fastify, machineId, userId, socket, msg, log: request.log });
+				handleAgentFrame({ fastify, machineId, userId, socket, msg, log: request.log });
 
-			if (isPlanFrame(msg)) {
+			if (isPlanFrame(msg) || isExecFrame(msg)) {
 				enqueue(handle);
 
 				return;

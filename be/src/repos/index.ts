@@ -4,6 +4,9 @@ import { getAcRepo } from 'src/repos/plans/ac.repo';
 import { getPlanMessageRepo } from 'src/repos/plans/plan-message.repo';
 import { getPlanRepo } from 'src/repos/plans/plan.repo';
 import { getSliceRepo } from 'src/repos/plans/slice.repo';
+import { getQueueItemRepo } from 'src/repos/queues/queue-item.repo';
+import { getQueueRepo } from 'src/repos/queues/queue.repo';
+import { getSliceRunRepo } from 'src/repos/queues/slice-run.repo';
 import { getUserRepo } from 'src/repos/users/user.repo';
 
 export function getRepos(db: ReturnType<typeof getDb>) {
@@ -12,6 +15,9 @@ export function getRepos(db: ReturnType<typeof getDb>) {
 		machineRepo: getMachineRepo(db),
 		planMessageRepo: getPlanMessageRepo(db),
 		planRepo: getPlanRepo(db),
+		queueItemRepo: getQueueItemRepo(db),
+		queueRepo: getQueueRepo(db),
+		sliceRunRepo: getSliceRunRepo(db),
 		sliceRepo: getSliceRepo(db),
 		userRepo: getUserRepo(db)
 	};

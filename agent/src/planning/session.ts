@@ -2,9 +2,21 @@ import { type AgentConfig } from '../config/config';
 import { type AgentMsg, type PlanAnswer } from '../protocol';
 import { type Services } from '../services/index';
 import { createActivityTracker } from './activity-labels';
-import { startSessionMcpServer, type SessionMcpServer } from './mcp/server';
-import { spawnClaudeSession, type ClaudeSession } from './process';
+import { createPlanDispatch, TOOL_DEFINITIONS } from './mcp/tools';
+import { startSessionMcpServer, type SessionMcpServer } from '../sessions/mcp-server';
+import { spawnClaudeSession, type ClaudeSession } from '../sessions/process';
 import { createStreamParser } from './stream-parser';
+
+// Planning reads and asks; it never writes to the repository.
+const PLANNING_TOOLS = {
+	builtin: ['Read', 'Grep', 'Glob', 'Task', 'Skill'],
+	mcp: [
+		'mcp__bosun__bosun_ask',
+		'mcp__bosun__create_plan',
+		'mcp__bosun__add_ac',
+		'mcp__bosun__create_slice'
+	]
+};
 
 const STDERR_KEPT_CHARS = 500;
 
@@ -67,12 +79,16 @@ export function createPlanningSessions(opts: {
 		}
 
 		const mcp = await startSessionMcpServer({
-			planId,
-			bosunApi: opts.services.bosunApi,
+			sessionId: planId,
+			definitions: TOOL_DEFINITIONS,
+			createDispatch: createPlanDispatch({
+				planId,
+				bosunApi: opts.services.bosunApi,
+				onQuestion: ({ questionId, questions }) => {
+					opts.send({ type: 'plan.question', planId, questionId, questions });
+				}
+			}),
 			userServers: userMcp.servers,
-			onQuestion: ({ questionId, questions }) => {
-				opts.send({ type: 'plan.question', planId, questionId, questions });
-			},
 			log: (line) => {
 				console.log(line);
 			}
@@ -114,6 +130,7 @@ export function createPlanningSessions(opts: {
 			prompt: opts.prompt(input),
 			mcpConfigPath: mcp.configPath,
 			userServerNames: userMcp.serverNames,
+			tools: PLANNING_TOOLS,
 			claudeAuth: opts.services.claudeAuth,
 			onStdout: (chunk) => {
 				parser.push(chunk);

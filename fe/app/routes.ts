@@ -9,6 +9,8 @@ export default [
 		index('views/machines/machines-page.tsx'),
 		route('machines/:machineId', 'views/machine-detail/machine-detail-page.tsx'),
 		route('plans', 'views/plans/plans-page.tsx'),
+		route('queues', 'views/queues/queues-page.tsx'),
+		route('queues/:queueId', 'views/queue-detail/queue-detail-page.tsx'),
 		route('plans/:planId', 'views/plan-detail/plan-page.tsx')
 	])
 ] satisfies RouteConfig

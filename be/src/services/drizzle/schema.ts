@@ -1,4 +1,14 @@
-import { index, integer, jsonb, pgTable, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
+import {
+	boolean,
+	index,
+	integer,
+	jsonb,
+	pgTable,
+	text,
+	timestamp,
+	unique,
+	uuid
+} from 'drizzle-orm/pg-core';
 import { type MachineStatus, type PreflightCheck } from 'src/types/MachineSchema';
 import {
 	type PlanMessageContent,
@@ -6,6 +16,11 @@ import {
 	type PlanStatus,
 	type SliceKind
 } from 'src/types/PlanSchema';
+import {
+	type QueueItemStatus,
+	type QueueStatus,
+	type SliceRunStatus
+} from 'src/types/QueueSchema';
 
 export const users = pgTable('users', {
 	id: text().primaryKey(),
@@ -108,4 +123,80 @@ export const acs = pgTable(
 		index('acs_plan_id_idx').on(table.planId),
 		unique('acs_plan_code_key').on(table.planId, table.code)
 	]
+);
+
+// A queue is a git worktree on one machine. Two queues on the same machine run
+// side by side without sharing a working tree, which is the whole reason the
+// worktree rather than the repository is the unit.
+export const queues = pgTable(
+	'queues',
+	{
+		id: text().primaryKey(),
+		userId: text()
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		machineId: text()
+			.notNull()
+			.references(() => machines.id, { onDelete: 'cascade' }),
+		name: text().notNull(),
+		slug: text().notNull(),
+		worktreePath: text(),
+		baseRef: text(),
+		afk: boolean().notNull().default(false),
+		status: text().$type<QueueStatus>().notNull().default('provisioning'),
+		failureReason: text(),
+		createdAt: timestamp({ withTimezone: true }).notNull().defaultNow()
+	},
+	// The slug names a directory and a branch on the machine, so two queues on one
+	// machine cannot share it without one of them writing over the other's tree.
+	(table) => [
+		index('queues_user_id_idx').on(table.userId),
+		unique('queues_machine_slug_key').on(table.machineId, table.slug)
+	]
+);
+
+export const queueItems = pgTable(
+	'queue_items',
+	{
+		id: text().primaryKey(),
+		queueId: text()
+			.notNull()
+			.references(() => queues.id, { onDelete: 'cascade' }),
+		planId: text()
+			.notNull()
+			.references(() => plans.id, { onDelete: 'cascade' }),
+		ordinal: integer().notNull(),
+		// Cut fresh from baseRef per plan: a plan that fails leaves its partial work
+		// on its own branch instead of underneath the next plan's pull request.
+		branch: text(),
+		status: text().$type<QueueItemStatus>().notNull().default('queued'),
+		prUrl: text(),
+		failureReason: text(),
+		startedAt: timestamp({ withTimezone: true }),
+		finishedAt: timestamp({ withTimezone: true })
+	},
+	(table) => [
+		index('queue_items_queue_id_idx').on(table.queueId),
+		unique('queue_items_queue_plan_key').on(table.queueId, table.planId)
+	]
+);
+
+export const sliceRuns = pgTable(
+	'slice_runs',
+	{
+		id: text().primaryKey(),
+		queueItemId: text()
+			.notNull()
+			.references(() => queueItems.id, { onDelete: 'cascade' }),
+		sliceId: text()
+			.notNull()
+			.references(() => slices.id, { onDelete: 'cascade' }),
+		ordinal: integer().notNull(),
+		status: text().$type<SliceRunStatus>().notNull().default('pending'),
+		commitSha: text(),
+		failureReason: text(),
+		startedAt: timestamp({ withTimezone: true }),
+		finishedAt: timestamp({ withTimezone: true })
+	},
+	(table) => [index('slice_runs_queue_item_id_idx').on(table.queueItemId)]
 );

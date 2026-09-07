@@ -3,7 +3,12 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 
 import { machineKeys } from '~/entities/machine/api/machine.queries'
 import type { Machine } from '~/entities/machine/model/machine'
-import { UiMsgSchema, type UiMsg } from '~/entities/machine/model/ui-message'
+import {
+	UiMsgSchema,
+	type RunQuestionMsg,
+	type UiMsg
+} from '~/entities/machine/model/ui-message'
+import { queueKeys, type Queue } from '~/entities/queue'
 import { subscribeToUiSocket } from '~/shared/api'
 
 export interface PongResult {
@@ -18,6 +23,10 @@ const UPGRADE_TIMEOUT_MS = 180_000
 
 const PongContext = createContext<Record<string, PongResult>>({})
 const UpgradeContext = createContext<Record<string, string>>({})
+const RunContext = createContext<{
+	activity: Record<string, string>,
+	questions: Record<string, RunQuestionMsg>
+}>({ activity: {}, questions: {} })
 
 export function useLastPong (machineId: string): PongResult | null {
 	return useContext(PongContext)[machineId] ?? null
@@ -25,6 +34,16 @@ export function useLastPong (machineId: string): PongResult | null {
 
 export function useUpgradingTo (machineId: string): string | null {
 	return useContext(UpgradeContext)[machineId] ?? null
+}
+
+export function useRunActivity (): Record<string, string> {
+	return useContext(RunContext).activity
+}
+
+export function useRunQuestion (runId: string | null): RunQuestionMsg | null {
+	const { questions } = useContext(RunContext)
+
+	return runId === null ? null : questions[runId] ?? null
 }
 
 function dropMachine (queryClient: QueryClient, machineId: string): void {
@@ -47,10 +66,32 @@ function without (previous: Record<string, string>, machineId: string): Record<s
 	return rest
 }
 
+function withQueue (previous: Queue[], queue: Queue): Queue[] {
+	return previous.some((entry) => entry.id === queue.id)
+		? previous.map((entry) => (entry.id === queue.id ? queue : entry))
+		: [queue, ...previous]
+}
+
+function patchQueue (queryClient: QueryClient, queue: Queue): void {
+	queryClient.setQueryData<Queue[]>(queueKeys.forMachine(queue.machineId), (previous) =>
+		previous === undefined ? previous : withQueue(previous, queue)
+	)
+}
+
+// The machine a deleted queue belonged to is not in the frame, so every cached
+// machine list is swept rather than the one it came from.
+function dropQueue (queryClient: QueryClient, queueId: string): void {
+	queryClient.setQueriesData<Queue[]>({ queryKey: queueKeys.all }, (previous) =>
+		previous?.filter((entry) => entry.id !== queueId)
+	)
+}
+
 export function MachinesSocketProvider ({ children }: { children: ReactNode }) {
 	const queryClient = useQueryClient()
 	const [pongs, setPongs] = useState<Record<string, PongResult>>({})
 	const [upgrades, setUpgrades] = useState<Record<string, string>>({})
+	const [runActivity, setRunActivity] = useState<Record<string, string>>({})
+	const [runQuestions, setRunQuestions] = useState<Record<string, RunQuestionMsg>>({})
 	const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>())
 	// Read through a ref so the subscription is not a function of the state it
 	// maintains: depending on `upgrades` would tear down and re-open the socket
@@ -75,6 +116,36 @@ export function MachinesSocketProvider ({ children }: { children: ReactNode }) {
 				clearTimeout(pending.get(msg.machineId))
 				pending.set(msg.machineId, setTimeout(() => { forget(msg.machineId) }, UPGRADE_TIMEOUT_MS))
 				setUpgrades((previous) => ({ ...previous, [msg.machineId]: msg.to }))
+
+				return
+			}
+
+			if (msg.type === 'run.activity') {
+				setRunActivity((previous) => ({ ...previous, [msg.runId]: msg.label }))
+
+				return
+			}
+
+			// The transcript is not kept in the browser: a queue can run for hours and
+			// the answer to "what is it doing" is the activity line, not every token.
+			if (msg.type === 'run.text') {
+				return
+			}
+
+			if (msg.type === 'run.question') {
+				setRunQuestions((previous) => ({ ...previous, [msg.runId]: msg }))
+
+				return
+			}
+
+			if (msg.type === 'queue.updated') {
+				patchQueue(queryClient, msg.queue)
+
+				return
+			}
+
+			if (msg.type === 'queue.deleted') {
+				dropQueue(queryClient, msg.queueId)
 
 				return
 			}
@@ -127,7 +198,11 @@ export function MachinesSocketProvider ({ children }: { children: ReactNode }) {
 
 	return (
 		<PongContext.Provider value={pongs}>
-			<UpgradeContext.Provider value={upgrades}>{children}</UpgradeContext.Provider>
+			<UpgradeContext.Provider value={upgrades}>
+				<RunContext.Provider value={{ activity: runActivity, questions: runQuestions }}>
+					{children}
+				</RunContext.Provider>
+			</UpgradeContext.Provider>
 		</PongContext.Provider>
 	)
 }

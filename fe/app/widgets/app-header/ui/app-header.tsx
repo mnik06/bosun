@@ -19,6 +19,9 @@ export function AppHeader ({ email }: { email: string }) {
 					<Anchor component={Link} to="/plans" size="sm" c="dimmed">
 						Plans
 					</Anchor>
+					<Anchor component={Link} to="/queues" size="sm" c="dimmed">
+						Queues
+					</Anchor>
 				</Group>
 
 				<Group gap="sm">

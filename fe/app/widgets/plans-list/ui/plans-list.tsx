@@ -1,13 +1,17 @@
-import { Alert, Card, Center, Group, Loader, Stack, Text } from '@mantine/core'
+import { Alert, Button, Card, Center, Checkbox, Group, Loader, Stack, Text } from '@mantine/core'
+import { useState } from 'react'
 import { Link } from 'react-router'
 
 import { useMachinesQuery } from '~/entities/machine'
-import { PlanStatusBadge, usePlansQuery } from '~/entities/plan'
+import { PlanStatusBadge, usePlansQuery, type Plan } from '~/entities/plan'
+import { PushToQueueModal } from '~/features/push-to-queue'
 import { formatRelativeTime, toErrorMessage } from '~/shared/lib'
 
 export function PlansList () {
 	const { data, isPending, error } = usePlansQuery()
 	const machines = useMachinesQuery()
+	const [selected, setSelected] = useState<string[]>([])
+	const [pushing, setPushing] = useState(false)
 
 	if (isPending) {
 		return (
@@ -33,32 +37,77 @@ export function PlansList () {
 		)
 	}
 
+	const chosen: Plan[] = data.filter((plan) => selected.includes(plan.id))
+
 	return (
 		<Stack gap="sm">
+			{chosen.length === 0 ? null : (
+				<Group justify="space-between">
+					<Text size="sm" c="dimmed">
+						{chosen.length} selected
+					</Text>
+					<Button
+						size="xs"
+						variant="light"
+						onClick={() => {
+							setPushing(true)
+						}}
+					>
+						Push to queue
+					</Button>
+				</Group>
+			)}
+
 			{data.map((plan) => (
-				<Card
-					key={plan.id}
-					withBorder
-					padding="md"
-					radius="md"
-					component={Link}
-					to={`/plans/${plan.id}`}
-				>
-					<Group justify="space-between" wrap="nowrap" align="start">
-						<Stack gap={2} className="min-w-0">
-							<Text fw={600} truncate>
-								{plan.title ?? 'Untitled'}
-							</Text>
-							<Text size="xs" c="dimmed">
-								{machines.data?.find((machine) => machine.id === plan.machineId)?.name ??
+				<Group key={plan.id} gap="sm" align="center" wrap="nowrap">
+					<Checkbox
+						aria-label={`Select ${plan.title ?? 'plan'}`}
+						checked={selected.includes(plan.id)}
+						// Only a finished plan has tracer bullets to execute; queueing one
+						// still being grilled would put an empty plan on a worktree.
+						disabled={plan.status !== 'ready'}
+						onChange={(event) => {
+							setSelected((previous) =>
+								event.currentTarget.checked
+									? [...previous, plan.id]
+									: previous.filter((id) => id !== plan.id)
+							)
+						}}
+					/>
+
+					<Card
+						className="grow"
+						withBorder
+						padding="md"
+						radius="md"
+						component={Link}
+						to={`/plans/${plan.id}`}
+					>
+						<Group justify="space-between" wrap="nowrap" align="start">
+							<Stack gap={2} className="min-w-0">
+								<Text fw={600} truncate>
+									{plan.title ?? 'Untitled'}
+								</Text>
+								<Text size="xs" c="dimmed">
+									{machines.data?.find((machine) => machine.id === plan.machineId)?.name ??
 									plan.machineId}{' '}
 								· {formatRelativeTime(plan.createdAt)}
-							</Text>
-						</Stack>
-						<PlanStatusBadge plan={plan} />
-					</Group>
-				</Card>
+								</Text>
+							</Stack>
+							<PlanStatusBadge plan={plan} />
+						</Group>
+					</Card>
+				</Group>
 			))}
+
+			<PushToQueueModal
+				plans={chosen}
+				opened={pushing}
+				onClose={() => {
+					setPushing(false)
+					setSelected([])
+				}}
+			/>
 		</Stack>
 	)
 }

@@ -1,4 +1,5 @@
 import WebSocket from 'ws';
+import { type ExecutionSessions } from '../execution/session';
 import { type PlanningSessions } from '../planning/session';
 import { ServerMsgSchema, type ServerMsg } from '../protocol';
 import { type Services } from '../services/index';
@@ -35,6 +36,7 @@ export interface RouterDeps {
 	configPath: string;
 	state: AgentState;
 	sessions: PlanningSessions;
+	executions: ExecutionSessions;
 	announce: (reason: 'connect' | 'refresh') => Promise<void>;
 	onUpgrade: (opts: { version: string; downloadBaseUrl: string }) => Promise<void>;
 }
@@ -98,8 +100,83 @@ export async function routeServerFrame(deps: RouterDeps, msg: ServerMsg): Promis
 
 			return;
 
+		case 'exec.start':
+			if (deps.state.paused) {
+				deps.socket.send(
+					JSON.stringify({
+						type: 'exec.error',
+						runId: msg.runId,
+						message: 'this machine is paused'
+					})
+				);
+
+				return;
+			}
+
+			await deps.executions.start(msg);
+
+			return;
+
+		case 'exec.answer':
+			deps.executions.answer(msg);
+
+			return;
+
+		case 'exec.cancel':
+			deps.executions.cancel(msg.runId);
+
+			return;
+
+		case 'queue.publish': {
+			const result = await deps.services.publish.publish({
+				worktreePath: msg.worktreePath,
+				branch: msg.branch,
+				baseRef: msg.baseRef,
+				title: msg.title,
+				body: msg.body
+			});
+
+			console.log(`publish ${msg.branch}: ${result.detail}`);
+			deps.socket.send(
+				JSON.stringify(
+					result.ok && result.prUrl
+						? { type: 'queue.published', itemId: msg.itemId, prUrl: result.prUrl }
+						: { type: 'queue.publish.error', itemId: msg.itemId, message: result.detail }
+				)
+			);
+
+			return;
+		}
+
+		case 'queue.worktree.ensure': {
+			const result = await deps.services.worktree.ensure(msg.slug);
+
+			console.log(`worktree ${msg.slug}: ${result.detail}`);
+			deps.socket.send(
+				JSON.stringify(
+					result.ok
+						? {
+							type: 'queue.worktree.ready',
+							queueId: msg.queueId,
+							worktreePath: result.worktreePath,
+							baseRef: result.baseRef
+						}
+						: { type: 'queue.worktree.error', queueId: msg.queueId, message: result.detail }
+				)
+			);
+
+			return;
+		}
+
+		case 'queue.worktree.remove':
+			await deps.services.worktree.remove(msg.slug);
+			console.log(`worktree ${msg.slug}: removed`);
+
+			return;
+
 		case 'shutdown':
 			deps.sessions.cancelAll();
+			deps.executions.cancelAll();
 			await deps.services.teardown.terminateSelf({
 				configPath: deps.configPath,
 				reason: msg.reason

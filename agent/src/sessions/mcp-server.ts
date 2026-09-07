@@ -4,21 +4,14 @@ import http from 'http';
 import os from 'os';
 import path from 'path';
 import { z } from 'zod';
-import {
-	AddAcArgsSchema,
-	AskArgsSchema,
-	CreatePlanArgsSchema,
-	CreateSliceArgsSchema,
-	TOOL_DEFINITIONS
-} from './tools';
-import { PlanAnswerSchema, type PlanAnswer, type PlanQuestion } from '../../protocol';
-import { type BosunApiService } from '../../services/bosun-api.service';
+import { AskArgsSchema } from './ask';
+import { PlanAnswerSchema, type PlanAnswer, type PlanQuestion } from '../protocol';
 
 const JSON_RPC = '2.0';
 const DEFAULT_PROTOCOL_VERSION = '2025-06-18';
 const MAX_BODY_BYTES = 1_000_000;
 
-interface PendingQuestion {
+export interface PendingQuestion {
 	questionId: string;
 	resolve: (answers: PlanAnswer[]) => void;
 }
@@ -58,13 +51,13 @@ function readBody(req: http.IncomingMessage): Promise<string> {
 	});
 }
 
-function createToolDispatcher(opts: {
-	planId: string;
-	bosunApi: BosunApiService;
+// The one tool the transport owns, because answering it is the only thing that
+// needs the socket: everything else a session can call is the caller's business.
+export function createAskTool(opts: {
 	pending: Map<string, PendingQuestion>;
 	onQuestion: (payload: { questionId: string; questions: PlanQuestion[] }) => void;
 }) {
-	const ask = async (args: unknown) => {
+	return async function ask(args: unknown) {
 		const { questions } = AskArgsSchema.parse(args);
 		const questionId = `q_${crypto.randomBytes(9).toString('base64url')}`;
 		const answers = await new Promise<PlanAnswer[]>((resolve) => {
@@ -74,38 +67,10 @@ function createToolDispatcher(opts: {
 
 		return textResult(describeAnswers({ questions, answers }));
 	};
+}
 
-	return async function dispatch(name: string, args: unknown) {
-		if (name === 'bosun_ask') {
-			return ask(args);
-		}
-
-		if (name === 'create_plan') {
-			await opts.bosunApi.savePlanTitle({ planId: opts.planId, ...CreatePlanArgsSchema.parse(args) });
-
-			return textResult(opts.planId);
-		}
-
-		if (name === 'add_ac') {
-			const created = await opts.bosunApi.addPlanAc({
-				planId: opts.planId,
-				...AddAcArgsSchema.parse(args)
-			});
-
-			return textResult(JSON.stringify(created));
-		}
-
-		if (name === 'create_slice') {
-			const created = await opts.bosunApi.createPlanSlice({
-				planId: opts.planId,
-				slice: CreateSliceArgsSchema.parse(args)
-			});
-
-			return textResult(JSON.stringify(created));
-		}
-
-		throw new Error(`unknown tool ${name}`);
-	};
+export function textToolResult(text: string, isError = false) {
+	return textResult(text, isError);
 }
 
 async function handleRpc(opts: {
@@ -113,6 +78,7 @@ async function handleRpc(opts: {
 		method?: string;
 		params?: { name?: string; arguments?: unknown; protocolVersion?: string };
 	};
+	definitions: unknown[];
 	dispatch: (name: string, args: unknown) => Promise<unknown>;
 }): Promise<unknown> {
 	const { message } = opts;
@@ -126,7 +92,7 @@ async function handleRpc(opts: {
 	}
 
 	if (message.method === 'tools/list') {
-		return { tools: TOOL_DEFINITIONS };
+		return { tools: opts.definitions };
 	}
 
 	if (message.method === 'tools/call') {
@@ -148,10 +114,10 @@ async function handleRpc(opts: {
 // this session's bearer token — and any token in the user's own server config —
 // to every other account on the box, which is exactly what the token exists to
 // prevent.
-function writeConfigFile(opts: { planId: string; config: unknown }): string {
+function writeConfigFile(opts: { sessionId: string; config: unknown }): string {
 	const configPath = path.join(
 		os.tmpdir(),
-		`bosun-mcp-${opts.planId}-${crypto.randomBytes(6).toString('hex')}.json`
+		`bosun-mcp-${opts.sessionId}-${crypto.randomBytes(6).toString('hex')}.json`
 	);
 
 	fs.writeFileSync(configPath, JSON.stringify(opts.config), { mode: 0o600 });
@@ -160,15 +126,24 @@ function writeConfigFile(opts: { planId: string; config: unknown }): string {
 	return configPath;
 }
 
+export interface PendingQuestions {
+	pending: Map<string, PendingQuestion>;
+}
+
 export async function startSessionMcpServer(opts: {
-	planId: string;
-	bosunApi: BosunApiService;
+	sessionId: string;
+	definitions: unknown[];
+	// Built by the caller from `pending`, which is why the map is handed in rather
+	// than owned here: `bosun_ask` is a tool only some sessions are given.
+	createDispatch: (pending: Map<string, PendingQuestion>) => (
+		name: string,
+		args: unknown
+	) => Promise<unknown>;
 	userServers?: Record<string, unknown>;
-	onQuestion: (payload: { questionId: string; questions: PlanQuestion[] }) => void;
 	log: (message: string) => void;
 }): Promise<SessionMcpServer> {
 	const pending = new Map<string, PendingQuestion>();
-	const dispatch = createToolDispatcher({ ...opts, pending });
+	const dispatch = opts.createDispatch(pending);
 	// Loopback keeps this off the network, but every process on the box shares
 	// loopback: without a secret, any local user could drive the session's tools.
 	const token = crypto.randomBytes(24).toString('base64url');
@@ -204,7 +179,7 @@ export async function startSessionMcpServer(opts: {
 				payload = {
 					jsonrpc: JSON_RPC,
 					id: message.id,
-					result: await handleRpc({ message, dispatch })
+					result: await handleRpc({ message, definitions: opts.definitions, dispatch })
 				};
 			} catch (error) {
 				payload = {
@@ -231,10 +206,10 @@ export async function startSessionMcpServer(opts: {
 	const address = server.address();
 	const port = typeof address === 'object' && address ? address.port : 0;
 
-	opts.log(`mcp server for ${opts.planId} on 127.0.0.1:${port}`);
+	opts.log(`mcp server for ${opts.sessionId} on 127.0.0.1:${port}`);
 
 	const configPath = writeConfigFile({
-		planId: opts.planId,
+		sessionId: opts.sessionId,
 		config: {
 			mcpServers: {
 				...opts.userServers,
