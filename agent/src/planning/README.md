@@ -82,9 +82,11 @@ interleaved.
 - **Whether the box can authenticate is asked, not inferred.** `preflight.service.ts` runs
   `claude auth status --json` and reports what it says. An earlier version guessed from the presence
   of an environment variable, which called a perfectly working machine red and refused to start
-  sessions on it. A token that is present but refused is reported apart from no token at all: the
-  first is an expired token needing `claude setup-token` again, the second is an unfilled env file,
-  and a box that looks configured and still fails is where an operator otherwise stops looking.
+  sessions on it. What it establishes is *presence*, not validity: `claude auth status` answers
+  `loggedIn: true` for a token the API rejects, so the check says `credential present` rather than
+  `authenticated`. Proving a credential works costs a real turn against the API, which is why it
+  lives in `bosun-agent auth set` and `auth status` rather than in a check that runs on every
+  reconnect.
 - **A red check carries the command's own words.** `exec.service.ts` keeps the exit code, the signal and the
   tail of stderr, and every failing check is logged to the journal as well as sent to the browser.
   These checks are read by someone who cannot see the box; "it failed" is indistinguishable from every

@@ -95,3 +95,72 @@ describe('getEnvService', () => {
 		expect(env.current()).toEqual({ A: '1' });
 	});
 });
+
+describe('env writes', () => {
+	let home: string;
+
+	beforeEach(() => {
+		home = fs.mkdtempSync(path.join(os.tmpdir(), 'bosun-envw-'));
+		fs.mkdirSync(path.join(home, '.bosun'));
+	});
+
+	afterEach(() => {
+		fs.rmSync(home, { recursive: true, force: true });
+	});
+
+	function service() {
+		return getEnvService({ baseEnv: {}, homeDir: home });
+	}
+
+	it('creates the file at 0600 on first write', () => {
+		const env = service();
+
+		env.set({ variable: 'TOKEN', value: 'a' });
+
+		expect(env.current().TOKEN).toBe('a');
+		expect(fs.statSync(env.envPath).mode & 0o777).toBe(0o600);
+	});
+
+	// Appending a second assignment would leave the file with two answers.
+	it('replaces an existing assignment in place', () => {
+		const env = service();
+
+		env.set({ variable: 'TOKEN', value: 'first' });
+		env.set({ variable: 'OTHER', value: 'keep' });
+		env.set({ variable: 'TOKEN', value: 'second' });
+
+		const contents = fs.readFileSync(env.envPath, 'utf8');
+
+		expect(contents.match(/^TOKEN=/gm)).toHaveLength(1);
+		expect(env.current()).toEqual({ TOKEN: 'second', OTHER: 'keep' });
+	});
+
+	it('replaces an export-prefixed assignment too', () => {
+		fs.writeFileSync(path.join(home, '.bosun', 'env'), 'export TOKEN=old\n');
+
+		const env = service();
+
+		env.set({ variable: 'TOKEN', value: 'new' });
+
+		expect(env.current().TOKEN).toBe('new');
+		expect(fs.readFileSync(env.envPath, 'utf8')).not.toContain('old');
+	});
+
+	it('does not mangle a file with no trailing newline', () => {
+		fs.writeFileSync(path.join(home, '.bosun', 'env'), 'A=1');
+
+		const env = service();
+
+		env.set({ variable: 'B', value: '2' });
+
+		expect(env.current()).toEqual({ A: '1', B: '2' });
+	});
+
+	it('reports whether a variable is set', () => {
+		const env = service();
+
+		expect(env.has('TOKEN')).toBe(false);
+		env.set({ variable: 'TOKEN', value: 'x' });
+		expect(env.has('TOKEN')).toBe(true);
+	});
+});

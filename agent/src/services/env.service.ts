@@ -48,17 +48,40 @@ export function parseEnvFile(raw: string): Record<string, string> {
 export function getEnvService(deps: { baseEnv: NodeJS.ProcessEnv; homeDir?: string }) {
 	const envPath = path.join(deps.homeDir ?? os.homedir(), '.bosun', ENV_FILENAME);
 
+	function read(): string {
+		try {
+			return fs.readFileSync(envPath, 'utf8');
+		} catch {
+			return '';
+		}
+	}
+
 	return {
 		envPath,
 
-		current(): NodeJS.ProcessEnv {
-			let raw: string;
+		has(variable: string): boolean {
+			return Object.hasOwn(parseEnvFile(read()), variable);
+		},
 
-			try {
-				raw = fs.readFileSync(envPath, 'utf8');
-			} catch {
-				return { ...deps.baseEnv };
-			}
+		// Replaces the line in place when the variable is already there. Appending a
+		// second assignment would leave the file with two answers and the parser
+		// picking the last one, which is not what someone editing it would expect.
+		set(opts: { variable: string; value: string }): void {
+			const line = `${opts.variable}=${opts.value}`;
+			const existing = read();
+			const pattern = new RegExp(`^\\s*(?:export\\s+)?${opts.variable}\\s*=.*$`, 'm');
+			const next = pattern.test(existing)
+				? existing.replace(pattern, line)
+				: `${existing}${existing === '' || existing.endsWith('\n') ? '' : '\n'}${line}\n`;
+
+			fs.mkdirSync(path.dirname(envPath), { recursive: true, mode: 0o700 });
+			fs.writeFileSync(envPath, next, { mode: 0o600 });
+			// writeFileSync only applies mode when it creates the file.
+			fs.chmodSync(envPath, 0o600);
+		},
+
+		current(): NodeJS.ProcessEnv {
+			const raw = read();
 
 			const overlay = Object.fromEntries(
 				Object.entries(parseEnvFile(raw)).filter(([key]) => !PROTECTED_KEYS.has(key))

@@ -9,7 +9,18 @@ export const CLAUDE_TOKEN_VARIABLE = 'CLAUDE_CODE_OAUTH_TOKEN';
 // Stripped from every session rather than merely ignored here.
 export const CONFLICTING_VARIABLES = ['ANTHROPIC_API_KEY'];
 
-const AuthStatusSchema = z.object({ loggedIn: z.boolean() });
+const AuthStatusSchema = z.object({ loggedIn: z.boolean(), authMethod: z.string().optional() });
+
+// A real turn against the API. `claude auth status` reports only that a
+// credential is *present* — it answers `loggedIn: true` for a token the API will
+// reject — so proving a credential works means actually using it.
+const VerifyResultSchema = z.object({
+	is_error: z.boolean().optional(),
+	api_error_status: z.number().optional(),
+	result: z.string().optional()
+});
+
+const VERIFY_TIMEOUT_MS = 60_000;
 
 export interface ClaudeAuthStatus {
 	// Whether a report was read at all, as distinct from what it said. "Not logged
@@ -18,6 +29,14 @@ export interface ClaudeAuthStatus {
 	reported: boolean;
 	loggedIn: boolean;
 	detail: string;
+}
+
+function safeJson(raw: string): unknown {
+	try {
+		return JSON.parse(raw);
+	} catch {
+		return null;
+	}
 }
 
 // The CLI may print a notice before its JSON, so the object is located rather
@@ -51,7 +70,14 @@ export function readClaudeAuthStatus(opts: { raw: string; tokenPresent: boolean 
 	}
 
 	if (parsed.data.loggedIn) {
-		return { reported: true, loggedIn: true, detail: 'authenticated' };
+		// Deliberately not "authenticated": this only establishes that a credential
+		// is configured. Whether the API accepts it is what `bosun-agent auth status`
+		// answers, and what the first planning session finds out.
+		return {
+			reported: true,
+			loggedIn: true,
+			detail: `credential present (${parsed.data.authMethod ?? 'unknown method'})`
+		};
 	}
 
 	return {
@@ -60,6 +86,30 @@ export function readClaudeAuthStatus(opts: { raw: string; tokenPresent: boolean 
 		detail: opts.tokenPresent
 			? `${CLAUDE_TOKEN_VARIABLE} was refused — it may have expired; re-run \`claude setup-token\` and update ~/.bosun/env`
 			: `no ${CLAUDE_TOKEN_VARIABLE} in ~/.bosun/env — run \`claude setup-token\` on your own machine and put the token there`
+	};
+}
+
+export interface VerifyResult {
+	ok: boolean;
+	detail: string;
+}
+
+export function readVerifyResult(opts: { raw: string; reason: string }): VerifyResult {
+	const start = opts.raw.indexOf('{');
+	const parsed =
+		start === -1 ? null : VerifyResultSchema.safeParse(safeJson(opts.raw.slice(start)));
+
+	if (!parsed?.success) {
+		return { ok: false, detail: opts.reason || 'claude produced no readable result' };
+	}
+
+	if (parsed.data.is_error !== true) {
+		return { ok: true, detail: 'the API accepted this credential' };
+	}
+
+	return {
+		ok: false,
+		detail: parsed.data.result ?? `the API refused it (${parsed.data.api_error_status ?? 'error'})`
 	};
 }
 
@@ -91,6 +141,22 @@ export function getClaudeAuthService(deps: { exec: ExecService; env: EnvService 
 			}
 
 			return status;
+		},
+
+		// Costs one tiny turn, which is why it is not part of preflight: this runs
+		// when somebody sets a credential or asks, not on every reconnect.
+		async verify(opts?: { token?: string }): Promise<VerifyResult> {
+			const env = deps.env.current();
+			const result = await deps.exec.run(
+				'claude',
+				['--print', '--tools=', '--output-format', 'json', 'ok'],
+				{
+					env: opts?.token ? { ...env, [CLAUDE_TOKEN_VARIABLE]: opts.token } : env,
+					timeoutMs: VERIFY_TIMEOUT_MS
+				}
+			);
+
+			return readVerifyResult({ raw: result.stdout, reason: result.reason });
 		},
 
 		// At most one credential reaches the session, so the box authenticates as the

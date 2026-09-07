@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 import path from 'path';
 import { Command } from 'commander';
+import { setClaudeToken, showClaudeAuth } from './commands/auth';
 import { enroll } from './commands/enroll';
+import { addMcpPreset, listMcpServers, removeMcpServer } from './commands/mcp';
 import { run } from './commands/run';
 import { defaultConfigPath, readConfig } from './config/config';
 import { AGENT_VERSION } from './version';
@@ -41,6 +43,49 @@ program
 
 		console.log(`Enrolled as ${config.machineId}`);
 		console.log(`Config written to ${configPath}`);
+	});
+
+const auth = program.command('auth').description('Manage this machine\'s Claude credential');
+
+auth
+	.command('set')
+	.description('Paste a Claude token, check it against the API, and save it')
+	.action(async () => {
+		await setClaudeToken();
+	});
+
+auth
+	.command('status')
+	.description('Show whether this machine has a working Claude credential')
+	.action(async () => {
+		await showClaudeAuth();
+	});
+
+const mcp = program.command('mcp').description('Manage this machine\'s MCP servers');
+
+mcp
+	.command('list')
+	.description('Show configured MCP servers and the presets available')
+	.option('--config <path>', 'path to the agent config', defaultConfigPath())
+	.action(async (opts: { config: string }) => {
+		await listMcpServers({ config: readConfig(path.resolve(opts.config)) });
+	});
+
+mcp
+	.command('add')
+	.argument('<id>', 'preset id, as shown by `bosun-agent mcp list`')
+	.description('Add an MCP server from a bosun preset, prompting for any credential it needs')
+	.option('--config <path>', 'path to the agent config', defaultConfigPath())
+	.action(async (id: string, opts: { config: string }) => {
+		await addMcpPreset({ config: readConfig(path.resolve(opts.config)), id });
+	});
+
+mcp
+	.command('remove')
+	.argument('<name>', 'server name to remove')
+	.description('Remove an MCP server from this machine')
+	.action((name: string) => {
+		removeMcpServer({ name });
 	});
 
 program

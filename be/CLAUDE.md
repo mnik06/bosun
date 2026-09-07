@@ -10,7 +10,7 @@ reaches it over an outbound WebSocket that it dials and the BE never initiates.
 
 Identity is **not** ours: there is no login endpoint, no password column and no session table.
 Supabase Auth issues the tokens, and `fastify.requireUser` resolves each one by asking Supabase who
-it belongs to before provisioning our `users` row. `/enroll`, `/agent/ws`, `/install.sh` and
+it belongs to before provisioning our `users` row. `/enroll`, `/agent/ws`, `/install.sh`, `/mcp-presets` and
 `/health` stay unauthenticated by design — they are the agent's and the installer's surface. See
 `src/services/auth/supabase-auth.service.md`.
 

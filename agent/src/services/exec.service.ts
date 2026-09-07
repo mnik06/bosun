@@ -34,13 +34,13 @@ export function getExecService() {
 		async run(
 			command: string,
 			args: string[],
-			opts?: { cwd?: string; env?: NodeJS.ProcessEnv }
+			opts?: { cwd?: string; env?: NodeJS.ProcessEnv; timeoutMs?: number }
 		): Promise<ExecResult> {
 			try {
 				const { stdout } = await exec(command, args, {
 					cwd: opts?.cwd,
 					env: opts?.env,
-					timeout: EXEC_TIMEOUT_MS
+					timeout: opts?.timeoutMs ?? EXEC_TIMEOUT_MS
 				});
 
 				return { ok: true, stdout: stdout.trim(), reason: '' };

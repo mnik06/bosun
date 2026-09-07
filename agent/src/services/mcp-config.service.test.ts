@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+import { afterEach, beforeEach } from 'vitest';
+import { getEnvService } from './env.service';
 import {
 	RESERVED_SERVER_NAME,
 	expandVariables,
+	getMcpConfigService,
 	readMcpConfigFile
 } from './mcp-config.service';
 
@@ -86,5 +92,69 @@ describe('readMcpConfigFile', () => {
 		});
 
 		expect(result.unresolved).toEqual(['JIRA_TOKEN']);
+	});
+});
+
+
+describe('getMcpConfigService writes', () => {
+	let home: string;
+
+	beforeEach(() => {
+		home = fs.mkdtempSync(path.join(os.tmpdir(), 'bosun-mcp-'));
+		fs.mkdirSync(path.join(home, '.bosun'));
+	});
+
+	afterEach(() => {
+		fs.rmSync(home, { recursive: true, force: true });
+	});
+
+	function service() {
+		return getMcpConfigService({
+			env: getEnvService({ baseEnv: {}, homeDir: home }),
+			homeDir: home
+		});
+	}
+
+	it('creates the file on the first upsert', () => {
+		const mcp = service();
+
+		mcp.upsert({ name: 'playwright', server: { type: 'stdio', command: 'npx' } });
+
+		expect(mcp.listConfigured()).toEqual(['playwright']);
+		expect(fs.statSync(mcp.configPath).mode & 0o777).toBe(0o600);
+	});
+
+	// A second server must not clobber the first — that would silently drop a
+	// working integration when adding an unrelated one.
+	it('keeps servers already in the file', () => {
+		const mcp = service();
+
+		mcp.upsert({ name: 'playwright', server: { type: 'stdio', command: 'npx' } });
+		mcp.upsert({ name: 'atlassian', server: { type: 'http', url: 'https://x' } });
+
+		expect(mcp.listConfigured().sort()).toEqual(['atlassian', 'playwright']);
+	});
+
+	// The reference, not the secret, is what lands on disk.
+	it('writes the config unexpanded', () => {
+		const mcp = service();
+
+		mcp.upsert({ name: 'jira', server: { type: 'http', headers: { a: 'Bearer ${T}' } } });
+
+		expect(fs.readFileSync(mcp.configPath, 'utf8')).toContain('${T}');
+	});
+
+	it('removes a server and reports whether it was there', () => {
+		const mcp = service();
+
+		mcp.upsert({ name: 'playwright', server: { type: 'stdio', command: 'npx' } });
+
+		expect(mcp.remove('playwright')).toBe(true);
+		expect(mcp.remove('playwright')).toBe(false);
+		expect(mcp.listConfigured()).toEqual([]);
+	});
+
+	it('reports no servers when nothing has been configured', () => {
+		expect(service().read()).toMatchObject({ present: false, serverNames: [] });
 	});
 });

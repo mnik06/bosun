@@ -90,12 +90,18 @@ Planning sessions run the `claude` CLI on the machine, so the box needs the bina
 working login. There is exactly one supported way to give it one:
 
 ```bash
-# on your own machine, which has a browser:
+# 1. on your own machine, which has a browser:
 claude setup-token
-# then paste the token into ~/.bosun/env on the VPS:
-CLAUDE_CODE_OAUTH_TOKEN=...
-systemctl --user restart bosun-agent
+
+# 2. on the VPS — prompts with echo off, checks the token, saves it:
+bosun-agent auth set
+bosun-agent auth status   # whether this machine has a working credential
 ```
+
+The token is typed at a prompt, never passed as an argument, so it stays out of
+`/proc/<pid>/cmdline` and the shell's history. `auth set` makes one real API call before writing:
+a credential the API refuses is a typo or an expired token, and storing it would leave the machine
+looking configured while every planning session fails. Editing `~/.bosun/env` by hand still works.
 
 `claude setup-token` mints a **one-year** OAuth token against a Pro, Max, Team or Enterprise plan,
 for exactly this case — CI and machines with no browser. It can only make model requests, which is
@@ -110,9 +116,18 @@ hits after weeks of working. A minted token has no renewal step to fail.
 `ANTHROPIC_API_KEY` from every session it spawns, so a stray key on the box cannot quietly decide
 which account a session bills to.
 
-Bosun never sees the value. The agent asks `claude auth status --json` and reports only whether the
-box is logged in. A token that is present but refused is reported differently from no token at all —
-the first means re-run `setup-token`, the second means the file was never filled in.
+Bosun never sees the value. The agent asks `claude auth status --json` and reports what it says.
+
+**That check proves presence, not validity.** `claude auth status` answers `loggedIn: true` for a
+token the API will reject, so the `claude` preflight check reads `credential present (oauth_token)`
+rather than `authenticated` — it cannot tell a live token from a dead one. Proving a credential
+works means spending a real turn against the API, which is what `bosun-agent auth set` does once at
+the moment you set it, and what `bosun-agent auth status` does on demand. It is deliberately not in
+preflight, which runs on every reconnect and every Refresh.
+
+The consequence worth knowing: a token that expires months later leaves preflight green, and the
+first planning session fails with the API's own message. `bosun-agent auth status` is the one-command
+answer when that happens.
 
 ### Skills
 
@@ -167,6 +182,25 @@ ones bosun assembles: its own loopback server, plus whatever is in `~/.bosun/mcp
 seeded by `install.sh`). A repo's `.mcp.json` is deliberately **not** read — that file is committed,
 and a credential in it goes to your git host.
 
+The quickest way to add one is a preset — bosun serves a catalogue and the agent installs from it:
+
+```bash
+bosun-agent mcp list           # configured servers, plus what is available
+bosun-agent mcp add playwright # prompts for any credential, confirms, writes
+bosun-agent mcp remove jira
+```
+
+**The command carries no secret.** A preset names the variable it needs, never a value: the agent
+prompts for it on the box with echo off, writes it to `~/.bosun/env`, and puts only the `${VAR}`
+reference in `mcp.json`. Nothing is typed into the browser, so the token never reaches bosun, and
+nothing is passed as an argument, so it never lands in shell history or `/proc/<pid>/cmdline`.
+
+`mcp add` prints the resolved server and waits for a `y` before writing anything. That matters most
+for a `stdio` preset, which is a command that will run on the machine — a preset comes from bosun,
+but running it is the operator's decision rather than an assumption bosun gets to make.
+
+Writing the file by hand does the same job:
+
 ```json
 {
   "mcpServers": {
@@ -194,6 +228,13 @@ config using it is ignored.
 
 Bosun never sees any of this. The file lives on the box, the expansion happens on the box, and the
 backend learns only the server names, through preflight.
+
+**Defaults.** `DEFAULT_SERVERS` in `agent/src/services/mcp-config.service.ts` is merged *underneath*
+`~/.bosun/mcp.json`, so a server of the same name in the user's file wins and `mcp list` labels each
+one `(yours)` or `(bosun default)`. It ships empty on purpose: every server costs startup budget
+against `MCP_TIMEOUT` and widens what a session can do, so being enabled on every machine has to be
+earned rather than assumed. Playwright is in the preset catalogue instead — one command away, and
+opted into per machine.
 
 `systemctl --user` sources no shell rc, so the unit carries an explicit `Environment=PATH=` resolved
 at install time and `EnvironmentFile=-%h/.bosun/env`. A machine that passes preflight by hand but was

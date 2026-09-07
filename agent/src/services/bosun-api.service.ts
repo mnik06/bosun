@@ -9,6 +9,23 @@ const EnrollRespSchema = z.object({
 
 const ErrorRespSchema = z.object({ message: z.string() });
 
+const McpRequirementSchema = z.object({
+	env: z.string(),
+	label: z.string(),
+	helpUrl: z.string().optional()
+});
+
+export const McpPresetSchema = z.object({
+	id: z.string(),
+	name: z.string(),
+	description: z.string(),
+	docsUrl: z.string().optional(),
+	requires: z.array(McpRequirementSchema),
+	server: z.unknown()
+});
+
+export type McpPreset = z.infer<typeof McpPresetSchema>;
+
 async function readError(res: Response, body: unknown): Promise<Error> {
 	const parsed = ErrorRespSchema.safeParse(body);
 
@@ -36,7 +53,26 @@ export function getBosunApiService(deps: { serverUrl: string; machineKey?: strin
 		return payload;
 	}
 
+	async function get(path: string): Promise<unknown> {
+		const res = await fetch(`${base}${path}`);
+		const payload: unknown = await res.json().catch(() => null);
+
+		if (!res.ok) {
+			throw await readError(res, payload);
+		}
+
+		return payload;
+	}
+
 	return {
+		async listMcpPresets(): Promise<McpPreset[]> {
+			return z.array(McpPresetSchema).parse(await get('/mcp-presets'));
+		},
+
+		async getMcpPreset(id: string): Promise<McpPreset> {
+			return McpPresetSchema.parse(await get(`/mcp-presets/${encodeURIComponent(id)}`));
+		},
+
 		async enroll(opts: { token: string; repoPath: string }) {
 			const payload = await post({
 				path: '/enroll',

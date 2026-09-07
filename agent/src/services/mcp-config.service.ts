@@ -11,6 +11,12 @@ export const MCP_CONFIG_FILENAME = 'mcp.json';
 // with it, so the name is refused rather than merged over.
 export const RESERVED_SERVER_NAME = 'bosun';
 
+// Bosun's opinion about what a session should have, merged underneath the user's
+// file so a server of the same name in ~/.bosun/mcp.json wins. Empty by default:
+// every server costs startup budget against MCP_TIMEOUT and widens what a session
+// can do, so being enabled everywhere has to be earned rather than assumed.
+export const DEFAULT_SERVERS: Record<string, unknown> = {};
+
 const McpConfigFileSchema = z.object({
 	mcpServers: z.record(z.string(), z.unknown())
 });
@@ -99,8 +105,8 @@ export function readMcpConfigFile(opts: {
 		return { ...EMPTY, present: true, error: 'expected an object with an "mcpServers" key' };
 	}
 
-	const { [RESERVED_SERVER_NAME]: reserved, ...servers } = validated.data.mcpServers;
-	const expanded = expandVariables(servers, opts.env);
+	const { [RESERVED_SERVER_NAME]: reserved, ...userServers } = validated.data.mcpServers;
+	const expanded = expandVariables({ ...DEFAULT_SERVERS, ...userServers }, opts.env);
 
 	return {
 		present: true,
@@ -114,6 +120,26 @@ export function readMcpConfigFile(opts: {
 	};
 }
 
+function readRawServers(configPath: string): Record<string, unknown> {
+	try {
+		const parsed = McpConfigFileSchema.safeParse(JSON.parse(fs.readFileSync(configPath, 'utf8')));
+
+		return parsed.success ? { ...parsed.data.mcpServers } : {};
+	} catch {
+		return {};
+	}
+}
+
+function writeServers(configPath: string, servers: Record<string, unknown>): void {
+	fs.mkdirSync(path.dirname(configPath), { recursive: true, mode: 0o700 });
+	fs.writeFileSync(configPath, `${JSON.stringify({ mcpServers: servers }, null, 2)}\n`, {
+		mode: 0o600
+	});
+	// writeFileSync only applies mode when it creates the file, so an existing
+	// config would otherwise keep whatever mode it had.
+	fs.chmodSync(configPath, 0o600);
+}
+
 export function getMcpConfigService(deps: { env: EnvService; homeDir?: string }) {
 	const configPath = path.join(deps.homeDir ?? os.homedir(), '.bosun', MCP_CONFIG_FILENAME);
 
@@ -124,7 +150,15 @@ export function getMcpConfigService(deps: { env: EnvService; homeDir?: string })
 		// tools, and the reason shows up in preflight instead of as a dead session.
 		read(): McpConfigResult {
 			if (!fs.existsSync(configPath)) {
-				return EMPTY;
+				const expanded = expandVariables(DEFAULT_SERVERS, deps.env.current());
+				const servers = expanded.value as Record<string, unknown>;
+
+				return {
+					...EMPTY,
+					servers,
+					serverNames: Object.keys(servers),
+					unresolved: expanded.unresolved
+				};
 			}
 
 			try {
@@ -135,6 +169,34 @@ export function getMcpConfigService(deps: { env: EnvService; homeDir?: string })
 			} catch {
 				return { ...EMPTY, present: true, error: `could not read ${configPath}` };
 			}
+		},
+
+		// Rewritten whole rather than patched, so a server added here cannot corrupt
+		// one already in the file. Unexpanded on purpose: what lands on disk keeps the
+		// `${VAR}` reference, and the secret stays in ~/.bosun/env.
+		upsert(opts: { name: string; server: unknown }): void {
+			const existing = readRawServers(configPath);
+
+			writeServers(configPath, { ...existing, [opts.name]: opts.server });
+		},
+
+		remove(name: string): boolean {
+			const existing = readRawServers(configPath);
+
+			if (!(name in existing)) {
+				return false;
+			}
+
+			delete existing[name];
+			writeServers(configPath, existing);
+
+			return true;
+		},
+
+		// The raw file, not the merged view: `mcp list` has to be able to say which
+		// servers the user actually owns and can remove.
+		listConfigured(): string[] {
+			return Object.keys(readRawServers(configPath));
 		}
 	};
 }

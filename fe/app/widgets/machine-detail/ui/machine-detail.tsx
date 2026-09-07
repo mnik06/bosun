@@ -1,6 +1,7 @@
 import { Alert, Card, Center, Group, Loader, Stack, Text, Title } from '@mantine/core'
 
 import { MachineStatusDot, PreflightChecklist, useMachineQuery } from '~/entities/machine'
+import { AddMcpServerButton } from '~/features/add-mcp-server'
 import { PausedBanner } from '~/features/pause-machine'
 import { useRefreshMachine } from '~/features/refresh-machine'
 import { formatRelativeTime, toErrorMessage } from '~/shared/lib'
@@ -66,6 +67,19 @@ export function MachineDetail ({ machineId }: { machineId: string }) {
 					</Group>
 					<PreflightChecklist checks={data.capabilities} />
 				</Stack>
+			</Card>
+
+			<Card withBorder padding="md" radius="md">
+				<Group justify="space-between" align="center">
+					<Stack gap={2}>
+						<Text fw={600}>MCP servers</Text>
+						<Text size="sm" c="dimmed">
+							Extra tools for planning sessions, configured on the machine itself.
+						</Text>
+					</Stack>
+
+					<AddMcpServerButton machineName={data.name} />
+				</Group>
 			</Card>
 
 			{data.repoPath === null ? null : (
