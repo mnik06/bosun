@@ -4,6 +4,7 @@ import { MachineStatusDot, PreflightChecklist, useMachineQuery } from '~/entitie
 import { AddMcpServerButton } from '~/features/add-mcp-server'
 import { PausedBanner } from '~/features/pause-machine'
 import { useRefreshMachine } from '~/features/refresh-machine'
+import { SetupClaudeButton } from '~/features/setup-claude'
 import { formatRelativeTime, toErrorMessage } from '~/shared/lib'
 import { MachineActions } from '~/widgets/machine-detail/ui/machine-actions'
 
@@ -67,6 +68,19 @@ export function MachineDetail ({ machineId }: { machineId: string }) {
 					</Group>
 					<PreflightChecklist checks={data.capabilities} />
 				</Stack>
+			</Card>
+
+			<Card withBorder padding="md" radius="md">
+				<Group justify="space-between" align="center">
+					<Stack gap={2}>
+						<Text fw={600}>Claude</Text>
+						<Text size="sm" c="dimmed">
+							The CLI and the credential every planning session runs on.
+						</Text>
+					</Stack>
+
+					<SetupClaudeButton machineName={data.name} />
+				</Group>
 			</Card>
 
 			<Card withBorder padding="md" radius="md">

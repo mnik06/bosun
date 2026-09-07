@@ -94,13 +94,34 @@ export interface VerifyResult {
 	detail: string;
 }
 
-export function readVerifyResult(opts: { raw: string; reason: string }): VerifyResult {
+// The whole point of this check is that it runs on a box the operator cannot
+// see, so a verdict of "no readable result" with nothing else is the one outcome
+// they can do nothing with. What claude actually printed is quoted instead.
+function quoteOutput(opts: { stdout: string; stderr: string }): string {
+	const said = [
+		opts.stdout ? `stdout: ${opts.stdout.slice(0, 200)}` : '',
+		opts.stderr ? `stderr: ${opts.stderr.slice(0, 200)}` : ''
+	].filter(Boolean);
+
+	return said.length === 0
+		? 'claude exited cleanly and printed nothing at all — check `claude --version` on this machine'
+		: `claude produced no JSON result — ${said.join(' | ')}`;
+}
+
+export function readVerifyResult(opts: {
+	raw: string;
+	reason: string;
+	stderr?: string;
+}): VerifyResult {
 	const start = opts.raw.indexOf('{');
 	const parsed =
 		start === -1 ? null : VerifyResultSchema.safeParse(safeJson(opts.raw.slice(start)));
 
 	if (!parsed?.success) {
-		return { ok: false, detail: opts.reason || 'claude produced no readable result' };
+		return {
+			ok: false,
+			detail: opts.reason || quoteOutput({ stdout: opts.raw, stderr: opts.stderr ?? '' })
+		};
 	}
 
 	if (parsed.data.is_error !== true) {
@@ -156,7 +177,11 @@ export function getClaudeAuthService(deps: { exec: ExecService; env: EnvService 
 				}
 			);
 
-			return readVerifyResult({ raw: result.stdout, reason: result.reason });
+			return readVerifyResult({
+				raw: result.stdout,
+				reason: result.reason,
+				stderr: result.stderr
+			});
 		},
 
 		// At most one credential reaches the session, so the box authenticates as the

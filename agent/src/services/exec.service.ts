@@ -8,6 +8,7 @@ const EXEC_TIMEOUT_MS = 15_000;
 export interface ExecResult {
 	ok: boolean;
 	stdout: string;
+	stderr: string;
 	reason: string;
 }
 
@@ -37,20 +38,25 @@ export function getExecService() {
 			opts?: { cwd?: string; env?: NodeJS.ProcessEnv; timeoutMs?: number }
 		): Promise<ExecResult> {
 			try {
-				const { stdout } = await exec(command, args, {
+				const { stdout, stderr } = await exec(command, args, {
 					cwd: opts?.cwd,
 					env: opts?.env,
 					timeout: opts?.timeoutMs ?? EXEC_TIMEOUT_MS
 				});
 
-				return { ok: true, stdout: stdout.trim(), reason: '' };
+				return { ok: true, stdout: stdout.trim(), stderr: stderr.trim(), reason: '' };
 			} catch (error) {
 				// stdout is kept even on a non-zero exit: a command can report a usable
 				// answer and still exit non-zero, and throwing that away turns a readable
 				// state into an unexplained failure.
-				const stdout = ((error as { stdout?: string }).stdout ?? '').trim();
+				const detail = error as { stdout?: string; stderr?: string };
 
-				return { ok: false, stdout, reason: failureReason(error) };
+				return {
+					ok: false,
+					stdout: (detail.stdout ?? '').trim(),
+					stderr: (detail.stderr ?? '').trim(),
+					reason: failureReason(error)
+				};
 			}
 		}
 	};
