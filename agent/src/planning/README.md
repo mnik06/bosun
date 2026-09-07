@@ -51,10 +51,15 @@ per-session bearer token and the server rejects anything without it.
 
 ## Invariants
 
-- **Exactly one credential reaches the session.** `process.ts` strips every supported credential
-  variable from the child environment and then sets the one that was resolved. Without that, Claude
-  Code picks its own precedence between two variables and the mode bosun reported at preflight is not
-  the mode the session actually authenticated with.
+- **At most one credential variable reaches the session.** `process.ts` strips every supported
+  variable from the child environment and then sets the one that was resolved, so two variables can
+  never be present at once and leave Claude Code to pick between them. When none is configured,
+  nothing is injected and the CLI authenticates from its own store — a machine set up with
+  `claude auth login` is a supported machine, not a broken one.
+- **Whether the box can authenticate is asked, not inferred.** `preflight.ts` runs
+  `claude auth status --json` and reports what it says. An earlier version guessed from the presence
+  of an environment variable, which called a perfectly working machine red and refused to start
+  sessions on it.
 - **The prompt travels on stdin, never argv.** `/proc/<pid>/cmdline` is world-readable and the input
   is the user's own ticket.
 - **A session dies with its socket.** `run.ts` cancels every session when the connection drops. A

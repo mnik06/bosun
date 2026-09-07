@@ -8,7 +8,7 @@ export const PreflightCheckSchema = z.object({
 
 export type PreflightCheck = z.infer<typeof PreflightCheckSchema>;
 
-export const ClaudeAuthModeSchema = z.enum(['oauth', 'api-key']);
+export const ClaudeAuthModeSchema = z.enum(['oauth', 'api-key', 'subscription']);
 
 export type ClaudeAuthMode = z.infer<typeof ClaudeAuthModeSchema>;
 

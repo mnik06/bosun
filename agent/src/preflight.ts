@@ -3,7 +3,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { promisify } from 'util';
-import { resolveClaudeCredential, SUPPORTED_CREDENTIAL_VARIABLES } from './claude-credential';
+import { readClaudeAuthStatus } from './claude-credential';
 import { type ClaudeAuthMode, type PreflightCheck } from './protocol';
 
 const exec = promisify(execFile);
@@ -102,28 +102,24 @@ async function checkClaudeCli(): Promise<PreflightCheck> {
 	};
 }
 
-function checkClaudeCredential(): PreflightCheck {
-	const credential = resolveClaudeCredential(process.env);
+async function checkClaudeCredential(): Promise<{
+	check: PreflightCheck;
+	mode: ClaudeAuthMode | null;
+}> {
+	const result = await tryExec('claude', ['auth', 'status', '--json']);
+
+	if (!result.ok) {
+		return {
+			check: { name: 'claude-credential', ok: false, detail: '`claude auth status` failed' },
+			mode: null
+		};
+	}
+
+	const status = readClaudeAuthStatus(result.stdout);
 
 	return {
-		name: 'claude-credential',
-		ok: credential !== null,
-		detail: credential
-			? `${credential.mode} via ${credential.variable}`
-			: `none of ${SUPPORTED_CREDENTIAL_VARIABLES.join(', ')} is set in the service environment`
-	};
-}
-
-function checkClaudeCredsShadow(): PreflightCheck {
-	const credsPath = path.join(os.homedir(), '.claude', '.credentials.json');
-	const shadowed = fs.existsSync(credsPath);
-
-	return {
-		name: 'claude-creds-shadow',
-		ok: !shadowed,
-		detail: shadowed
-			? `${credsPath} exists and silently outranks the configured credential`
-			: 'no shadowing credentials file'
+		check: { name: 'claude-credential', ok: status.loggedIn, detail: status.detail },
+		mode: status.mode
 	};
 }
 
@@ -182,12 +178,13 @@ export interface PreflightReport {
 }
 
 export async function collectPreflight(repoPath: string): Promise<PreflightReport> {
-	const [node, pnpm, gitClean, ghAuth, claudeCli] = await Promise.all([
+	const [node, pnpm, gitClean, ghAuth, claudeCli, credential] = await Promise.all([
 		checkNode(),
 		checkPnpm(),
 		checkGitClean(repoPath),
 		checkGhAuth(),
-		checkClaudeCli()
+		checkClaudeCli(),
+		checkClaudeCredential()
 	]);
 
 	return {
@@ -197,12 +194,11 @@ export async function collectPreflight(repoPath: string): Promise<PreflightRepor
 			gitClean,
 			ghAuth,
 			claudeCli,
-			checkClaudeCredential(),
-			checkClaudeCredsShadow(),
+			credential.check,
 			checkPlaywright(),
 			checkMcpJson(repoPath),
 			checkViteEnv(repoPath)
 		],
-		claudeAuthMode: resolveClaudeCredential(process.env)?.mode ?? null
+		claudeAuthMode: credential.mode
 	};
 }

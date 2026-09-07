@@ -407,9 +407,17 @@ Proof: AC-22 through AC-25.
   the risk choosing the CLI over the Agent SDK was meant to remove.
 - **The loopback MCP server requires a bearer token.** Loopback is not on the network, but every
   process on the box shares it. The token is generated per session and travels in the `--mcp-config`.
-- **Exactly one credential variable reaches the session.** The agent strips every supported variable
-  from the child environment and sets the resolved one. With two present, Claude Code applies its own
-  precedence and the mode reported at preflight would not be the mode the session authenticated with.
+- **Authentication is asked of the CLI, not inferred from the environment.** `claude auth status
+  --json` reports `loggedIn`, `authMethod` and `apiKeySource`, so preflight states what is actually in
+  effect. The first cut of this treated "no `CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY`" as "no
+  credential", which called a box logged in with `claude auth login` red and refused every session on
+  it. `claudeAuthMode` gained a third value, `subscription`, for that case, and the
+  `claude-creds-shadow` check was dropped — it existed to warn that the CLI's store outranks an
+  environment token, which is a question `auth status` now answers directly.
+- **At most one credential variable reaches the session.** The agent strips every supported variable
+  from the child environment and sets the resolved one, if there is one. With two present Claude Code
+  would apply its own precedence and the reported mode would not be the mode the session used; with
+  none, the CLI authenticates from its own store.
 - **A session dies with its socket.** Both sides act on the same event: the agent cancels its
   processes, the backend fails the machine's `planning` plans. A grill is answered over that socket, so
   one that has gone cannot deliver an answer to a question already in flight, and keeping the process
@@ -428,6 +436,7 @@ Proof: AC-22 through AC-25.
   AC-24 asks for a bullet to be *splittable*, and a split is an empty bullet plus moving ACs into it
   with the picker already on each row — so `POST /plans/:id/slices` was added rather than a bespoke
   split endpoint.
-- **Agent bumped to 1.3.0.** `install.sh` now writes `Environment=PATH=…` and
-  `EnvironmentFile=-%h/.bosun/env` into the unit, so an agent installed before this change cannot host
-  a session until the installer is re-run.
+- **Agent at 1.4.0.** 1.3.0 taught `install.sh` to write `Environment=PATH=…` and
+  `EnvironmentFile=-%h/.bosun/env` into the unit, so an agent installed before it cannot host a session
+  until the installer is re-run. 1.4.0 is the `claude auth status` change above, which is what makes a
+  box logged in through the CLI usable.

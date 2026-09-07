@@ -57,18 +57,12 @@ export function createPlanningSessions(opts: {
 	};
 
 	const startProcess = async (planId: string, input: string): Promise<void> => {
+		// May be null, and that is a supported setup: a machine logged in with
+		// `claude auth login` has no credential in its environment and the CLI
+		// authenticates from its own store. Preflight is what establishes that the
+		// box can authenticate at all, and the backend refuses to start a session
+		// when that check is red.
 		const credential = resolveClaudeCredential(process.env);
-
-		if (!credential) {
-			opts.send({
-				type: 'plan.error',
-				planId,
-				message: 'no Claude credential is configured on this machine'
-			});
-
-			return;
-		}
-
 		const mcp = await startSessionMcpServer({
 			planId,
 			config: opts.config,

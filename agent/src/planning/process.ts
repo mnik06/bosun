@@ -24,9 +24,10 @@ export interface ClaudeSession {
 function sessionEnv(credential: ClaudeCredential | null): NodeJS.ProcessEnv {
 	const env: NodeJS.ProcessEnv = { ...process.env };
 
-	// Exactly one credential reaches the session, so the mode reported at
+	// At most one credential variable reaches the session, so the mode reported at
 	// preflight is the mode it authenticates with rather than whichever variable
-	// the CLI happens to prefer.
+	// the CLI happens to prefer. With none configured, nothing is injected and the
+	// CLI authenticates from its own store, which preflight has already confirmed.
 	for (const variable of SUPPORTED_CREDENTIAL_VARIABLES) {
 		delete env[variable];
 	}

@@ -86,17 +86,22 @@ path. `--repo` defaults to the current directory, `--config` overrides the path.
 
 ### The machine's Claude credential
 
-Planning sessions run the `claude` CLI on the machine, so the box needs the binary on its PATH and one
-credential in `~/.bosun/env` (mode `0600`, seeded by `install.sh`):
+Planning sessions run the `claude` CLI on the machine, so the box needs the binary on its PATH and a
+working login. Any of these counts, and preflight reports which one is in effect:
 
-```
-CLAUDE_CODE_OAUTH_TOKEN=...   # a Claude subscription
-# or
-ANTHROPIC_API_KEY=...         # an Anthropic API key
-```
+| Setup | `claudeAuthMode` |
+| ----- | ---------------- |
+| `claude auth login` on the box — credential in the CLI's own store | `subscription` |
+| `CLAUDE_CODE_OAUTH_TOKEN` in `~/.bosun/env` | `oauth` |
+| `ANTHROPIC_API_KEY` in `~/.bosun/env` | `api-key` |
 
-Set exactly one. Bosun never sees the value — the agent reports only which mode is configured and
-whether the variable is present, and `machines.claudeAuthMode` stores that much and no more.
+`~/.bosun/env` (mode `0600`, seeded by `install.sh`) is only needed for the last two — a box that is
+already logged in needs nothing there. Set at most one variable: the agent injects exactly the one it
+resolved into each session and strips the other, so the reported mode is always the mode the session
+authenticates with.
+
+Bosun never sees the value. The agent asks `claude auth status --json` and reports the mode and
+whether the box is logged in; `machines.claudeAuthMode` stores that much and no more.
 
 `systemctl --user` sources no shell rc, so the unit carries an explicit `Environment=PATH=` resolved
 at install time and `EnvironmentFile=-%h/.bosun/env`. A machine that passes preflight by hand but was

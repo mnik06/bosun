@@ -12,7 +12,9 @@ export const PreflightCheckSchema = z.object({
 
 export type PreflightCheck = z.infer<typeof PreflightCheckSchema>;
 
-export const ClaudeAuthModeSchema = z.enum(['oauth', 'api-key']);
+// 'subscription' is a machine logged in with `claude auth login`, where the
+// credential lives in the CLI's own store and never appears in the environment.
+export const ClaudeAuthModeSchema = z.enum(['oauth', 'api-key', 'subscription']);
 
 export type ClaudeAuthMode = z.infer<typeof ClaudeAuthModeSchema>;
 
