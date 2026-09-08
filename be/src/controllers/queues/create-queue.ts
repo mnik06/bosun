@@ -4,6 +4,7 @@ import { type MachineRepo } from 'src/repos/machines/machine.repo';
 import { type QueueRepo } from 'src/repos/queues/queue.repo';
 import { type IdService } from 'src/services/ids/id.service';
 import { type SocketRegistry } from 'src/services/sockets/registry.service';
+import { DEFAULT_PROJECT_PROFILE } from 'src/types/ProjectProfileSchema';
 import { toQueueSlug, type Queue } from 'src/types/QueueSchema';
 
 export async function createQueue(opts: {
@@ -43,9 +44,17 @@ export async function createQueue(opts: {
 	// The row is created before the worktree exists, so a queue created against an
 	// offline machine stays visible as `provisioning` rather than failing outright
 	// — the ensure is re-sent when the agent comes back.
+	const profile = machine.projectProfile ?? DEFAULT_PROJECT_PROFILE;
+
 	opts.socketRegistry.sendToAgent({
 		machineId: opts.machineId,
-		message: { type: 'queue.worktree.ensure', queueId: queue.id, slug }
+		message: {
+			type: 'queue.worktree.ensure',
+			queueId: queue.id,
+			slug,
+			copyFiles: profile.copyFiles,
+			setupCommand: profile.setupCommand
+		}
 	});
 	announceQueue({ socketRegistry: opts.socketRegistry, queue });
 

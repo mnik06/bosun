@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { MachineSchema } from 'src/types/MachineSchema';
 import {
 	AcSchema,
+	PlanDecisionSchema,
 	PlanMessageSchema,
 	PlanQuestionSchema,
 	PlanSchema,
@@ -96,6 +97,12 @@ export const RunQuestionMsgSchema = z.object({
 	questions: z.array(PlanQuestionSchema).min(1)
 });
 
+export const PlanDecisionMsgSchema = z.object({
+	type: z.literal('plan.decision'),
+	planId: z.string(),
+	decision: PlanDecisionSchema
+});
+
 export const UiMsgSchema = z.discriminatedUnion('type', [
 	MachineUpdatedMsgSchema,
 	MachinePongMsgSchema,
@@ -114,7 +121,8 @@ export const UiMsgSchema = z.discriminatedUnion('type', [
 	QueueDeletedMsgSchema,
 	RunTextMsgSchema,
 	RunActivityMsgSchema,
-	RunQuestionMsgSchema
+	RunQuestionMsgSchema,
+	PlanDecisionMsgSchema
 ]);
 
 export type UiMsg = z.infer<typeof UiMsgSchema>;

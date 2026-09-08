@@ -2,13 +2,16 @@ import { FastifyPluginAsync } from 'fastify';
 import { ZodTypeProvider } from 'fastify-type-provider-zod';
 import {
 	AgentBlockersReqSchema,
+	AgentDecisionReqSchema,
 	PlanIdParamsSchema
 } from 'src/api/routes/schemas/plans/PlanReqSchemas';
 import {
 	AgentBlockersRespSchema,
+	AgentDecisionRespSchema,
 	AgentMachinePlansRespSchema
 } from 'src/api/routes/schemas/plans/PlanRespSchemas';
 import { listMachinePlans } from 'src/controllers/plans/agent/list-machine-plans';
+import { recordPlanDecision } from 'src/controllers/plans/agent/record-plan-decision';
 import { setPlanBlockers } from 'src/controllers/plans/agent/set-plan-blockers';
 
 const routes: FastifyPluginAsync = async function (f) {
@@ -47,6 +50,29 @@ const routes: FastifyPluginAsync = async function (f) {
 		}
 	);
 
+	fastify.post(
+		'/plans/:id/decisions',
+		{
+			schema: {
+				params: PlanIdParamsSchema,
+				body: AgentDecisionReqSchema,
+				response: { 200: AgentDecisionRespSchema }
+			}
+		},
+		async (req) => {
+			const decision = await recordPlanDecision({
+				planRepo: fastify.repos.planRepo,
+				planDecisionRepo: fastify.repos.planDecisionRepo,
+				idService: fastify.services.idService,
+				socketRegistry: fastify.services.socketRegistry,
+				planId: req.params.id,
+				machineId: req.agent!.machineId,
+				...req.body
+			});
+
+			return { decisionId: decision.id };
+		}
+	);
 };
 
 export default routes;

@@ -6,13 +6,16 @@ export {
 	useMachinesQuery
 } from './api/machine.queries'
 export {
+	DEFAULT_PROJECT_PROFILE,
 	MachineListSchema,
 	MachineSchema,
 	MachineStatusSchema,
 	PreflightCheckSchema,
 	type Machine,
 	type MachineStatus,
-	type PreflightCheck
+	ProjectProfileSchema,
+	type PreflightCheck,
+	type ProjectProfile
 } from './model/machine'
 export {
 	MachinesSocketProvider,

@@ -1,5 +1,11 @@
 import { z } from 'zod';
-import { AcSchema, PlanMessageSchema, PlanSchema, SliceSchema } from 'src/types/PlanSchema';
+import {
+	AcSchema,
+	PlanDecisionSchema,
+	PlanMessageSchema,
+	PlanSchema,
+	SliceSchema
+} from 'src/types/PlanSchema';
 
 export const PlanListRespSchema = z.array(PlanSchema);
 
@@ -8,7 +14,8 @@ export const PlanDetailRespSchema = z.object({
 	messages: z.array(PlanMessageSchema),
 	acs: z.array(AcSchema),
 	slices: z.array(SliceSchema),
-	blockedBy: z.array(PlanSchema)
+	blockedBy: z.array(PlanSchema),
+	decisions: z.array(PlanDecisionSchema)
 });
 
 export const AnswerPlanRespSchema = z.object({ status: z.literal('accepted') });
@@ -33,3 +40,5 @@ export const AgentMachinePlansRespSchema = z.array(
 );
 
 export const AgentBlockersRespSchema = z.object({ blockedBy: z.array(z.number().int()) });
+
+export const AgentDecisionRespSchema = z.object({ decisionId: z.string() });

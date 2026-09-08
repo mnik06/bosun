@@ -55,7 +55,7 @@ export default function PlanPage ({ params }: Route.ComponentProps) {
 		)
 	}
 
-	const { plan, messages, acs, slices, blockedBy } = data
+	const { plan, messages, acs, slices, blockedBy, decisions } = data
 	const planning = plan.status === 'planning'
 
 	const header = (
@@ -100,7 +100,15 @@ export default function PlanPage ({ params }: Route.ComponentProps) {
 		/>
 	)
 
-	const artifact = <PlanArtifact plan={plan} acs={acs} slices={slices} editable={!planning} />
+	const artifact = (
+		<PlanArtifact
+			plan={plan}
+			acs={acs}
+			slices={slices}
+			decisions={decisions}
+			editable={!planning}
+		/>
+	)
 
 	// While the grill runs the two halves are watched side by side; once it is
 	// over the artifact is the page and the transcript is the receipt.

@@ -3,6 +3,7 @@ import { parseServerFrame, routeServerFrame, type AgentState, type RouterDeps } 
 import { type ExecutionSessions } from '../execution/session';
 import { type PlanningSessions } from '../planning/session';
 import { type ServerMsg } from '../protocol';
+import { DEFAULT_PROJECT_PROFILE } from '../project-profile';
 import { type Services } from '../services/index';
 
 function build (opts?: { paused?: boolean }) {
@@ -182,10 +183,17 @@ describe('exec frames', () => {
 		baseRef: 'main',
 		freshBranch: true,
 		afk: false,
+		planId: 'p_1',
+		sliceId: 'sl_1',
+		planNumber: 1,
 		planTitle: 'Auth',
 		planBodyMd: 'body',
+		profile: DEFAULT_PROJECT_PROFILE,
+		portBase: 4100,
 		slice: { ordinal: 1, kind: 'build', title: 'token table', bodyMd: null },
 		acs: [],
+		planAcs: [],
+		decisions: [],
 		doneSlices: []
 	} satisfies ServerMsg;
 

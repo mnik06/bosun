@@ -120,6 +120,14 @@ export function MachinesSocketProvider ({ children }: { children: ReactNode }) {
 				return
 			}
 
+			if (msg.type === 'plan.decision') {
+				queryClient.invalidateQueries({ queryKey: ['plans', 'detail', msg.planId] }).catch(() => {
+					// A refetch that fails leaves the page as it was; the next one recovers.
+				})
+
+				return
+			}
+
 			if (msg.type === 'run.activity') {
 				setRunActivity((previous) => ({ ...previous, [msg.runId]: msg.label }))
 

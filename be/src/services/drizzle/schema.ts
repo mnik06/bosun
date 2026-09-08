@@ -11,6 +11,7 @@ import {
 	uuid
 } from 'drizzle-orm/pg-core';
 import { type MachineStatus, type PreflightCheck } from 'src/types/MachineSchema';
+import { type ProjectProfile } from 'src/types/ProjectProfileSchema';
 import {
 	type PlanMessageContent,
 	type PlanMessageRole,
@@ -47,6 +48,7 @@ export const machines = pgTable(
 		repoPath: text(),
 		agentVersion: text(),
 		capabilities: jsonb().$type<PreflightCheck[]>(),
+		projectProfile: jsonb().$type<ProjectProfile>(),
 		createdAt: timestamp({ withTimezone: true }).notNull().defaultNow()
 	},
 	(table) => [index('machines_user_id_idx').on(table.userId)]
@@ -154,6 +156,10 @@ export const queues = pgTable(
 		worktreePath: text(),
 		baseRef: text(),
 		afk: boolean().notNull().default(false),
+		// Every running queue on a machine may start a dev stack of its own, so each
+		// gets a range nobody else is listening on. Without it the second queue's
+		// server dies on a port the first one holds.
+		portBase: integer().notNull(),
 		status: text().$type<QueueStatus>().notNull().default('provisioning'),
 		failureReason: text(),
 		createdAt: timestamp({ withTimezone: true }).notNull().defaultNow()
@@ -229,4 +235,26 @@ export const planBlockers = pgTable(
 		primaryKey({ columns: [table.planId, table.blockedByPlanId] }),
 		index('plan_blockers_blocked_by_idx').on(table.blockedByPlanId)
 	]
+);
+
+// The forks a plan could not settle, resolved while executing it. Kept as rows
+// rather than prose in the plan body: the pull request quotes them, the browser
+// shows them as they land, and a session that made one cannot quietly revise it
+// later.
+export const planDecisions = pgTable(
+	'plan_decisions',
+	{
+		id: text().primaryKey(),
+		planId: text()
+			.notNull()
+			.references(() => plans.id, { onDelete: 'cascade' }),
+		sliceId: text().references(() => slices.id, { onDelete: 'set null' }),
+		fork: text().notNull(),
+		options: text(),
+		chose: text().notNull(),
+		blastRadius: text(),
+		reversing: text(),
+		createdAt: timestamp({ withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [index('plan_decisions_plan_id_idx').on(table.planId)]
 );

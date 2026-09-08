@@ -87,12 +87,27 @@ export const SliceSchema = z.object({
 
 export type Slice = z.infer<typeof SliceSchema>
 
+export const PlanDecisionSchema = z.object({
+	id: z.string(),
+	planId: z.string(),
+	sliceId: z.string().nullable(),
+	fork: z.string(),
+	options: z.string().nullable(),
+	chose: z.string(),
+	blastRadius: z.string().nullable(),
+	reversing: z.string().nullable(),
+	createdAt: z.coerce.date()
+})
+
+export type PlanDecision = z.infer<typeof PlanDecisionSchema>
+
 export const PlanDetailSchema = z.object({
 	plan: PlanSchema,
 	messages: z.array(PlanMessageSchema),
 	acs: z.array(AcSchema),
 	slices: z.array(SliceSchema),
-	blockedBy: z.array(PlanSchema)
+	blockedBy: z.array(PlanSchema),
+	decisions: z.array(PlanDecisionSchema)
 })
 
 export type PlanDetail = z.infer<typeof PlanDetailSchema>

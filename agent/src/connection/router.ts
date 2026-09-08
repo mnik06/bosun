@@ -149,7 +149,19 @@ export async function routeServerFrame(deps: RouterDeps, msg: ServerMsg): Promis
 		}
 
 		case 'queue.worktree.ensure': {
-			const result = await deps.services.worktree.ensure(msg.slug);
+			const result = await deps.services.worktree.ensure({
+				slug: msg.slug,
+				copyFiles: msg.copyFiles
+			});
+
+			if (result.ok && msg.setupCommand) {
+				const setup = await deps.services.worktree.setup({
+					slug: msg.slug,
+					command: msg.setupCommand
+				});
+
+				console.log(`worktree ${msg.slug}: ${setup.detail}`);
+			}
 
 			console.log(`worktree ${msg.slug}: ${result.detail}`);
 			deps.socket.send(

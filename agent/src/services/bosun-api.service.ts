@@ -115,6 +115,20 @@ export function getBosunApiService(deps: { serverUrl: string; machineKey?: strin
 			return get('/agent/plans', true);
 		},
 
+		async recordPlanDecision(opts: {
+			planId: string;
+			sliceId: string | null;
+			fork: string;
+			options: string | null;
+			chose: string;
+			blastRadius: string | null;
+			reversing: string | null;
+		}): Promise<unknown> {
+			const { planId, ...body } = opts;
+
+			return post({ path: `/agent/plans/${planId}/decisions`, body, authorized: true });
+		},
+
 		async setPlanBlockers(opts: { planId: string; blockedByNumbers: number[] }): Promise<unknown> {
 			return post({
 				path: `/agent/plans/${opts.planId}/blockers`,

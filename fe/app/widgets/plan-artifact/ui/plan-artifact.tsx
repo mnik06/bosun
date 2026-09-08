@@ -1,6 +1,7 @@
 import { Card, Divider, Stack, Text, Title } from '@mantine/core'
 
-import type { Ac, Plan, Slice } from '~/entities/plan'
+import type { Ac, Plan, PlanDecision, Slice } from '~/entities/plan'
+import { PlanDecisions } from '~/widgets/plan-artifact/ui/plan-decisions'
 import { AcRow, AddSliceButton, SliceCard } from '~/features/edit-artifact'
 import { EditablePlanBody, EditablePlanTitle } from '~/features/edit-plan'
 
@@ -8,11 +9,13 @@ export function PlanArtifact ({
 	plan,
 	acs,
 	slices,
+	decisions,
 	editable
 }: {
 	plan: Plan
 	acs: Ac[]
 	slices: Slice[]
+	decisions: PlanDecision[]
 	editable: boolean
 }) {
 	const unassigned = acs.filter((ac) => ac.sliceId === null)
@@ -70,6 +73,7 @@ export function PlanArtifact ({
 
 				{editable ? <AddSliceButton planId={plan.id} /> : null}
 			</Stack>
+			<PlanDecisions decisions={decisions} />
 		</Stack>
 	)
 }

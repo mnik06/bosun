@@ -1,6 +1,6 @@
 {
   "name": "bosun-agent",
-  "version": "2.1.2",
+  "version": "2.2.0",
   "private": true,
   "description": "Bosun agent \u2014 enrolls a machine and holds the outbound connection back to the bosun backend",
   "bin": {

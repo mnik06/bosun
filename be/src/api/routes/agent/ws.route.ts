@@ -9,6 +9,7 @@ import { pauseMachineQueues } from 'src/controllers/queues/pause-machine-queues'
 import { schedulerDeps } from 'src/controllers/queues/scheduler-deps';
 import { type SocketRegistry } from 'src/services/sockets/registry.service';
 import { type Machine } from 'src/types/MachineSchema';
+import { DEFAULT_PROJECT_PROFILE } from 'src/types/ProjectProfileSchema';
 import { AgentMsgSchema, type AgentMsg } from 'src/types/protocol';
 import { handleAgentFrame, isExecFrame, isPlanFrame } from 'src/api/routes/agent/frame-router';
 
@@ -147,9 +148,17 @@ export async function applyMachineFrame(opts: {
 		const pending = await opts.fastify.repos.queueRepo.listProvisioningForMachine(machine.id);
 
 		for (const queue of pending) {
+			const profile = machine.projectProfile ?? DEFAULT_PROJECT_PROFILE;
+
 			socketRegistry.sendToAgent({
 				machineId: machine.id,
-				message: { type: 'queue.worktree.ensure', queueId: queue.id, slug: queue.slug }
+				message: {
+					type: 'queue.worktree.ensure',
+					queueId: queue.id,
+					slug: queue.slug,
+					copyFiles: profile.copyFiles,
+					setupCommand: profile.setupCommand
+				}
 			});
 		}
 	}

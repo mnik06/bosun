@@ -14,6 +14,7 @@ function queue(status: QueueStatus): Queue {
 		worktreePath: null,
 		baseRef: null,
 		afk: false,
+		portBase: 4100,
 		status,
 		failureReason: null,
 		createdAt: new Date()

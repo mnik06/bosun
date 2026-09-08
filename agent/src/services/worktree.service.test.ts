@@ -42,7 +42,7 @@ describe('worktree service', () => {
 	}
 
 	it('creates a checkout of its own on a branch named for the queue', async () => {
-		const result = await service().ensure('auth-work');
+		const result = await service().ensure({ slug: 'auth-work', copyFiles: [] });
 
 		expect(result.ok).toBe(true);
 		expect(result.baseRef).toBe('main');
@@ -56,16 +56,16 @@ describe('worktree service', () => {
 	// reconnects, so a second one has to find the worktree rather than fail on the
 	// branch already existing.
 	it('is idempotent', async () => {
-		const first = await service().ensure('auth-work');
-		const second = await service().ensure('auth-work');
+		const first = await service().ensure({ slug: 'auth-work', copyFiles: [] });
+		const second = await service().ensure({ slug: 'auth-work', copyFiles: [] });
 
 		expect(second.ok).toBe(true);
 		expect(second.worktreePath).toBe(first.worktreePath);
 	});
 
 	it('keeps two queues in separate checkouts', async () => {
-		const one = await service().ensure('one');
-		const two = await service().ensure('two');
+		const one = await service().ensure({ slug: 'one', copyFiles: [] });
+		const two = await service().ensure({ slug: 'two', copyFiles: [] });
 
 		fs.writeFileSync(path.join(one.worktreePath, 'only-in-one'), 'x');
 
@@ -73,7 +73,7 @@ describe('worktree service', () => {
 	});
 
 	it('removes the checkout and its registration', async () => {
-		await service().ensure('gone');
+		await service().ensure({ slug: 'gone', copyFiles: [] });
 		await service().remove('gone');
 
 		expect(fs.existsSync(service().pathFor('gone'))).toBe(false);
@@ -83,7 +83,7 @@ describe('worktree service', () => {
 	// Removing a queue is how somebody gets rid of it, so refusing over changes
 	// they no longer want would leave a directory bosun has already forgotten.
 	it('removes a checkout with uncommitted changes in it', async () => {
-		const created = await service().ensure('dirty');
+		const created = await service().ensure({ slug: 'dirty', copyFiles: [] });
 
 		fs.writeFileSync(path.join(created.worktreePath, 'README.md'), 'changed\n');
 		await service().remove('dirty');
@@ -94,16 +94,33 @@ describe('worktree service', () => {
 	// A directory deleted by hand leaves metadata git still believes in, and
 	// `worktree add` then refuses the path.
 	it('recreates a checkout whose directory was deleted behind its back', async () => {
-		const created = await service().ensure('clobbered');
+		const created = await service().ensure({ slug: 'clobbered', copyFiles: [] });
 
 		fs.rmSync(created.worktreePath, { recursive: true, force: true });
 
-		expect((await service().ensure('clobbered')).ok).toBe(true);
+		expect((await service().ensure({ slug: 'clobbered', copyFiles: [] })).ok).toBe(true);
+	});
+
+	// A worktree with no .env runs nothing, and git tracks none of those files —
+	// the machine's own checkout is the only place they exist.
+	it('copies the untracked files a fresh checkout would lack', async () => {
+		fs.writeFileSync(path.join(repoPath, '.env'), 'SECRET=1\n');
+
+		const created = await service().ensure({ slug: 'withenv', copyFiles: ['.env', 'missing.txt'] });
+
+		expect(fs.readFileSync(path.join(created.worktreePath, '.env'), 'utf8')).toBe('SECRET=1\n');
+		expect(created.detail).toContain('.env');
+	});
+
+	it('does not fail over a file that is not there to copy', async () => {
+		const created = await service().ensure({ slug: 'nofile', copyFiles: ['nope.env'] });
+
+		expect(created.ok).toBe(true);
 	});
 
 	it('reports a repo path that is not a git repository', async () => {
 		const notARepo = getWorktreeService({ exec, repoPath: home, homeDir: home });
-		const result = await notARepo.ensure('nope');
+		const result = await notARepo.ensure({ slug: 'nope', copyFiles: [] });
 
 		expect(result.ok).toBe(false);
 		expect(result.detail).toContain('not a git repository');

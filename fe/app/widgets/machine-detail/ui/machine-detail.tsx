@@ -10,6 +10,7 @@ import {
 import { AddMcpServerButton } from '~/features/add-mcp-server'
 import { PausedBanner } from '~/features/pause-machine'
 import { useRefreshMachine } from '~/features/refresh-machine'
+import { ProjectProfileButton } from '~/features/edit-project-profile'
 import { SetupClaudeButton } from '~/features/setup-claude'
 import { SetupGithubButton } from '~/features/setup-github'
 import { formatRelativeTime, toErrorMessage } from '~/shared/lib'
@@ -106,6 +107,7 @@ export function MachineDetail ({ machineId }: { machineId: string }) {
 					</Stack>
 
 					<Group gap="xs">
+						<ProjectProfileButton machine={data} />
 						<SetupClaudeButton machineName={data.name} />
 						<SetupGithubButton machineName={data.name} />
 					</Group>

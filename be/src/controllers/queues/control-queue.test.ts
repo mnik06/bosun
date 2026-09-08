@@ -13,6 +13,7 @@ function queue(status: QueueStatus): Queue {
 		worktreePath: '/w',
 		baseRef: 'main',
 		afk: false,
+		portBase: 4100,
 		status,
 		failureReason: null,
 		createdAt: new Date()

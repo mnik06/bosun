@@ -8,6 +8,7 @@ export {
 export { findPendingQuestion, type PendingQuestion } from './lib/pending-question'
 export {
 	AcSchema,
+	PlanDecisionSchema,
 	PlanDetailSchema,
 	PlanListSchema,
 	PlanMessageSchema,
@@ -16,6 +17,7 @@ export {
 	SliceSchema,
 	type Ac,
 	type Plan,
+	type PlanDecision,
 	type PlanAnswer,
 	type PlanDetail,
 	type PlanMessage,

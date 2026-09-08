@@ -9,6 +9,7 @@ import {
 	type MachineStatus,
 	type PreflightCheck
 } from 'src/types/MachineSchema';
+import { type ProjectProfile } from 'src/types/ProjectProfileSchema';
 
 type Db = ReturnType<typeof getDb>;
 
@@ -21,6 +22,7 @@ const publicColumns = {
 	repoPath: machines.repoPath,
 	agentVersion: machines.agentVersion,
 	capabilities: machines.capabilities,
+	projectProfile: machines.projectProfile,
 	createdAt: machines.createdAt
 };
 
@@ -56,6 +58,14 @@ export function getMachineRepo(db: Db) {
 				.orderBy(desc(machines.createdAt));
 
 			return rows.map((row) => MachineSchema.parse(row));
+		},
+
+		// Scheduler-only, unscoped: dispatching a bullet is reached from a queue row
+		// whose ownership has already been established.
+		async getById(id: string): Promise<Machine | null> {
+			const [row] = await db.select(publicColumns).from(machines).where(eq(machines.id, id));
+
+			return row ? MachineSchema.parse(row) : null;
 		},
 
 		async getOwnedById(opts: { id: string; userId: string }): Promise<Machine | null> {
@@ -174,6 +184,20 @@ export function getMachineRepo(db: Db) {
 				.returning({ id: machines.id });
 
 			return rows.length > 0;
+		},
+
+		async saveProjectProfile(opts: {
+			id: string;
+			userId: string;
+			projectProfile: ProjectProfile;
+		}): Promise<Machine | null> {
+			const [row] = await db
+				.update(machines)
+				.set({ projectProfile: opts.projectProfile })
+				.where(and(eq(machines.id, opts.id), eq(machines.userId, opts.userId)))
+				.returning(publicColumns);
+
+			return row ? MachineSchema.parse(row) : null;
 		},
 
 		async saveCapabilities(opts: {

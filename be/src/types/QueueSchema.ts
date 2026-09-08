@@ -26,6 +26,7 @@ export const QueueSchema = z.object({
 	// Whether a session may stop and ask. Held on the queue rather than the run
 	// because it is a property of how the operator intends to watch it.
 	afk: z.boolean(),
+	portBase: z.number().int(),
 	status: QueueStatusSchema,
 	failureReason: z.string().nullable(),
 	createdAt: z.coerce.date()

@@ -4,10 +4,14 @@ import { type PlanRepo } from 'src/repos/plans/plan.repo';
 import { type SliceRepo } from 'src/repos/plans/slice.repo';
 import { type QueueItemRepo } from 'src/repos/queues/queue-item.repo';
 import { type QueueRepo } from 'src/repos/queues/queue.repo';
+import { type MachineRepo } from 'src/repos/machines/machine.repo';
 import { type PlanBlockerRepo } from 'src/repos/plans/plan-blocker.repo';
+import { type PlanDecisionRepo } from 'src/repos/plans/plan-decision.repo';
 import { type SliceRunRepo } from 'src/repos/queues/slice-run.repo';
 import { type SocketRegistry } from 'src/services/sockets/registry.service';
+import { type Ac, type Plan, type PlanDecision } from 'src/types/PlanSchema';
 import { type Queue, type QueueItem } from 'src/types/QueueSchema';
+import { DEFAULT_PROJECT_PROFILE } from 'src/types/ProjectProfileSchema';
 
 // Each running queue is a `claude` process holding a worktree. Two is what a
 // small VPS survives; the point is that the number exists at all, not the number.
@@ -21,6 +25,8 @@ export interface AdvanceDeps {
 	sliceRepo: SliceRepo;
 	acRepo: AcRepo;
 	planBlockerRepo: PlanBlockerRepo;
+	planDecisionRepo: PlanDecisionRepo;
+	machineRepo: MachineRepo;
 	socketRegistry: SocketRegistry;
 }
 
@@ -73,6 +79,9 @@ async function dispatch(
 	}
 
 	const acs = await deps.acRepo.listBySlice(slice.id);
+	const planAcs = await deps.acRepo.listByPlan(opts.item.planId);
+	const decisions = await deps.planDecisionRepo.listByPlan(opts.item.planId);
+	const machine = await deps.machineRepo.getById(opts.queue.machineId);
 	const done = await deps.sliceRunRepo.listForItem(opts.item.id);
 	const byId = new Map(slices.map((entry) => [entry.id, entry]));
 	const firstRun = done.reduce((lowest, entry) =>
@@ -91,8 +100,13 @@ async function dispatch(
 			// would throw away every commit the ones before it made.
 			freshBranch: run.id === firstRun.id,
 			afk: opts.queue.afk,
+			planId: plan.id,
+			sliceId: slice.id,
+			planNumber: plan.number,
 			planTitle: plan.title ?? 'Untitled plan',
 			planBodyMd: plan.bodyMd ?? '',
+			profile: machine?.projectProfile ?? DEFAULT_PROJECT_PROFILE,
+			portBase: opts.queue.portBase,
 			slice: {
 				ordinal: slice.ordinal,
 				kind: slice.kind,
@@ -100,6 +114,8 @@ async function dispatch(
 				bodyMd: slice.bodyMd
 			},
 			acs: acs.map((ac) => ({ code: ac.code, text: ac.text })),
+			planAcs: planAcs.map((ac) => ({ code: ac.code, text: ac.text })),
+			decisions: decisions.map((entry) => ({ fork: entry.fork, chose: entry.chose })),
 			doneSlices: done
 				.filter((entry) => entry.status === 'done')
 				.map((entry) => ({
@@ -147,6 +163,46 @@ async function blockedPlanIds(deps: AdvanceDeps, items: QueueItem[]): Promise<st
 		.map((item) => item.planId);
 }
 
+// Assembled from what bosun already holds rather than from anything the session
+// writes at the end. A decision recorded while executing is on the plan whether
+// or not the last bullet remembered to mention it, and the reviewer reads this
+// before the diff.
+function pullRequestBody(opts: {
+	plan: Plan;
+	acs: Ac[];
+	decisions: PlanDecision[];
+}): string {
+	const criteria =
+		opts.acs.length === 0
+			? '_None recorded._'
+			: opts.acs.map((ac) => `- **${ac.code}** ${ac.text}`).join('\n');
+	const decisions =
+		opts.decisions.length === 0
+			? '_None recorded._'
+			: opts.decisions
+				.map((entry) =>
+					[
+						`### ${entry.fork}`,
+						entry.options === null ? '' : `- **Options:** ${entry.options}`,
+						`- **Chose:** ${entry.chose}`,
+						entry.blastRadius === null ? '' : `- **Blast radius:** ${entry.blastRadius}`,
+						entry.reversing === null ? '' : `- **Reversing it:** ${entry.reversing}`
+					]
+						.filter(Boolean)
+						.join('\n')
+				)
+				.join('\n\n');
+
+	return [
+		opts.plan.bodyMd ?? '',
+		'## Acceptance criteria',
+		criteria,
+		'## Decisions taken',
+		decisions,
+		`_Planned and executed by bosun as plan #${opts.plan.number}._`
+	].join('\n\n');
+}
+
 // Asked for only when every bullet landed. A plan that failed keeps its branch
 // and its partial commits for somebody to look at, but opening a pull request
 // for work that did not finish would put it in front of reviewers as though it
@@ -183,8 +239,12 @@ async function requestPublish(
 			worktreePath: opts.queue.worktreePath!,
 			branch: opts.item.branch,
 			baseRef: opts.queue.baseRef,
-			title: plan.title ?? 'Untitled plan',
-			body: plan.bodyMd ?? ''
+			title: `#${plan.number} ${plan.title ?? 'Untitled plan'}`,
+			body: pullRequestBody({
+				plan,
+				acs: await deps.acRepo.listByPlan(plan.id),
+				decisions: await deps.planDecisionRepo.listByPlan(plan.id)
+			})
 		}
 	});
 }

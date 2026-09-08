@@ -17,18 +17,37 @@ const LIST_PLANS_DEFINITION = {
 // An AFK queue is given no way to ask at all, rather than a tool it is told not
 // to call. A model that can see `bosun_ask` in its tool list will eventually
 // reach for it, and on an unattended queue that is a session blocked forever.
+export const RecordDecisionArgsSchema = z.object({
+	fork: z.string().min(1),
+	options: z.string().nullable().optional(),
+	chose: z.string().min(1),
+	blastRadius: z.string().nullable().optional(),
+	reversing: z.string().nullable().optional()
+});
+
+const RECORD_DECISION_DEFINITION = {
+	name: 'record_decision',
+	description:
+		'Record a fork the plan left open and how you resolved it. Goes on the plan, is shown in the browser as it lands, and is carried into the pull request verbatim. Required for: a new shared module, a new table or column or migration, a new endpoint or a changed request/response shape, a new dependency, a change spanning more than five files, an acceptance criterion that turns out unbuildable or already true, or a choice between two viable implementations the plan named neither of.',
+	inputSchema: z.toJSONSchema(RecordDecisionArgsSchema, { target: 'draft-7' })
+};
+
 export function executionDefinitions(afk: boolean): unknown[] {
-	return afk ? [LIST_PLANS_DEFINITION] : [ASK_DEFINITION, LIST_PLANS_DEFINITION];
+	const always = [LIST_PLANS_DEFINITION, RECORD_DECISION_DEFINITION];
+
+	return afk ? always : [ASK_DEFINITION, ...always];
 }
 
 export function executionMcpTools(afk: boolean): string[] {
-	const listing = 'mcp__bosun__list_plans';
+	const always = ['mcp__bosun__list_plans', 'mcp__bosun__record_decision'];
 
-	return afk ? [listing] : ['mcp__bosun__bosun_ask', listing];
+	return afk ? always : ['mcp__bosun__bosun_ask', ...always];
 }
 
 export function createExecutionDispatch(opts: {
 	afk: boolean;
+	planId: string;
+	sliceId: string;
 	bosunApi: BosunApiService;
 	onQuestion: (payload: { questionId: string; questions: PlanQuestion[] }) => void;
 }) {
@@ -42,6 +61,24 @@ export function createExecutionDispatch(opts: {
 
 			if (name === 'list_plans') {
 				return textToolResult(JSON.stringify(await opts.bosunApi.listMachinePlans()));
+			}
+
+			if (name === 'record_decision') {
+				const parsed = RecordDecisionArgsSchema.parse(args);
+
+				return textToolResult(
+					JSON.stringify(
+						await opts.bosunApi.recordPlanDecision({
+							planId: opts.planId,
+							sliceId: opts.sliceId,
+							fork: parsed.fork,
+							options: parsed.options ?? null,
+							chose: parsed.chose,
+							blastRadius: parsed.blastRadius ?? null,
+							reversing: parsed.reversing ?? null
+						})
+					)
+				);
 			}
 
 			throw new Error(`unknown tool ${name}`);

@@ -21,6 +21,22 @@ export function commitMessageFor(opts: {
 	return `${opts.planTitle} — slice ${opts.sliceOrdinal}: ${opts.sliceTitle}`;
 }
 
+// `main` and `origin/main` are the same branch and routinely different commits.
+// The remote one is what everybody else has merged into, so it is what a new plan
+// branches from.
+async function resolveStartPoint(
+	git: (worktreePath: string, args: string[]) => Promise<{ ok: boolean }>,
+	opts: { worktreePath: string; baseRef: string }
+): Promise<string> {
+	if (opts.baseRef.startsWith('origin/')) {
+		return opts.baseRef;
+	}
+
+	const remote = `origin/${opts.baseRef}`;
+
+	return (await git(opts.worktreePath, ['rev-parse', '--verify', remote])).ok ? remote : opts.baseRef;
+}
+
 export function getCommitService(deps: { exec: ExecService }) {
 	async function git(worktreePath: string, args: string[]) {
 		return deps.exec.run('git', ['-C', worktreePath, ...args], { timeoutMs: 60_000 });
@@ -30,6 +46,11 @@ export function getCommitService(deps: { exec: ExecService }) {
 		// Checked out before the plan's first slice, so a plan that fails leaves its
 		// partial work on a branch of its own rather than underneath the next plan's
 		// pull request.
+		//
+		// The fetch is what makes each plan start from what the default branch
+		// actually is now, rather than from whatever this worktree last saw. A queue
+		// left running for a day would otherwise cut every plan from the same stale
+		// commit and rediscover the same conflicts in every pull request.
 		async startBranch(opts: {
 			worktreePath: string;
 			branch: string;
@@ -43,10 +64,14 @@ export function getCommitService(deps: { exec: ExecService }) {
 
 			await git(opts.worktreePath, ['clean', '-fd']);
 
-			const checkout = await git(opts.worktreePath, ['checkout', '-B', opts.branch, opts.baseRef]);
+			const fetched = await git(opts.worktreePath, ['fetch', 'origin', '--prune']);
+			// A repository with no remote is a legitimate setup — the branch is then
+			// cut from whatever this clone holds, which is all there is.
+			const startPoint = fetched.ok ? await resolveStartPoint(git, opts) : opts.baseRef;
+			const checkout = await git(opts.worktreePath, ['checkout', '-B', opts.branch, startPoint]);
 
 			return checkout.ok
-				? { ok: true, detail: `${opts.branch} from ${opts.baseRef}` }
+				? { ok: true, detail: `${opts.branch} from ${startPoint}` }
 				: { ok: false, detail: checkout.reason };
 		},
 

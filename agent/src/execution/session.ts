@@ -1,6 +1,7 @@
 import { createActivityTracker } from '../planning/activity-labels';
 import { createStreamParser } from '../planning/stream-parser';
 import { executionPrompt } from '../prompts/execution';
+import { verifyPrompt } from '../prompts/verify';
 import { type AgentMsg, type ExecStart, type PlanAnswer } from '../protocol';
 import { type Services } from '../services/index';
 import { startSessionMcpServer, type SessionMcpServer } from '../sessions/mcp-server';
@@ -15,6 +16,34 @@ const REPORT_KEPT_CHARS = 4_000;
 // difference between the two halves of the product is that one may change the
 // repository and the other may not.
 const EXECUTION_BUILTIN_TOOLS = ['Read', 'Grep', 'Glob', 'Task', 'Skill', 'Edit', 'Write', 'Bash'];
+
+// A verify bullet orchestrates: its own sub-agents do the reading and the fixing,
+// and it drives a browser through whatever MCP servers the machine has.
+const VERIFY_BUILTIN_TOOLS = [...EXECUTION_BUILTIN_TOOLS, 'ToolSearch'];
+
+function promptFor(msg: ExecStart): string {
+	const shared = {
+		planNumber: msg.planNumber,
+		planTitle: msg.planTitle,
+		planBodyMd: msg.planBodyMd,
+		branch: msg.branch,
+		baseRef: msg.baseRef,
+		worktreePath: msg.worktreePath,
+		profile: msg.profile,
+		portBase: msg.portBase,
+		afk: msg.afk,
+		decisions: msg.decisions,
+		planAcs: msg.planAcs,
+		sliceOrdinal: msg.slice.ordinal,
+		sliceTitle: msg.slice.title,
+		sliceBodyMd: msg.slice.bodyMd,
+		doneSlices: msg.doneSlices
+	};
+
+	return msg.slice.kind === 'verify'
+		? verifyPrompt(shared)
+		: executionPrompt({ ...shared, sliceKind: msg.slice.kind, acs: msg.acs });
+}
 
 interface Run {
 	mcp: SessionMcpServer;
@@ -127,6 +156,8 @@ export function createExecutionSessions(opts: {
 			definitions: executionDefinitions(msg.afk),
 			createDispatch: createExecutionDispatch({
 				afk: msg.afk,
+				planId: msg.planId,
+				sliceId: msg.sliceId,
 				bosunApi: opts.services.bosunApi,
 				onQuestion: ({ questionId, questions }) => {
 					opts.send({ type: 'exec.question', runId: msg.runId, questionId, questions });
@@ -172,20 +203,13 @@ export function createExecutionSessions(opts: {
 
 		run.process = spawnClaudeSession({
 			cwd: msg.worktreePath,
-			prompt: executionPrompt({
-				planTitle: msg.planTitle,
-				planBodyMd: msg.planBodyMd,
-				sliceOrdinal: msg.slice.ordinal,
-				sliceKind: msg.slice.kind,
-				sliceTitle: msg.slice.title,
-				sliceBodyMd: msg.slice.bodyMd,
-				acs: msg.acs,
-				doneSlices: msg.doneSlices,
-				afk: msg.afk
-			}),
+			prompt: promptFor(msg),
 			mcpConfigPath: mcp.configPath,
 			userServerNames: userMcp.serverNames,
-			tools: { builtin: EXECUTION_BUILTIN_TOOLS, mcp: executionMcpTools(msg.afk) },
+			tools: {
+				builtin: msg.slice.kind === 'verify' ? VERIFY_BUILTIN_TOOLS : EXECUTION_BUILTIN_TOOLS,
+				mcp: executionMcpTools(msg.afk)
+			},
 			claudeAuth: opts.services.claudeAuth,
 			onStdout: (chunk) => {
 				parser.push(chunk);

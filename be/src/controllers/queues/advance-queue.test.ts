@@ -16,6 +16,7 @@ function queue(overrides: Partial<Queue> = {}): Queue {
 		worktreePath: '/home/u/.bosun/worktrees/auth',
 		baseRef: 'main',
 		afk: false,
+		portBase: 4100,
 		status: 'idle',
 		failureReason: null,
 		createdAt: new Date(),
@@ -93,7 +94,12 @@ function build(opts: {
 				{ id: 'sl_2', planId: 'p_1', ordinal: 2, kind: 'verify', title: 'two', bodyMd: null }
 			])
 		},
-		acRepo: { listBySlice: vi.fn().mockResolvedValue([]) },
+		acRepo: {
+			listBySlice: vi.fn().mockResolvedValue([]),
+			listByPlan: vi.fn().mockResolvedValue([])
+		},
+		planDecisionRepo: { listByPlan: vi.fn().mockResolvedValue([]) },
+		machineRepo: { getById: vi.fn().mockResolvedValue({ id: 'm_1', projectProfile: null }) },
 		planBlockerRepo: { listEdges: vi.fn().mockResolvedValue(opts.edges ?? []) },
 		socketRegistry: { sendToAgent, broadcastToUi: vi.fn() }
 	} as unknown as AdvanceDeps;

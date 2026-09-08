@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ProjectProfileSchema } from 'src/types/ProjectProfileSchema';
 
 export const MachineStatusSchema = z.enum(['pending', 'online', 'offline', 'paused']);
 
@@ -20,6 +21,7 @@ export const MachineSchema = z.object({
 	lastSeenAt: z.date().nullable(),
 	repoPath: z.string().nullable(),
 	agentVersion: z.string().nullable(),
+	projectProfile: ProjectProfileSchema.nullable(),
 	capabilities: z.array(PreflightCheckSchema).nullable(),
 	createdAt: z.date()
 });

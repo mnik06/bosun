@@ -1,90 +1,137 @@
-export interface ExecutionContext {
-	planTitle: string;
-	planBodyMd: string;
+import {
+	criteriaList,
+	decisionsSection,
+	feedbackLoops,
+	gitFlow,
+	unattended,
+	type RunContext
+} from './shared';
+
+export interface ExecutionContext extends RunContext {
 	sliceOrdinal: number;
 	sliceKind: 'build' | 'verify';
 	sliceTitle: string;
 	sliceBodyMd: string | null;
 	acs: { code: string; text: string }[];
 	doneSlices: { ordinal: number; title: string }[];
-	afk: boolean;
-}
-
-function acceptanceCriteria(acs: ExecutionContext['acs']): string {
-	return acs.length === 0
-		? 'This bullet claims no acceptance criteria of its own.'
-		: acs.map((ac) => `- **${ac.code}** ${ac.text}`).join('\n');
 }
 
 function alreadyDone(slices: ExecutionContext['doneSlices']): string {
 	return slices.length === 0
-		? 'Nothing yet — this is the first bullet of the plan.'
+		? '_Nothing yet — this is the first bullet of the plan._'
 		: slices.map((slice) => `- ${slice.ordinal}. ${slice.title}`).join('\n');
 }
 
-// A verify bullet exists to find out whether the build bullets actually work.
-// Telling it to make the checks pass turns the one step that could report a
-// problem into another step that hides one.
-function work(context: ExecutionContext): string {
-	return context.sliceKind === 'verify'
-		? `This is a **verify** bullet, and it builds nothing. Every bullet before it has already been executed in this worktree; your job is to drive the finished feature the way a person would and report what you find.
-
-Run the repository's own checks first — its test command, its typecheck, its linter, whatever \`package.json\`, the Makefile or the CI config names. Then walk the journeys this bullet names, through the interface rather than around it.
-
-**The only change you may make is repairing a defect you found doing that.** Not "while I was in there"; not a piece of the feature an earlier bullet left unfinished. If something was never built, that is a finding to report, not work to quietly absorb — the plan was cut wrong and somebody needs to know, and burying it here is how that stays hidden until it is expensive. The same goes for a repair that turns out to be large: report it rather than becoming the bullet that rewrote half the feature.
-
-A failing check is a result, not an obstacle. Never change code to make one pass.`
-		: `This is a **build** bullet. Implement exactly what it describes and nothing beyond it — the later bullets are somebody's plan, not scope you have been handed early.
-
-It has to leave the repository working on its own: the verify bullet at the end is a review, not the place your work gets finished. Run whatever checks the repository has before you call it done.
-
-Match the surrounding code: its naming, its structure, its idiom, its comment density. Read neighbouring files before you write. If the repository has a CLAUDE.md or equivalent, it outranks your habits.`;
-}
-
-function asking(afk: boolean): string {
-	return afk
-		? `You are running unattended. Nobody is watching and you have no way to ask anything — decide, write down the decision and its reasoning in your final message, and carry on. If a choice is genuinely unsafe to make alone, stop and say why rather than guessing at it.`
-		: `You may call \`bosun_ask\` when a decision is genuinely the operator's to make and you cannot settle it from the plan or the code. It blocks the whole queue until somebody answers, so spend it on decisions that change what you build, not on confirmations.`;
-}
-
 export function executionPrompt(context: ExecutionContext): string {
-	return `You are executing one tracer bullet of an approved plan, in a git worktree of its own. The branch is already checked out and the working tree is clean.
+	return `You are building one tracer bullet of an approved plan, alone, in a git worktree of its own.
 
-# The plan
+${unattended(context.afk)}
 
-## ${context.planTitle}
+${feedbackLoops(context)}
+
+# The plan — #${context.planNumber} ${context.planTitle}
 
 ${context.planBodyMd}
 
-# Bullets already done in this worktree
+## Bullets already built in this worktree
 
 ${alreadyDone(context.doneSlices)}
 
-# Your bullet — ${context.sliceOrdinal}. ${context.sliceTitle}
+# Step 2 — your bullet: ${context.sliceOrdinal}. ${context.sliceTitle}
 
 ${context.sliceBodyMd ?? '_No further detail was written for this bullet._'}
 
-## Acceptance criteria it claims
+## The acceptance criteria it delivers
 
-${acceptanceCriteria(context.acs)}
+${criteriaList(context.acs)}
 
-# How to work
+**These are the bar.** An unmet criterion is unfinished work, not a nice-to-have.
 
-${work(context)}
+## Gather the requirements before you write anything
 
-${asking(context.afk)}
+Read the plan above and whatever specification material this repository actually keeps — a
+\`docs/\` directory, a product spec, an architecture note, the CLAUDE.md. The plan says what to build;
+those say what the product already promises, and a bullet that contradicts them is a defect however
+well it matches its own description.
 
-Do not commit, and do not touch git at all — bosun commits this bullet for you once you finish, and a commit of your own splits the history it is keeping.
+Building a user-facing surface? Find the existing design first — a component library route, a design
+system folder, the nearest screens that already exist. That is the shipped design and you consume it.
+Inventing a second visual language beside it is the most expensive kind of rework.
 
-Do not start the next bullet. Finishing yours is the whole job.
+## Build it yourself
 
-The plan you are executing is not the only one written for this repository. If your bullet runs into
-something you suspect another plan owns, call \`list_plans\` and look: it returns every plan for this
-machine with its number, title, bullets and blockers. Work that belongs to another plan is left to
-it — building it here duplicates it, and building it *differently* here is worse. Say in your report
-which plan you left it to.
+This bullet is already scoped for one session — the plan was cut into three or four of them precisely
+so that one session could build its piece without splitting it again. **Do not spawn implementation
+agents.** A sub-agent pays four to sixteen minutes of cold-start re-orientation before its first
+edit, and on a bullet this size you pay that to save nothing.
+
+Order that avoids the usual dead ends: data layer and schema first, then the server, then anything
+generated from the server (types, clients — generated *after* the server is live, never before), then
+the interface. Run the loop for each side as you finish it rather than all at the end.
+
+Implement exactly what this bullet describes and nothing beyond it. The later bullets are somebody's
+plan, not scope you were handed early. Match the surrounding code — naming, structure, idiom, comment
+density — and read neighbouring files before you write.
+
+## Tests, only where they earn it
+
+**No test is the default.** Coverage is not a goal and "this file has no test" is not a defect.
+Before writing one, answer three questions about the code under test:
+
+1. **Can it break on its own?** Could it fail for a reason other than someone editing the declaration
+   it mirrors — a branch, a boundary, ordering, parsing, a derived value, a state transition, an
+   async or error path, an invariant spanning two files?
+2. **Is it fragile?** Many branches, several callers, or rules a future reader could not infer.
+3. **Is a silent break critical?** Wrong data written, a credential path, permissions, money, a
+   migration, data loss.
+
+Write it **only when (1) is yes and (2) or (3) is yes.** Engines, reducers, parsers, validation rules,
+anything deciding what reaches the database — those pass. Design tokens, schema shapes, repositories,
+constant tables, barrels, exact copy, thin wrappers, components that only render their props — those
+never do. If nothing in your change passes the gate, say so; that is a valid outcome, not a gap.
+
+If this repository's own conventions set a different bar, follow theirs and say so.
+
+Never weaken a test to get a green run. A failing test is a finding: fix the code, or fix the test
+and say which you did.
+
+## Document only what the code cannot say
+
+A module a reader cannot follow from the code alone gets a note beside it — why it is shaped this
+way, the invariants, what breaks if you change them. Never restate the API. Most work needs none; say
+which it is rather than writing one out of duty.
+
+# Step 3 — run the loop until it is clean
+
+Run everything you found in step 1 for every side you touched, and fix what it reports. A red loop is
+not done. Then have it reviewed: spawn **one** \`general-purpose\` sub-agent to review this bullet's
+changes against the plan, the repository's conventions and its own loop — fresh context is the whole
+point, because you just wrote this code and are its worst reader.
+
+Await it inside this turn. Fix what it found yourself, in severity order, and run the loop again. A
+finding you judge out of scope goes in your report with the reason — never dropped silently.
+
+**One sub-agent in the whole session, and that is the reviewer.** No implementation agents, no fix
+agents, no second review round.
+
+# No browser
+
+Every user-facing criterion in this plan is verified once, by the plan's final verify bullet, against
+the whole feature standing. A criterion whose only evidence is visual — layout, clipping, focus
+order, what a grid renders — is not yours to confirm and not yours to fail. Implement it and leave
+the driving to verify. Deferring one is correct behaviour, not a gap you are expected to close.
+
+${decisionsSection(context)}
+
+${gitFlow(context)}
 
 # When you are done
 
-End with a short report: what you changed, which acceptance criteria you believe are met, and anything the next bullet needs to know. If you could not finish, say what stopped you — that message is what the operator reads in the browser.`;
+Report, briefly: the feedback loops you found and whether they were green before you started; what
+you built and which files you touched; which acceptance criteria you believe now hold; what the
+review found and what you did about it; anything you deferred to the verify bullet, one line each
+with how to reproduce it. That report is what the operator reads in the browser, and what the next
+bullet inherits.
+
+If you could not finish, say what stopped you — plainly, first line.`;
 }

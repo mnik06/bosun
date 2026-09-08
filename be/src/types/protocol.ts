@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ProjectProfileSchema } from 'src/types/ProjectProfileSchema';
 import { PreflightCheckSchema } from 'src/types/MachineSchema';
 import { PlanAnswerSchema, PlanQuestionSchema } from 'src/types/PlanSchema';
 import {
@@ -179,10 +180,24 @@ export const ExecStartMsgSchema = z.object({
 	// the earlier ones made rather than resetting over them.
 	freshBranch: z.boolean(),
 	afk: z.boolean(),
+	planId: z.string(),
+	sliceId: z.string(),
+	planNumber: z.number().int(),
 	planTitle: z.string(),
 	planBodyMd: z.string(),
+	// Everything a session cannot work out by reading the repository, plus the
+	// port range this queue owns. Sent per run rather than read from disk so a
+	// profile edited in the browser takes effect on the next bullet.
+	profile: ProjectProfileSchema,
+	portBase: z.number().int(),
 	slice: ExecSliceSchema,
 	acs: z.array(z.object({ code: z.string(), text: z.string() })),
+	// Every criterion in the plan, not only this bullet's — a verify bullet is
+	// measured against the whole feature.
+	planAcs: z.array(z.object({ code: z.string(), text: z.string() })),
+	decisions: z.array(
+		z.object({ fork: z.string(), chose: z.string() })
+	),
 	doneSlices: z.array(z.object({ ordinal: z.number().int(), title: z.string() }))
 });
 
@@ -208,7 +223,9 @@ export const QueuePublishMsgSchema = z.object({
 export const QueueWorktreeEnsureMsgSchema = z.object({
 	type: z.literal('queue.worktree.ensure'),
 	queueId: z.string(),
-	slug: z.string()
+	slug: z.string(),
+	copyFiles: z.array(z.string()).default([]),
+	setupCommand: z.string().nullable().default(null)
 });
 
 export const QueueWorktreeRemoveMsgSchema = z.object({

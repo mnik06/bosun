@@ -13,6 +13,8 @@ export function schedulerDeps(fastify: FastifyInstance): AdvanceDeps {
 		sliceRepo: fastify.repos.sliceRepo,
 		acRepo: fastify.repos.acRepo,
 		planBlockerRepo: fastify.repos.planBlockerRepo,
+		planDecisionRepo: fastify.repos.planDecisionRepo,
+		machineRepo: fastify.repos.machineRepo,
 		socketRegistry: fastify.services.socketRegistry
 	};
 }

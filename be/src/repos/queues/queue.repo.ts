@@ -1,7 +1,12 @@
-import { and, count, desc, eq, ne } from 'drizzle-orm';
+import { and, count, desc, eq, ne, sql } from 'drizzle-orm';
 import { type DbOrTx } from 'src/services/drizzle/drizzle.service';
 import { queues } from 'src/services/drizzle/schema';
 import { QueueSchema, type Queue, type QueueStatus } from 'src/types/QueueSchema';
+
+// Ten ports each: a dev stack is rarely one listener, and leaving room means a
+// project that adds a second server does not need every queue renumbered.
+const PORT_BASE_START = 4100;
+const PORT_BASE_STRIDE = 10;
 
 const columns = {
 	id: queues.id,
@@ -12,6 +17,7 @@ const columns = {
 	worktreePath: queues.worktreePath,
 	baseRef: queues.baseRef,
 	afk: queues.afk,
+	portBase: queues.portBase,
 	status: queues.status,
 	failureReason: queues.failureReason,
 	createdAt: queues.createdAt
@@ -22,6 +28,9 @@ const columns = {
 // able to hand out.
 export function getQueueRepo(db: DbOrTx) {
 	return {
+		// The port range is taken in the insert for the same reason the plan number
+		// is: two creates racing would otherwise both read the same maximum and hand
+		// two queues the same listener.
 		async create(opts: {
 			id: string;
 			userId: string;
@@ -30,7 +39,13 @@ export function getQueueRepo(db: DbOrTx) {
 			slug: string;
 			afk: boolean;
 		}): Promise<Queue> {
-			const [row] = await db.insert(queues).values(opts).returning(columns);
+			const [row] = await db
+				.insert(queues)
+				.values({
+					...opts,
+					portBase: sql`(select coalesce(max(${queues.portBase}), ${PORT_BASE_START} - ${PORT_BASE_STRIDE}) + ${PORT_BASE_STRIDE} from ${queues} where ${queues.machineId} = ${opts.machineId})`
+				})
+				.returning(columns);
 
 			return QueueSchema.parse(row);
 		},
