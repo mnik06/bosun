@@ -19,7 +19,10 @@ export async function retryQueueItem(deps: AdvanceDeps, opts: {
 	const item = await deps.queueItemRepo.requeue({ id: opts.itemId, queueId: queue.id });
 
 	if (!item) {
-		throw new HttpError(409, 'Only a plan that failed or was stopped can be retried');
+		throw new HttpError(
+			409,
+			'Only a plan that failed, was stopped, or has bullets that never ran can be retried'
+		);
 	}
 
 	await deps.sliceRunRepo.resetUnfinished(item.id);

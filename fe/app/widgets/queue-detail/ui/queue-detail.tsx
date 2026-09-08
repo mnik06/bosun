@@ -58,7 +58,10 @@ export function QueueDetail ({ queueId }: { queueId: string }) {
 				<Stack gap={4}>
 					<Group gap="sm">
 						<Title order={2}>{data.queue.name}</Title>
-						<QueueStatusBadge status={data.queue.status} />
+						<QueueStatusBadge
+							status={data.queue.status}
+							pausing={runningRun !== undefined}
+						/>
 					</Group>
 					<Text size="xs" c="dimmed" className="font-mono">
 						{data.queue.worktreePath ?? 'no worktree yet'}

@@ -1,6 +1,6 @@
-import { and, asc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, or, sql } from 'drizzle-orm';
 import { type DbOrTx } from 'src/services/drizzle/drizzle.service';
-import { queueItems } from 'src/services/drizzle/schema';
+import { queueItems, sliceRuns } from 'src/services/drizzle/schema';
 import { QueueItemSchema, type QueueItem, type QueueItemStatus } from 'src/types/QueueSchema';
 
 const columns = {
@@ -118,6 +118,13 @@ export function getQueueItemRepo(db: DbOrTx) {
 		// Back to `queued`, keeping the branch. The commits its finished bullets made
 		// live on that branch, so a retry that renamed it would start again from
 		// nothing and open a second pull request for the same plan.
+		//
+		// A `done` item joins the failed ones only when bullets of it never ran. A
+		// queue advanced while a bullet was in flight used to close the item on top
+		// of the live session, and the plan it stranded has no other way back. The
+		// `exists` is what keeps a genuinely finished plan closed: retrying one of
+		// those would dispatch nothing and ask for a second pull request for work
+		// that is already in review.
 		async requeue(opts: { id: string; queueId: string }): Promise<QueueItem | null> {
 			const [row] = await db
 				.update(queueItems)
@@ -126,7 +133,13 @@ export function getQueueItemRepo(db: DbOrTx) {
 					and(
 						eq(queueItems.id, opts.id),
 						eq(queueItems.queueId, opts.queueId),
-						inArray(queueItems.status, ['failed', 'cancelled'])
+						or(
+							inArray(queueItems.status, ['failed', 'cancelled']),
+							and(
+								eq(queueItems.status, 'done'),
+								sql`exists (select 1 from ${sliceRuns} where queue_item_id = ${queueItems.id} and status in ('pending', 'running'))`
+							)
+						)
 					)
 				)
 				.returning(columns);

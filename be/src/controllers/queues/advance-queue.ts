@@ -297,13 +297,35 @@ export async function advanceQueue(deps: AdvanceDeps, opts: { queueId: string })
 		return;
 	}
 
-	// A running item with no bullets left is a finished plan.
+	// A running item with no bullets left is a finished plan — but dispatch
+	// declining is not proof of that. A queue resumed while its bullet is still in
+	// flight declines the claim too, because one worktree holds one session, and
+	// closing the item there strands every bullet after it: the plan reads as done,
+	// its remaining bullets stay pending forever, and the queue falls to idle and
+	// never picks them up.
+	let settled = items;
+
 	if (running) {
+		const runs = await deps.sliceRunRepo.listForItem(running.id);
+
+		if (runs.some((entry) => entry.status === 'running' || entry.status === 'pending')) {
+			await setStatus(deps, { queue, status: 'running' });
+
+			return;
+		}
+
 		await deps.queueItemRepo.update({ id: running.id, status: 'done', finishedAt: new Date() });
 		await requestPublish(deps, { queue, item: running });
+
+		// The plan that just finished has to count as finished when the next one's
+		// blockers are weighed, or a plan waiting on it is skipped for a blocker
+		// that is no longer outstanding and the queue goes idle holding it.
+		settled = items.map((entry) =>
+			entry.id === running.id ? { ...entry, status: 'done' as const } : entry
+		);
 	}
 
-	const next = await deps.queueItemRepo.claimNext(queue.id, await blockedPlanIds(deps, items));
+	const next = await deps.queueItemRepo.claimNext(queue.id, await blockedPlanIds(deps, settled));
 
 	if (!next) {
 		await setStatus(deps, { queue, status: 'idle' });

@@ -8,7 +8,7 @@ import {
 	type RunQuestionMsg,
 	type UiMsg
 } from '~/entities/machine/model/ui-message'
-import { queueKeys, type Queue } from '~/entities/queue'
+import { queueKeys, type Queue, type QueueDetail } from '~/entities/queue'
 import { subscribeToUiSocket } from '~/shared/api'
 
 export interface PongResult {
@@ -79,9 +79,18 @@ function withQueue (previous: Queue[], queue: Queue): Queue[] {
 		: [queue, ...previous]
 }
 
+// Every cache a queue is read from, not the machine's list alone: the queues page
+// reads `list()` and the queue page reads `detail()`, and a status change missing
+// from either of those looks like the button did nothing until a refresh.
 function patchQueue (queryClient: QueryClient, queue: Queue): void {
 	queryClient.setQueryData<Queue[]>(queueKeys.forMachine(queue.machineId), (previous) =>
 		previous === undefined ? previous : withQueue(previous, queue)
+	)
+	queryClient.setQueryData<Queue[]>(queueKeys.list(), (previous) =>
+		previous === undefined ? previous : withQueue(previous, queue)
+	)
+	queryClient.setQueryData<QueueDetail>(queueKeys.detail(queue.id), (previous) =>
+		previous === undefined ? previous : { ...previous, queue }
 	)
 }
 

@@ -396,6 +396,60 @@ describe('advanceQueue', () => {
 		expect(sendToAgent).not.toHaveBeenCalled();
 	});
 
+	// Pausing leaves the bullet in flight, so a resume arrives with the worktree
+	// still held. Reading the declined claim as "no bullets left" closed the plan
+	// on top of a live session, stranded the bullets after it as pending forever,
+	// and dropped the queue to idle for good.
+	it('does not close a running item whose bullet is still in flight', async () => {
+		const { deps, sendToAgent } = build({
+			items: [item({ status: 'running' })],
+			claimRun: null,
+			runs: [run({ status: 'running' }), run({ id: 'sr_2', ordinal: 2, status: 'pending' })]
+		});
+
+		await advanceQueue(deps, { queueId: 'q_1' });
+
+		expect(sendToAgent).not.toHaveBeenCalled();
+		expect(deps.queueItemRepo.update).not.toHaveBeenCalled();
+		expect(deps.queueRepo.update).toHaveBeenCalledWith({ id: 'q_1', status: 'running' });
+	});
+
+	// The bullet the pause let finish settles while the queue is still paused, so
+	// nothing dispatches then. The resume is what has to pick the next one up.
+	it('dispatches the next bullet when a resumed queue has one waiting', async () => {
+		const second = run({ id: 'sr_2', sliceId: 'sl_2', ordinal: 2 });
+		const { deps, sendToAgent } = build({
+			items: [item({ status: 'running', branch: 'bosun/plan/auth/7-add-login-page' })],
+			claimRun: second,
+			runs: [run({ status: 'done' }), second]
+		});
+
+		await advanceQueue(deps, { queueId: 'q_1' });
+
+		expect(dispatched(sendToAgent)).toMatchObject({ type: 'exec.start', runId: 'sr_2' });
+		expect(deps.queueRepo.update).toHaveBeenCalledWith({ id: 'q_1', status: 'running' });
+	});
+
+	// The plan that just finished is closed inside this same call, so weighing the
+	// next one's blockers against the list read at the top holds it back for a
+	// blocker that is no longer outstanding — and the queue goes idle holding it.
+	it('counts the plan it just closed as finished when weighing blockers', async () => {
+		const { deps } = build({
+			queue: queue({ status: 'running' }),
+			items: [
+				item({ id: 'qi_1', planId: 'p_blocker', status: 'running' }),
+				item({ id: 'qi_2', planId: 'p_blocked', ordinal: 2, status: 'queued' })
+			],
+			edges: [{ planId: 'p_blocked', blockedByPlanId: 'p_blocker' }],
+			claimRun: null,
+			runs: [run({ status: 'done', commitSha: 'abc' })]
+		});
+
+		await advanceQueue(deps, { queueId: 'q_1' });
+
+		expect(deps.queueItemRepo.claimNext).toHaveBeenCalledWith('q_1', []);
+	});
+
 	it('closes a running item once its bullets are all settled', async () => {
 		const { deps } = build({
 			queue: queue({ status: 'running' }),

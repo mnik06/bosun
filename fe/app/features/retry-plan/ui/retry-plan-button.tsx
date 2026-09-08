@@ -8,8 +8,11 @@ const RETRYABLE = new Set(['failed', 'cancelled'])
 
 export function RetryPlanButton ({ item }: { item: QueueItemDetail }) {
 	const retry = useRetryPlan({ queueId: item.queueId, itemId: item.id })
+	// A plan closed with bullets that never ran is not finished, whatever the badge
+	// says, and retry is the only way to pick them up.
+	const stranded = item.status === 'done' && item.runs.some((run) => run.status !== 'done')
 
-	if (!RETRYABLE.has(item.status)) {
+	if (!RETRYABLE.has(item.status) && !stranded) {
 		return null
 	}
 
