@@ -112,10 +112,14 @@ export async function publishPlan(opts: {
 		const acRepo = getAcRepo(tx);
 		const sliceRepo = getSliceRepo(tx);
 
+		// A republish is a different plan, whatever it is called. Keeping the
+		// sign-off would let a revision walk into a queue on the strength of a read
+		// somebody gave the version before it.
 		const updated = await planRepo.update({
 			id: plan.id,
 			title: opts.title,
-			bodyMd: opts.bodyMd
+			bodyMd: opts.bodyMd,
+			confirmedAt: null
 		});
 
 		const sliceIdByOrdinal = await writeSlices({ sliceRepo, idService: opts.idService, planId: plan.id, slices: opts.slices });

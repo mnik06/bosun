@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Link } from 'react-router'
 
 import { usePlanQuery, usePlanStream, type Ac, type Plan, type Slice } from '~/entities/plan'
+import { ConfirmPlanButton } from '~/features/confirm-plan'
 import { DeletePlanButton } from '~/features/delete-plan'
 import { toErrorMessage } from '~/shared/lib'
 import { SplitPane } from '~/shared/ui'
@@ -94,12 +95,9 @@ export default function PlanPage ({ params }: Route.ComponentProps) {
 			{published ? (
 				<PlanArtifact plan={plan} acs={acs} slices={slices} decisions={decisions} />
 			) : (
-				<Group gap="xs" align="center">
-					<Loader size={14} />
-					<Text size="sm" c="dimmed">
-						The plan appears here, whole, the moment the session publishes it.
-					</Text>
-				</Group>
+				<Text size="sm" c="dimmed">
+					The plan appears here, whole, the moment the session publishes it.
+				</Text>
 			)}
 		</ArtifactPane>
 	)
@@ -118,7 +116,6 @@ export default function PlanPage ({ params }: Route.ComponentProps) {
 						</Text>{' '}
 						{plan.title ?? 'Untitled'}
 					</Text>
-					{plan.status === 'planning' && published ? <Loader size={12} /> : null}
 					{blockedBy.map((blocker) => (
 						<Tooltip key={blocker.id} label={blocker.title ?? 'Untitled'}>
 							<Badge
@@ -135,14 +132,17 @@ export default function PlanPage ({ params }: Route.ComponentProps) {
 					))}
 				</Group>
 
-				<DeletePlanButton planId={plan.id} />
+				<Group gap="xs" wrap="nowrap">
+					{published ? <ConfirmPlanButton plan={plan} /> : null}
+					<DeletePlanButton planId={plan.id} />
+				</Group>
 			</Group>
 
 			{expanded ? (
 				artifact
 			) : (
 				<SplitPane
-					initial={0.45}
+					initial={2 / 3}
 					left={<div className="flex min-h-0 grow flex-col pr-2">{chat}</div>}
 					right={<div className="flex min-h-0 grow flex-col pl-2">{artifact}</div>}
 				/>

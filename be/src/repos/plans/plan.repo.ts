@@ -12,6 +12,7 @@ const columns = {
 	bodyMd: plans.bodyMd,
 	status: plans.status,
 	verifyInUi: plans.verifyInUi,
+	confirmedAt: plans.confirmedAt,
 	failureReason: plans.failureReason,
 	input: plans.input,
 	createdAt: plans.createdAt
@@ -102,6 +103,7 @@ export function getPlanRepo(db: DbOrTx) {
 			title?: string | null;
 			bodyMd?: string | null;
 			status?: PlanStatus;
+			confirmedAt?: Date | null;
 			failureReason?: string | null;
 		}): Promise<Plan | null> {
 			const { id, ...values } = opts;

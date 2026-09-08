@@ -71,6 +71,13 @@
       "when": 1788866062138,
       "tag": "0009_typical_ikaris",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1788868583906,
+      "tag": "0010_early_mongoose",
+      "breakpoints": true
     }
   ]
 }

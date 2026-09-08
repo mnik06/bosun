@@ -15,6 +15,33 @@ thread. `bun build --compile` embeds the runtime in the artifact, so the script'
 The cost is that binaries are architecture-specific, which is why the script branches on `uname -m`
 and why every release publishes both `linux-x64` and `linux-arm64`.
 
+## The toolchain the repository asks for
+
+The agent needs no runtime; everything it runs does. A session installs the project, typechecks it,
+runs its tests and starts its dev server, and all of that is somebody else's node and somebody else's
+package manager. The script therefore provisions both, from the enrolled repository rather than from
+a prompt or a default:
+
+- **node** — `.nvmrc`, then `.node-version`, then `engines.node`. The version files come first
+  because they are what a developer's own shell obeys; a machine that disagrees with them builds
+  differently to every laptop on the team. `>=` is honoured as a floor, an exact or partial version
+  as a prefix, and `lts/*` or nothing at all resolves to the current LTS.
+- **the package manager** — `packageManager` if the repo declares one, which is also what corepack
+  reads, so the version is pinned rather than approximated. Otherwise the lockfile decides: a repo
+  with `pnpm-lock.yaml` cannot be installed with npm whatever the field says.
+
+Node is unpacked into `~/.bosun/node` rather than installed system-wide. The script refuses to run as
+root, so there is no system prefix to write to, and a bosun-owned copy cannot break whatever the box
+already had. That directory goes on the front of the unit's `PATH`, so the service uses the version
+the repository asked for even when an older node is on the system path.
+
+The tarball is checksummed against `SHASUMS256.txt` from the same release directory, for the reason
+the agent binary is: an unverified `curl | tar` is arbitrary code execution on every machine that
+enrolls.
+
+Preflight does **not** check for node or a package manager. It used to, and it was reporting a
+prerequisite the installer is responsible for — a red check nobody could act on from the browser.
+
 ## Invariants
 
 **The checksum gate is not optional.** The script downloads `SHA256SUMS` alongside the binary and

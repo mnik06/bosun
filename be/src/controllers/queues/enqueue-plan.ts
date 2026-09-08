@@ -41,6 +41,10 @@ export async function enqueuePlan(opts: {
 		throw new HttpError(400, 'Only a plan that finished planning can be queued');
 	}
 
+	if (plan.confirmedAt === null) {
+		throw new HttpError(400, 'That plan has not been confirmed yet');
+	}
+
 	const slices = await opts.sliceRepo.listByPlan(plan.id);
 
 	if (slices.length === 0) {

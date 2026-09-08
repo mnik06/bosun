@@ -11,7 +11,7 @@ export function DeletePlanButton ({ planId }: { planId: string }) {
 
 	return (
 		<Button
-			variant="subtle"
+			variant="light"
 			color="red"
 			size="compact-sm"
 			leftSection={<Trash2 size={14} />}

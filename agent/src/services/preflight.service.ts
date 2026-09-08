@@ -5,10 +5,6 @@ import { type PreflightCheck } from '../protocol';
 
 const MIN_CLAUDE_MAJOR = 2;
 
-// Either is enough to install and run what a session needs. Requiring a specific
-// one would fail boxes that are already set up, for no gain.
-const PACKAGE_MANAGERS = ['npm', 'pnpm'] as const;
-
 export function claudeVersionIsSupported(version: string): boolean {
 	// The stream-json event shape is a looser contract than a package version, so
 	// a major the parser has never seen is reported rather than assumed to work.
@@ -21,25 +17,6 @@ export function getPreflightService(deps: {
 	mcpConfig: McpConfigService;
 	repoPath: string;
 }) {
-	async function checkPackageManager(): Promise<PreflightCheck> {
-		const results = await Promise.all(
-			PACKAGE_MANAGERS.map(async (name) => ({
-				name,
-				result: await deps.exec.run(name, ['--version'])
-			}))
-		);
-		const found = results.filter((entry) => entry.result.ok);
-
-		return {
-			name: 'package-manager',
-			ok: found.length > 0,
-			detail:
-				found.length > 0
-					? found.map((entry) => `${entry.name} ${entry.result.stdout}`).join(', ')
-					: `neither ${PACKAGE_MANAGERS.join(' nor ')} found on the service PATH`
-		};
-	}
-
 	// One check, two probes. A missing binary and a missing login are different
 	// fixes, so the detail says which one failed rather than collapsing to
 	// "claude: failed" and sending the operator to look at the wrong thing.
@@ -146,14 +123,9 @@ export function getPreflightService(deps: {
 
 	return {
 		async collect(): Promise<PreflightCheck[]> {
-			const [packageManager, claude, git, gh] = await Promise.all([
-				checkPackageManager(),
-				checkClaude(),
-				checkGit(),
-				checkGh()
-			]);
+			const [claude, git, gh] = await Promise.all([checkClaude(), checkGit(), checkGh()]);
 
-			return [packageManager, claude, git, gh, checkCustomMcp()];
+			return [claude, git, gh, checkCustomMcp()];
 		}
 	};
 }

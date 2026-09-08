@@ -2,7 +2,7 @@ import { Alert, Loader, ScrollArea, Stack, Text } from '@mantine/core'
 import { useEffect, useRef } from 'react'
 
 import { findPendingQuestion, type Plan, type PlanMessage } from '~/entities/plan'
-import { QuestionPrompt } from '~/features/answer-question'
+import { QuestionPrompt, useAnswerQuestion } from '~/features/answer-question'
 import { PlanComposer } from '~/features/say-to-plan'
 import { Transcript } from '~/widgets/plan-chat/ui/transcript'
 
@@ -19,6 +19,10 @@ export function PlanChat ({
 }) {
 	const bottom = useRef<HTMLDivElement>(null)
 	const pending = findPendingQuestion(messages)
+	const answer = useAnswerQuestion(plan.id)
+	// One sentence cannot be the answer to three questions, so the composer only
+	// takes over the reply when exactly one is open.
+	const open = pending !== null && pending.questions.length === 1 ? pending : null
 
 	useEffect(() => {
 		bottom.current?.scrollIntoView({ block: 'end' })
@@ -54,7 +58,20 @@ export function PlanChat ({
 
 			{/* Always here, whatever the plan's status. A ready plan is revised by
 			    saying so, and a running one takes a correction mid-grill. */}
-			<PlanComposer planId={plan.id} />
+			<PlanComposer
+				planId={plan.id}
+				busy={plan.status === 'planning'}
+				answering={answer.isPending}
+				onAnswer={
+					open === null
+						? undefined
+						: async (text) =>
+							answer.mutateAsync({
+								questionId: open.questionId,
+								answers: [{ selected: [text] }]
+							})
+				}
+			/>
 		</div>
 	)
 }

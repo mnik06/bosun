@@ -20,9 +20,6 @@ function TranscriptEntry ({
 	if (message.role === 'user') {
 		return (
 			<Card withBorder padding="md" radius="md" bg="var(--mantine-color-default-hover)">
-				<Text size="xs" c="dimmed" mb={4}>
-					The ticket
-				</Text>
 				<Text size="sm" className="whitespace-pre-wrap">
 					{message.content.text}
 				</Text>

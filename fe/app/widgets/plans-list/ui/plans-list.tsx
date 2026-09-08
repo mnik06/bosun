@@ -64,9 +64,10 @@ export function PlansList () {
 					<Checkbox
 						aria-label={`Select ${plan.title ?? 'plan'}`}
 						checked={selected.includes(plan.id)}
-						// Only a finished plan has tracer bullets to execute; queueing one
-						// still being grilled would put an empty plan on a worktree.
-						disabled={plan.status !== 'ready'}
+						// Only a finished, confirmed plan has tracer bullets somebody has
+						// agreed to: queueing one still being grilled would put an empty
+						// plan on a worktree, and an unconfirmed one is refused anyway.
+						disabled={plan.status !== 'ready' || plan.confirmedAt === null}
 						onChange={(event) => {
 							setSelected((previous) =>
 								event.currentTarget.checked
