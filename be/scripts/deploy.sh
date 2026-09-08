@@ -5,7 +5,6 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 ALLOW_DIRTY=0
-ASSUME_YES=0
 SKIP_MIGRATIONS=0
 
 usage() {
@@ -14,8 +13,12 @@ Usage: pnpm deploy [options]
 
   --allow-dirty       deploy with uncommitted changes in be/
   --skip-migrations   do not run drizzle-kit migrate before deploying
-  --yes               do not prompt for confirmation
   -h, --help          show this
+
+Runs unattended. What it is about to migrate and deploy is printed rather than
+asked about, so read the two lines under "Applying migrations" and "Deploying"
+if you want to know before it happens. The checks that can refuse — a dirty
+tree, a failing preflight, a variable missing on Fly — still refuse.
 USAGE
 }
 
@@ -23,7 +26,9 @@ while [ $# -gt 0 ]; do
 	case "$1" in
 		--allow-dirty) ALLOW_DIRTY=1 ;;
 		--skip-migrations) SKIP_MIGRATIONS=1 ;;
-		--yes | -y) ASSUME_YES=1 ;;
+		# Accepted and ignored: it used to suppress the prompts that no longer exist,
+		# and failing on it would break the habit of typing it.
+		--yes | -y) ;;
 		-h | --help) usage; exit 0 ;;
 		*) echo "unknown option: $1" >&2; usage >&2; exit 2 ;;
 	esac
@@ -32,15 +37,6 @@ done
 
 step() { printf '\n\033[1m==> %s\033[0m\n' "$1"; }
 die() { printf '\033[31mdeploy: %s\033[0m\n' "$1" >&2; exit 1; }
-
-confirm() {
-	[ "$ASSUME_YES" = "1" ] && return 0
-	[ -t 0 ] || die "not a terminal — rerun with --yes"
-
-	printf '%s [y/N] ' "$1"
-	read -r reply
-	case "$reply" in y | Y | yes) return 0 ;; *) die 'cancelled' ;; esac
-}
 
 APP="$(awk -F'"' '/^app *=/ {print $2; exit}' fly.toml)"
 [ -n "$APP" ] || die 'could not read the app name from fly.toml'
@@ -100,8 +96,9 @@ if [ "$SKIP_MIGRATIONS" = "0" ]; then
 	')"
 
 	# The URL comes from the local .env, which is not necessarily the database Fly
-	# is pointed at. Naming it is the only chance to notice before it is migrated.
-	confirm "Migrate $target ?"
+	# is pointed at. Nothing here can tell the difference, so it is named loudly and
+	# left in the log — it is the only trace of which database was migrated.
+	echo "migrating $target"
 	pnpm db:migration:run
 fi
 
@@ -110,7 +107,7 @@ fi
 # machine would be online on one instance and unreachable on the other. See
 # src/services/sockets/registry.service.md.
 step 'Deploying'
-confirm "Deploy $APP from $(git rev-parse --short HEAD) ?"
+echo "deploying $APP from $(git rev-parse --short HEAD)"
 fly deploy --app "$APP" --ha=false
 
 step 'Verifying'

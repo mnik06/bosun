@@ -185,8 +185,13 @@ not one of them.
   `src/services/sockets/registry.service.md`
 
 Migrations are applied from your machine before the deploy, using the `DATABASE_URL` in your local
-`.env` — the script prints which database that is and asks, because nothing else can tell whether it
-is the one Fly points at.
+`.env`. Nothing can tell whether that is the database Fly points at, so the script names it on the
+way past and leaves it in the log — deliberately not a prompt, because the deploy runs unattended and
+a question nobody is there to answer is worse than a line nobody read.
+
+Only the checks that can be decided without a person refuse: a dirty `be/`, a failing preflight, or a
+variable `EnvSchema` requires that Fly does not have. `--allow-dirty` and `--skip-migrations` opt out
+of the first and the third.
 
 ## Testing
 
