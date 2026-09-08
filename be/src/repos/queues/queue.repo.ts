@@ -8,6 +8,21 @@ import { QueueSchema, type Queue, type QueueStatus } from 'src/types/QueueSchema
 const PORT_BASE_START = 4100;
 const PORT_BASE_STRIDE = 10;
 
+// Written into the statement rather than bound. A number passed through `${}`
+// reaches Postgres as an untyped parameter, and arithmetic between two of those
+// is `operator is not unique: unknown - unknown` — the planner cannot tell which
+// `-` was meant. These are module constants, never user input, so there is
+// nothing to bind them for.
+const FIRST_PORT_BASE = sql.raw(String(PORT_BASE_START));
+const PORT_STRIDE = sql.raw(String(PORT_BASE_STRIDE));
+
+// Exported so the statement it renders can be asserted without a database. The
+// failure it guards against is invisible to every mocked test and shows up as a
+// 500 the first time somebody creates a queue.
+export function nextPortBase(machineId: string) {
+	return sql<number>`(select coalesce(max(${queues.portBase}) + ${PORT_STRIDE}, ${FIRST_PORT_BASE}) from ${queues} where ${queues.machineId} = ${machineId})`;
+}
+
 const columns = {
 	id: queues.id,
 	userId: queues.userId,
@@ -43,7 +58,7 @@ export function getQueueRepo(db: DbOrTx) {
 				.insert(queues)
 				.values({
 					...opts,
-					portBase: sql`(select coalesce(max(${queues.portBase}), ${PORT_BASE_START} - ${PORT_BASE_STRIDE}) + ${PORT_BASE_STRIDE} from ${queues} where ${queues.machineId} = ${opts.machineId})`
+					portBase: nextPortBase(opts.machineId)
 				})
 				.returning(columns);
 
