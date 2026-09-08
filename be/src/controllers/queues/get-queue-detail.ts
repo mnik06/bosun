@@ -3,6 +3,7 @@ import { type PlanRepo } from 'src/repos/plans/plan.repo';
 import { type SliceRepo } from 'src/repos/plans/slice.repo';
 import { type QueueItemRepo } from 'src/repos/queues/queue-item.repo';
 import { type QueueRepo } from 'src/repos/queues/queue.repo';
+import { type QueueMessageRepo } from 'src/repos/queues/queue-message.repo';
 import { type SliceRunRepo } from 'src/repos/queues/slice-run.repo';
 import { type QueueDetail } from 'src/types/QueueSchema';
 
@@ -13,6 +14,7 @@ export async function getQueueDetail(opts: {
 	queueRepo: QueueRepo;
 	queueItemRepo: QueueItemRepo;
 	sliceRunRepo: SliceRunRepo;
+	queueMessageRepo: QueueMessageRepo;
 	planRepo: PlanRepo;
 	sliceRepo: SliceRepo;
 	id: string;
@@ -47,5 +49,5 @@ export async function getQueueDetail(opts: {
 		})
 	);
 
-	return { queue, items: entries };
+	return { queue, items: entries, messages: await opts.queueMessageRepo.listForQueue(queue.id) };
 }

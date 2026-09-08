@@ -97,9 +97,25 @@ export const QueueItemDetailSchema = QueueItemSchema.extend({
 
 export type QueueItemDetail = z.infer<typeof QueueItemDetailSchema>;
 
+export const QueueMessageRoleSchema = z.enum(['user', 'assistant']);
+
+export type QueueMessageRole = z.infer<typeof QueueMessageRoleSchema>;
+
+export const QueueMessageSchema = z.object({
+	id: z.string(),
+	queueId: z.string(),
+	role: QueueMessageRoleSchema,
+	content: z.string(),
+	createdAt: z.coerce.date()
+});
+
+export type QueueMessage = z.infer<typeof QueueMessageSchema>;
+
 export const QueueDetailSchema = z.object({
 	queue: QueueSchema,
-	items: z.array(QueueItemDetailSchema)
+	items: z.array(QueueItemDetailSchema),
+	messages: z.array(QueueMessageSchema)
 });
 
 export type QueueDetail = z.infer<typeof QueueDetailSchema>;
+

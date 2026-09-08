@@ -57,6 +57,13 @@
       "when": 1788794969716,
       "tag": "0007_lyrical_risque",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1788861721334,
+      "tag": "0008_cute_wolverine",
+      "breakpoints": true
     }
   ]
 }

@@ -71,9 +71,20 @@ export const QueueItemDetailSchema = z.object({
 
 export type QueueItemDetail = z.infer<typeof QueueItemDetailSchema>
 
+export const QueueMessageSchema = z.object({
+	id: z.string(),
+	queueId: z.string(),
+	role: z.enum(['user', 'assistant']),
+	content: z.string(),
+	createdAt: z.coerce.date()
+})
+
+export type QueueMessage = z.infer<typeof QueueMessageSchema>
+
 export const QueueDetailSchema = z.object({
 	queue: QueueSchema,
-	items: z.array(QueueItemDetailSchema)
+	items: z.array(QueueItemDetailSchema),
+	messages: z.array(QueueMessageSchema)
 })
 
 export type QueueDetail = z.infer<typeof QueueDetailSchema>

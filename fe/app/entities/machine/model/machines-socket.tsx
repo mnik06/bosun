@@ -23,6 +23,7 @@ const UPGRADE_TIMEOUT_MS = 180_000
 
 const PongContext = createContext<Record<string, PongResult>>({})
 const UpgradeContext = createContext<Record<string, string>>({})
+const AnswerContext = createContext<Record<string, string>>({})
 const RunContext = createContext<{
 	activity: Record<string, string>,
 	questions: Record<string, RunQuestionMsg>
@@ -34,6 +35,12 @@ export function useLastPong (machineId: string): PongResult | null {
 
 export function useUpgradingTo (machineId: string): string | null {
 	return useContext(UpgradeContext)[machineId] ?? null
+}
+
+// The streamed half of an answer, keyed by queue. Dropped once the finished
+// message arrives over `queue.message`, which is the one that gets stored.
+export function useQueueAnswer (queueId: string): string | null {
+	return useContext(AnswerContext)[queueId] ?? null
 }
 
 export function useRunActivity (): Record<string, string> {
@@ -92,6 +99,7 @@ export function MachinesSocketProvider ({ children }: { children: ReactNode }) {
 	const [upgrades, setUpgrades] = useState<Record<string, string>>({})
 	const [runActivity, setRunActivity] = useState<Record<string, string>>({})
 	const [runQuestions, setRunQuestions] = useState<Record<string, RunQuestionMsg>>({})
+	const [answers, setAnswers] = useState<Record<string, string>>({})
 	const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>())
 	// Read through a ref so the subscription is not a function of the state it
 	// maintains: depending on `upgrades` would tear down and re-open the socket
@@ -116,6 +124,26 @@ export function MachinesSocketProvider ({ children }: { children: ReactNode }) {
 				clearTimeout(pending.get(msg.machineId))
 				pending.set(msg.machineId, setTimeout(() => { forget(msg.machineId) }, UPGRADE_TIMEOUT_MS))
 				setUpgrades((previous) => ({ ...previous, [msg.machineId]: msg.to }))
+
+				return
+			}
+
+			if (msg.type === 'queue.answer') {
+				setAnswers((previous) => ({
+					...previous,
+					[msg.queueId]: `${previous[msg.queueId] ?? ''}${msg.delta}`
+				}))
+
+				return
+			}
+
+			if (msg.type === 'queue.message') {
+				setAnswers((previous) => without(previous, msg.message.queueId))
+				queryClient
+					.invalidateQueries({ queryKey: queueKeys.detail(msg.message.queueId) })
+					.catch(() => {
+						// A refetch that fails leaves the panel as it was; the next one recovers.
+					})
 
 				return
 			}
@@ -208,7 +236,7 @@ export function MachinesSocketProvider ({ children }: { children: ReactNode }) {
 		<PongContext.Provider value={pongs}>
 			<UpgradeContext.Provider value={upgrades}>
 				<RunContext.Provider value={{ activity: runActivity, questions: runQuestions }}>
-					{children}
+					<AnswerContext.Provider value={answers}>{children}</AnswerContext.Provider>
 				</RunContext.Provider>
 			</UpgradeContext.Provider>
 		</PongContext.Provider>

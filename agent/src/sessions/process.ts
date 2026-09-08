@@ -16,6 +16,10 @@ const SIGKILL_GRACE_MS = 5_000;
 export interface SessionTools {
 	builtin: string[];
 	mcp: string[];
+	// Defaults to everything the session was given. Named separately when the two
+	// must differ — `Bash` has to be loaded for `Bash(git *)` to be allowed at all,
+	// and allowing bare `Bash` alongside it would defeat the restriction.
+	allowed?: string[];
 }
 
 export interface ClaudeSession {
@@ -48,7 +52,7 @@ function sessionArgs(opts: {
 		'--tools',
 		opts.tools.builtin.join(','),
 		'--allowed-tools',
-		[...opts.tools.builtin, ...opts.tools.mcp, ...userTools].join(',')
+		[...(opts.tools.allowed ?? [...opts.tools.builtin, ...opts.tools.mcp]), ...userTools].join(',')
 	];
 }
 

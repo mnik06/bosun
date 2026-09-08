@@ -20,6 +20,7 @@ export {
 export {
 	MachinesSocketProvider,
 	useLastPong,
+	useQueueAnswer,
 	useRunActivity,
 	useRunQuestion,
 	useUpgradingTo,

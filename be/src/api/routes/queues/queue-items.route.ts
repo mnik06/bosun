@@ -1,9 +1,16 @@
 import { FastifyPluginAsync } from 'fastify';
 import { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { QueueItemParamsSchema } from 'src/api/routes/schemas/queues/QueueReqSchemas';
+import {
+	AskQueueReqSchema,
+	QueueIdParamsSchema,
+	QueueItemParamsSchema
+} from 'src/api/routes/schemas/queues/QueueReqSchemas';
 import { removeQueueItem } from 'src/controllers/queues/remove-queue-item';
 import { retryQueueItem } from 'src/controllers/queues/retry-queue-item';
+import { askDeps } from 'src/controllers/queues/ask-deps';
+import { askQueue } from 'src/controllers/queues/ask-queue';
 import { schedulerDeps } from 'src/controllers/queues/scheduler-deps';
+import { QueueMessageSchema } from 'src/types/QueueSchema';
 
 const routes: FastifyPluginAsync = async function (f) {
 	const fastify = f.withTypeProvider<ZodTypeProvider>();
@@ -35,6 +42,25 @@ const routes: FastifyPluginAsync = async function (f) {
 			});
 
 			return reply.status(204).send(undefined);
+		}
+	);
+	fastify.post(
+		'/:id/messages',
+		{
+			schema: {
+				params: QueueIdParamsSchema,
+				body: AskQueueReqSchema,
+				response: { 201: QueueMessageSchema }
+			}
+		},
+		async (req, reply) => {
+			const message = await askQueue(askDeps(fastify), {
+				queueId: req.params.id,
+				userId: req.user!.id,
+				question: req.body.question
+			});
+
+			return reply.status(201).send(message);
 		}
 	);
 };

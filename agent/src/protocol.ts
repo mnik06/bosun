@@ -107,6 +107,27 @@ export const ExecErrorMsgSchema = z.object({
 	message: z.string()
 });
 
+export const QueueAnswerTextMsgSchema = z.object({
+	type: z.literal('queue.answer.text'),
+	queueId: z.string(),
+	askId: z.string(),
+	delta: z.string()
+});
+
+export const QueueAnswerDoneMsgSchema = z.object({
+	type: z.literal('queue.answer.done'),
+	queueId: z.string(),
+	askId: z.string(),
+	content: z.string()
+});
+
+export const QueueAnswerErrorMsgSchema = z.object({
+	type: z.literal('queue.answer.error'),
+	queueId: z.string(),
+	askId: z.string(),
+	message: z.string()
+});
+
 export const QueuePublishedMsgSchema = z.object({
 	type: z.literal('queue.published'),
 	itemId: z.string(),
@@ -149,7 +170,10 @@ export const AgentMsgSchema = z.discriminatedUnion('type', [
 	ExecDoneMsgSchema,
 	ExecErrorMsgSchema,
 	QueuePublishedMsgSchema,
-	QueuePublishErrorMsgSchema
+	QueuePublishErrorMsgSchema,
+	QueueAnswerTextMsgSchema,
+	QueueAnswerDoneMsgSchema,
+	QueueAnswerErrorMsgSchema
 ]);
 
 export type AgentMsg = z.infer<typeof AgentMsgSchema>;
@@ -244,6 +268,18 @@ export const ExecAnswerMsgSchema = z.object({
 	answers: z.array(PlanAnswerSchema).min(1)
 });
 
+export const QueueAskMsgSchema = z.object({
+	type: z.literal('queue.ask'),
+	queueId: z.string(),
+	askId: z.string(),
+	worktreePath: z.string(),
+	question: z.string(),
+	// The state bosun holds, rendered for the session. It reads the worktree for
+	// everything else, but the statuses and the failure reasons live here.
+	state: z.string(),
+	transcript: z.array(z.object({ role: z.enum(['user', 'assistant']), content: z.string() }))
+});
+
 export const QueuePublishMsgSchema = z.object({
 	type: z.literal('queue.publish'),
 	itemId: z.string(),
@@ -283,9 +319,12 @@ export const ServerMsgSchema = z.discriminatedUnion('type', [
 	ExecStartMsgSchema,
 	ExecCancelMsgSchema,
 	ExecAnswerMsgSchema,
-	QueuePublishMsgSchema
+	QueuePublishMsgSchema,
+	QueueAskMsgSchema
 ]);
 
 export type ServerMsg = z.infer<typeof ServerMsgSchema>;
 
 export type ExecStart = z.infer<typeof ExecStartMsgSchema>;
+
+export type QueueAsk = z.infer<typeof QueueAskMsgSchema>;

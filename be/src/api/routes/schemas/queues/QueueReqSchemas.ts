@@ -30,3 +30,5 @@ export const QueueItemParamsSchema = z.object({
 	id: z.string().min(1),
 	itemId: z.string().min(1)
 });
+
+export const AskQueueReqSchema = z.object({ question: z.string().min(1).max(4000) });

@@ -4,9 +4,10 @@ import { Plus } from 'lucide-react'
 import { Button } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
 
-import { useRunActivity, useRunQuestion } from '~/entities/machine'
+import { useQueueAnswer, useRunActivity, useRunQuestion } from '~/entities/machine'
 import { QueueStatusBadge, queueKeys, useQueueDetailQuery } from '~/entities/queue'
 import { RunQuestionPanel } from '~/features/answer-run'
+import { QueueChat } from '~/features/ask-queue'
 import { QueueControls } from '~/features/control-queue'
 import { EnqueuePlansModal } from '~/features/enqueue-plans'
 import { AfkSwitch } from '~/features/toggle-afk'
@@ -17,6 +18,7 @@ import { QueueItemCard } from '~/widgets/queue-detail/ui/queue-item-card'
 export function QueueDetail ({ queueId }: { queueId: string }) {
 	const { data, isPending, error } = useQueueDetailQuery(queueId)
 	const activity = useRunActivity()
+	const streaming = useQueueAnswer(queueId)
 	const queryClient = useQueryClient()
 	const [opened, { open, close }] = useDisclosure(false)
 
@@ -95,6 +97,8 @@ export function QueueDetail ({ queueId }: { queueId: string }) {
 					))}
 				</Stack>
 			)}
+
+			<QueueChat queueId={queueId} messages={data.messages} streaming={streaming} />
 
 			<EnqueuePlansModal queue={data.queue} opened={opened} onClose={close} />
 		</Stack>

@@ -20,6 +20,7 @@ import {
 } from 'src/types/PlanSchema';
 import {
 	type QueueItemStatus,
+	type QueueMessageRole,
 	type QueueStatus,
 	type SliceRunStatus
 } from 'src/types/QueueSchema';
@@ -257,4 +258,21 @@ export const planDecisions = pgTable(
 		createdAt: timestamp({ withTimezone: true }).notNull().defaultNow()
 	},
 	(table) => [index('plan_decisions_plan_id_idx').on(table.planId)]
+);
+
+// A conversation about a queue, not a session's transcript. Kept so the answer
+// to "what happened overnight" survives the process that answered it, and so a
+// follow-up question knows what was already asked.
+export const queueMessages = pgTable(
+	'queue_messages',
+	{
+		id: text().primaryKey(),
+		queueId: text()
+			.notNull()
+			.references(() => queues.id, { onDelete: 'cascade' }),
+		role: text().$type<QueueMessageRole>().notNull(),
+		content: text().notNull(),
+		createdAt: timestamp({ withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [index('queue_messages_queue_id_idx').on(table.queueId)]
 );

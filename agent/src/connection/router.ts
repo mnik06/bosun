@@ -1,4 +1,5 @@
 import WebSocket from 'ws';
+import { type AskSessions } from '../ask/session';
 import { type ExecutionSessions } from '../execution/session';
 import { type PlanningSessions } from '../planning/session';
 import { ServerMsgSchema, type ServerMsg } from '../protocol';
@@ -37,6 +38,7 @@ export interface RouterDeps {
 	state: AgentState;
 	sessions: PlanningSessions;
 	executions: ExecutionSessions;
+	asks: AskSessions;
 	announce: (reason: 'connect' | 'refresh') => Promise<void>;
 	onUpgrade: (opts: { version: string; downloadBaseUrl: string }) => Promise<void>;
 }
@@ -127,6 +129,11 @@ export async function routeServerFrame(deps: RouterDeps, msg: ServerMsg): Promis
 
 			return;
 
+		case 'queue.ask':
+			await deps.asks.ask(msg);
+
+			return;
+
 		case 'queue.publish': {
 			const result = await deps.services.publish.publish({
 				worktreePath: msg.worktreePath,
@@ -189,6 +196,7 @@ export async function routeServerFrame(deps: RouterDeps, msg: ServerMsg): Promis
 		case 'shutdown':
 			deps.sessions.cancelAll();
 			deps.executions.cancelAll();
+			deps.asks.cancelAll();
 			await deps.services.teardown.terminateSelf({
 				configPath: deps.configPath,
 				reason: msg.reason

@@ -4,6 +4,7 @@ import { backoffDelay, nextAttempt } from './backoff';
 import { UPGRADE_EXIT_CODE } from '../services/upgrade.service';
 import { parseServerFrame, routeServerFrame, type AgentState } from './router';
 import { type AgentConfig } from '../config/config';
+import { createAskSessions } from '../ask/session';
 import { createExecutionSessions } from '../execution/session';
 import { createPlanningSessions } from '../planning/session';
 import { planningPrompt } from '../prompts/planning';
@@ -99,6 +100,14 @@ async function connectOnce(deps: ConnectionDeps): Promise<void> {
 				}
 			}
 		});
+		const asks = createAskSessions({
+			services: deps.services,
+			send: (message: AgentMsg) => {
+				if (socket.readyState === WebSocket.OPEN) {
+					socket.send(JSON.stringify(message));
+				}
+			}
+		});
 		const announce = createAnnouncer({ ...deps, socket });
 
 		// Exits rather than restarting itself: `Restart=on-failure` is what brings
@@ -158,6 +167,7 @@ async function connectOnce(deps: ConnectionDeps): Promise<void> {
 					state: deps.state,
 					sessions,
 					executions,
+					asks,
 					announce,
 					onUpgrade
 				},
@@ -176,12 +186,14 @@ async function connectOnce(deps: ConnectionDeps): Promise<void> {
 		socket.on('error', (error) => {
 			sessions.cancelAll();
 			executions.cancelAll();
+			asks.cancelAll();
 			settle(error);
 		});
 
 		socket.on('close', () => {
 			sessions.cancelAll();
 			executions.cancelAll();
+			asks.cancelAll();
 			settle();
 		});
 	});

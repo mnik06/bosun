@@ -10,6 +10,7 @@ export function getIdService() {
 		createAcId: (): string => `ac_${nanoid(12)}`,
 		createSliceId: (): string => `sl_${nanoid(12)}`,
 		createQueueId: (): string => `q_${nanoid(12)}`,
+		createQueueMessageId: (): string => `qm_${nanoid(12)}`,
 		createQueueItemId: (): string => `qi_${nanoid(12)}`,
 		createPlanDecisionId: (): string => `pd_${nanoid(12)}`,
 		createSliceRunId: (): string => `sr_${nanoid(12)}`

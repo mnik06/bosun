@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { parseServerFrame, routeServerFrame, type AgentState, type RouterDeps } from './router';
+import { type AskSessions } from '../ask/session';
 import { type ExecutionSessions } from '../execution/session';
 import { type PlanningSessions } from '../planning/session';
 import { type ServerMsg } from '../protocol';
@@ -25,6 +26,11 @@ function build (opts?: { paused?: boolean }) {
 		cancelAll: vi.fn(),
 		running: vi.fn().mockReturnValue(0)
 	};
+	const asks = {
+		ask: vi.fn().mockResolvedValue(undefined),
+		cancelAll: vi.fn(),
+		running: vi.fn().mockReturnValue(0)
+	};
 	const state: AgentState = { paused: opts?.paused ?? false };
 
 	const deps = {
@@ -34,6 +40,7 @@ function build (opts?: { paused?: boolean }) {
 		state,
 		sessions: sessions as unknown as PlanningSessions,
 		executions: executions as unknown as ExecutionSessions,
+		asks: asks as unknown as AskSessions,
 		announce,
 		onUpgrade
 	} satisfies RouterDeps;
@@ -41,6 +48,7 @@ function build (opts?: { paused?: boolean }) {
 	return {
 		announce,
 		onUpgrade,
+		asks,
 		executions,
 		send,
 		sessions,
@@ -234,5 +242,46 @@ describe('exec frames', () => {
 		await harness.route({ type: 'shutdown', reason: 'deleted' });
 
 		expect(harness.executions.cancelAll).toHaveBeenCalled();
+	});
+});
+
+describe('queue questions', () => {
+	const ask = {
+		type: 'queue.ask',
+		queueId: 'q_1',
+		askId: 'qm_1',
+		worktreePath: '/w',
+		question: 'where is it up to?',
+		state: 'Queue "Auth" — running',
+		transcript: []
+	} satisfies ServerMsg;
+
+	it('answers one', async () => {
+		const harness = build();
+
+		await harness.route(ask);
+
+		expect(harness.asks.ask).toHaveBeenCalledWith(expect.objectContaining({ askId: 'qm_1' }));
+	});
+
+	// A question is read-only and answers something a person is waiting on, so a
+	// paused machine still takes it. Pausing stops bosun dispatching work, not
+	// somebody asking what happened.
+	it('answers one even while the machine is paused', async () => {
+		const harness = build({ paused: true });
+
+		await harness.route(ask);
+
+		expect(harness.asks.ask).toHaveBeenCalled();
+	});
+
+	// Its answer travels back over the socket that asked, so a question outliving
+	// that socket leaves the browser waiting on one that can never arrive.
+	it('releases outstanding questions on shutdown', async () => {
+		const harness = build();
+
+		await harness.route({ type: 'shutdown', reason: 'deleted' });
+
+		expect(harness.asks.cancelAll).toHaveBeenCalled();
 	});
 });

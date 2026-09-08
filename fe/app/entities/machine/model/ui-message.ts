@@ -2,7 +2,7 @@ import { z } from 'zod'
 
 import { MachineSchema } from '~/entities/machine/model/machine'
 import { PlanDecisionSchema } from '~/entities/plan'
-import { QueueSchema } from '~/entities/queue'
+import { QueueMessageSchema, QueueSchema } from '~/entities/queue'
 
 export const MachineUpdatedMsgSchema = z.object({
 	type: z.literal('machine.updated'),
@@ -77,6 +77,18 @@ export const PlanDecisionMsgSchema = z.object({
 	decision: PlanDecisionSchema
 })
 
+export const QueueMessageMsgSchema = z.object({
+	type: z.literal('queue.message'),
+	message: QueueMessageSchema
+})
+
+export const QueueAnswerMsgSchema = z.object({
+	type: z.literal('queue.answer'),
+	queueId: z.string(),
+	askId: z.string(),
+	delta: z.string()
+})
+
 export const UiMsgSchema = z.discriminatedUnion('type', [
 	MachineUpdatedMsgSchema,
 	MachinePongMsgSchema,
@@ -87,7 +99,9 @@ export const UiMsgSchema = z.discriminatedUnion('type', [
 	RunTextMsgSchema,
 	RunActivityMsgSchema,
 	RunQuestionMsgSchema,
-	PlanDecisionMsgSchema
+	PlanDecisionMsgSchema,
+	QueueMessageMsgSchema,
+	QueueAnswerMsgSchema
 ])
 
 export type UiMsg = z.infer<typeof UiMsgSchema>

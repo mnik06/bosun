@@ -8,7 +8,7 @@ import {
 	PlanSchema,
 	SliceSchema
 } from 'src/types/PlanSchema';
-import { QueueSchema } from 'src/types/QueueSchema';
+import { QueueMessageSchema, QueueSchema } from 'src/types/QueueSchema';
 import {
 	PlanActivityMsgSchema,
 	PlanDoneMsgSchema,
@@ -103,6 +103,18 @@ export const PlanDecisionMsgSchema = z.object({
 	decision: PlanDecisionSchema
 });
 
+export const QueueMessageMsgSchema = z.object({
+	type: z.literal('queue.message'),
+	message: QueueMessageSchema
+});
+
+export const QueueAnswerMsgSchema = z.object({
+	type: z.literal('queue.answer'),
+	queueId: z.string(),
+	askId: z.string(),
+	delta: z.string()
+});
+
 export const UiMsgSchema = z.discriminatedUnion('type', [
 	MachineUpdatedMsgSchema,
 	MachinePongMsgSchema,
@@ -122,7 +134,9 @@ export const UiMsgSchema = z.discriminatedUnion('type', [
 	RunTextMsgSchema,
 	RunActivityMsgSchema,
 	RunQuestionMsgSchema,
-	PlanDecisionMsgSchema
+	PlanDecisionMsgSchema,
+	QueueMessageMsgSchema,
+	QueueAnswerMsgSchema
 ]);
 
 export type UiMsg = z.infer<typeof UiMsgSchema>;
