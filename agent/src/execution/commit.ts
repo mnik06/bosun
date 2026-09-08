@@ -75,6 +75,26 @@ export function getCommitService(deps: { exec: ExecService }) {
 				: { ok: false, detail: checkout.reason };
 		},
 
+		// Run before every bullet that is not cutting the branch. A bullet that
+		// succeeded left nothing behind — bosun committed all of it — so this is a
+		// no-op then. A bullet that *failed* left whatever it had written, and a
+		// retry that inherits that mess commits it under the retry's name.
+		//
+		// `HEAD`, never the base ref: the commits the finished bullets made are on
+		// this branch, and resetting past them would rebuild work the plan already
+		// has.
+		async cleanTree(worktreePath: string): Promise<{ ok: boolean; detail: string }> {
+			const reset = await git(worktreePath, ['reset', '--hard', 'HEAD']);
+
+			if (!reset.ok) {
+				return { ok: false, detail: reset.reason };
+			}
+
+			await git(worktreePath, ['clean', '-fd']);
+
+			return { ok: true, detail: 'worktree clean at HEAD' };
+		},
+
 		async commitAll(opts: { worktreePath: string; message: string }): Promise<CommitResult> {
 			const added = await git(opts.worktreePath, ['add', '-A']);
 

@@ -5,7 +5,6 @@ import {
 	ControlQueueReqSchema,
 	EnqueuePlanReqSchema,
 	QueueIdParamsSchema,
-	QueueItemParamsSchema,
 	RunIdParamsSchema
 } from 'src/api/routes/schemas/queues/QueueReqSchemas';
 import { advanceQueue } from 'src/controllers/queues/advance-queue';
@@ -13,7 +12,6 @@ import { answerRunQuestion } from 'src/controllers/queues/answer-run-question';
 import { controlQueue } from 'src/controllers/queues/control-queue';
 import { enqueuePlan } from 'src/controllers/queues/enqueue-plan';
 import { schedulerDeps } from 'src/controllers/queues/scheduler-deps';
-import { removeQueueItem } from 'src/controllers/queues/remove-queue-item';
 import { QueueItemSchema, QueueSchema } from 'src/types/QueueSchema';
 
 const routes: FastifyPluginAsync = async function (f) {
@@ -81,21 +79,6 @@ const routes: FastifyPluginAsync = async function (f) {
 		}
 	);
 
-	fastify.delete(
-		'/:id/items/:itemId',
-		{ schema: { params: QueueItemParamsSchema } },
-		async (req, reply) => {
-			await removeQueueItem({
-				queueRepo: fastify.repos.queueRepo,
-				queueItemRepo: fastify.repos.queueItemRepo,
-				queueId: req.params.id,
-				itemId: req.params.itemId,
-				userId: req.user!.id
-			});
-
-			return reply.status(204).send(undefined);
-		}
-	);
 };
 
 export default routes;

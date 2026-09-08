@@ -143,6 +143,12 @@ export function createExecutionSessions(opts: {
 			if (!branched.ok) {
 				throw new Error(branched.detail);
 			}
+		} else {
+			const cleaned = await opts.services.commit.cleanTree(msg.worktreePath);
+
+			if (!cleaned.ok) {
+				throw new Error(`could not clean the worktree: ${cleaned.detail}`);
+			}
 		}
 
 		const userMcp = opts.services.mcpConfig.read();

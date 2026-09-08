@@ -16,6 +16,10 @@ const columns = {
 	finishedAt: queueItems.finishedAt
 };
 
+export function noItemInFlight(queueId: string) {
+	return sql`not exists (select 1 from ${queueItems} where queue_id = ${queueId} and status = 'running')`;
+}
+
 export function getQueueItemRepo(db: DbOrTx) {
 	return {
 		async create(opts: {
@@ -64,6 +68,10 @@ export function getQueueItemRepo(db: DbOrTx) {
 		// and keep their place; the queue simply takes the next one that can
 		// actually run, so push order decides between plans that are equally ready
 		// and dependency order decides the rest.
+		//
+		// The `not exists` clause is what stops two concurrent advances claiming two
+		// *different* plans into one queue — one worktree, two branches, two sessions
+		// writing over each other.
 		async claimNext(queueId: string, skipPlanIds: string[] = []): Promise<QueueItem | null> {
 			const [row] = await db
 				.update(queueItems)
@@ -72,6 +80,7 @@ export function getQueueItemRepo(db: DbOrTx) {
 					and(
 						eq(queueItems.queueId, queueId),
 						eq(queueItems.status, 'queued'),
+						noItemInFlight(queueId),
 						eq(
 							queueItems.id,
 							skipPlanIds.length === 0
@@ -101,6 +110,25 @@ export function getQueueItemRepo(db: DbOrTx) {
 				.update(queueItems)
 				.set(changes)
 				.where(eq(queueItems.id, id))
+				.returning(columns);
+
+			return row ? QueueItemSchema.parse(row) : null;
+		},
+
+		// Back to `queued`, keeping the branch. The commits its finished bullets made
+		// live on that branch, so a retry that renamed it would start again from
+		// nothing and open a second pull request for the same plan.
+		async requeue(opts: { id: string; queueId: string }): Promise<QueueItem | null> {
+			const [row] = await db
+				.update(queueItems)
+				.set({ status: 'queued', failureReason: null, startedAt: null, finishedAt: null })
+				.where(
+					and(
+						eq(queueItems.id, opts.id),
+						eq(queueItems.queueId, opts.queueId),
+						inArray(queueItems.status, ['failed', 'cancelled'])
+					)
+				)
 				.returning(columns);
 
 			return row ? QueueItemSchema.parse(row) : null;

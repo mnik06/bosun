@@ -2,6 +2,7 @@ import { ActionIcon, Anchor, Badge, Card, Group, Stack, Text } from '@mantine/co
 import { ExternalLink, X } from 'lucide-react'
 
 import type { QueueItemDetail, QueueItemStatus } from '~/entities/queue'
+import { RetryPlanButton } from '~/features/retry-plan'
 import { SliceRunRow } from '~/widgets/queue-detail/ui/slice-run-row'
 
 const COLORS: Record<QueueItemStatus, string> = {
@@ -57,18 +58,22 @@ export function QueueItemCard ({
 						)}
 					</Stack>
 
-					{item.status === 'queued' ? (
-						<ActionIcon
-							variant="subtle"
-							color="red"
-							aria-label="Remove from the queue"
-							onClick={() => {
-								onRemove(item.id)
-							}}
-						>
-							<X size={16} />
-						</ActionIcon>
-					) : null}
+					<Group gap="xs" wrap="nowrap">
+						<RetryPlanButton item={item} />
+
+						{item.status === 'queued' ? (
+							<ActionIcon
+								variant="subtle"
+								color="red"
+								aria-label="Remove from the queue"
+								onClick={() => {
+									onRemove(item.id)
+								}}
+							>
+								<X size={16} />
+							</ActionIcon>
+						) : null}
+					</Group>
 				</Group>
 
 				<Stack gap={6}>
