@@ -48,13 +48,27 @@ describe('worktree service', () => {
 		expect(result.baseRef).toBe('main');
 		expect(fs.existsSync(path.join(result.worktreePath, 'README.md'))).toBe(true);
 		expect(await git(result.worktreePath, ['rev-parse', '--abbrev-ref', 'HEAD'])).toBe(
-			'bosun/auth-work'
+			'bosun/worktree/auth-work'
 		);
 	});
 
 	// A queue created against an offline machine is re-sent the same ensure when it
 	// reconnects, so a second one has to find the worktree rather than fail on the
 	// branch already existing.
+	// Git refs are paths: a branch at `bosun/auth-work` makes every
+	// `bosun/auth-work/...` impossible to create, and plan branches are exactly
+	// that shape. Keeping the worktree's own branch under its own segment is what
+	// stops the first plan failing with `cannot lock ref`.
+	it('holds its branch under a segment plan branches never use', async () => {
+		const created = await service().ensure({ slug: 'shared', copyFiles: [] });
+		const head = await git(created.worktreePath, ['rev-parse', '--abbrev-ref', 'HEAD']);
+
+		expect(head.startsWith('bosun/worktree/')).toBe(true);
+		await expect(
+			git(created.worktreePath, ['branch', 'bosun/plan/shared/1-a', 'HEAD'])
+		).resolves.toBeDefined();
+	});
+
 	it('is idempotent', async () => {
 		const first = await service().ensure({ slug: 'auth-work', copyFiles: [] });
 		const second = await service().ensure({ slug: 'auth-work', copyFiles: [] });

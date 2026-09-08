@@ -62,8 +62,11 @@ export function getWorktreeService(deps: {
 		return path.join(root, slug);
 	}
 
+	// Under its own segment, never `bosun/<slug>` directly. Git refs are paths, so
+	// a branch at `bosun/auth` makes every `bosun/auth/...` impossible to create —
+	// and plan branches live under exactly that shape.
 	function branchFor(slug: string): string {
-		return `bosun/${slug}`;
+		return `bosun/worktree/${slug}`;
 	}
 
 	async function prune(): Promise<void> {

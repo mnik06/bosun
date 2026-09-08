@@ -86,7 +86,13 @@ function build(opts: {
 		planRepo: {
 			getByIdForMachine: vi
 				.fn()
-				.mockResolvedValue({ id: 'p_1', title: 'Auth', bodyMd: 'body', machineId: 'm_1' })
+				.mockResolvedValue({
+					id: 'p_1',
+					number: 7,
+					title: 'Add login page',
+					bodyMd: 'body',
+					machineId: 'm_1'
+				})
 		},
 		sliceRepo: {
 			listByPlan: vi.fn().mockResolvedValue([
@@ -128,10 +134,48 @@ describe('advanceQueue', () => {
 		expect(dispatched(sendToAgent)).toMatchObject({
 			type: 'exec.start',
 			runId: 'sr_1',
-			branch: 'bosun/auth/p_1',
+			branch: 'bosun/plan/auth/7-add-login-page',
 			baseRef: 'main',
 			freshBranch: true
 		});
+	});
+
+	// Git refs are paths. The worktree already holds `bosun/worktree/<slug>`, and a
+	// plan branch under `bosun/<slug>/...` would make one a directory and the other
+	// a leaf: `cannot lock ref ... exists; cannot create ...`, on the first plan.
+	it('keeps plan branches out of the namespace a worktree branch occupies', async () => {
+		const { deps, sendToAgent } = build({
+			claimItem: item(),
+			claimRun: run(),
+			runs: [run()]
+		});
+
+		await advanceQueue(deps, { queueId: 'q_1' });
+
+		expect(dispatched(sendToAgent).branch.startsWith('bosun/plan/')).toBe(true);
+	});
+
+	it('persists the branch so a retitled plan keeps the one its commits are on', async () => {
+		const { deps } = build({ claimItem: item(), claimRun: run(), runs: [run()] });
+
+		await advanceQueue(deps, { queueId: 'q_1' });
+
+		expect(deps.queueItemRepo.update).toHaveBeenCalledWith({
+			id: 'qi_1',
+			branch: 'bosun/plan/auth/7-add-login-page'
+		});
+	});
+
+	it('reuses a branch already recorded on the item', async () => {
+		const { deps, sendToAgent } = build({
+			items: [item({ status: 'running', branch: 'bosun/plan/auth/7-old-title' })],
+			claimRun: run(),
+			runs: [run()]
+		});
+
+		await advanceQueue(deps, { queueId: 'q_1' });
+
+		expect(dispatched(sendToAgent).branch).toBe('bosun/plan/auth/7-old-title');
 	});
 
 	// The second bullet resetting to baseRef would throw away the commit the first
@@ -140,7 +184,7 @@ describe('advanceQueue', () => {
 		const first = run({ status: 'done' });
 		const second = run({ id: 'sr_2', sliceId: 'sl_2', ordinal: 2 });
 		const { deps, sendToAgent } = build({
-			items: [item({ status: 'running', branch: 'bosun/auth/p_1' })],
+			items: [item({ status: 'running', branch: 'bosun/plan/auth/7-add-login-page' })],
 			claimRun: second,
 			runs: [first, second]
 		});
@@ -303,7 +347,7 @@ describe('advanceQueue', () => {
 	it('does not publish a plan whose bullets did not all land', async () => {
 		const { deps, sendToAgent } = build({
 			queue: queue({ status: 'running' }),
-			items: [item({ status: 'running', branch: 'bosun/auth/p_1' })],
+			items: [item({ status: 'running', branch: 'bosun/plan/auth/7-add-login-page' })],
 			claimRun: null,
 			runs: [
 				run({ status: 'done', commitSha: 'abc' }),
@@ -319,7 +363,7 @@ describe('advanceQueue', () => {
 	it('publishes a plan whose bullets all landed', async () => {
 		const { deps, sendToAgent } = build({
 			queue: queue({ status: 'running' }),
-			items: [item({ status: 'running', branch: 'bosun/auth/p_1' })],
+			items: [item({ status: 'running', branch: 'bosun/plan/auth/7-add-login-page' })],
 			claimRun: null,
 			runs: [run({ status: 'done', commitSha: 'abc' })]
 		});
@@ -330,7 +374,7 @@ describe('advanceQueue', () => {
 			expect.objectContaining({
 				message: expect.objectContaining({
 					type: 'queue.publish',
-					branch: 'bosun/auth/p_1',
+					branch: 'bosun/plan/auth/7-add-login-page',
 					baseRef: 'main'
 				})
 			})
@@ -342,7 +386,7 @@ describe('advanceQueue', () => {
 	it('publishes nothing when no bullet made a commit', async () => {
 		const { deps, sendToAgent } = build({
 			queue: queue({ status: 'running' }),
-			items: [item({ status: 'running', branch: 'bosun/auth/p_1' })],
+			items: [item({ status: 'running', branch: 'bosun/plan/auth/7-add-login-page' })],
 			claimRun: null,
 			runs: [run({ status: 'done', commitSha: null })]
 		});

@@ -10,7 +10,7 @@ import { type PlanDecisionRepo } from 'src/repos/plans/plan-decision.repo';
 import { type SliceRunRepo } from 'src/repos/queues/slice-run.repo';
 import { type SocketRegistry } from 'src/services/sockets/registry.service';
 import { type Ac, type Plan, type PlanDecision } from 'src/types/PlanSchema';
-import { type Queue, type QueueItem } from 'src/types/QueueSchema';
+import { toQueueSlug, type Queue, type QueueItem } from 'src/types/QueueSchema';
 import { DEFAULT_PROJECT_PROFILE } from 'src/types/ProjectProfileSchema';
 
 // Each running queue is a `claude` process holding a worktree. Two is what a
@@ -78,6 +78,15 @@ async function dispatch(
 		return false;
 	}
 
+	// Named from the plan rather than the item, so a branch and its pull request
+	// say which plan they are without anybody looking it up. Persisted on first
+	// use: a retitled plan must not change the branch its commits are already on.
+	const branch = opts.item.branch ?? planBranch({ queueSlug: opts.queue.slug, plan });
+
+	if (opts.item.branch === null) {
+		await deps.queueItemRepo.update({ id: opts.item.id, branch });
+	}
+
 	const acs = await deps.acRepo.listBySlice(slice.id);
 	const planAcs = await deps.acRepo.listByPlan(opts.item.planId);
 	const decisions = await deps.planDecisionRepo.listByPlan(opts.item.planId);
@@ -94,7 +103,7 @@ async function dispatch(
 			type: 'exec.start',
 			runId: run.id,
 			worktreePath: opts.queue.worktreePath!,
-			branch: opts.item.branch ?? `bosun/${opts.queue.slug}/${opts.item.planId}`,
+			branch,
 			baseRef: opts.queue.baseRef ?? 'HEAD',
 			// Only the first bullet cuts the branch. A later one resetting over it
 			// would throw away every commit the ones before it made.
@@ -203,6 +212,16 @@ function pullRequestBody(opts: {
 	].join('\n\n');
 }
 
+// `bosun/plan/...` rather than `bosun/<queue>/...`: the worktree already holds a
+// branch named for the queue, and git cannot have a ref that is both a leaf and
+// a directory. Two queues can run the same plan, so the queue slug stays in the
+// name to keep those apart.
+function planBranch(opts: { queueSlug: string; plan: Plan }): string {
+	const title = toQueueSlug(opts.plan.title ?? '');
+
+	return `bosun/plan/${opts.queueSlug}/${opts.plan.number}${title === '' ? '' : `-${title}`}`;
+}
+
 // Asked for only when every bullet landed. A plan that failed keeps its branch
 // and its partial commits for somebody to look at, but opening a pull request
 // for work that did not finish would put it in front of reviewers as though it
@@ -292,11 +311,7 @@ export async function advanceQueue(deps: AdvanceDeps, opts: { queueId: string })
 		return;
 	}
 
-	const branch = `bosun/${queue.slug}/${next.planId}`;
-
-	await deps.queueItemRepo.update({ id: next.id, branch });
-
-	if (await dispatch(deps, { queue, item: { ...next, branch } })) {
+	if (await dispatch(deps, { queue, item: next })) {
 		await setStatus(deps, { queue, status: 'running' });
 
 		return;
