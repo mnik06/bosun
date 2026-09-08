@@ -1,21 +1,13 @@
 import { type ClaudeAuthService } from './claude-auth.service';
 import { type ExecService } from './exec.service';
 import { type McpConfigService } from './mcp-config.service';
-import { type SkillsService } from './skills.service';
 import { type PreflightCheck } from '../protocol';
 
-const MIN_NODE = [24, 15] as const;
 const MIN_CLAUDE_MAJOR = 2;
 
 // Either is enough to install and run what a session needs. Requiring a specific
 // one would fail boxes that are already set up, for no gain.
 const PACKAGE_MANAGERS = ['npm', 'pnpm'] as const;
-
-export function isAtLeastMinNode(version: string): boolean {
-	const [major = 0, minor = 0] = version.replace(/^v/, '').split('.').map(Number);
-
-	return major > MIN_NODE[0] || (major === MIN_NODE[0] && minor >= MIN_NODE[1]);
-}
 
 export function claudeVersionIsSupported(version: string): boolean {
 	// The stream-json event shape is a looser contract than a package version, so
@@ -27,23 +19,8 @@ export function getPreflightService(deps: {
 	exec: ExecService;
 	claudeAuth: ClaudeAuthService;
 	mcpConfig: McpConfigService;
-	skills: SkillsService;
 	repoPath: string;
 }) {
-	async function checkNode(): Promise<PreflightCheck> {
-		const result = await deps.exec.run('node', ['--version']);
-
-		if (!result.ok) {
-			return { name: 'node', ok: false, detail: `node: ${result.reason}` };
-		}
-
-		return {
-			name: 'node',
-			ok: isAtLeastMinNode(result.stdout),
-			detail: `${result.stdout} (need >= ${MIN_NODE[0]}.${MIN_NODE[1]})`
-		};
-	}
-
 	async function checkPackageManager(): Promise<PreflightCheck> {
 		const results = await Promise.all(
 			PACKAGE_MANAGERS.map(async (name) => ({
@@ -120,22 +97,6 @@ export function getPreflightService(deps: {
 		};
 	}
 
-	// Informational, never red: a repo with no skills is the normal case, not a
-	// misconfigured machine. It is reported so that a skill which is present but
-	// never picked up is visible rather than a mystery.
-	function checkSkills(): PreflightCheck {
-		const found = deps.skills.list();
-
-		return {
-			name: 'skills',
-			ok: true,
-			detail:
-				found.length === 0
-					? 'none found'
-					: found.map((skill) => `${skill.name} (${skill.source})`).join(', ')
-		};
-	}
-
 	// Queues are git worktrees of this checkout, so a repo path that is not a
 	// repository is not a queue that fails later — it is a queue that can never be
 	// created at all.
@@ -185,15 +146,14 @@ export function getPreflightService(deps: {
 
 	return {
 		async collect(): Promise<PreflightCheck[]> {
-			const [node, packageManager, claude, git, gh] = await Promise.all([
-				checkNode(),
+			const [packageManager, claude, git, gh] = await Promise.all([
 				checkPackageManager(),
 				checkClaude(),
 				checkGit(),
 				checkGh()
 			]);
 
-			return [node, packageManager, claude, git, gh, checkCustomMcp(), checkSkills()];
+			return [packageManager, claude, git, gh, checkCustomMcp()];
 		}
 	};
 }

@@ -39,6 +39,7 @@ export async function startPlan(opts: {
 	userId: string;
 	machineId: string;
 	input: string;
+	verifyInUi: boolean;
 }): Promise<Plan> {
 	const machine = await opts.machineRepo.getOwnedById({
 		id: opts.machineId,
@@ -65,7 +66,8 @@ export async function startPlan(opts: {
 		id: opts.idService.createPlanId(),
 		userId: opts.userId,
 		machineId: machine.id,
-		input: opts.input
+		input: opts.input,
+		verifyInUi: opts.verifyInUi
 	});
 
 	await opts.planMessageRepo.append({
@@ -77,7 +79,12 @@ export async function startPlan(opts: {
 
 	const dispatched = opts.socketRegistry.sendToAgent({
 		machineId: machine.id,
-		message: { type: 'plan.start', planId: plan.id, input: opts.input }
+		message: {
+			type: 'plan.start',
+			planId: plan.id,
+			input: opts.input,
+			verifyInUi: opts.verifyInUi
+		}
 	});
 
 	if (!dispatched) {

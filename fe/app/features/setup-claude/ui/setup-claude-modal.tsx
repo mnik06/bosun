@@ -53,7 +53,7 @@ export function SetupClaudeModal ({
 
 				<Step
 					title="1. Install Claude Code"
-					detail="Needs node 24.15 or newer, which preflight also checks."
+					detail="Installs the CLI into ~/.local/bin. It brings everything it needs with it."
 					label={onMachine}
 					command="curl -fsSL https://claude.ai/install.sh | bash"
 				/>

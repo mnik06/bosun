@@ -1,21 +1,44 @@
-import { Button, Modal, Stack, Switch, Text, TextInput } from '@mantine/core'
+import { Button, Modal, Select, Stack, Switch, Text, TextInput } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
 import { Plus } from 'lucide-react'
 import { useState } from 'react'
 
+import { useMachinesQuery } from '~/entities/machine'
 import { useCreateQueue } from '~/features/create-queue/api/use-create-queue'
 
-function CreateQueueForm ({ machineId, onDone }: { machineId: string, onDone: () => void }) {
+function CreateQueueForm ({
+	machineId,
+	onDone
+}: {
+	machineId: string | undefined,
+	onDone: () => void
+}) {
+	const machines = useMachinesQuery()
+	const [target, setTarget] = useState(machineId ?? '')
 	const [name, setName] = useState('')
 	const [afk, setAfk] = useState(false)
-	const create = useCreateQueue(machineId)
+	const create = useCreateQueue()
 
 	const submit = () => {
-		create.mutate({ machineId, name: name.trim(), afk }, { onSuccess: onDone })
+		create.mutate({ machineId: target, name: name.trim(), afk }, { onSuccess: onDone })
 	}
 
 	return (
 		<Stack gap="md">
+			{machineId === undefined ? (
+				<Select
+					label="Machine"
+					placeholder="Pick a machine"
+					description="The queue's worktree is made on it, out of the checkout it already has."
+					data={(machines.data ?? []).map((machine) => ({
+						value: machine.id,
+						label: machine.name
+					}))}
+					value={target === '' ? null : target}
+					onChange={(value) => { setTarget(value ?? '') }}
+				/>
+			) : null}
+
 			<TextInput
 				label="Name"
 				placeholder="Auth work"
@@ -40,7 +63,7 @@ function CreateQueueForm ({ machineId, onDone }: { machineId: string, onDone: ()
 			<Button
 				onClick={submit}
 				loading={create.isPending}
-				disabled={name.trim() === ''}
+				disabled={name.trim() === '' || target === ''}
 			>
 				Create queue
 			</Button>
@@ -48,7 +71,7 @@ function CreateQueueForm ({ machineId, onDone }: { machineId: string, onDone: ()
 	)
 }
 
-export function CreateQueueButton ({ machineId }: { machineId: string }) {
+export function CreateQueueButton ({ machineId }: { machineId?: string | undefined }) {
 	const [opened, { open, close }] = useDisclosure(false)
 
 	return (

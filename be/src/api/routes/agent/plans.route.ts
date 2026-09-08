@@ -1,40 +1,39 @@
 import { FastifyPluginAsync } from 'fastify';
 import { ZodTypeProvider } from 'fastify-type-provider-zod';
 import {
-	AgentAcReqSchema,
-	AgentPlanTitleReqSchema,
-	AgentSliceReqSchema,
+	AgentAcMarkParamsSchema,
+	AgentAcMarkReqSchema,
+	AgentPlanNameReqSchema,
+	AgentPublishReqSchema,
 	PlanIdParamsSchema
 } from 'src/api/routes/schemas/plans/PlanReqSchemas';
 import {
 	AgentAcRespSchema,
-	AgentPlanTitleRespSchema,
-	AgentSliceRespSchema
+	AgentPlanRespSchema
 } from 'src/api/routes/schemas/plans/PlanRespSchemas';
-import { addPlanAc } from 'src/controllers/plans/agent/add-plan-ac';
-import { createPlanSlice } from 'src/controllers/plans/agent/create-plan-slice';
-import { savePlanTitle } from 'src/controllers/plans/agent/save-plan-title';
+import { markPlanAc } from 'src/controllers/plans/agent/mark-plan-ac';
+import { publishPlan } from 'src/controllers/plans/agent/publish-plan';
+import { savePlanName } from 'src/controllers/plans/agent/save-plan-name';
 
 const routes: FastifyPluginAsync = async function (f) {
 	const fastify = f.withTypeProvider<ZodTypeProvider>();
 
 	fastify.post(
-		'/plans/:id/title',
+		'/plans/:id/name',
 		{
 			schema: {
 				params: PlanIdParamsSchema,
-				body: AgentPlanTitleReqSchema,
-				response: { 200: AgentPlanTitleRespSchema }
+				body: AgentPlanNameReqSchema,
+				response: { 200: AgentPlanRespSchema }
 			}
 		},
 		async (req) => {
-			const plan = await savePlanTitle({
+			const plan = await savePlanName({
 				planRepo: fastify.repos.planRepo,
 				socketRegistry: fastify.services.socketRegistry,
 				id: req.params.id,
 				machineId: req.agent!.machineId,
-				title: req.body.title,
-				bodyMd: req.body.bodyMd
+				title: req.body.title
 			});
 
 			return { planId: plan.id };
@@ -42,42 +41,16 @@ const routes: FastifyPluginAsync = async function (f) {
 	);
 
 	fastify.post(
-		'/plans/:id/acs',
+		'/plans/:id/publish',
 		{
 			schema: {
 				params: PlanIdParamsSchema,
-				body: AgentAcReqSchema,
-				response: { 201: AgentAcRespSchema }
+				body: AgentPublishReqSchema,
+				response: { 200: AgentPlanRespSchema }
 			}
 		},
-		async (req, reply) => {
-			const ac = await addPlanAc({
-				planRepo: fastify.repos.planRepo,
-				acRepo: fastify.repos.acRepo,
-				sliceRepo: fastify.repos.sliceRepo,
-				idService: fastify.services.idService,
-				socketRegistry: fastify.services.socketRegistry,
-				id: req.params.id,
-				machineId: req.agent!.machineId,
-				code: req.body.code,
-				text: req.body.text
-			});
-
-			return reply.status(201).send({ acId: ac.id, code: ac.code });
-		}
-	);
-
-	fastify.post(
-		'/plans/:id/slices',
-		{
-			schema: {
-				params: PlanIdParamsSchema,
-				body: AgentSliceReqSchema,
-				response: { 201: AgentSliceRespSchema }
-			}
-		},
-		async (req, reply) => {
-			const slice = await createPlanSlice({
+		async (req) => {
+			const plan = await publishPlan({
 				db: fastify.db,
 				planRepo: fastify.repos.planRepo,
 				acRepo: fastify.repos.acRepo,
@@ -89,7 +62,32 @@ const routes: FastifyPluginAsync = async function (f) {
 				...req.body
 			});
 
-			return reply.status(201).send({ sliceId: slice.id });
+			return { planId: plan.id };
+		}
+	);
+
+	fastify.post(
+		'/plans/:id/acs/:code/mark',
+		{
+			schema: {
+				params: AgentAcMarkParamsSchema,
+				body: AgentAcMarkReqSchema,
+				response: { 200: AgentAcRespSchema }
+			}
+		},
+		async (req) => {
+			const ac = await markPlanAc({
+				planRepo: fastify.repos.planRepo,
+				acRepo: fastify.repos.acRepo,
+				sliceRepo: fastify.repos.sliceRepo,
+				socketRegistry: fastify.services.socketRegistry,
+				id: req.params.id,
+				machineId: req.agent!.machineId,
+				code: req.params.code,
+				...req.body
+			});
+
+			return { code: ac.code, implemented: ac.implemented, verified: ac.verified };
 		}
 	);
 };

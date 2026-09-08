@@ -1,18 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { claudeVersionIsSupported, isAtLeastMinNode } from './preflight.service';
-
-describe('isAtLeastMinNode', () => {
-	it.each([
-		['v24.15.0', true],
-		['v24.16.0', true],
-		['v25.0.0', true],
-		['v24.14.9', false],
-		['v22.20.0', false],
-		['24.15.0', true]
-	])('%s -> %s', (version, expected) => {
-		expect(isAtLeastMinNode(version)).toBe(expected);
-	});
-});
+import { claudeVersionIsSupported } from './preflight.service';
 
 describe('claudeVersionIsSupported', () => {
 	it.each([

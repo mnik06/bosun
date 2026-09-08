@@ -1,4 +1,5 @@
 import { advanceMachine, advanceQueue, type AdvanceDeps } from 'src/controllers/queues/advance-queue';
+import { acGateFailure } from 'src/controllers/queues/shared/ac-gate';
 import { type AgentMsg } from 'src/types/protocol';
 
 type ExecFrame = Extract<AgentMsg, { type: `exec.${string}` }>;
@@ -59,35 +60,59 @@ export async function recordExecFrame(
 	}
 
 	if (frame.type === 'exec.done') {
-		await deps.sliceRunRepo.update({
-			id: frame.runId,
-			status: 'done',
-			commitSha: frame.commitSha,
-			finishedAt: new Date()
+		const gate = await acGateFailure(deps, {
+			planId: located.item.planId,
+			machineId: opts.machineId,
+			sliceId: located.run.sliceId
 		});
-		await advanceQueue(deps, { queueId: located.queue.id });
-		await advanceMachine(deps, { machineId: opts.machineId });
+
+		if (gate === null) {
+			await deps.sliceRunRepo.update({
+				id: frame.runId,
+				status: 'done',
+				commitSha: frame.commitSha,
+				finishedAt: new Date()
+			});
+			await advanceQueue(deps, { queueId: located.queue.id });
+			await advanceMachine(deps, { machineId: opts.machineId });
+
+			return;
+		}
+
+		await failRun(deps, { ...opts, located, runId: frame.runId, message: gate });
 
 		return;
 	}
 
-	// A bullet that failed ends its plan and nothing else. The partial work stays
-	// on that plan's own branch, and the queue carries on with the next plan —
-	// which is only safe because each plan is cut from baseRef rather than from
-	// whatever the last one left behind.
+	await failRun(deps, { ...opts, located, runId: frame.runId, message: frame.message });
+}
+
+// A bullet that failed ends its plan and nothing else. The partial work stays on
+// that plan's own branch, and the queue carries on with the next plan — which is
+// only safe because each plan is cut from baseRef rather than from whatever the
+// last one left behind.
+async function failRun(
+	deps: AdvanceDeps,
+	opts: {
+		machineId: string;
+		located: NonNullable<Awaited<ReturnType<typeof locate>>>;
+		runId: string;
+		message: string;
+	}
+): Promise<void> {
 	await deps.sliceRunRepo.update({
-		id: frame.runId,
+		id: opts.runId,
 		status: 'failed',
-		failureReason: frame.message,
+		failureReason: opts.message,
 		finishedAt: new Date()
 	});
 	await deps.queueItemRepo.update({
-		id: located.item.id,
+		id: opts.located.item.id,
 		status: 'failed',
-		failureReason: frame.message,
+		failureReason: opts.message,
 		finishedAt: new Date()
 	});
-	await advanceQueue(deps, { queueId: located.queue.id });
+	await advanceQueue(deps, { queueId: opts.located.queue.id });
 	// This queue may have just handed its slot back, so anything on the machine
 	// that was held at the cap gets to start now rather than on the next nudge.
 	await advanceMachine(deps, { machineId: opts.machineId });

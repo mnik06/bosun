@@ -72,6 +72,9 @@ export const plans = pgTable(
 		title: text(),
 		bodyMd: text(),
 		status: text().$type<PlanStatus>().notNull().default('planning'),
+		// Settled when the ticket is pasted, not by the session: whether this plan
+		// ends in a verify bullet that drives the feature through its interface.
+		verifyInUi: boolean().notNull().default(true),
 		failureReason: text(),
 		input: text().notNull(),
 		createdAt: timestamp({ withTimezone: true }).notNull().defaultNow()
@@ -131,7 +134,13 @@ export const acs = pgTable(
 		// that still owns an AC is refused: an AC must never be silently dropped
 		// along with the bullet that claimed it.
 		sliceId: text().references(() => slices.id, { onDelete: 'set null' }),
-		ordinal: integer().notNull()
+		ordinal: integer().notNull(),
+		// Ticked by the sessions, never by the browser. A build bullet may not
+		// finish while one of its criteria is unimplemented, and a verify bullet
+		// may not open a pull request while one is unverified — these two columns
+		// are what those refusals are decided from.
+		implemented: boolean().notNull().default(false),
+		verified: boolean().notNull().default(false)
 	},
 	(table) => [
 		index('acs_plan_id_idx').on(table.planId),

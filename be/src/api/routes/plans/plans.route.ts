@@ -2,8 +2,7 @@ import { FastifyPluginAsync } from 'fastify';
 import { ZodTypeProvider } from 'fastify-type-provider-zod';
 import {
 	CreatePlanReqSchema,
-	PlanIdParamsSchema,
-	UpdatePlanReqSchema
+	PlanIdParamsSchema
 } from 'src/api/routes/schemas/plans/PlanReqSchemas';
 import {
 	PlanDetailRespSchema,
@@ -13,7 +12,6 @@ import { discardPlan } from 'src/controllers/plans/discard-plan';
 import { getPlanDetail } from 'src/controllers/plans/get-plan-detail';
 import { listPlans } from 'src/controllers/plans/list-plans';
 import { startPlan } from 'src/controllers/plans/start-plan';
-import { updatePlan } from 'src/controllers/plans/update-plan';
 import { PlanSchema } from 'src/types/PlanSchema';
 
 const routes: FastifyPluginAsync = async function (f) {
@@ -36,7 +34,8 @@ const routes: FastifyPluginAsync = async function (f) {
 				socketRegistry: fastify.services.socketRegistry,
 				userId: req.user!.id,
 				machineId: req.body.machineId,
-				input: req.body.input
+				input: req.body.input,
+				verifyInUi: req.body.verifyInUi
 			});
 
 			return reply.status(201).send(plan);
@@ -65,26 +64,6 @@ const routes: FastifyPluginAsync = async function (f) {
 				sliceRepo: fastify.repos.sliceRepo,
 				id: req.params.id,
 				userId: req.user!.id
-			});
-		}
-	);
-
-	fastify.patch(
-		'/:id',
-		{
-			schema: {
-				params: PlanIdParamsSchema,
-				body: UpdatePlanReqSchema,
-				response: { 200: PlanSchema }
-			}
-		},
-		async (req) => {
-			return updatePlan({
-				planRepo: fastify.repos.planRepo,
-				socketRegistry: fastify.services.socketRegistry,
-				id: req.params.id,
-				userId: req.user!.id,
-				...req.body
 			});
 		}
 	);

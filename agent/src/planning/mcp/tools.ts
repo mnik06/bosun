@@ -8,44 +8,45 @@ import {
 import { type PlanQuestion } from '../../protocol';
 import { type BosunApiService } from '../../services/bosun-api.service';
 
-export const CreatePlanArgsSchema = z.object({
-	title: z.string().min(1),
-	bodyMd: z.string().min(1)
-});
-
-export const AddAcArgsSchema = z.object({ code: z.string().min(1), text: z.string().min(1) });
+export const NamePlanArgsSchema = z.object({ title: z.string().min(1) });
 
 export const SetBlockersArgsSchema = z.object({
 	blockedByNumbers: z.array(z.number().int().positive())
 });
 
-export const CreateSliceArgsSchema = z.object({
-	ordinal: z.number().int().min(1),
-	kind: z.enum(['build', 'verify']),
+export const PublishPlanArgsSchema = z.object({
 	title: z.string().min(1),
-	bodyMd: z.string().optional(),
-	acCodes: z.array(z.string().min(1))
+	bodyMd: z.string().min(1),
+	acs: z.array(z.object({ code: z.string().min(1), text: z.string().min(1) })).min(1),
+	slices: z
+		.array(
+			z.object({
+				ordinal: z.number().int().min(1),
+				kind: z.enum(['build', 'verify']),
+				title: z.string().min(1),
+				bodyMd: z.string().nullable().optional(),
+				acCodes: z.array(z.string().min(1))
+			})
+		)
+		.min(1)
 });
 
 const DESCRIPTIONS: Record<string, string> = {
 	list_plans:
 		'List every plan already written for this machine — number, title, status, its tracer bullets and what it is blocked by. Call this during recon, before you write anything: it is the only way to see whether the work you are planning is already covered, already underway, or waiting on something. Bodies are truncated to a summary.',
+	name_plan:
+		'Name this plan. Call it as soon as you know what the ticket is about, before the grill starts — until you do, the person watching a list of running sessions sees "Untitled". Call it again if the scope turns out to be something else.',
 	set_blockers:
 		'Declare which plans this one cannot start until. Names them by plan number, replacing whatever was declared before — pass an empty list to clear. A queue runs plans in push order except where a blocker says otherwise, so this is what stops a plan executing before the work it depends on exists.',
-	create_plan:
-		'Publish the plan title and its markdown body. Call this once, before add_ac, and only after every question is resolved.',
-	add_ac:
-		'Add one acceptance criterion. Codes are AC-1, AC-2, ... in order. Every AC must later be claimed by exactly one tracer bullet.',
-	create_slice:
-		'Create one tracer bullet and claim the acceptance criteria it delivers. acCodes must name ACs that exist and that no other bullet has claimed.'
+	publish_plan:
+		'Publish the whole plan at once: title, markdown body, every acceptance criterion and every tracer bullet with the criteria it claims. Replaces whatever was published before, so a revision re-sends the plan as it should now be rather than a diff. Every AC must be claimed by exactly one bullet, and what is already marked implemented or verified stays that way.'
 };
 
 export const TOOL_SCHEMAS = {
 	list_plans: z.object({}),
+	name_plan: NamePlanArgsSchema,
 	set_blockers: SetBlockersArgsSchema,
-	create_plan: CreatePlanArgsSchema,
-	add_ac: AddAcArgsSchema,
-	create_slice: CreateSliceArgsSchema
+	publish_plan: PublishPlanArgsSchema
 } as const;
 
 export type ToolName = keyof typeof TOOL_SCHEMAS;
@@ -79,6 +80,15 @@ export function createPlanDispatch(opts: {
 				return textToolResult(JSON.stringify(await opts.bosunApi.listMachinePlans()));
 			}
 
+			if (name === 'name_plan') {
+				await opts.bosunApi.savePlanName({
+					planId: opts.planId,
+					...NamePlanArgsSchema.parse(args)
+				});
+
+				return textToolResult(opts.planId);
+			}
+
 			if (name === 'set_blockers') {
 				const saved = await opts.bosunApi.setPlanBlockers({
 					planId: opts.planId,
@@ -88,31 +98,13 @@ export function createPlanDispatch(opts: {
 				return textToolResult(JSON.stringify(saved));
 			}
 
-			if (name === 'create_plan') {
-				await opts.bosunApi.savePlanTitle({
+			if (name === 'publish_plan') {
+				const saved = await opts.bosunApi.publishPlan({
 					planId: opts.planId,
-					...CreatePlanArgsSchema.parse(args)
+					artifact: PublishPlanArgsSchema.parse(args)
 				});
 
-				return textToolResult(opts.planId);
-			}
-
-			if (name === 'add_ac') {
-				const created = await opts.bosunApi.addPlanAc({
-					planId: opts.planId,
-					...AddAcArgsSchema.parse(args)
-				});
-
-				return textToolResult(JSON.stringify(created));
-			}
-
-			if (name === 'create_slice') {
-				const created = await opts.bosunApi.createPlanSlice({
-					planId: opts.planId,
-					slice: CreateSliceArgsSchema.parse(args)
-				});
-
-				return textToolResult(JSON.stringify(created));
+				return textToolResult(JSON.stringify(saved));
 			}
 
 			throw new Error(`unknown tool ${name}`);

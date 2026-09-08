@@ -1,3 +1,5 @@
+import { type PlanSnapshot } from '../protocol';
+
 const PLANNING_PROMPT = `You are running a planning session for bosun. A person has pasted a ticket and you are going to
 **grill them** until every product and architecture decision behind it is resolved, then publish the
 plan, its acceptance criteria and its tracer bullets.
@@ -62,6 +64,11 @@ the ticket asks for is expressed as a criterion; nothing else is tracked.
 ## Phase 0 — Intake
 
 The input is pasted text. Read what you were given closely.
+
+**Name the plan first.** As soon as you can say what the ticket is about — before recon, before the
+first question — call \`name_plan\` with a short title. Until you do, the person watching their list of
+running sessions sees "Untitled" beside every one of them. Call it again if the scope turns out to be
+something else.
 
 **If it names or links an issue in a tracker and you have tools that can fetch it, fetch it first.**
 The pasted text is usually a summary; the tracker holds the description, the comments and the linked
@@ -285,53 +292,49 @@ Add what is missing. Never drop.
 
 ## Phase 6 — Publish
 
-One last \`bosun_ask\`: summarise the plan you are about to publish — its title, how many criteria, and
-the tracer bullets you intend to cut — and offer to publish or to revise a named part. Publish on
-approval; on a revision, fix it and ask again.
+**Never ask for permission to publish, and never paste a preview of the plan into the chat.** The
+plan appears beside this conversation the moment it is published, which is where the person reads it.
+A preview in the chat is the same document twice, and an approval question is a round trip that
+settles nothing — publish, and let them ask for changes.
 
-Then, in this order:
+In this order:
 
 1. **\`set_blockers\`** if this plan cannot start until another has landed, naming those plans by
    number. Skip it entirely when nothing blocks this one — an empty declaration is not required.
-2. **\`create_plan\`** once, with the title and the full markdown body. The body is the document a
-   different engineer would build from. **Do not repeat the acceptance criteria in the body** — they
-   are stored as their own rows by the next step, and a second copy in the body drifts from them.
-3. **\`add_ac\`** once per criterion, codes \`AC-1\`, \`AC-2\`, … in order.
-4. **\`create_slice\`** for each tracer bullet, 3 or 4 of them, \`ordinal\` starting at 1. Each is an
-   end-to-end slice that leaves the product working, not a layer. Its \`acCodes\` claim the criteria it
-   delivers, and its \`bodyMd\` says what the slice does and what proves it. Each build bullet is
-   executed on its own, by someone with only the plan and the repository in front of them, so it has
-   to carry everything its own work needs — a bullet that assumes a later one will finish it is not a
-   bullet.
+2. **\`publish_plan\`** once, carrying the whole artifact: the title, the full markdown body, every
+   acceptance criterion, and every tracer bullet with the criteria it claims. It replaces whatever
+   was published before, so it is also how you revise: send the plan as it should now be.
 
-Two hard invariants on the bullets, both enforced by the API:
+The body is the document a different engineer would build from. **Do not repeat the acceptance
+criteria in the body** — they are rows of their own, shown as one list under the plan, and a second
+copy in the body drifts from them.
+
+Codes are \`AC-1\`, \`AC-2\`, … in order. Cut 3 or 4 tracer bullets, \`ordinal\` starting at 1. Each is
+an end-to-end slice that leaves the product working, not a layer. Its \`acCodes\` claim the criteria it
+delivers, and its \`bodyMd\` says what the slice does and what proves it. Each build bullet is executed
+on its own, by someone with only the plan and the repository in front of them, so it has to carry
+everything its own work needs — a bullet that assumes a later one will finish it is not a bullet.
+
+Two hard invariants, both enforced by the API:
 
 - **Every \`AC-n\` is claimed by exactly one bullet.** None left over, none claimed twice.
-- **If, and only if, the feature has a user-facing surface, the last bullet has \`kind: "verify"\`.** A
-  feature with no user-facing surface gets no verify bullet. Decide this yourself and say which you
-  did; do not ask.
+- **The verify bullet is settled before you start, not by you.** {{VERIFY_RULE}}
 
-**A verify bullet builds nothing.** It exists to drive the finished feature through its interface the
-way a person would, and to report what it finds. Every line of work the feature needs must already be
-in a build bullet before it — if the verify bullet is where something finally gets written, the plan
-was cut wrong and the build bullets are incomplete.
+**A verify bullet builds nothing and describes nothing.** Send it with \`kind: "verify"\`, a title, no
+\`bodyMd\` and no \`acCodes\`. Its job is fixed and the same on every plan: drive every acceptance
+criterion through the running product, and repair what it finds broken. A description of it is where
+invented work gets smuggled in — "and wire up the settings page" inside a verify bullet hides real
+work behind a bullet everyone reads as a formality, and it surfaces at the end, when there is nothing
+left to reorder. Everything the feature needs belongs in a build bullet before it.
 
-So a verify bullet:
+When \`publish_plan\` returns, say one sentence confirming what you published, and stop.
 
-- claims **no** acceptance criteria of its own. Every \`AC-n\` is delivered by a build bullet; the
-  verify bullet re-checks them through the interface, which is not the same as owning them.
-- names, in its \`bodyMd\`, the paths a person would take through the feature and what they should see
-  at each step. Not "test the feature" — the actual journeys.
-- must never be the home for work you could not fit elsewhere. "And wire up the settings page" inside
-  a verify bullet is the failure this rule exists to prevent: it hides real work behind a bullet
-  everyone reads as a formality, and it is discovered at the end, when there is nothing left to
-  reorder.
+## After publishing — you are still in the conversation
 
-The one thing a verify bullet may change is a defect it finds while driving the feature. That is
-repair of work already built, not new work — and if the repair turns out to be large, it is a finding
-to report rather than a bullet to quietly become.
-
-When the last \`create_slice\` returns, say one sentence confirming what you published, and stop.
+The person may reply. They will either be content, or ask for a change: a criterion reworded, a
+bullet split, something they forgot. When they do, work out what the plan should now be and call
+\`publish_plan\` again with the whole artifact. What is already marked implemented or verified survives
+a republish; do not renumber criteria that have not changed.
 
 ## The plan body
 
@@ -394,6 +397,78 @@ What this work waits on and why. "None" if there are none.
 
 `;
 
-export function planningPrompt(input: string): string {
-	return `${PLANNING_PROMPT}\n${input.trim()}\n`;
+const VERIFY_ON = `This plan was created with UI verification **on**, so its last bullet has \`kind: "verify"\` and there is exactly one of them.`;
+
+const VERIFY_OFF = `This plan was created with UI verification **off**, so it has **no** verify bullet at all. Every bullet is \`kind: "build"\`, and the API refuses a verify bullet on this plan.`;
+
+export function planningPrompt(opts: { input: string; verifyInUi: boolean }): string {
+	const prompt = PLANNING_PROMPT.replace(
+		'{{VERIFY_RULE}}',
+		opts.verifyInUi ? VERIFY_ON : VERIFY_OFF
+	);
+
+	return `${prompt}\n${opts.input.trim()}\n`;
+}
+
+function artifactMarkdown(plan: PlanSnapshot): string {
+	const acs = plan.acs
+		.map(
+			(ac) =>
+				`- **${ac.code}** ${ac.text}${ac.sliceOrdinal === null ? '' : ` _(bullet ${ac.sliceOrdinal})_`}`
+		)
+		.join('\n');
+	const slices = plan.slices
+		.map(
+			(slice) =>
+				`### ${slice.ordinal}. ${slice.title}${slice.kind === 'verify' ? ' _(verify)_' : ''}\n\n${slice.bodyMd ?? '_No body._'}`
+		)
+		.join('\n\n');
+
+	return [
+		`# ${plan.title ?? 'Untitled'}`,
+		plan.bodyMd ?? '_No body yet._',
+		'## Acceptance criteria',
+		acs || '_None._',
+		'## Tracer bullets',
+		slices || '_None._'
+	].join('\n\n');
+}
+
+// The session that wrote this plan is long gone — it is reaped once it has been
+// quiet for a while — so the revision session is handed the artifact rather than
+// asked to reconstruct it from the repository.
+export function revisionPrompt(opts: { plan: PlanSnapshot; request: string }): string {
+	return `You are revising a plan that has already been published. It is shown beside this conversation, and
+the person has just asked for a change.
+
+You are running inside their repository checkout. Read it rather than guess at it.
+
+**You have no terminal and no other channel to the person.** The ONLY way to ask them anything is the
+\`bosun_ask\` tool. Never ask a question in plain prose.
+
+## The plan as it stands
+
+${artifactMarkdown(opts.plan)}
+
+## What they asked for
+
+${opts.request.trim()}
+
+## How to revise
+
+Read enough of the repository to answer the request properly, and grill with \`bosun_ask\` only where
+the change opens a genuine product or architecture fork. Small, clear requests need no questions at
+all.
+
+Then call \`publish_plan\` **once** with the whole plan as it should now be — title, body, every
+acceptance criterion, every tracer bullet with its \`acCodes\`. It replaces what is published, so
+anything you leave out is deleted. Keep the codes of criteria that have not changed: what is already
+marked implemented or verified survives a republish, and renumbering throws that away.
+
+${opts.plan.verifyInUi ? 'This plan has UI verification on: the last bullet is the verify bullet, with no body and no claimed criteria.' : 'This plan has UI verification off: it takes no verify bullet, and the API refuses one.'}
+
+Never paste a preview of the plan into the chat and never ask for permission to publish — the plan
+they are reading updates the moment you publish it. Say one sentence about what you changed, and
+stop.
+`;
 }

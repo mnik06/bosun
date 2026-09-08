@@ -42,7 +42,7 @@ describe('worktree service', () => {
 	}
 
 	it('creates a checkout of its own on a branch named for the queue', async () => {
-		const result = await service().ensure({ slug: 'auth-work', copyFiles: [] });
+		const result = await service().ensure({ slug: 'auth-work' });
 
 		expect(result.ok).toBe(true);
 		expect(result.baseRef).toBe('main');
@@ -60,7 +60,7 @@ describe('worktree service', () => {
 	// that shape. Keeping the worktree's own branch under its own segment is what
 	// stops the first plan failing with `cannot lock ref`.
 	it('holds its branch under a segment plan branches never use', async () => {
-		const created = await service().ensure({ slug: 'shared', copyFiles: [] });
+		const created = await service().ensure({ slug: 'shared' });
 		const head = await git(created.worktreePath, ['rev-parse', '--abbrev-ref', 'HEAD']);
 
 		expect(head.startsWith('bosun/worktree/')).toBe(true);
@@ -70,16 +70,16 @@ describe('worktree service', () => {
 	});
 
 	it('is idempotent', async () => {
-		const first = await service().ensure({ slug: 'auth-work', copyFiles: [] });
-		const second = await service().ensure({ slug: 'auth-work', copyFiles: [] });
+		const first = await service().ensure({ slug: 'auth-work' });
+		const second = await service().ensure({ slug: 'auth-work' });
 
 		expect(second.ok).toBe(true);
 		expect(second.worktreePath).toBe(first.worktreePath);
 	});
 
 	it('keeps two queues in separate checkouts', async () => {
-		const one = await service().ensure({ slug: 'one', copyFiles: [] });
-		const two = await service().ensure({ slug: 'two', copyFiles: [] });
+		const one = await service().ensure({ slug: 'one' });
+		const two = await service().ensure({ slug: 'two' });
 
 		fs.writeFileSync(path.join(one.worktreePath, 'only-in-one'), 'x');
 
@@ -87,7 +87,7 @@ describe('worktree service', () => {
 	});
 
 	it('removes the checkout and its registration', async () => {
-		await service().ensure({ slug: 'gone', copyFiles: [] });
+		await service().ensure({ slug: 'gone' });
 		await service().remove('gone');
 
 		expect(fs.existsSync(service().pathFor('gone'))).toBe(false);
@@ -97,7 +97,7 @@ describe('worktree service', () => {
 	// Removing a queue is how somebody gets rid of it, so refusing over changes
 	// they no longer want would leave a directory bosun has already forgotten.
 	it('removes a checkout with uncommitted changes in it', async () => {
-		const created = await service().ensure({ slug: 'dirty', copyFiles: [] });
+		const created = await service().ensure({ slug: 'dirty' });
 
 		fs.writeFileSync(path.join(created.worktreePath, 'README.md'), 'changed\n');
 		await service().remove('dirty');
@@ -108,33 +108,34 @@ describe('worktree service', () => {
 	// A directory deleted by hand leaves metadata git still believes in, and
 	// `worktree add` then refuses the path.
 	it('recreates a checkout whose directory was deleted behind its back', async () => {
-		const created = await service().ensure({ slug: 'clobbered', copyFiles: [] });
+		const created = await service().ensure({ slug: 'clobbered' });
 
 		fs.rmSync(created.worktreePath, { recursive: true, force: true });
 
-		expect((await service().ensure({ slug: 'clobbered', copyFiles: [] })).ok).toBe(true);
+		expect((await service().ensure({ slug: 'clobbered' })).ok).toBe(true);
 	});
 
 	// A worktree with no .env runs nothing, and git tracks none of those files —
-	// the machine's own checkout is the only place they exist.
-	it('copies the untracked files a fresh checkout would lack', async () => {
+	// the machine's own checkout is the only place they exist. An ignored file is
+	// copied; a directory ignored whole is what the setup command rebuilds, and
+	// copying it would move node_modules into every queue.
+	it('copies untracked and ignored files, but not an ignored directory', async () => {
+		fs.writeFileSync(path.join(repoPath, '.gitignore'), '.env.local\nnode_modules/\n');
 		fs.writeFileSync(path.join(repoPath, '.env'), 'SECRET=1\n');
+		fs.writeFileSync(path.join(repoPath, '.env.local'), 'LOCAL=1\n');
+		fs.mkdirSync(path.join(repoPath, 'node_modules', 'left-pad'), { recursive: true });
+		fs.writeFileSync(path.join(repoPath, 'node_modules', 'left-pad', 'index.js'), 'module.exports=1\n');
 
-		const created = await service().ensure({ slug: 'withenv', copyFiles: ['.env', 'missing.txt'] });
+		const created = await service().ensure({ slug: 'withenv' });
 
 		expect(fs.readFileSync(path.join(created.worktreePath, '.env'), 'utf8')).toBe('SECRET=1\n');
-		expect(created.detail).toContain('.env');
-	});
-
-	it('does not fail over a file that is not there to copy', async () => {
-		const created = await service().ensure({ slug: 'nofile', copyFiles: ['nope.env'] });
-
-		expect(created.ok).toBe(true);
+		expect(fs.readFileSync(path.join(created.worktreePath, '.env.local'), 'utf8')).toBe('LOCAL=1\n');
+		expect(fs.existsSync(path.join(created.worktreePath, 'node_modules'))).toBe(false);
 	});
 
 	it('reports a repo path that is not a git repository', async () => {
 		const notARepo = getWorktreeService({ exec, repoPath: home, homeDir: home });
-		const result = await notARepo.ensure({ slug: 'nope', copyFiles: [] });
+		const result = await notARepo.ensure({ slug: 'nope' });
 
 		expect(result.ok).toBe(false);
 		expect(result.detail).toContain('not a git repository');

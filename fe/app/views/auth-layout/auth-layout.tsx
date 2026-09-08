@@ -1,4 +1,4 @@
-import { Container, Paper } from '@mantine/core'
+import { Center, Paper } from '@mantine/core'
 import { Navigate, Outlet } from 'react-router'
 
 import { useSession } from '~/entities/session'
@@ -16,10 +16,10 @@ export default function AuthLayout () {
 	}
 
 	return (
-		<Container size={420} py="xl">
-			<Paper withBorder radius="md" p="xl">
+		<Center mih="100dvh" p="md">
+			<Paper withBorder radius="md" p="xl" className="w-full max-w-105">
 				<Outlet />
 			</Paper>
-		</Container>
+		</Center>
 	)
 }

@@ -88,7 +88,16 @@ export async function routeServerFrame(deps: RouterDeps, msg: ServerMsg): Promis
 				return;
 			}
 
-			await deps.sessions.start({ planId: msg.planId, input: msg.input });
+			await deps.sessions.start({
+				planId: msg.planId,
+				input: msg.input,
+				verifyInUi: msg.verifyInUi
+			});
+
+			return;
+
+		case 'plan.say':
+			await deps.sessions.say({ planId: msg.planId, text: msg.text, plan: msg.plan });
 
 			return;
 
@@ -156,10 +165,7 @@ export async function routeServerFrame(deps: RouterDeps, msg: ServerMsg): Promis
 		}
 
 		case 'queue.worktree.ensure': {
-			const result = await deps.services.worktree.ensure({
-				slug: msg.slug,
-				copyFiles: msg.copyFiles
-			});
+			const result = await deps.services.worktree.ensure({ slug: msg.slug });
 
 			if (result.ok && msg.setupCommand) {
 				const setup = await deps.services.worktree.setup({

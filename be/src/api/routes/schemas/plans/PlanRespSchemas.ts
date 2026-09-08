@@ -20,11 +20,9 @@ export const PlanDetailRespSchema = z.object({
 
 export const AnswerPlanRespSchema = z.object({ status: z.literal('accepted') });
 
-export const AgentAcRespSchema = z.object({ acId: z.string(), code: z.string() });
+export const AgentPlanRespSchema = z.object({ planId: z.string() });
 
-export const AgentSliceRespSchema = z.object({ sliceId: z.string() });
-
-export const AgentPlanTitleRespSchema = z.object({ planId: z.string() });
+export const AgentAcRespSchema = z.object({ code: z.string(), implemented: z.boolean(), verified: z.boolean() });
 
 export const AgentMachinePlansRespSchema = z.array(
 	z.object({

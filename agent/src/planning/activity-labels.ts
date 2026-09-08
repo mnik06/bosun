@@ -16,9 +16,10 @@ const TOOL_LABELS: Record<string, string> = {
 	WebFetch: 'Reading documentation',
 	WebSearch: 'Searching the web',
 	mcp__bosun__bosun_ask: 'Waiting for your answer',
-	mcp__bosun__create_plan: 'Writing the plan',
-	mcp__bosun__add_ac: 'Recording acceptance criteria',
-	mcp__bosun__create_slice: 'Cutting tracer bullets'
+	mcp__bosun__name_plan: 'Naming the plan',
+	mcp__bosun__publish_plan: 'Publishing the plan',
+	mcp__bosun__mark_ac_implemented: 'Ticking a criterion off',
+	mcp__bosun__mark_ac_verified: 'Ticking a criterion off'
 };
 
 function plural(count: number, noun: string): string {

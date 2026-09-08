@@ -1,10 +1,9 @@
-import { ActionIcon, Group, Menu } from '@mantine/core'
+import { ActionIcon, Menu } from '@mantine/core'
 import { EllipsisVertical, RefreshCw } from 'lucide-react'
 
 import type { Machine } from '~/entities/machine'
 import { DeleteMenuItem } from '~/features/delete-machine'
 import { PauseMenuItem } from '~/features/pause-machine'
-import { PingButton } from '~/features/ping-machine'
 
 export function MachineActions ({
 	machine,
@@ -16,32 +15,28 @@ export function MachineActions ({
 	isRefreshing: boolean
 }) {
 	return (
-		<Group gap="sm" wrap="nowrap">
-			<PingButton machineId={machine.id} />
+		<Menu position="bottom-end" withinPortal>
+			<Menu.Target>
+				<ActionIcon variant="default" size="lg" aria-label="Machine actions">
+					<EllipsisVertical size={16} />
+				</ActionIcon>
+			</Menu.Target>
 
-			<Menu position="bottom-end" withinPortal>
-				<Menu.Target>
-					<ActionIcon variant="default" size="lg" aria-label="Machine actions">
-						<EllipsisVertical size={16} />
-					</ActionIcon>
-				</Menu.Target>
+			<Menu.Dropdown>
+				<Menu.Item
+					leftSection={<RefreshCw size={14} />}
+					disabled={isRefreshing}
+					onClick={onRefresh}
+				>
+					Refresh machine
+				</Menu.Item>
 
-				<Menu.Dropdown>
-					<Menu.Item
-						leftSection={<RefreshCw size={14} />}
-						disabled={isRefreshing}
-						onClick={onRefresh}
-					>
-						Refresh machine
-					</Menu.Item>
+				<PauseMenuItem machine={machine} />
 
-					<PauseMenuItem machine={machine} />
+				<Menu.Divider />
 
-					<Menu.Divider />
-
-					<DeleteMenuItem machine={machine} />
-				</Menu.Dropdown>
-			</Menu>
-		</Group>
+				<DeleteMenuItem machine={machine} />
+			</Menu.Dropdown>
+		</Menu>
 	)
 }

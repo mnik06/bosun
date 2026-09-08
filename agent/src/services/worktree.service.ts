@@ -16,6 +16,31 @@ export interface WorktreeResult {
 // be cut from too. `origin/HEAD` is preferred over the checkout's current branch
 // because the repository the operator happens to have checked out is not
 // necessarily the line of development they want work based on.
+// Everything git does not track is what a fresh worktree lacks: `.env` and its
+// neighbours. A directory that is ignored whole — node_modules, dist, .venv —
+// comes back from `--directory` as a single `name/` entry and is skipped: that
+// is what the setup command exists to rebuild, and copying it would move
+// gigabytes into every queue.
+async function untrackedPaths(opts: { exec: ExecService; repoPath: string }): Promise<string[]> {
+	const base = ['-C', opts.repoPath, 'ls-files', '-z', '--others'];
+	const [plain, ignored] = await Promise.all([
+		opts.exec.run('git', [...base, '--exclude-standard'], { timeoutMs: 60_000 }),
+		opts.exec.run('git', [...base, '--ignored', '--exclude-standard', '--directory'], {
+			timeoutMs: 60_000
+		})
+	]);
+
+	const entries = (result: { ok: boolean; stdout: string }): string[] =>
+		result.ok ? result.stdout.split('\0').filter((entry) => entry !== '') : [];
+
+	return [
+		...new Set([
+			...entries(plain),
+			...entries(ignored).filter((entry) => !entry.endsWith('/'))
+		])
+	];
+}
+
 function copyUntracked(opts: { from: string; to: string; files: string[] }): string[] {
 	const copied: string[] = [];
 
@@ -92,7 +117,7 @@ export function getWorktreeService(deps: {
 		// Idempotent on purpose. A queue whose machine was offline at creation is
 		// re-sent the same ensure when it reconnects, and a second create must find
 		// the worktree it already made rather than fail on the branch existing.
-		async ensure(opts: { slug: string; copyFiles: string[] }): Promise<WorktreeResult> {
+		async ensure(opts: { slug: string }): Promise<WorktreeResult> {
 			const slug = opts.slug;
 			const worktreePath = pathFor(slug);
 			const baseRef = await resolveBaseRef({ exec: deps.exec, repoPath: deps.repoPath });
@@ -126,16 +151,19 @@ export function getWorktreeService(deps: {
 				return { ok: false, worktreePath, baseRef, detail: created.reason };
 			}
 
-			// Git tracks none of these, so a fresh worktree has no `.env` and nothing
-			// runs in it. They exist only in the machine's own checkout, which is why
-			// bosun copies rather than the session recreating them from nothing.
-			const copied = copyUntracked({ from: deps.repoPath, to: worktreePath, files: opts.copyFiles });
+			// They exist only in the machine's own checkout, which is why bosun copies
+			// them rather than the session recreating from nothing what it cannot see.
+			const copied = copyUntracked({
+				from: deps.repoPath,
+				to: worktreePath,
+				files: await untrackedPaths({ exec: deps.exec, repoPath: deps.repoPath })
+			});
 
 			return {
 				ok: true,
 				worktreePath,
 				baseRef,
-				detail: `created from ${baseRef}${copied.length === 0 ? '' : `, copied ${copied.join(', ')}`}`
+				detail: `created from ${baseRef}${copied.length === 0 ? '' : `, copied ${copied.length} untracked file${copied.length === 1 ? '' : 's'}`}`
 			};
 		},
 

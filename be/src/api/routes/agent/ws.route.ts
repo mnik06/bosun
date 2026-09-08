@@ -156,7 +156,6 @@ export async function applyMachineFrame(opts: {
 					type: 'queue.worktree.ensure',
 					queueId: queue.id,
 					slug: queue.slug,
-					copyFiles: profile.copyFiles,
 					setupCommand: profile.setupCommand
 				}
 			});

@@ -47,6 +47,12 @@ ${criteriaList(context.acs)}
 
 **These are the bar.** An unmet criterion is unfinished work, not a nice-to-have.
 
+**Tick each one with \`mark_ac_implemented\` as you satisfy it** — the moment the code is written and
+its feedback loop is green, not in a sweep at the end. The person watching the plan sees the boxes
+fill in as you go, and this bullet is refused if it finishes with one of its own criteria unticked.
+Tick it because it holds, never to clear the list: a criterion you cannot satisfy is a blocker to
+report.
+
 ## Gather the requirements before you write anything
 
 Read the plan above and whatever specification material this repository actually keeps — a

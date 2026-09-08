@@ -95,19 +95,37 @@ export function getBosunApiService(deps: { serverUrl: string; machineKey?: strin
 			return EnrollRespSchema.parse(payload);
 		},
 
-		async savePlanTitle(opts: { planId: string; title: string; bodyMd: string }): Promise<unknown> {
+		async savePlanName(opts: { planId: string; title: string }): Promise<unknown> {
 			return post({
-				path: `/agent/plans/${opts.planId}/title`,
+				path: `/agent/plans/${opts.planId}/name`,
 				authorized: true,
-				body: { title: opts.title, bodyMd: opts.bodyMd }
+				body: { title: opts.title }
 			});
 		},
 
-		async addPlanAc(opts: { planId: string; code: string; text: string }): Promise<unknown> {
+		// The whole artifact in one call. Publishing it piece by piece put a plan
+		// with two of its four bullets in front of the person, and made a revision
+		// a diff against whatever the last session happened to write.
+		async publishPlan(opts: { planId: string; artifact: unknown }): Promise<unknown> {
 			return post({
-				path: `/agent/plans/${opts.planId}/acs`,
+				path: `/agent/plans/${opts.planId}/publish`,
 				authorized: true,
-				body: { code: opts.code, text: opts.text }
+				body: opts.artifact
+			});
+		},
+
+		async markPlanAc(opts: {
+			planId: string;
+			code: string;
+			implemented?: boolean;
+			verified?: boolean;
+		}): Promise<unknown> {
+			const { planId, code, ...body } = opts;
+
+			return post({
+				path: `/agent/plans/${planId}/acs/${encodeURIComponent(code)}/mark`,
+				authorized: true,
+				body
 			});
 		},
 
@@ -134,14 +152,6 @@ export function getBosunApiService(deps: { serverUrl: string; machineKey?: strin
 				path: `/agent/plans/${opts.planId}/blockers`,
 				body: { blockedByNumbers: opts.blockedByNumbers },
 				authorized: true
-			});
-		},
-
-		async createPlanSlice(opts: { planId: string; slice: unknown }): Promise<unknown> {
-			return post({
-				path: `/agent/plans/${opts.planId}/slices`,
-				authorized: true,
-				body: opts.slice
 			});
 		}
 	};

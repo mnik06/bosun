@@ -1,5 +1,5 @@
 import { type AgentConfig } from '../config/config';
-import { type AgentMsg, type PlanAnswer } from '../protocol';
+import { type AgentMsg, type PlanAnswer, type PlanSnapshot } from '../protocol';
 import { type Services } from '../services/index';
 import { createActivityTracker } from './activity-labels';
 import { createPlanDispatch, TOOL_DEFINITIONS } from './mcp/tools';
@@ -13,24 +13,33 @@ const PLANNING_TOOLS = {
 	mcp: [
 		'mcp__bosun__bosun_ask',
 		'mcp__bosun__list_plans',
+		'mcp__bosun__name_plan',
 		'mcp__bosun__set_blockers',
-		'mcp__bosun__create_plan',
-		'mcp__bosun__add_ac',
-		'mcp__bosun__create_slice'
+		'mcp__bosun__publish_plan'
 	]
 };
 
 const STDERR_KEPT_CHARS = 500;
 
+// A published session is kept alive so the next thing the person types continues
+// the same conversation rather than re-reading the repository from nothing. It
+// is a `claude` process holding memory, so it does not stay forever: past this,
+// the next message starts a revision session with the plan handed to it.
+const IDLE_REAP_MS = 30 * 60 * 1000;
+const REAP_SWEEP_MS = 60 * 1000;
+
 interface Session {
 	mcp: SessionMcpServer;
 	process: ClaudeSession | null;
 	cancelled: boolean;
-	settled: boolean;
+	// A turn finished. The session stays up for follow-ups, and this is when it
+	// went quiet — a session mid-grill has never settled and is never reaped.
+	idleAt: number | null;
 }
 
 export interface PlanningSessions {
-	start(opts: { planId: string; input: string }): Promise<void>;
+	start(opts: { planId: string; input: string; verifyInUi: boolean }): Promise<void>;
+	say(opts: { planId: string; text: string; plan: PlanSnapshot }): Promise<void>;
 	answer(opts: { planId: string; questionId: string; answers: PlanAnswer[] }): void;
 	cancel(planId: string): void;
 	cancelAll(): void;
@@ -41,7 +50,8 @@ export function createPlanningSessions(opts: {
 	config: AgentConfig;
 	services: Services;
 	send: (message: AgentMsg) => void;
-	prompt: (input: string) => string;
+	prompt: (opts: { input: string; verifyInUi: boolean }) => string;
+	revisionPrompt: (opts: { plan: PlanSnapshot; request: string }) => string;
 }): PlanningSessions {
 	const sessions = new Map<string, Session>();
 
@@ -57,23 +67,30 @@ export function createPlanningSessions(opts: {
 		void session.mcp.close();
 	};
 
-	const settle = (planId: string, message: AgentMsg): void => {
+	// A finished turn is not a finished session: the plan is announced as done and
+	// the process is left running, so the next thing the person types is answered
+	// by the session that wrote the plan rather than by a stranger.
+	const done = (planId: string): void => {
 		const session = sessions.get(planId);
 
-		if (!session || session.settled) {
+		if (!session) {
 			return;
 		}
 
-		session.settled = true;
-		opts.send(message);
-		teardown(planId);
+		session.idleAt = Date.now();
+		opts.send({ type: 'plan.done', planId });
 	};
 
 	const fail = (planId: string, message: string): void => {
-		settle(planId, { type: 'plan.error', planId, message });
+		if (!sessions.has(planId)) {
+			return;
+		}
+
+		opts.send({ type: 'plan.error', planId, message });
+		teardown(planId);
 	};
 
-	const startProcess = async (planId: string, input: string): Promise<void> => {
+	const startProcess = async (planId: string, prompt: string): Promise<void> => {
 		const userMcp = opts.services.mcpConfig.read();
 
 		if (userMcp.error) {
@@ -95,7 +112,7 @@ export function createPlanningSessions(opts: {
 				console.log(line);
 			}
 		});
-		const session: Session = { mcp, process: null, cancelled: false, settled: false };
+		const session: Session = { mcp, process: null, cancelled: false, idleAt: null };
 
 		sessions.set(planId, session);
 		opts.send({ type: 'plan.activity', planId, label: 'Starting the session' });
@@ -120,7 +137,7 @@ export function createPlanningSessions(opts: {
 					return;
 				}
 
-				event.ok ? settle(planId, { type: 'plan.done', planId }) : fail(planId, event.message);
+				event.ok ? done(planId) : fail(planId, event.message);
 			},
 			onDropped: (line) => {
 				console.error(`dropped unrecognised claude frame: ${line.slice(0, 200)}`);
@@ -129,7 +146,7 @@ export function createPlanningSessions(opts: {
 
 		session.process = spawnClaudeSession({
 			cwd: opts.config.repoPath,
-			prompt: opts.prompt(input),
+			prompt,
 			mcpConfigPath: mcp.configPath,
 			userServerNames: userMcp.serverNames,
 			tools: PLANNING_TOOLS,
@@ -148,12 +165,45 @@ export function createPlanningSessions(opts: {
 					return;
 				}
 
-				// An exit without a `result` frame is the process dying under the grill —
-				// the plan has to be told, or it sits in `planning` forever.
+				// A session that already produced a result has published; exiting after
+				// that is the process being reaped, not the grill dying. Only an exit
+				// before the first result leaves a plan stuck in `planning`.
+				if (session.idleAt !== null) {
+					sessions.delete(planId);
+					void session.mcp.close();
+
+					return;
+				}
+
 				fail(planId, stderr.trim() || `claude exited with code ${code ?? 'unknown'}`);
 			}
 		});
 	};
+
+	const spawnFor = async (planId: string, prompt: string): Promise<void> => {
+		try {
+			await startProcess(planId, prompt);
+		} catch (error) {
+			teardown(planId);
+			opts.send({
+				type: 'plan.error',
+				planId,
+				message: error instanceof Error ? error.message : 'could not start the session'
+			});
+		}
+	};
+
+	const reaper = setInterval(() => {
+		const deadline = Date.now() - IDLE_REAP_MS;
+
+		for (const [planId, session] of sessions) {
+			if (session.idleAt !== null && session.idleAt < deadline) {
+				teardown(planId);
+			}
+		}
+	}, REAP_SWEEP_MS);
+
+	reaper.unref();
 
 	return {
 		async start(payload): Promise<void> {
@@ -161,16 +211,29 @@ export function createPlanningSessions(opts: {
 				return;
 			}
 
-			try {
-				await startProcess(payload.planId, payload.input);
-			} catch (error) {
-				teardown(payload.planId);
-				opts.send({
-					type: 'plan.error',
-					planId: payload.planId,
-					message: error instanceof Error ? error.message : 'could not start the session'
-				});
+			await spawnFor(
+				payload.planId,
+				opts.prompt({ input: payload.input, verifyInUi: payload.verifyInUi })
+			);
+		},
+
+		// Delivered to the session that is already up whenever there is one, so the
+		// person is talking to something that remembers the grill. Otherwise the
+		// plan travels on the frame and a revision session starts from it.
+		async say(payload): Promise<void> {
+			const session = sessions.get(payload.planId);
+
+			if (session?.process) {
+				session.idleAt = null;
+				session.process.send(payload.text);
+
+				return;
 			}
+
+			await spawnFor(
+				payload.planId,
+				opts.revisionPrompt({ plan: payload.plan, request: payload.text })
+			);
 		},
 
 		answer(payload): void {
@@ -187,6 +250,8 @@ export function createPlanningSessions(opts: {
 		},
 
 		cancelAll(): void {
+			clearInterval(reaper);
+
 			for (const planId of [...sessions.keys()]) {
 				this.cancel(planId);
 			}

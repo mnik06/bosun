@@ -1,4 +1,4 @@
-import { Alert, Button, Modal, Select, Stack, Textarea } from '@mantine/core'
+import { Alert, Button, Modal, Select, Stack, Switch, Textarea } from '@mantine/core'
 import { useForm } from '@mantine/form'
 import { zod4Resolver } from 'mantine-form-zod-resolver'
 import { useNavigate } from 'react-router'
@@ -17,7 +17,7 @@ export function NewPlanModal ({ opened, onClose }: { opened: boolean, onClose: (
 
 	const form = useForm<CreatePlanForm>({
 		mode: 'uncontrolled',
-		initialValues: { machineId: '', input: '' },
+		initialValues: { machineId: '', input: '', verifyInUi: true },
 		validate: zod4Resolver(CreatePlanFormSchema)
 	})
 
@@ -69,6 +69,13 @@ export function NewPlanModal ({ opened, onClose }: { opened: boolean, onClose: (
 						maxRows={20}
 						key={form.key('input')}
 						{...form.getInputProps('input')}
+					/>
+
+					<Switch
+						label="Verify in the UI"
+						description="On, the plan ends in a verify bullet that drives the finished feature through its interface and fixes what it finds. Off for work with no user-facing surface — no verify bullet is cut at all."
+						key={form.key('verifyInUi')}
+						{...form.getInputProps('verifyInUi', { type: 'checkbox' })}
 					/>
 
 					<Button type="submit" loading={createPlan.isPending} disabled={options.length === 0}>

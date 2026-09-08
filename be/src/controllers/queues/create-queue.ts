@@ -52,7 +52,6 @@ export async function createQueue(opts: {
 			type: 'queue.worktree.ensure',
 			queueId: queue.id,
 			slug,
-			copyFiles: profile.copyFiles,
 			setupCommand: profile.setupCommand
 		}
 	});

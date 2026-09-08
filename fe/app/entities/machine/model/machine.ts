@@ -2,13 +2,10 @@ import { z } from 'zod'
 
 export const ProjectProfileSchema = z.object({
 	applyMigrations: z.boolean(),
-	runUiTest: z.boolean(),
 	setupCommand: z.string().nullable(),
 	migrationCommand: z.string().nullable(),
 	startCommand: z.string().nullable(),
-	appUrl: z.string().nullable(),
 	testCredentialsPath: z.string().nullable(),
-	copyFiles: z.array(z.string()),
 	notes: z.string().nullable()
 })
 
@@ -16,13 +13,10 @@ export type ProjectProfile = z.infer<typeof ProjectProfileSchema>
 
 export const DEFAULT_PROJECT_PROFILE: ProjectProfile = {
 	applyMigrations: true,
-	runUiTest: true,
 	setupCommand: null,
 	migrationCommand: null,
 	startCommand: null,
-	appUrl: null,
 	testCredentialsPath: null,
-	copyFiles: [],
 	notes: null
 }
 

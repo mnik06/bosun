@@ -2,46 +2,16 @@ import { Alert, Anchor, Card, Center, Group, Loader, Stack, Text } from '@mantin
 import { Link } from 'react-router'
 
 import { QueueStatusBadge, useMachineQueuesQuery, type Queue } from '~/entities/queue'
-import { CreateQueueButton } from '~/features/create-queue'
-import { QueueControls } from '~/features/control-queue'
-import { DeleteQueueButton } from '~/features/delete-queue'
 import { toErrorMessage } from '~/shared/lib'
 
 function QueueRow ({ queue }: { queue: Queue }) {
 	return (
-		<Card withBorder padding="sm" radius="md">
-			<Group justify="space-between" align="start" wrap="nowrap">
-				<Stack gap={4}>
-					<Group gap="xs" align="center">
-						<Anchor component={Link} to={`/queues/${queue.id}`} fw={600}>
-							{queue.name}
-						</Anchor>
-						<QueueStatusBadge status={queue.status} />
-						{queue.afk ? (
-							<Text size="xs" c="dimmed">
-								AFK
-							</Text>
-						) : null}
-					</Group>
-
-					<Text size="xs" c="dimmed" className="font-mono">
-						{queue.worktreePath ?? `~/.bosun/worktrees/${queue.slug}`}
-						{queue.baseRef === null ? '' : ` · from ${queue.baseRef}`}
-					</Text>
-
-					{queue.failureReason === null ? null : (
-						<Text size="xs" c="red">
-							{queue.failureReason}
-						</Text>
-					)}
-				</Stack>
-
-				<Group gap="xs" wrap="nowrap">
-					<QueueControls queue={queue} />
-					<DeleteQueueButton queue={queue} />
-				</Group>
-			</Group>
-		</Card>
+		<Group gap="xs" align="center" wrap="nowrap">
+			<Text size="sm" fw={500} truncate>
+				{queue.name}
+			</Text>
+			<QueueStatusBadge status={queue.status} />
+		</Group>
 	)
 }
 
@@ -74,7 +44,7 @@ function QueueList ({ machineId }: { machineId: string }) {
 	}
 
 	return (
-		<Stack gap="sm">
+		<Stack gap="xs">
 			{data.map((queue) => (
 				<QueueRow key={queue.id} queue={queue} />
 			))}
@@ -82,6 +52,9 @@ function QueueList ({ machineId }: { machineId: string }) {
 	)
 }
 
+// Read-only on purpose: a queue is created, paused, stopped and deleted in one
+// place, and that place is the queues page. This card only answers "what is
+// running on this box".
 export function QueuesPanel ({ machineId }: { machineId: string }) {
 	return (
 		<Card withBorder padding="md" radius="md">
@@ -94,7 +67,9 @@ export function QueuesPanel ({ machineId }: { machineId: string }) {
 						</Text>
 					</Stack>
 
-					<CreateQueueButton machineId={machineId} />
+					<Anchor component={Link} to="/queues" size="sm">
+						Manage queues
+					</Anchor>
 				</Group>
 
 				<QueueList machineId={machineId} />

@@ -54,19 +54,39 @@ The buffer is process-local and deliberately not durable. Losing it costs the ta
 turn on a backend restart, and the session is being failed on that restart anyway, because the agent
 socket went with it.
 
+## The plan is published whole, or not at all
+
+`publishPlan` takes the entire artifact in one call — title, body, every AC, every bullet with the
+codes it claims — and writes it in one transaction. Publishing it piece by piece put a plan with two
+of its four bullets in front of whoever was watching, and made a revision a diff against whatever the
+last session happened to write. Republishing is therefore the revision mechanism: send the plan as it
+should now be, and what is missing from the payload is deleted.
+
+Two things survive a republish deliberately. Slices are matched by `ordinal` and ACs by `code`, so a
+plan already queued keeps the rows its runs point at; and `acs.implemented` / `acs.verified` are
+never written by a publish, because resetting them would hand a queue criteria it has already met.
+
 ## The every-AC-in-exactly-one-bullet invariant
 
 Two places enforce it, and they enforce different halves:
 
-- `createPlanSlice` rejects a bullet claiming an AC that does not exist, or one another bullet has
-  already claimed. Repairing a double claim afterwards is not possible without guessing which bullet
-  meant it.
+- `publishPlan` rejects an artifact where an AC is claimed twice, claimed by nothing, or claimed by a
+  bullet under a code that does not exist. Repairing a double claim afterwards is not possible
+  without guessing which bullet meant it.
 - `finishPlan` refuses to mark a plan `ready` while any AC is unclaimed, and records which ones in
   `failureReason`. An AC no bullet delivers is invisible work, not a cosmetic gap.
 
-`deleteSlice` is the third face of the same rule: deleting a bullet that still owns an AC is a `409`
-rather than an orphaning, because where those ACs should go is the user's decision. The `acs.sliceId`
-foreign key is `on delete set null` only so that rule cannot be silently bypassed by the database.
+The `acs.sliceId` foreign key is `on delete set null` so a bullet removed by a republish cannot take
+its criteria with it silently.
+
+## Criteria are ticked by sessions, never by the browser
+
+`acs.implemented` is ticked by the build bullet that owns the criterion, `acs.verified` by the verify
+bullet that drove it. `acGateFailure` refuses to settle a run whose criteria are not ticked: a build
+bullet that finishes with one of its own unticked has not delivered it, and a verify bullet that
+finishes with one unverified has not driven the feature — which is also why no pull request is opened
+for such a plan. The browser renders both boxes read-only; a click there would be a claim about work
+nobody did.
 
 ## Plan frames are handled one at a time
 

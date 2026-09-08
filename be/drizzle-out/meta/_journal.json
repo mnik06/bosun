@@ -64,6 +64,13 @@
       "when": 1788861721334,
       "tag": "0008_cute_wolverine",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1788866062138,
+      "tag": "0009_typical_ikaris",
+      "breakpoints": true
     }
   ]
 }

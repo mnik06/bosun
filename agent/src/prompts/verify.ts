@@ -10,33 +10,21 @@ import {
 export interface VerifyContext extends RunContext {
 	sliceOrdinal: number;
 	sliceTitle: string;
-	sliceBodyMd: string | null;
 	doneSlices: { ordinal: number; title: string }[];
 }
 
 function reachTheApp(context: VerifyContext): string {
-	if (!context.profile.runUiTest) {
-		return `**This project has no user-facing surface to drive** — the operator turned the browser pass
-off for this machine. Skip agent A entirely and say so in your report. Do not start a server, and do
-not report the absence of a browser as a finding.`;
-	}
-
 	const start =
 		context.profile.startCommand === null
 			? `The operator did not configure a start command, so work out how this project runs from its scripts and start it **on a port in ${context.portBase}–${context.portBase + 9}**.`
 			: `Start it with \`${context.profile.startCommand}\`, on a port in ${context.portBase}–${context.portBase + 9}.`;
-
-	const url =
-		context.profile.appUrl === null
-			? 'Take the URL from what the server prints when it comes up.'
-			: `It should then serve at \`${context.profile.appUrl}\`.`;
 
 	const creds =
 		context.profile.testCredentialsPath === null
 			? `No credentials path was configured. Look for one in the repository; if the app needs a login and you cannot find one, that is a blocker to report, not a criterion to mark passed.`
 			: `Sign in with the credentials at \`${context.profile.testCredentialsPath}\`.`;
 
-	return `${start} ${url} ${creds}
+	return `${start} Take the URL from what the server prints when it comes up. ${creds}
 
 Start it yourself in this worktree — never point at a shared or deployed environment, and never take
 a port outside your range. Confirm the entry screen renders before you test anything. If it will not
@@ -62,9 +50,16 @@ ${context.planBodyMd}
 
 ${criteriaList(context.planAcs)}
 
+**Tick each one with \`mark_ac_verified\` the moment you have watched it hold in the running product** —
+the journey driven, the state reached, the result seen. Never on the strength of the diff, and never
+in a sweep at the end. No pull request is opened for this plan while one criterion is unticked, so an
+unverifiable criterion is a blocker to report rather than a box to clear.
+
 ## This bullet
 
-${context.sliceBodyMd ?? '_No further detail was written for this bullet._'}
+Your job is fixed and it is the same on every plan: drive every acceptance criterion above through
+the running product the way a person would, and repair what you find broken. Nothing here describes
+new work, because there is none — every line the feature needs was written by a bullet before you.
 
 # You build nothing
 

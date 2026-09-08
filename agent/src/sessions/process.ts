@@ -24,6 +24,10 @@ export interface SessionTools {
 
 export interface ClaudeSession {
 	kill(): void;
+	// Another user turn on the same session. The CLI reads stream-json from stdin
+	// until it closes, so a session stays answerable instead of ending with its
+	// first result.
+	send(text: string): void;
 }
 
 function sessionArgs(opts: {
@@ -107,15 +111,21 @@ export function spawnClaudeSession(opts: {
 		opts.onExit(code);
 	});
 
+	const write = (text: string): void => {
+		if (child.stdin.writable) {
+			child.stdin.write(
+				`${JSON.stringify({
+					type: 'user',
+					message: { role: 'user', content: [{ type: 'text', text }] }
+				})}\n`
+			);
+		}
+	};
+
 	// The prompt travels on stdin rather than argv: argv is world-readable through
-	// /proc/<pid>/cmdline, and the pasted ticket is the user's own material.
-	child.stdin.write(
-		`${JSON.stringify({
-			type: 'user',
-			message: { role: 'user', content: [{ type: 'text', text: opts.prompt }] }
-		})}\n`
-	);
-	child.stdin.end();
+	// /proc/<pid>/cmdline, and the pasted ticket is the user's own material. stdin
+	// is deliberately left open — closing it ends the session after one turn.
+	write(opts.prompt);
 
 	const signalGroup = (signal: NodeJS.Signals): void => {
 		try {
@@ -126,6 +136,8 @@ export function spawnClaudeSession(opts: {
 	};
 
 	return {
+		send: write,
+
 		kill(): void {
 			if (child.exitCode !== null || child.signalCode !== null) {
 				return;

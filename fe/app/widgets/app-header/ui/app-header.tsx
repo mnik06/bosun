@@ -1,4 +1,5 @@
-import { Anchor, Button, Container, Group, Text } from '@mantine/core'
+import { Anchor, AppShell, Avatar, Group, Menu, Text, UnstyledButton } from '@mantine/core'
+import { LogOut } from 'lucide-react'
 import { Link } from 'react-router'
 
 import { useSignOut } from '~/features/auth'
@@ -7,39 +8,40 @@ export function AppHeader ({ email }: { email: string }) {
 	const signOut = useSignOut()
 
 	return (
-		<Container size="md" pt="lg">
-			<Group justify="space-between">
-				<Group gap="lg">
-					<Anchor component={Link} to="/" fw={600} underline="never">
-						bosun
-					</Anchor>
-					<Anchor component={Link} to="/" size="sm" c="dimmed">
-						Machines
-					</Anchor>
-					<Anchor component={Link} to="/plans" size="sm" c="dimmed">
-						Plans
-					</Anchor>
-					<Anchor component={Link} to="/queues" size="sm" c="dimmed">
-						Queues
-					</Anchor>
-				</Group>
+		<AppShell.Header>
+			<Group h="100%" px="md" justify="space-between" wrap="nowrap">
+				<Anchor component={Link} to="/" fw={700} size="lg" underline="never" c="bright">
+					bosun
+				</Anchor>
 
-				<Group gap="sm">
-					<Text size="sm" c="dimmed">
-						{email}
-					</Text>
-					<Button
-						variant="subtle"
-						size="compact-sm"
-						loading={signOut.isPending}
-						onClick={() => {
-							signOut.mutate()
-						}}
-					>
-						Log out
-					</Button>
-				</Group>
+				<Menu position="bottom-end" width={240} withArrow>
+					<Menu.Target>
+						<UnstyledButton aria-label="Account">
+							<Avatar radius="xl" size={32} color="blue">
+								{email.slice(0, 1).toUpperCase()}
+							</Avatar>
+						</UnstyledButton>
+					</Menu.Target>
+
+					<Menu.Dropdown>
+						<Menu.Label>
+							<Text size="xs" truncate>
+								{email}
+							</Text>
+						</Menu.Label>
+						<Menu.Divider />
+						<Menu.Item
+							leftSection={<LogOut size={14} />}
+							disabled={signOut.isPending}
+							onClick={() => {
+								signOut.mutate()
+							}}
+						>
+							Log out
+						</Menu.Item>
+					</Menu.Dropdown>
+				</Menu>
 			</Group>
-		</Container>
+		</AppShell.Header>
 	)
 }

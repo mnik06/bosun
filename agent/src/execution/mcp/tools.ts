@@ -32,16 +32,43 @@ const RECORD_DECISION_DEFINITION = {
 	inputSchema: z.toJSONSchema(RecordDecisionArgsSchema, { target: 'draft-7' })
 };
 
-export function executionDefinitions(afk: boolean): unknown[] {
-	const always = [LIST_PLANS_DEFINITION, RECORD_DECISION_DEFINITION];
+export const MarkAcArgsSchema = z.object({ code: z.string().min(1) });
 
-	return afk ? always : [ASK_DEFINITION, ...always];
+// Two tools rather than one with a flag: which of the two columns a session may
+// tick is decided by the bullet it is running, and a flag is something a model
+// can get wrong. A build bullet cannot reach `mark_ac_verified` at all.
+const MARK_IMPLEMENTED_DEFINITION = {
+	name: 'mark_ac_implemented',
+	description:
+		'Tick one acceptance criterion as implemented, by its code. Do it the moment the code that satisfies it is written and its feedback loop is green — not in a batch at the end. This bullet cannot finish while one of the criteria it claims is unticked.',
+	inputSchema: z.toJSONSchema(MarkAcArgsSchema, { target: 'draft-7' })
+};
+
+const MARK_VERIFIED_DEFINITION = {
+	name: 'mark_ac_verified',
+	description:
+		'Tick one acceptance criterion as verified, by its code. Call it only after you have watched it hold in the running product — the journey driven, the state reached, the result seen. No pull request is opened while one is unticked.',
+	inputSchema: z.toJSONSchema(MarkAcArgsSchema, { target: 'draft-7' })
+};
+
+export function executionDefinitions(opts: { afk: boolean; verify: boolean }): unknown[] {
+	const always = [
+		LIST_PLANS_DEFINITION,
+		RECORD_DECISION_DEFINITION,
+		opts.verify ? MARK_VERIFIED_DEFINITION : MARK_IMPLEMENTED_DEFINITION
+	];
+
+	return opts.afk ? always : [ASK_DEFINITION, ...always];
 }
 
-export function executionMcpTools(afk: boolean): string[] {
-	const always = ['mcp__bosun__list_plans', 'mcp__bosun__record_decision'];
+export function executionMcpTools(opts: { afk: boolean; verify: boolean }): string[] {
+	const always = [
+		'mcp__bosun__list_plans',
+		'mcp__bosun__record_decision',
+		opts.verify ? 'mcp__bosun__mark_ac_verified' : 'mcp__bosun__mark_ac_implemented'
+	];
 
-	return afk ? always : ['mcp__bosun__bosun_ask', ...always];
+	return opts.afk ? always : ['mcp__bosun__bosun_ask', ...always];
 }
 
 export function createExecutionDispatch(opts: {
@@ -61,6 +88,20 @@ export function createExecutionDispatch(opts: {
 
 			if (name === 'list_plans') {
 				return textToolResult(JSON.stringify(await opts.bosunApi.listMachinePlans()));
+			}
+
+			if (name === 'mark_ac_implemented' || name === 'mark_ac_verified') {
+				const { code } = MarkAcArgsSchema.parse(args);
+
+				return textToolResult(
+					JSON.stringify(
+						await opts.bosunApi.markPlanAc({
+							planId: opts.planId,
+							code,
+							...(name === 'mark_ac_verified' ? { verified: true } : { implemented: true })
+						})
+					)
+				);
 			}
 
 			if (name === 'record_decision') {

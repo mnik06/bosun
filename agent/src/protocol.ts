@@ -203,7 +203,44 @@ export const ShutdownMsgSchema = z.object({
 export const PlanStartMsgSchema = z.object({
 	type: z.literal('plan.start'),
 	planId: z.string(),
-	input: z.string()
+	input: z.string(),
+	verifyInUi: z.boolean().default(true)
+});
+
+// The published plan as it stands, carried on the frame rather than fetched:
+// the agent keeps no plan state, so a revision session that starts an hour after
+// the grill ended needs the artifact handed to it.
+export const PlanSnapshotSchema = z.object({
+	verifyInUi: z.boolean(),
+	title: z.string().nullable(),
+	bodyMd: z.string().nullable(),
+	acs: z.array(
+		z.object({
+			code: z.string(),
+			text: z.string(),
+			sliceOrdinal: z.number().int().nullable()
+		})
+	),
+	slices: z.array(
+		z.object({
+			ordinal: z.number().int(),
+			kind: z.enum(['build', 'verify']),
+			title: z.string(),
+			bodyMd: z.string().nullable()
+		})
+	)
+});
+
+// A line the person typed into the plan's chat. It reaches a live session as
+// another turn on its stdin; when the session is already over it starts a
+// revision session with the published plan in front of it.
+export type PlanSnapshot = z.infer<typeof PlanSnapshotSchema>;
+
+export const PlanSayMsgSchema = z.object({
+	type: z.literal('plan.say'),
+	planId: z.string(),
+	text: z.string(),
+	plan: PlanSnapshotSchema
 });
 
 export const PlanAnswerMsgSchema = z.object({
@@ -294,7 +331,6 @@ export const QueueWorktreeEnsureMsgSchema = z.object({
 	type: z.literal('queue.worktree.ensure'),
 	queueId: z.string(),
 	slug: z.string(),
-	copyFiles: z.array(z.string()).default([]),
 	setupCommand: z.string().nullable().default(null)
 });
 
@@ -314,6 +350,7 @@ export const ServerMsgSchema = z.discriminatedUnion('type', [
 	PlanStartMsgSchema,
 	PlanAnswerMsgSchema,
 	PlanCancelMsgSchema,
+	PlanSayMsgSchema,
 	QueueWorktreeEnsureMsgSchema,
 	QueueWorktreeRemoveMsgSchema,
 	ExecStartMsgSchema,

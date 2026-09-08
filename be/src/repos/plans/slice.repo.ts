@@ -40,6 +40,7 @@ export function getSliceRepo(db: DbOrTx) {
 		async updateInPlan(opts: {
 			id: string;
 			planId: string;
+			kind?: SliceKind;
 			title?: string;
 			bodyMd?: string | null;
 			ordinal?: number;

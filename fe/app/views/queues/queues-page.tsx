@@ -1,9 +1,51 @@
-import { Alert, Anchor, Card, Center, Container, Group, Loader, Stack, Text, Title } from '@mantine/core'
+import { Alert, Anchor, Card, Center, Group, Loader, Stack, Text } from '@mantine/core'
 import { Link } from 'react-router'
 
 import { useMachinesQuery } from '~/entities/machine'
-import { QueueStatusBadge, useQueuesQuery } from '~/entities/queue'
+import { QueueStatusBadge, useQueuesQuery, type Queue } from '~/entities/queue'
+import { QueueControls } from '~/features/control-queue'
+import { CreateQueueButton } from '~/features/create-queue'
+import { DeleteQueueButton } from '~/features/delete-queue'
 import { toErrorMessage } from '~/shared/lib'
+import { Page } from '~/shared/ui'
+
+function QueueCard ({ queue, machineName }: { queue: Queue, machineName: string }) {
+	return (
+		<Card withBorder padding="md" radius="md">
+			<Group justify="space-between" align="start" wrap="nowrap">
+				<Stack gap={2} className="min-w-0">
+					<Group gap="xs">
+						<Anchor component={Link} to={`/queues/${queue.id}`} fw={600}>
+							{queue.name}
+						</Anchor>
+						<QueueStatusBadge status={queue.status} />
+						{queue.afk ? (
+							<Text size="xs" c="dimmed">
+								AFK
+							</Text>
+						) : null}
+					</Group>
+
+					<Text size="xs" c="dimmed">
+						{machineName}
+						{queue.baseRef === null ? '' : ` · from ${queue.baseRef}`}
+					</Text>
+
+					{queue.failureReason === null ? null : (
+						<Text size="xs" c="red">
+							{queue.failureReason}
+						</Text>
+					)}
+				</Stack>
+
+				<Group gap="xs" wrap="nowrap">
+					<QueueControls queue={queue} />
+					<DeleteQueueButton queue={queue} />
+				</Group>
+			</Group>
+		</Card>
+	)
+}
 
 function QueueList () {
 	const { data, isPending, error } = useQueuesQuery()
@@ -28,8 +70,8 @@ function QueueList () {
 	if (data.length === 0) {
 		return (
 			<Text size="sm" c="dimmed">
-				No queues yet. A queue is a git worktree on one of your machines — create one from that
-				machine&apos;s page, then push plans to it.
+				No queues yet. A queue is a git worktree on one of your machines — create one here, then
+				push plans to it.
 			</Text>
 		)
 	}
@@ -37,28 +79,14 @@ function QueueList () {
 	return (
 		<Stack gap="sm">
 			{data.map((queue) => (
-				<Card key={queue.id} withBorder padding="md" radius="md">
-					<Group justify="space-between" align="start" wrap="nowrap">
-						<Stack gap={2} className="min-w-0">
-							<Group gap="xs">
-								<Anchor component={Link} to={`/queues/${queue.id}`} fw={600}>
-									{queue.name}
-								</Anchor>
-								<QueueStatusBadge status={queue.status} />
-								{queue.afk ? (
-									<Text size="xs" c="dimmed">
-													AFK
-									</Text>
-								) : null}
-							</Group>
-							<Text size="xs" c="dimmed">
-								{machines.data?.find((machine) => machine.id === queue.machineId)?.name ??
-												queue.machineId}
-								{queue.baseRef === null ? '' : ` · from ${queue.baseRef}`}
-							</Text>
-						</Stack>
-					</Group>
-				</Card>
+				<QueueCard
+					key={queue.id}
+					queue={queue}
+					machineName={
+						machines.data?.find((machine) => machine.id === queue.machineId)?.name ??
+						queue.machineId
+					}
+				/>
 			))}
 		</Stack>
 	)
@@ -66,11 +94,8 @@ function QueueList () {
 
 export default function QueuesPage () {
 	return (
-		<Container size="md" py="xl">
-			<Stack gap="lg">
-				<Title order={2}>Queues</Title>
-				<QueueList />
-			</Stack>
-		</Container>
+		<Page title="Queues" actions={<CreateQueueButton />}>
+			<QueueList />
+		</Page>
 	)
 }

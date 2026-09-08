@@ -1,8 +1,10 @@
-import { Button, Modal, Stack, Switch, TagsInput, Text, Textarea, TextInput } from '@mantine/core'
+import { Button, Modal, Stack, Switch, Text, Textarea, TextInput } from '@mantine/core'
 import { useState } from 'react'
 
 import { DEFAULT_PROJECT_PROFILE, type Machine, type ProjectProfile } from '~/entities/machine'
 import { useSaveProjectProfile } from '~/features/edit-project-profile/api/use-save-profile'
+
+const AGENT_DECIDES = 'Leave it empty and the agent works it out from the repository itself.'
 
 function trimmed (value: string): string | null {
 	return value.trim() === '' ? null : value.trim()
@@ -26,37 +28,32 @@ function ProfileForm ({ machine, onDone }: { machine: Machine, onDone: () => voi
 				a field that goes stale is worse than no field.
 			</Text>
 
-			<Switch
-				label="Apply migrations during a run"
-				description="Off when this machine points at a database bosun must not migrate. A session then commits the migration and says it is pending."
-				checked={draft.applyMigrations}
-				onChange={(event) => {
-					field('applyMigrations', event.currentTarget.checked)
-				}}
-			/>
+			<Stack gap="xs">
+				<Switch
+					label="Apply migrations during a run"
+					description="Off when this machine points at a database bosun must not migrate. A session then commits the migration and says it is pending."
+					checked={draft.applyMigrations}
+					onChange={(event) => {
+						field('applyMigrations', event.currentTarget.checked)
+					}}
+				/>
 
-			<Switch
-				label="Drive the UI in verify bullets"
-				description="Off for a project with no user-facing surface, so a verify bullet does not report the absence of a browser as a defect."
-				checked={draft.runUiTest}
-				onChange={(event) => {
-					field('runUiTest', event.currentTarget.checked)
-				}}
-			/>
-
-			<TagsInput
-				label="Files to copy into a new worktree"
-				description="Untracked files a fresh checkout lacks — .env and its neighbours. Copied from this machine's own checkout, the only place they exist."
-				placeholder=".env"
-				value={draft.copyFiles}
-				onChange={(value) => {
-					field('copyFiles', value)
-				}}
-			/>
+				{draft.applyMigrations ? (
+					<TextInput
+						label="Migration command"
+						description={AGENT_DECIDES}
+						placeholder="pnpm db:migration:run"
+						value={draft.migrationCommand ?? ''}
+						onChange={(event) => {
+							field('migrationCommand', trimmed(event.currentTarget.value))
+						}}
+					/>
+				) : null}
+			</Stack>
 
 			<TextInput
 				label="Setup command"
-				description="Run once when a worktree is created. Usually the install."
+				description={`Run once when a worktree is created, usually the install. ${AGENT_DECIDES}`}
 				placeholder="pnpm install"
 				value={draft.setupCommand ?? ''}
 				onChange={(event) => {
@@ -65,31 +62,12 @@ function ProfileForm ({ machine, onDone }: { machine: Machine, onDone: () => voi
 			/>
 
 			<TextInput
-				label="Migration command"
-				placeholder="pnpm db:migration:run"
-				value={draft.migrationCommand ?? ''}
-				onChange={(event) => {
-					field('migrationCommand', trimmed(event.currentTarget.value))
-				}}
-			/>
-
-			<TextInput
 				label="Start command"
-				description="How the dev stack runs. Each queue gets its own ten-port range and is told which."
+				description={`How the dev stack runs. Each queue gets its own ten-port range and is told which. ${AGENT_DECIDES}`}
 				placeholder="pnpm dev"
 				value={draft.startCommand ?? ''}
 				onChange={(event) => {
 					field('startCommand', trimmed(event.currentTarget.value))
-				}}
-			/>
-
-			<TextInput
-				label="App URL"
-				description="Where it serves once started."
-				placeholder="http://127.0.0.1:5173"
-				value={draft.appUrl ?? ''}
-				onChange={(event) => {
-					field('appUrl', trimmed(event.currentTarget.value))
 				}}
 			/>
 

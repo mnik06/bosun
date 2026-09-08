@@ -159,7 +159,7 @@ export function createExecutionSessions(opts: {
 
 		const mcp = await startSessionMcpServer({
 			sessionId: msg.runId,
-			definitions: executionDefinitions(msg.afk),
+			definitions: executionDefinitions({ afk: msg.afk, verify: msg.slice.kind === 'verify' }),
 			createDispatch: createExecutionDispatch({
 				afk: msg.afk,
 				planId: msg.planId,
@@ -214,7 +214,7 @@ export function createExecutionSessions(opts: {
 			userServerNames: userMcp.serverNames,
 			tools: {
 				builtin: msg.slice.kind === 'verify' ? VERIFY_BUILTIN_TOOLS : EXECUTION_BUILTIN_TOOLS,
-				mcp: executionMcpTools(msg.afk)
+				mcp: executionMcpTools({ afk: msg.afk, verify: msg.slice.kind === 'verify' })
 			},
 			claudeAuth: opts.services.claudeAuth,
 			onStdout: (chunk) => {

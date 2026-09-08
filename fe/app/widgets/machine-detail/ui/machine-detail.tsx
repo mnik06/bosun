@@ -8,13 +8,14 @@ import {
 	useUpgradingTo
 } from '~/entities/machine'
 import { AddMcpServerButton } from '~/features/add-mcp-server'
-import { PausedBanner } from '~/features/pause-machine'
-import { useRefreshMachine } from '~/features/refresh-machine'
 import { ProjectProfileButton } from '~/features/edit-project-profile'
+import { PausedBanner } from '~/features/pause-machine'
+import { RefreshMachineButton, useRefreshMachine } from '~/features/refresh-machine'
 import { SetupClaudeButton } from '~/features/setup-claude'
-import { SetupGithubButton } from '~/features/setup-github'
 import { formatRelativeTime, toErrorMessage } from '~/shared/lib'
+import { GitCard } from '~/widgets/machine-detail/ui/git-card'
 import { MachineActions } from '~/widgets/machine-detail/ui/machine-actions'
+import { SetupCard } from '~/widgets/machine-detail/ui/setup-card'
 import { QueuesPanel } from '~/widgets/queues-panel'
 
 export function MachineDetail ({ machineId }: { machineId: string }) {
@@ -47,6 +48,10 @@ export function MachineDetail ({ machineId }: { machineId: string }) {
 					<Group gap="sm">
 						<MachineStatusDot status={data.status} />
 						<Title order={2}>{data.name}</Title>
+						<RefreshMachineButton
+							onRefresh={refresh.refresh}
+							isRefreshing={refresh.isRefreshing}
+						/>
 					</Group>
 					<Text size="xs" c="dimmed" className="font-mono">
 						{data.id} · seen {formatRelativeTime(data.lastSeenAt)}
@@ -97,43 +102,27 @@ export function MachineDetail ({ machineId }: { machineId: string }) {
 				</Stack>
 			</Card>
 
-			<Card withBorder padding="md" radius="md">
-				<Group justify="space-between" align="center">
-					<Stack gap={2}>
-						<Text fw={600}>Claude</Text>
-						<Text size="sm" c="dimmed">
-							The CLI and the credential every planning session runs on.
-						</Text>
-					</Stack>
+			<SetupCard
+				title="Claude"
+				description="The CLI and the credential every session on this machine runs on."
+				action={<SetupClaudeButton machineName={data.name} />}
+			/>
 
-					<Group gap="xs">
-						<ProjectProfileButton machine={data} />
-						<SetupClaudeButton machineName={data.name} />
-						<SetupGithubButton machineName={data.name} />
-					</Group>
-				</Group>
-			</Card>
+			<GitCard machineName={data.name} />
 
-			<Card withBorder padding="md" radius="md">
-				<Group justify="space-between" align="center">
-					<Stack gap={2}>
-						<Text fw={600}>MCP servers</Text>
-						<Text size="sm" c="dimmed">
-							Extra tools for planning sessions, configured on the machine itself.
-						</Text>
-					</Stack>
+			<SetupCard
+				title="MCP servers"
+				description="Extra tools for planning sessions, configured on the machine itself."
+				action={<AddMcpServerButton machineName={data.name} />}
+			/>
 
-					<AddMcpServerButton machineName={data.name} />
-				</Group>
-			</Card>
+			<SetupCard
+				title="Project setup"
+				description="What a session cannot work out by reading the repository — migrations, the commands to run it, where the test credentials live."
+				action={<ProjectProfileButton machine={data} />}
+			/>
 
 			<QueuesPanel machineId={data.id} />
-
-			{data.repoPath === null ? null : (
-				<Text size="sm" c="dimmed" className="font-mono">
-					{data.repoPath}
-				</Text>
-			)}
 		</Stack>
 	)
 }

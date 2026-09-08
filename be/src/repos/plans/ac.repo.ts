@@ -9,7 +9,9 @@ const columns = {
 	code: acs.code,
 	text: acs.text,
 	sliceId: acs.sliceId,
-	ordinal: acs.ordinal
+	ordinal: acs.ordinal,
+	implemented: acs.implemented,
+	verified: acs.verified
 };
 
 export function getAcRepo(db: DbOrTx) {
@@ -75,10 +77,30 @@ export function getAcRepo(db: DbOrTx) {
 			return rows.map((row) => AcSchema.parse(row));
 		},
 
+		// By code rather than by id: a session names the criterion the way the plan
+		// does, and it has no id to hold on to.
+		async markInPlan(opts: {
+			planId: string;
+			code: string;
+			implemented?: boolean;
+			verified?: boolean;
+		}): Promise<Ac | null> {
+			const { planId, code, ...values } = opts;
+			const [row] = await db
+				.update(acs)
+				.set(values)
+				.where(and(eq(acs.planId, planId), eq(acs.code, code)))
+				.returning(columns);
+
+			return row ? AcSchema.parse(row) : null;
+		},
+
 		async updateInPlan(opts: {
 			id: string;
 			planId: string;
+			code?: string;
 			text?: string;
+			ordinal?: number;
 			sliceId?: string | null;
 		}): Promise<Ac | null> {
 			const { id, planId, ...values } = opts;

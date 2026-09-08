@@ -25,7 +25,7 @@ export function Layout ({ children }: { children: React.ReactNode }) {
 			<head>
 				<meta charSet="utf-8" />
 				<meta name="viewport" content="width=device-width, initial-scale=1" />
-				<ColorSchemeScript defaultColorScheme="auto" />
+				<ColorSchemeScript defaultColorScheme="dark" />
 				<Meta />
 				<Links />
 			</head>
@@ -62,7 +62,7 @@ function QueryProvider ({ children }: { children: React.ReactNode }) {
 export default function App () {
 	return (
 		<QueryProvider>
-			<MantineProvider theme={theme} defaultColorScheme="auto">
+			<MantineProvider theme={theme} defaultColorScheme="dark">
 				<ModalsProvider>
 					<Notifications />
 					<SessionProvider>

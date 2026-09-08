@@ -1,24 +1,23 @@
-import { Button, Container, Group, Stack, Title } from '@mantine/core'
+import { Button } from '@mantine/core'
+import { Plus } from 'lucide-react'
 import { useDisclosure } from '@mantine/hooks'
 
 import { NewPlanModal } from '~/features/create-plan'
+import { Page } from '~/shared/ui'
 import { PlansList } from '~/widgets/plans-list'
 
 export default function PlansPage () {
 	const [opened, { open, close }] = useDisclosure(false)
 
 	return (
-		<Container size="md" py="xl">
-			<Stack gap="lg">
-				<Group justify="space-between">
-					<Title order={2}>Plans</Title>
-					<Button onClick={open}>New plan</Button>
-				</Group>
-
-				<PlansList />
-			</Stack>
+		<Page title="Plans" actions={
+			<Button variant="light" size="xs" leftSection={<Plus size={14} />} onClick={open}>
+					New plan
+			</Button>
+		}>
+			<PlansList />
 
 			<NewPlanModal opened={opened} onClose={close} />
-		</Container>
+		</Page>
 	)
 }

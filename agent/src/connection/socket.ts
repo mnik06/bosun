@@ -7,7 +7,7 @@ import { type AgentConfig } from '../config/config';
 import { createAskSessions } from '../ask/session';
 import { createExecutionSessions } from '../execution/session';
 import { createPlanningSessions } from '../planning/session';
-import { planningPrompt } from '../prompts/planning';
+import { planningPrompt, revisionPrompt } from '../prompts/planning';
 import { type AgentMsg } from '../protocol';
 import { type Services } from '../services/index';
 import { AGENT_VERSION } from '../version';
@@ -86,6 +86,7 @@ async function connectOnce(deps: ConnectionDeps): Promise<void> {
 			config: deps.config,
 			services: deps.services,
 			prompt: planningPrompt,
+			revisionPrompt,
 			send: (message: AgentMsg) => {
 				if (socket.readyState === WebSocket.OPEN) {
 					socket.send(JSON.stringify(message));

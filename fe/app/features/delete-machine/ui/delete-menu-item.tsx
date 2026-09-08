@@ -22,12 +22,15 @@ export function DeleteMenuItem ({ machine }: { machine: Machine }) {
 			children: (
 				<Stack gap="sm">
 					<Text size="sm">
-						The agent on this machine will shut itself down, disable its service and discard
-						its credentials.
+						This cannot be undone. The agent shuts itself down, disables its service and deletes
+						every file bosun put on that machine — its binary, its credentials and its worktrees.
+					</Text>
+					<Text size="sm">
+						Your own checkout and anything already committed and pushed are left alone.
 					</Text>
 					<Text size="sm" fw={600}>
-						Connecting this machine again needs terminal access to that box. It cannot be
-						done from here.
+						Connecting this machine again needs terminal access to that box. It cannot be done
+						from here.
 					</Text>
 				</Stack>
 			),

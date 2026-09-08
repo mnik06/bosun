@@ -9,9 +9,6 @@ export const ProjectProfileSchema = z.object({
 	// off; one with its own wants it on, and no amount of reading the repo says
 	// which this is.
 	applyMigrations: z.boolean().default(true),
-	// A repository with no user-facing surface has nothing to drive, and a verify
-	// bullet that tries anyway reports the absence of a browser as a defect.
-	runUiTest: z.boolean().default(true),
 	// Run once when a worktree is created. A fresh worktree has no node_modules.
 	setupCommand: z.string().nullable().default(null),
 	migrationCommand: z.string().nullable().default(null),
@@ -19,14 +16,9 @@ export const ProjectProfileSchema = z.object({
 	// substituted with the queue's own port base, so two queues on one machine do
 	// not fight over a listener.
 	startCommand: z.string().nullable().default(null),
-	appUrl: z.string().nullable().default(null),
 	// The path to them, never the credentials. They stay in the repository or on
 	// the box; bosun holds a pointer and nothing more.
 	testCredentialsPath: z.string().nullable().default(null),
-	// Files git does not track and a fresh worktree therefore lacks — `.env` and
-	// its neighbours. Copied from the machine's own checkout, which is the only
-	// place they exist.
-	copyFiles: z.array(z.string()).default([]),
 	notes: z.string().nullable().default(null)
 });
 

@@ -36,7 +36,6 @@ export function getServices(opts: { config: AgentConfig; env: NodeJS.ProcessEnv 
 			exec,
 			claudeAuth,
 			mcpConfig,
-			skills,
 			repoPath: opts.config.repoPath
 		}),
 		skills,

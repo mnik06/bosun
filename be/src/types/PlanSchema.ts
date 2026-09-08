@@ -12,6 +12,7 @@ export const PlanSchema = z.object({
 	bodyMd: z.string().nullable(),
 	number: z.number().int(),
 	status: PlanStatusSchema,
+	verifyInUi: z.boolean(),
 	failureReason: z.string().nullable(),
 	input: z.string(),
 	createdAt: z.date()
@@ -83,7 +84,9 @@ export const AcSchema = z.object({
 	code: z.string(),
 	text: z.string(),
 	sliceId: z.string().nullable(),
-	ordinal: z.number().int()
+	ordinal: z.number().int(),
+	implemented: z.boolean(),
+	verified: z.boolean()
 });
 
 export type Ac = z.infer<typeof AcSchema>;
