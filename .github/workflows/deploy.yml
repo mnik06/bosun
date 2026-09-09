@@ -147,6 +147,15 @@ jobs:
 
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
+      # The flyctl tarball used in CI ships the binary as `flyctl` only, while the
+      # local installer also creates a `fly` symlink — which is the name
+      # scripts/deploy.sh calls.
+      - name: Provide the fly alias deploy.sh expects
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          ln -sf "$(command -v flyctl)" "$HOME/.local/bin/fly"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
       - run: pnpm install --frozen-lockfile
 
       # scripts/deploy.sh is the only supported way to ship the backend: it runs
