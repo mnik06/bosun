@@ -13,11 +13,15 @@ export async function answerPlanQuestion(opts: {
 	idService: IdService;
 	socketRegistry: SocketRegistry;
 	id: string;
-	userId: string;
+	projectId: string;
 	questionId: string;
 	answers: PlanAnswer[];
 }): Promise<void> {
-	const plan = await getOwnedPlan({ planRepo: opts.planRepo, id: opts.id, userId: opts.userId });
+	const plan = await getOwnedPlan({
+		planRepo: opts.planRepo,
+		id: opts.id,
+		projectId: opts.projectId
+	});
 
 	if (plan.status !== 'planning') {
 		throw new HttpError(409, 'this plan is no longer running');

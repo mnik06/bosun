@@ -12,6 +12,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import { type MachineStatus, type PreflightCheck } from 'src/types/MachineSchema';
 import { type ProjectProfile } from 'src/types/ProjectProfileSchema';
+import { type ProjectRole } from 'src/types/ProjectSchema';
 import {
 	type PlanMessageContent,
 	type PlanMessageRole,
@@ -30,16 +31,48 @@ export const users = pgTable('users', {
 	id: text().primaryKey(),
 	subId: uuid().notNull().unique(),
 	email: text().notNull(),
+	// Not a role in `project_members`: it is not scoped to a project, and putting
+	// it there would mean writing a row for every project that will ever exist.
+	isAppOwner: boolean().notNull().default(false),
 	createdAt: timestamp({ withTimezone: true }).notNull().defaultNow()
 });
+
+// The unit of ownership. A boundary rather than a workspace: machines, plans and
+// queues belong to one, and membership in it is the only thing that grants sight
+// of them.
+export const projects = pgTable('projects', {
+	id: text().primaryKey(),
+	name: text().notNull(),
+	createdAt: timestamp({ withTimezone: true }).notNull().defaultNow()
+});
+
+// A row rather than a column on either side, because the pair is the fact and
+// neither the project nor the person owns it.
+export const projectMembers = pgTable(
+	'project_members',
+	{
+		projectId: text()
+			.notNull()
+			.references(() => projects.id, { onDelete: 'cascade' }),
+		userId: text()
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		role: text().$type<ProjectRole>().notNull(),
+		createdAt: timestamp({ withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [
+		primaryKey({ columns: [table.projectId, table.userId] }),
+		index('project_members_user_id_idx').on(table.userId)
+	]
+);
 
 export const machines = pgTable(
 	'machines',
 	{
 		id: text().primaryKey(),
-		userId: text()
+		projectId: text()
 			.notNull()
-			.references(() => users.id, { onDelete: 'cascade' }),
+			.references(() => projects.id, { onDelete: 'cascade' }),
 		name: text().notNull(),
 		enrollmentToken: text().unique(),
 		tokenExpiresAt: timestamp({ withTimezone: true }),
@@ -53,16 +86,19 @@ export const machines = pgTable(
 		projectProfile: jsonb().$type<ProjectProfile>(),
 		createdAt: timestamp({ withTimezone: true }).notNull().defaultNow()
 	},
-	(table) => [index('machines_user_id_idx').on(table.userId)]
+	(table) => [index('machines_project_id_idx').on(table.projectId)]
 );
 
 export const plans = pgTable(
 	'plans',
 	{
 		id: text().primaryKey(),
-		userId: text()
+		projectId: text()
 			.notNull()
-			.references(() => users.id, { onDelete: 'cascade' }),
+			.references(() => projects.id, { onDelete: 'cascade' }),
+		// Who started it, for display only. Nulled rather than cascaded when the
+		// person leaves: the plan belongs to the project and outlives them.
+		createdByUserId: text().references(() => users.id, { onDelete: 'set null' }),
 		machineId: text()
 			.notNull()
 			.references(() => machines.id, { onDelete: 'cascade' }),
@@ -89,11 +125,11 @@ export const plans = pgTable(
 		createdAt: timestamp({ withTimezone: true }).notNull().defaultNow()
 	},
 	(table) => [
-		index('plans_user_id_idx').on(table.userId),
+		index('plans_project_id_idx').on(table.projectId),
 		index('plans_machine_id_idx').on(table.machineId),
 		// Unique so two concurrent creates cannot both take max+1 — one loses and
 		// retries rather than two plans quietly sharing a number.
-		unique('plans_user_number_key').on(table.userId, table.number)
+		unique('plans_project_number_key').on(table.projectId, table.number)
 	]
 );
 
@@ -164,9 +200,9 @@ export const queues = pgTable(
 	'queues',
 	{
 		id: text().primaryKey(),
-		userId: text()
+		projectId: text()
 			.notNull()
-			.references(() => users.id, { onDelete: 'cascade' }),
+			.references(() => projects.id, { onDelete: 'cascade' }),
 		machineId: text()
 			.notNull()
 			.references(() => machines.id, { onDelete: 'cascade' }),
@@ -186,7 +222,7 @@ export const queues = pgTable(
 	// The slug names a directory and a branch on the machine, so two queues on one
 	// machine cannot share it without one of them writing over the other's tree.
 	(table) => [
-		index('queues_user_id_idx').on(table.userId),
+		index('queues_project_id_idx').on(table.projectId),
 		unique('queues_machine_slug_key').on(table.machineId, table.slug)
 	]
 );

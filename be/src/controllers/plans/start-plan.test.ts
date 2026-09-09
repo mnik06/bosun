@@ -22,7 +22,7 @@ function fakeSocket() {
 function machine(overrides: Partial<Machine> & { status: MachineStatus }): Machine {
 	return {
 		id: 'm_1',
-		userId: 'u_alice',
+		projectId: 'u_alice',
 		name: 'vps-1',
 		lastSeenAt: null,
 		repoPath: '/srv/repo',
@@ -34,7 +34,7 @@ function machine(overrides: Partial<Machine> & { status: MachineStatus }): Machi
 }
 
 function build(found: Machine | null) {
-	const create = vi.fn().mockResolvedValue({ id: 'p_1', userId: 'u_alice', machineId: 'm_1' });
+	const create = vi.fn().mockResolvedValue({ id: 'p_1', projectId: 'u_alice', machineId: 'm_1' });
 	const append = vi.fn().mockResolvedValue({});
 	const update = vi.fn().mockResolvedValue(null);
 
@@ -49,7 +49,7 @@ function build(found: Machine | null) {
 				machineRepo: { getOwnedById: vi.fn().mockResolvedValue(found) } as unknown as MachineRepo,
 				idService: getIdService(),
 				socketRegistry,
-				userId: 'u_alice',
+				projectId: 'u_alice',
 				machineId: 'm_1',
 				input: 'make the thing'
 			})

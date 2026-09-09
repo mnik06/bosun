@@ -25,7 +25,7 @@ const routes: FastifyPluginAsync = async function (f) {
 				machineRepo: fastify.repos.machineRepo,
 				idService: fastify.services.idService,
 				socketRegistry: fastify.services.socketRegistry,
-				userId: req.user!.id,
+				projectId: req.membership!.projectId,
 				machineId: req.body.machineId,
 				name: req.body.name,
 				afk: req.body.afk
@@ -41,7 +41,7 @@ const routes: FastifyPluginAsync = async function (f) {
 		async (req) => {
 			return listQueues({
 				queueRepo: fastify.repos.queueRepo,
-				userId: req.user!.id,
+				projectId: req.membership!.projectId,
 				machineId: req.query.machineId
 			});
 		}
@@ -59,7 +59,7 @@ const routes: FastifyPluginAsync = async function (f) {
 				planRepo: fastify.repos.planRepo,
 				sliceRepo: fastify.repos.sliceRepo,
 				id: req.params.id,
-				userId: req.user!.id
+				projectId: req.membership!.projectId
 			});
 		}
 	);
@@ -78,7 +78,7 @@ const routes: FastifyPluginAsync = async function (f) {
 				queueRepo: fastify.repos.queueRepo,
 				socketRegistry: fastify.services.socketRegistry,
 				id: req.params.id,
-				userId: req.user!.id,
+				projectId: req.membership!.projectId,
 				afk: req.body.afk
 			});
 		}
@@ -91,7 +91,7 @@ const routes: FastifyPluginAsync = async function (f) {
 			sliceRunRepo: fastify.repos.sliceRunRepo,
 			socketRegistry: fastify.services.socketRegistry,
 			id: req.params.id,
-			userId: req.user!.id
+			projectId: req.membership!.projectId
 		});
 
 		return reply.status(204).send(undefined);

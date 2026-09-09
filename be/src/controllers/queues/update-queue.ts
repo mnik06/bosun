@@ -12,10 +12,10 @@ export async function updateQueue(opts: {
 	queueRepo: QueueRepo;
 	socketRegistry: SocketRegistry;
 	id: string;
-	userId: string;
+	projectId: string;
 	afk: boolean;
 }): Promise<Queue> {
-	await getOwnedQueue({ queueRepo: opts.queueRepo, id: opts.id, userId: opts.userId });
+	await getOwnedQueue({ queueRepo: opts.queueRepo, id: opts.id, projectId: opts.projectId });
 
 	const updated = await opts.queueRepo.update({ id: opts.id, afk: opts.afk });
 

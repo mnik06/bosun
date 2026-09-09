@@ -22,10 +22,14 @@ export async function sayToPlan(opts: {
 	idService: IdService;
 	socketRegistry: SocketRegistry;
 	id: string;
-	userId: string;
+	projectId: string;
 	text: string;
 }): Promise<void> {
-	const plan = await getOwnedPlan({ planRepo: opts.planRepo, id: opts.id, userId: opts.userId });
+	const plan = await getOwnedPlan({
+		planRepo: opts.planRepo,
+		id: opts.id,
+		projectId: opts.projectId
+	});
 
 	if (!opts.socketRegistry.getAgentSocket(plan.machineId)) {
 		throw new HttpError(409, 'this machine is offline');

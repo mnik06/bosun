@@ -8,12 +8,12 @@ export async function deleteMachine(opts: {
 	machineRepo: MachineRepo;
 	socketRegistry: SocketRegistry;
 	id: string;
-	userId: string;
+	projectId: string;
 }): Promise<void> {
 	// The scoped delete is the authorization check. Nothing is sent to any agent
 	// before it succeeds, or a caller could shut down a machine they do not own
 	// and still be told 404.
-	if (!(await opts.machineRepo.deleteOwned({ id: opts.id, userId: opts.userId }))) {
+	if (!(await opts.machineRepo.deleteOwned({ id: opts.id, projectId: opts.projectId }))) {
 		throw new HttpError(404, 'Machine not found');
 	}
 
@@ -37,7 +37,7 @@ export async function deleteMachine(opts: {
 	}
 
 	opts.socketRegistry.broadcastToUi({
-		userId: opts.userId,
+		projectId: opts.projectId,
 		message: { type: 'machine.deleted', machineId: opts.id }
 	});
 }

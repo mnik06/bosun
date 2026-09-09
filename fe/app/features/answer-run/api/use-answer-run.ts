@@ -16,7 +16,7 @@ export function useAnswerRun (runId: string) {
 		mutationFn: async (payload: RunAnswer) => {
 			await apiClient.post(`/queues/runs/${runId}/answer`, payload)
 		},
-		onSuccess: async () => queryClient.invalidateQueries({ queryKey: queueKeys.all }),
+		onSuccess: async () => queryClient.invalidateQueries({ queryKey: queueKeys.all() }),
 		onError: (error: unknown) => {
 			notifyError({ title: 'Could not send the answer', error })
 		}

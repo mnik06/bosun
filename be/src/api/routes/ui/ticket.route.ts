@@ -6,6 +6,7 @@ const routes: FastifyPluginAsync = async function (f) {
 	const fastify = f.withTypeProvider<ZodTypeProvider>();
 
 	fastify.addHook('preValidation', fastify.requireUser);
+	fastify.addHook('preValidation', fastify.requireMembership);
 
 	fastify.post(
 		'/ticket',
@@ -15,7 +16,10 @@ const routes: FastifyPluginAsync = async function (f) {
 			}
 		},
 		async (req) => {
-			return fastify.services.ticketService.issue(req.user!.id);
+			return fastify.services.ticketService.issue({
+				userId: req.user!.id,
+				projectId: req.membership!.projectId
+			});
 		}
 	);
 };

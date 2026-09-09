@@ -5,6 +5,8 @@ import { getPlanBlockerRepo } from 'src/repos/plans/plan-blocker.repo';
 import { getPlanDecisionRepo } from 'src/repos/plans/plan-decision.repo';
 import { getPlanMessageRepo } from 'src/repos/plans/plan-message.repo';
 import { getPlanRepo } from 'src/repos/plans/plan.repo';
+import { getProjectMemberRepo } from 'src/repos/projects/project-member.repo';
+import { getProjectRepo } from 'src/repos/projects/project.repo';
 import { getSliceRepo } from 'src/repos/plans/slice.repo';
 import { getQueueItemRepo } from 'src/repos/queues/queue-item.repo';
 import { getQueueMessageRepo } from 'src/repos/queues/queue-message.repo';
@@ -20,6 +22,8 @@ export function getRepos(db: ReturnType<typeof getDb>) {
 		planDecisionRepo: getPlanDecisionRepo(db),
 		planMessageRepo: getPlanMessageRepo(db),
 		planRepo: getPlanRepo(db),
+		projectMemberRepo: getProjectMemberRepo(db),
+		projectRepo: getProjectRepo(db),
 		queueItemRepo: getQueueItemRepo(db),
 		queueMessageRepo: getQueueMessageRepo(db),
 		queueRepo: getQueueRepo(db),

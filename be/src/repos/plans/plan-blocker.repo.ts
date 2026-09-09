@@ -1,5 +1,6 @@
 import { eq, inArray } from 'drizzle-orm';
 import { type DbOrTx } from 'src/services/drizzle/drizzle.service';
+import { planColumns } from 'src/repos/plans/plan.repo';
 import { planBlockers, plans } from 'src/services/drizzle/schema';
 import { PlanSchema, type Plan } from 'src/types/PlanSchema';
 
@@ -25,18 +26,7 @@ export function getPlanBlockerRepo(db: DbOrTx) {
 
 		async listBlockers(planId: string): Promise<Plan[]> {
 			const rows = await db
-				.select({
-					id: plans.id,
-					userId: plans.userId,
-					number: plans.number,
-					machineId: plans.machineId,
-					title: plans.title,
-					bodyMd: plans.bodyMd,
-					status: plans.status,
-					failureReason: plans.failureReason,
-					input: plans.input,
-					createdAt: plans.createdAt
-				})
+				.select(planColumns)
 				.from(planBlockers)
 				.innerJoin(plans, eq(plans.id, planBlockers.blockedByPlanId))
 				.where(eq(planBlockers.planId, planId));

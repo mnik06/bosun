@@ -12,6 +12,8 @@ import { MachineSchema } from 'src/types/MachineSchema';
 const routes: FastifyPluginAsync = async function (f) {
 	const fastify = f.withTypeProvider<ZodTypeProvider>();
 
+	// Open to developers: a liveness read, and somebody who cannot tell whether a
+	// machine is reachable cannot decide whether to queue work on it.
 	fastify.post(
 		'/:id/ping',
 		{
@@ -24,7 +26,7 @@ const routes: FastifyPluginAsync = async function (f) {
 			const machine = await getMachine({
 				machineRepo: fastify.repos.machineRepo,
 				id: req.params.id,
-				userId: req.user!.id
+				projectId: req.membership!.projectId
 			});
 
 			return reply.status(202).send(
@@ -41,6 +43,7 @@ const routes: FastifyPluginAsync = async function (f) {
 	fastify.post(
 		'/:id/refresh',
 		{
+			preValidation: fastify.requireLeader,
 			schema: {
 				params: MachineIdParamsSchema,
 				response: { 202: RefreshMachineRespSchema }
@@ -50,7 +53,7 @@ const routes: FastifyPluginAsync = async function (f) {
 			const machine = await getMachine({
 				machineRepo: fastify.repos.machineRepo,
 				id: req.params.id,
-				userId: req.user!.id
+				projectId: req.membership!.projectId
 			});
 
 			refreshMachine({ socketRegistry: fastify.services.socketRegistry, machine });
@@ -66,6 +69,7 @@ const routes: FastifyPluginAsync = async function (f) {
 		fastify.post(
 			path,
 			{
+				preValidation: fastify.requireLeader,
 				schema: {
 					params: MachineIdParamsSchema,
 					response: { 200: MachineSchema }
@@ -76,7 +80,7 @@ const routes: FastifyPluginAsync = async function (f) {
 					machineRepo: fastify.repos.machineRepo,
 					socketRegistry: fastify.services.socketRegistry,
 					id: req.params.id,
-					userId: req.user!.id,
+					projectId: req.membership!.projectId,
 					paused
 				});
 			}

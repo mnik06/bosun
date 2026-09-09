@@ -9,11 +9,15 @@ export async function discardPlan(opts: {
 	planTextService: PlanTextService;
 	socketRegistry: SocketRegistry;
 	id: string;
-	userId: string;
+	projectId: string;
 }): Promise<void> {
-	const plan = await getOwnedPlan({ planRepo: opts.planRepo, id: opts.id, userId: opts.userId });
+	const plan = await getOwnedPlan({
+		planRepo: opts.planRepo,
+		id: opts.id,
+		projectId: opts.projectId
+	});
 
-	if (!(await opts.planRepo.deleteOwned({ id: plan.id, userId: opts.userId }))) {
+	if (!(await opts.planRepo.deleteOwned({ id: plan.id, projectId: opts.projectId }))) {
 		throw new HttpError(404, 'Plan not found');
 	}
 
@@ -30,7 +34,7 @@ export async function discardPlan(opts: {
 		message: { type: 'plan.deleted', planId: plan.id }
 	});
 	opts.socketRegistry.broadcastToUi({
-		userId: opts.userId,
+		projectId: opts.projectId,
 		message: { type: 'plan.deleted', planId: plan.id }
 	});
 }

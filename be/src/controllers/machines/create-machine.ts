@@ -8,7 +8,7 @@ export async function createMachine(opts: {
 	machineRepo: MachineRepo;
 	idService: IdService;
 	keyService: KeyService;
-	userId: string;
+	projectId: string;
 	name: string;
 	serverUrl: string;
 }) {
@@ -17,7 +17,7 @@ export async function createMachine(opts: {
 
 	const machine = await opts.machineRepo.create({
 		id: opts.idService.createMachineId(),
-		userId: opts.userId,
+		projectId: opts.projectId,
 		name: opts.name,
 		enrollmentToken: token,
 		tokenExpiresAt

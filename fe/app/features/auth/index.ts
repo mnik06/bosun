@@ -1,5 +1,4 @@
 export { useSignIn } from './api/use-sign-in'
 export { useSignOut } from './api/use-sign-out'
-export { useSignUp } from './api/use-sign-up'
-export { SignInSchema, SignUpSchema, type Credentials } from './model/credentials'
+export { SignInSchema, type Credentials } from './model/credentials'
 export { CredentialsForm } from './ui/credentials-form'

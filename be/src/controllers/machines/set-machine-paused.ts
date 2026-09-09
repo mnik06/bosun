@@ -18,12 +18,12 @@ export async function setMachinePaused(opts: {
 	machineRepo: MachineRepo;
 	socketRegistry: SocketRegistry;
 	id: string;
-	userId: string;
+	projectId: string;
 	paused: boolean;
 }): Promise<Machine> {
 	const machine = await opts.machineRepo.setOwnedStatus({
 		id: opts.id,
-		userId: opts.userId,
+		projectId: opts.projectId,
 		status: opts.paused
 			? 'paused'
 			: resumedStatus({ socketRegistry: opts.socketRegistry, machineId: opts.id })
@@ -40,7 +40,7 @@ export async function setMachinePaused(opts: {
 		message: { type: opts.paused ? 'pause' : 'resume' }
 	});
 	opts.socketRegistry.broadcastToUi({
-		userId: machine.userId,
+		projectId: machine.projectId,
 		message: { type: 'machine.updated', machine }
 	});
 

@@ -32,7 +32,8 @@ const routes: FastifyPluginAsync = async function (f) {
 				machineRepo: fastify.repos.machineRepo,
 				idService: fastify.services.idService,
 				socketRegistry: fastify.services.socketRegistry,
-				userId: req.user!.id,
+				projectId: req.membership!.projectId,
+				createdByUserId: req.user!.id,
 				machineId: req.body.machineId,
 				input: req.body.input,
 				verifyInUi: req.body.verifyInUi,
@@ -44,7 +45,10 @@ const routes: FastifyPluginAsync = async function (f) {
 	);
 
 	fastify.get('/', { schema: { response: { 200: PlanListRespSchema } } }, async (req) => {
-		return listPlans({ planRepo: fastify.repos.planRepo, userId: req.user!.id });
+		return listPlans({
+			planRepo: fastify.repos.planRepo,
+			projectId: req.membership!.projectId
+		});
 	});
 
 	fastify.get(
@@ -64,7 +68,7 @@ const routes: FastifyPluginAsync = async function (f) {
 				acRepo: fastify.repos.acRepo,
 				sliceRepo: fastify.repos.sliceRepo,
 				id: req.params.id,
-				userId: req.user!.id
+				projectId: req.membership!.projectId
 			});
 		}
 	);
@@ -75,7 +79,7 @@ const routes: FastifyPluginAsync = async function (f) {
 			planTextService: fastify.services.planTextService,
 			socketRegistry: fastify.services.socketRegistry,
 			id: req.params.id,
-			userId: req.user!.id
+			projectId: req.membership!.projectId
 		});
 
 		return reply.status(204).send(undefined);

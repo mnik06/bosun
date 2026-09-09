@@ -10,12 +10,12 @@ export async function deleteQueue(opts: {
 	sliceRunRepo: SliceRunRepo;
 	socketRegistry: SocketRegistry;
 	id: string;
-	userId: string;
+	projectId: string;
 }): Promise<void> {
 	const queue = await getOwnedQueue({
 		queueRepo: opts.queueRepo,
 		id: opts.id,
-		userId: opts.userId
+		projectId: opts.projectId
 	});
 
 	// The session goes first. Removing the worktree under a `claude` process that
@@ -45,7 +45,7 @@ export async function deleteQueue(opts: {
 	await opts.queueRepo.remove(queue.id);
 
 	opts.socketRegistry.broadcastToUi({
-		userId: opts.userId,
+		projectId: opts.projectId,
 		message: { type: 'queue.deleted', queueId: queue.id }
 	});
 }

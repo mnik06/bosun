@@ -9,6 +9,15 @@ const PublishableKeySchema = z
 	.min(1)
 	.refine((key) => !key.startsWith('sb_secret_'), 'must be the publishable key, not a secret key');
 
+// The mirror image of the check above. Creating a member's account needs the
+// secret key, so the guard cannot be "no secrets here" — it is that the two slots
+// must not be filled with each other, which is the mistake that would either
+// break sign-in or hand account creation to the browser's key.
+const SecretKeySchema = z
+	.string()
+	.min(1)
+	.refine((key) => !key.startsWith('sb_publishable_'), 'must be the secret key, not the publishable key');
+
 export const EnvSchema = z.object({
 	TZ: z.string().optional(),
 	NODE_ENV: z.enum(['local', 'staging', 'production']),
@@ -25,7 +34,8 @@ export const EnvSchema = z.object({
 	// a bad release. Left unset in normal operation.
 	AGENT_EXPECTED_VERSION: z.string().min(1).optional(),
 	SUPABASE_URL: z.url(),
-	SUPABASE_PUBLISHABLE_KEY: PublishableKeySchema
+	SUPABASE_PUBLISHABLE_KEY: PublishableKeySchema,
+	SUPABASE_SECRET_KEY: SecretKeySchema
 });
 
 export type Env = z.infer<typeof EnvSchema>;

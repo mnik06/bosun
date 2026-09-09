@@ -15,7 +15,7 @@ export type PreflightCheck = z.infer<typeof PreflightCheckSchema>;
 
 export const MachineSchema = z.object({
 	id: z.string(),
-	userId: z.string(),
+	projectId: z.string(),
 	name: z.string(),
 	status: MachineStatusSchema,
 	lastSeenAt: z.date().nullable(),

@@ -40,7 +40,7 @@ function build(opts?: { machineId?: string }) {
 	return deps;
 }
 
-const base = { machineId: 'm_1', userId: 'u_1' };
+const base = { machineId: 'm_1', projectId: 'u_1' };
 
 describe('recordExecFrame', () => {
 	it('records the commit a finished bullet made', async () => {

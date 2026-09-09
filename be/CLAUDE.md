@@ -10,9 +10,20 @@ reaches it over an outbound WebSocket that it dials and the BE never initiates.
 
 Identity is **not** ours: there is no login endpoint, no password column and no session table.
 Supabase Auth issues the tokens, and `fastify.requireUser` resolves each one by asking Supabase who
-it belongs to before provisioning our `users` row. `/enroll`, `/agent/ws`, `/install.sh`, `/mcp-presets` and
-`/health` stay unauthenticated by design — they are the agent's and the installer's surface. See
-`src/services/auth/supabase-auth.service.md`.
+it belongs to before provisioning our `users` row. Accounts are *created* here, though — a leader
+adds a member and the backend mints the Supabase account with a generated password, which is the one
+thing that needs the secret key. See `src/services/auth/supabase-auth.service.md` and
+`src/services/auth/supabase-admin.service.md`.
+
+**Authorization is by project.** `machines`, `plans` and `queues` belong to a project, never to a
+person. `fastify.requireMembership` reads `X-Project-Id`, resolves the caller's role and puts
+`request.membership = { projectId, role }` on the request; `fastify.requireLeader` refuses a
+`developer` on the machine-management routes. A `users.is_app_owner` row resolves as `leader` of every
+project without holding a membership. A project the caller is not in answers **404**; a role they do
+not hold answers **403**. See `plans/006-projects-and-roles.md`.
+
+`/enroll`, `/agent/ws`, `/install.sh`, `/mcp-presets` and `/health` stay unauthenticated by design —
+they are the agent's and the installer's surface.
 
 ## Tech Stack
 

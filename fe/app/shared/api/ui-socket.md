@@ -38,10 +38,17 @@ a permanent retry loop of 401s on the login screen.
   them ends up silently not retrying.
 - **The socket closes when the last subscriber leaves**, and reconnects are not scheduled while there
   are none.
+- **The active project is captured before the ticket await and re-checked after it.** The ticket is
+  bound to the project that was active when it was bought, and the backend keys the connection by
+  that project. Opening with a ticket bought under the previous one would put its frames on the new
+  project's screens.
+- **A project switch closes the socket.** `subscribeToActiveProject` hangs up rather than filtering,
+  for the same reason the backend keys the registry by project: a filter is a check, and a check gets
+  forgotten. `onclose` then buys a fresh ticket under the new project.
 
 ## Plan subscriptions are re-sent on every open
 
-Machine frames are addressed by account and arrive unasked. Plan frames are not: they carry a
+Machine frames are addressed by project and arrive unasked. Plan frames are not: they carry a
 transcript, so the backend sends them only to sockets that have named that plan with a
 `plan.subscribe` command, and it keeps that list in the socket's own registry entry.
 

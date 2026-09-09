@@ -13,7 +13,7 @@ export function useToggleAfk (queueId: string) {
 
 			return QueueSchema.parse(data)
 		},
-		onSuccess: async () => queryClient.invalidateQueries({ queryKey: queueKeys.all }),
+		onSuccess: async () => queryClient.invalidateQueries({ queryKey: queueKeys.all() }),
 		onError: (error: unknown) => {
 			notifyError({ title: 'Could not change AFK', error })
 		}

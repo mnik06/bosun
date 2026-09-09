@@ -9,7 +9,7 @@ import { type Plan, type PlanMessage } from 'src/types/PlanSchema';
 // plan, because they are high-volume and mean nothing anywhere else.
 export function announcePlan(opts: { socketRegistry: SocketRegistry; plan: Plan }): void {
 	opts.socketRegistry.broadcastToUi({
-		userId: opts.plan.userId,
+		projectId: opts.plan.projectId,
 		message: { type: 'plan.updated', plan: opts.plan }
 	});
 }

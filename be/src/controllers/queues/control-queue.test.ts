@@ -6,7 +6,7 @@ import { type Queue, type QueueStatus } from 'src/types/QueueSchema';
 function queue(status: QueueStatus): Queue {
 	return {
 		id: 'q_1',
-		userId: 'u_1',
+		projectId: 'u_1',
 		machineId: 'm_1',
 		name: 'Auth',
 		slug: 'auth',
@@ -59,7 +59,7 @@ describe('controlQueue', () => {
 	it('pausing kills the bullet and re-arms it', async () => {
 		const deps = build('running', { running: true });
 
-		await controlQueue(deps, { id: 'q_1', userId: 'u_1', action: 'pause' });
+		await controlQueue(deps, { id: 'q_1', projectId: 'u_1', action: 'pause' });
 
 		expect(deps.socketRegistry.sendToAgent).toHaveBeenCalledWith(
 			expect.objectContaining({ message: { type: 'exec.cancel', runId: 'sr_1' } })
@@ -76,7 +76,7 @@ describe('controlQueue', () => {
 	it('resuming clears the pause and looks for work', async () => {
 		const deps = build('paused');
 
-		await controlQueue(deps, { id: 'q_1', userId: 'u_1', action: 'resume' });
+		await controlQueue(deps, { id: 'q_1', projectId: 'u_1', action: 'resume' });
 
 		expect(deps.queueRepo.update).toHaveBeenCalledWith(
 			expect.objectContaining({ id: 'q_1', status: 'idle' })
@@ -90,7 +90,7 @@ describe('controlQueue', () => {
 		const deps = build('blocked');
 
 		await expect(
-			controlQueue(deps, { id: 'q_1', userId: 'u_1', action: 'resume' })
+			controlQueue(deps, { id: 'q_1', projectId: 'u_1', action: 'resume' })
 		).rejects.toThrow(/answer it/);
 	});
 
@@ -98,7 +98,7 @@ describe('controlQueue', () => {
 		const deps = build('provisioning');
 
 		await expect(
-			controlQueue(deps, { id: 'q_1', userId: 'u_1', action: 'pause' })
+			controlQueue(deps, { id: 'q_1', projectId: 'u_1', action: 'pause' })
 		).rejects.toThrow(/no worktree/);
 	});
 });

@@ -9,7 +9,7 @@ import { type Queue, type QueueItem, type SliceRun } from 'src/types/QueueSchema
 function queue(overrides: Partial<Queue> = {}): Queue {
 	return {
 		id: 'q_1',
-		userId: 'u_1',
+		projectId: 'u_1',
 		machineId: 'm_1',
 		name: 'Auth',
 		slug: 'auth',
@@ -63,8 +63,12 @@ function build(opts: {
 	runs?: SliceRun[];
 	busy?: number;
 	edges?: { planId: string; blockedByPlanId: string }[];
+	reachable?: boolean;
 }) {
-	const sendToAgent = vi.fn();
+	// The real registry returns whether the frame reached a socket, and the
+	// difference between `true` and a bare `vi.fn()` is the whole bug this guards:
+	// a mock that answers `undefined` makes every dispatch look undelivered.
+	const sendToAgent = vi.fn().mockReturnValue(opts.reachable ?? true);
 
 	const deps = {
 		queueRepo: {
@@ -448,6 +452,52 @@ describe('advanceQueue', () => {
 		await advanceQueue(deps, { queueId: 'q_1' });
 
 		expect(deps.queueItemRepo.claimNext).toHaveBeenCalledWith('q_1', []);
+	});
+
+	// The claim is what made this a stuck queue: `claimNext` had already flipped
+	// the bullet to `running`, the `exec.start` went into a closed socket, and the
+	// return value saying so was dropped — so the run sat `running` with no
+	// session behind it, forever, and nothing was logged.
+	it('puts the bullet back and stops the queue when the machine is unreachable', async () => {
+		const { deps } = build({
+			items: [item({ status: 'running' })],
+			claimRun: run({ status: 'running' }),
+			runs: [run({ status: 'running' })],
+			reachable: false
+		});
+
+		await advanceQueue(deps, { queueId: 'q_1' });
+
+		expect(deps.sliceRunRepo.update).toHaveBeenCalledWith(
+			expect.objectContaining({ id: 'sr_1', status: 'pending', startedAt: null })
+		);
+		expect(deps.queueRepo.update).toHaveBeenCalledWith(
+			expect.objectContaining({ id: 'q_1', status: 'paused' })
+		);
+		expect(deps.queueRepo.update).not.toHaveBeenCalledWith(
+			expect.objectContaining({ status: 'running' })
+		);
+	});
+
+	// An undelivered dispatch used to be indistinguishable from a plan with no
+	// bullets left, so the item was closed and the queue walked on to the next
+	// plan — marking work done that never ran a line of itself.
+	it('does not close a plan it could not dispatch', async () => {
+		const { deps } = build({
+			claimItem: item({ status: 'running' }),
+			claimRun: run(),
+			runs: [run()],
+			reachable: false
+		});
+
+		await advanceQueue(deps, { queueId: 'q_1' });
+
+		expect(deps.queueItemRepo.update).not.toHaveBeenCalledWith(
+			expect.objectContaining({ status: 'done' })
+		);
+		expect(deps.queueRepo.update).toHaveBeenCalledWith(
+			expect.objectContaining({ id: 'q_1', status: 'paused' })
+		);
 	});
 
 	it('closes a running item once its bullets are all settled', async () => {

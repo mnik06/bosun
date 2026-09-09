@@ -25,7 +25,7 @@ export function nextPortBase(machineId: string) {
 
 const columns = {
 	id: queues.id,
-	userId: queues.userId,
+	projectId: queues.projectId,
 	machineId: queues.machineId,
 	name: queues.name,
 	slug: queues.slug,
@@ -48,7 +48,7 @@ export function getQueueRepo(db: DbOrTx) {
 		// two queues the same listener.
 		async create(opts: {
 			id: string;
-			userId: string;
+			projectId: string;
 			machineId: string;
 			name: string;
 			slug: string;
@@ -65,21 +65,23 @@ export function getQueueRepo(db: DbOrTx) {
 			return QueueSchema.parse(row);
 		},
 
-		async listOwned(userId: string): Promise<Queue[]> {
+		async listOwned(projectId: string): Promise<Queue[]> {
 			const rows = await db
 				.select(columns)
 				.from(queues)
-				.where(eq(queues.userId, userId))
+				.where(eq(queues.projectId, projectId))
 				.orderBy(desc(queues.createdAt));
 
 			return rows.map((row) => QueueSchema.parse(row));
 		},
 
-		async listForMachine(opts: { machineId: string; userId: string }): Promise<Queue[]> {
+		async listForMachine(opts: { machineId: string; projectId: string }): Promise<Queue[]> {
 			const rows = await db
 				.select(columns)
 				.from(queues)
-				.where(and(eq(queues.machineId, opts.machineId), eq(queues.userId, opts.userId)))
+				.where(
+					and(eq(queues.machineId, opts.machineId), eq(queues.projectId, opts.projectId))
+				)
 				.orderBy(desc(queues.createdAt));
 
 			return rows.map((row) => QueueSchema.parse(row));
@@ -131,11 +133,11 @@ export function getQueueRepo(db: DbOrTx) {
 			return rows.map((row) => QueueSchema.parse(row));
 		},
 
-		async getOwnedById(opts: { id: string; userId: string }): Promise<Queue | null> {
+		async getOwnedById(opts: { id: string; projectId: string }): Promise<Queue | null> {
 			const [row] = await db
 				.select(columns)
 				.from(queues)
-				.where(and(eq(queues.id, opts.id), eq(queues.userId, opts.userId)));
+				.where(and(eq(queues.id, opts.id), eq(queues.projectId, opts.projectId)));
 
 			return row ? QueueSchema.parse(row) : null;
 		},

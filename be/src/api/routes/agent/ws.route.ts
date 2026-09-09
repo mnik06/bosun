@@ -1,6 +1,7 @@
 import { type WebSocket } from '@fastify/websocket';
 import { type RawData } from 'ws';
 import { FastifyBaseLogger, FastifyInstance, FastifyPluginAsync } from 'fastify';
+import { type MachineRepo } from 'src/repos/machines/machine.repo';
 import { markMachineOffline } from 'src/controllers/machines/mark-machine-offline';
 import { markMachineOnline } from 'src/controllers/machines/mark-machine-online';
 import { saveMachinePreflight } from 'src/controllers/machines/save-machine-preflight';
@@ -15,32 +16,66 @@ import { handleAgentFrame, isExecFrame, isPlanFrame } from 'src/api/routes/agent
 
 const HEARTBEAT_MS = 15_000;
 const MAX_MISSED = 2;
+// `lastSeenAt` is what tells a live machine from one whose socket died without a
+// close frame, so it has to move while nothing else is happening — but a write
+// per machine per pong is a write every 15 seconds for a column read by eye.
+// A minute of resolution answers the question; the rest is load.
+const TOUCH_MS = 60_000;
 
 function announceUpdate(opts: { socketRegistry: SocketRegistry; machine: Machine }): void {
 	opts.socketRegistry.broadcastToUi({
-		userId: opts.machine.userId,
+		projectId: opts.machine.projectId,
 		message: { type: 'machine.updated', machine: opts.machine }
 	});
 }
 
 // Protocol-level ping frames, not the application ping: this is what catches a
-// TCP connection that died without either side sending a close frame.
-function startHeartbeat(socket: WebSocket): () => void {
+// TCP connection that died without either side sending a close frame. The pong
+// is also the only liveness signal that survives a quiet machine, so it is what
+// keeps `lastSeenAt` honest between the hello that set it and the close that
+// would have moved it.
+function startHeartbeat(opts: {
+	socket: WebSocket;
+	machineId: string;
+	machineRepo: MachineRepo;
+	log: FastifyBaseLogger;
+}): () => void {
 	let missed = 0;
+	// Seeded to now because `hello` has just written the same timestamp: starting
+	// at zero would spend a write restating it.
+	let touchedAt = Date.now();
 
-	socket.on('pong', () => {
+	opts.socket.on('pong', () => {
 		missed = 0;
+
+		const now = Date.now();
+
+		if (now - touchedAt < TOUCH_MS) {
+			return;
+		}
+
+		touchedAt = now;
+		void opts.machineRepo.touch({ id: opts.machineId, now: new Date(now) }).catch(
+			(error: unknown) => {
+				// A heartbeat that cannot be recorded is not a reason to drop a working
+				// socket; the machine stays reachable and only the column goes stale.
+				opts.log.warn(
+					{ error, machineId: opts.machineId },
+					'failed recording an agent heartbeat'
+				);
+			}
+		);
 	});
 
 	const timer = setInterval(() => {
 		if (missed >= MAX_MISSED) {
-			socket.terminate();
+			opts.socket.terminate();
 
 			return;
 		}
 
 		missed += 1;
-		socket.ping();
+		opts.socket.ping();
 	}, HEARTBEAT_MS);
 
 	return () => {
@@ -129,7 +164,7 @@ export async function applyMachineFrame(opts: {
 				message: { type: 'upgrade', ...target }
 			});
 			socketRegistry.broadcastToUi({
-				userId: machine.userId,
+				projectId: machine.projectId,
 				message: {
 					type: 'machine.upgrading',
 					machineId: machine.id,
@@ -216,10 +251,15 @@ function handleClose(opts: {
 
 const routes: FastifyPluginAsync = async function (fastify) {
 	fastify.get('/ws', { websocket: true }, (socket, request) => {
-		const { machineId, userId } = request.agent!;
+		const { machineId, projectId } = request.agent!;
 
 		fastify.services.socketRegistry.registerAgentSocket({ machineId, socket });
-		const stopHeartbeat = startHeartbeat(socket);
+		const stopHeartbeat = startHeartbeat({
+			socket,
+			machineId,
+			machineRepo: fastify.repos.machineRepo,
+			log: request.log
+		});
 		const enqueue = createFrameQueue(request.log);
 
 		socket.on('message', (raw: RawData) => {
@@ -230,7 +270,7 @@ const routes: FastifyPluginAsync = async function (fastify) {
 			}
 
 			const handle = async () =>
-				handleAgentFrame({ fastify, machineId, userId, socket, msg, log: request.log });
+				handleAgentFrame({ fastify, machineId, projectId, socket, msg, log: request.log });
 
 			if (isPlanFrame(msg) || isExecFrame(msg)) {
 				enqueue(handle);

@@ -53,7 +53,7 @@ export function QueueDetail ({ queueId }: { queueId: string }) {
 	const remove = (itemId: string) => {
 		apiClient
 			.delete(`/queues/${queueId}/items/${itemId}`)
-			.then(async () => queryClient.invalidateQueries({ queryKey: queueKeys.all }))
+			.then(async () => queryClient.invalidateQueries({ queryKey: queueKeys.all() }))
 			.catch((cause: unknown) => {
 				notifyError({ title: 'Could not remove that plan', error: cause })
 			})

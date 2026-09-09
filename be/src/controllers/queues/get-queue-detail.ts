@@ -18,12 +18,12 @@ export async function getQueueDetail(opts: {
 	planRepo: PlanRepo;
 	sliceRepo: SliceRepo;
 	id: string;
-	userId: string;
+	projectId: string;
 }): Promise<QueueDetail> {
 	const queue = await getOwnedQueue({
 		queueRepo: opts.queueRepo,
 		id: opts.id,
-		userId: opts.userId
+		projectId: opts.projectId
 	});
 	const items = await opts.queueItemRepo.listForQueue(queue.id);
 

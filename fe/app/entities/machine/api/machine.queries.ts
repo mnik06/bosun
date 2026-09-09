@@ -1,12 +1,15 @@
 import { useQuery } from '@tanstack/react-query'
 
 import { MachineListSchema, MachineSchema, type Machine } from '~/entities/machine/model/machine'
-import { apiClient } from '~/shared/api'
+import { apiClient, getActiveProjectId } from '~/shared/api'
 
+// Every key carries the active project. Without it a switch shows the previous
+// project's rows out of cache until the refetch lands, which is the one bug this
+// change invites and the cheapest possible place to prevent it.
 export const machineKeys = {
-	all: ['machines'] as const,
-	list: () => [...machineKeys.all, 'list'] as const,
-	detail: (id: string) => [...machineKeys.all, 'detail', id] as const
+	all: () => ['machines', getActiveProjectId()] as const,
+	list: () => [...machineKeys.all(), 'list'] as const,
+	detail: (id: string) => [...machineKeys.all(), 'detail', id] as const
 }
 
 export async function fetchMachines (): Promise<Machine[]> {

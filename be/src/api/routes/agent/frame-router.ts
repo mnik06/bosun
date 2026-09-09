@@ -39,7 +39,7 @@ function isPublishFrame(msg: AgentMsg): msg is PublishFrame {
 export async function handleAgentFrame(opts: {
 	fastify: FastifyInstance;
 	machineId: string;
-	userId: string;
+	projectId: string;
 	socket: WebSocket;
 	msg: AgentMsg;
 	log: FastifyBaseLogger;
@@ -56,7 +56,7 @@ export async function handleAgentFrame(opts: {
 
 		if (rttMs !== null) {
 			socketRegistry.broadcastToUi({
-				userId: opts.userId,
+				projectId: opts.projectId,
 				message: { type: 'machine.pong', machineId: opts.machineId, id: msg.id, rttMs }
 			});
 		}
@@ -67,7 +67,7 @@ export async function handleAgentFrame(opts: {
 	if (isAnswerFrame(msg)) {
 		await recordAnswerFrame(askDeps(opts.fastify), {
 			machineId: opts.machineId,
-			userId: opts.userId,
+			projectId: opts.projectId,
 			frame: msg
 		});
 
@@ -86,7 +86,7 @@ export async function handleAgentFrame(opts: {
 	if (isExecFrame(msg)) {
 		await recordExecFrame(schedulerDeps(opts.fastify), {
 			machineId: opts.machineId,
-			userId: opts.userId,
+			projectId: opts.projectId,
 			frame: msg
 		});
 

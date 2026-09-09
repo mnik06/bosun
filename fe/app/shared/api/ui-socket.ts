@@ -1,3 +1,4 @@
+import { getActiveProjectId, subscribeToActiveProject } from './active-project'
 import { apiWsUrl } from './ws-url'
 import { fetchUiTicket } from './ui-ticket'
 
@@ -34,11 +35,21 @@ function scheduleReconnect (): void {
 // A ticket is single-use and lives for seconds, so every attempt — the first and
 // every reconnect — has to buy a fresh one over HTTPS before dialling.
 async function open (): Promise<void> {
+	const projectId = getActiveProjectId()
 	const ticket = await fetchUiTicket()
 
 	// The last subscriber may have gone while the ticket was in flight. Opening
 	// now would leave a socket nobody holds a handle to and nobody will close.
 	if (subscribers.size === 0) {
+		return
+	}
+
+	// The ticket is bound to the project that was active when it was bought. If
+	// that changed while it was in flight, opening with it would put the previous
+	// project's frames on the new project's screens.
+	if (getActiveProjectId() !== projectId) {
+		scheduleReconnect()
+
 		return
 	}
 
@@ -118,6 +129,13 @@ export function subscribeToUiSocket (subscriber: Subscriber): () => void {
 		socket = null
 	}
 }
+
+// The backend keys a browser socket by the project its ticket named, so a switch
+// has to hang up. `onclose` schedules the reconnect, which buys a fresh ticket
+// under the new project.
+subscribeToActiveProject(() => {
+	socket?.close()
+})
 
 export function sendUiCommand (command: unknown): void {
 	if (socket?.readyState === WebSocket.OPEN) {

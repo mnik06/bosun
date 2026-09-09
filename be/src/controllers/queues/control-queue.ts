@@ -44,12 +44,12 @@ async function pause(deps: AdvanceDeps, queue: Queue): Promise<Queue | null> {
 
 export async function controlQueue(
 	deps: AdvanceDeps,
-	opts: { id: string; userId: string; action: QueueAction }
+	opts: { id: string; projectId: string; action: QueueAction }
 ): Promise<Queue> {
 	const queue = await getOwnedQueue({
 		queueRepo: deps.queueRepo,
 		id: opts.id,
-		userId: opts.userId
+		projectId: opts.projectId
 	});
 
 	if (queue.status === 'provisioning') {

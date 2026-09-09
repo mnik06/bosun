@@ -1,21 +1,26 @@
 import { eq } from 'drizzle-orm';
-import { type getDb } from 'src/services/drizzle/drizzle.service';
+import { type DbOrTx } from 'src/services/drizzle/drizzle.service';
 import { users } from 'src/services/drizzle/schema';
 import { UserSchema, type User } from 'src/types/UserSchema';
-
-type Db = ReturnType<typeof getDb>;
 
 const publicColumns = {
 	id: users.id,
 	subId: users.subId,
 	email: users.email,
+	isAppOwner: users.isAppOwner,
 	createdAt: users.createdAt
 };
 
-export function getUserRepo(db: Db) {
+export function getUserRepo(db: DbOrTx) {
 	return {
 		async getBySubId(subId: string): Promise<User | null> {
 			const [row] = await db.select(publicColumns).from(users).where(eq(users.subId, subId));
+
+			return row ? UserSchema.parse(row) : null;
+		},
+
+		async findByEmail(email: string): Promise<User | null> {
+			const [row] = await db.select(publicColumns).from(users).where(eq(users.email, email));
 
 			return row ? UserSchema.parse(row) : null;
 		},

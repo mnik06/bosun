@@ -17,7 +17,7 @@ export function useControlQueue (opts: { queueId: string, machineId: string }) {
 		},
 		// Every queue cache, not the machine's list alone: pause is pressed from the
 		// queues page and the queue page, and both read a key of their own.
-		onSuccess: async () => queryClient.invalidateQueries({ queryKey: queueKeys.all }),
+		onSuccess: async () => queryClient.invalidateQueries({ queryKey: queueKeys.all() }),
 		onError: (error: unknown) => {
 			notifyError({ title: 'Could not change the queue', error })
 		}

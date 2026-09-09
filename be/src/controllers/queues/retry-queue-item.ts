@@ -6,12 +6,12 @@ import { getOwnedQueue } from 'src/controllers/queues/shared/queue-access';
 export async function retryQueueItem(deps: AdvanceDeps, opts: {
 	queueId: string;
 	itemId: string;
-	userId: string;
+	projectId: string;
 }): Promise<void> {
 	const queue = await getOwnedQueue({
 		queueRepo: deps.queueRepo,
 		id: opts.queueId,
-		userId: opts.userId
+		projectId: opts.projectId
 	});
 
 	// Only what has stopped. A plan still running would be dispatched a second

@@ -16,6 +16,10 @@ export function getKeyService() {
 
 		generateUiTicket: (): string => randomToken(18),
 
+		// Shown once and typed by hand by whoever it is passed to, so base64url
+		// rather than hex: the same entropy in fewer characters to transcribe.
+		generateMemberPassword: (): string => randomToken(18),
+
 		generateMachineKey: (): string => crypto.randomBytes(32).toString('hex'),
 
 		machineKeyMatchesHash(opts: { key: string; hash: string }): boolean {

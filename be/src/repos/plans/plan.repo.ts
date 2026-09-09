@@ -3,9 +3,10 @@ import { type DbOrTx } from 'src/services/drizzle/drizzle.service';
 import { plans } from 'src/services/drizzle/schema';
 import { PlanSchema, type Plan, type PlanStatus } from 'src/types/PlanSchema';
 
-const columns = {
+export const planColumns = {
 	id: plans.id,
-	userId: plans.userId,
+	projectId: plans.projectId,
+	createdByUserId: plans.createdByUserId,
 	number: plans.number,
 	machineId: plans.machineId,
 	title: plans.title,
@@ -19,8 +20,8 @@ const columns = {
 	createdAt: plans.createdAt
 };
 
-// Reads are owner-scoped or machine-scoped, never bare by id: a plan carries the
-// pasted ticket and the whole transcript, so an unscoped getter is a leak
+// Reads are project-scoped or machine-scoped, never bare by id: a plan carries
+// the pasted ticket and the whole transcript, so an unscoped getter is a leak
 // waiting for the first careless caller.
 export function getPlanRepo(db: DbOrTx) {
 	return {
@@ -29,7 +30,8 @@ export function getPlanRepo(db: DbOrTx) {
 		// unique index is what makes the loser fail, and the caller retries.
 		async create(opts: {
 			id: string;
-			userId: string;
+			projectId: string;
+			createdByUserId: string;
 			machineId: string;
 			input: string;
 			verifyInUi: boolean;
@@ -39,19 +41,19 @@ export function getPlanRepo(db: DbOrTx) {
 				.insert(plans)
 				.values({
 					...opts,
-					number: sql`(select coalesce(max(${plans.number}), 0) + 1 from ${plans} where ${plans.userId} = ${opts.userId})`
+					number: sql`(select coalesce(max(${plans.number}), 0) + 1 from ${plans} where ${plans.projectId} = ${opts.projectId})`
 				})
-				.returning(columns);
+				.returning(planColumns);
 
 			return PlanSchema.parse(row);
 		},
 
 		// Everything a session may reason about when it asks what else exists for
-		// this machine. Owner-scoped as well as machine-scoped: the agent asks with
-		// a machine key, and a machine belongs to exactly one person.
+		// this machine. Machine-scoped is enough: the agent asks with a machine key,
+		// and a machine belongs to exactly one project.
 		async listForMachineContext(machineId: string): Promise<Plan[]> {
 			const rows = await db
-				.select(columns)
+				.select(planColumns)
 				.from(plans)
 				.where(eq(plans.machineId, machineId))
 				.orderBy(asc(plans.number));
@@ -59,41 +61,43 @@ export function getPlanRepo(db: DbOrTx) {
 			return rows.map((row) => PlanSchema.parse(row));
 		},
 
-		async getByNumbers(opts: { userId: string; numbers: number[] }): Promise<Plan[]> {
+		async getByNumbers(opts: { projectId: string; numbers: number[] }): Promise<Plan[]> {
 			if (opts.numbers.length === 0) {
 				return [];
 			}
 
 			const rows = await db
-				.select(columns)
+				.select(planColumns)
 				.from(plans)
-				.where(and(eq(plans.userId, opts.userId), inArray(plans.number, opts.numbers)));
+				.where(
+					and(eq(plans.projectId, opts.projectId), inArray(plans.number, opts.numbers))
+				);
 
 			return rows.map((row) => PlanSchema.parse(row));
 		},
 
-		async listOwned(userId: string): Promise<Plan[]> {
+		async listOwned(projectId: string): Promise<Plan[]> {
 			const rows = await db
-				.select(columns)
+				.select(planColumns)
 				.from(plans)
-				.where(eq(plans.userId, userId))
+				.where(eq(plans.projectId, projectId))
 				.orderBy(desc(plans.createdAt));
 
 			return rows.map((row) => PlanSchema.parse(row));
 		},
 
-		async getOwnedById(opts: { id: string; userId: string }): Promise<Plan | null> {
+		async getOwnedById(opts: { id: string; projectId: string }): Promise<Plan | null> {
 			const [row] = await db
-				.select(columns)
+				.select(planColumns)
 				.from(plans)
-				.where(and(eq(plans.id, opts.id), eq(plans.userId, opts.userId)));
+				.where(and(eq(plans.id, opts.id), eq(plans.projectId, opts.projectId)));
 
 			return row ? PlanSchema.parse(row) : null;
 		},
 
 		async getByIdForMachine(opts: { id: string; machineId: string }): Promise<Plan | null> {
 			const [row] = await db
-				.select(columns)
+				.select(planColumns)
 				.from(plans)
 				.where(and(eq(plans.id, opts.id), eq(plans.machineId, opts.machineId)));
 
@@ -113,14 +117,14 @@ export function getPlanRepo(db: DbOrTx) {
 				.update(plans)
 				.set(values)
 				.where(eq(plans.id, id))
-				.returning(columns);
+				.returning(planColumns);
 
 			return row ? PlanSchema.parse(row) : null;
 		},
 
 		async listPlanningOnMachine(machineId: string): Promise<Plan[]> {
 			const rows = await db
-				.select(columns)
+				.select(planColumns)
 				.from(plans)
 				.where(and(eq(plans.machineId, machineId), eq(plans.status, 'planning')));
 
@@ -132,15 +136,15 @@ export function getPlanRepo(db: DbOrTx) {
 				.update(plans)
 				.set({ status: 'failed', failureReason: opts.reason })
 				.where(inArray(plans.id, opts.ids))
-				.returning(columns);
+				.returning(planColumns);
 
 			return rows.map((row) => PlanSchema.parse(row));
 		},
 
-		async deleteOwned(opts: { id: string; userId: string }): Promise<boolean> {
+		async deleteOwned(opts: { id: string; projectId: string }): Promise<boolean> {
 			const rows = await db
 				.delete(plans)
-				.where(and(eq(plans.id, opts.id), eq(plans.userId, opts.userId)))
+				.where(and(eq(plans.id, opts.id), eq(plans.projectId, opts.projectId)))
 				.returning({ id: plans.id });
 
 			return rows.length > 0;

@@ -7,7 +7,7 @@ export async function authenticateAgent(opts: {
 	machineRepo: MachineRepo;
 	keyService: KeyService;
 	authorization?: string;
-}): Promise<{ machineId: string; userId: string } | null> {
+}): Promise<{ machineId: string; projectId: string } | null> {
 	const key = readBearerToken(opts.authorization);
 
 	if (!key) {
@@ -26,5 +26,5 @@ export async function authenticateAgent(opts: {
 		Buffer.from(auth.machineKeyHash, 'hex')
 	);
 
-	return matches ? { machineId: auth.id, userId: auth.userId } : null;
+	return matches ? { machineId: auth.id, projectId: auth.projectId } : null;
 }

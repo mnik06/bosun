@@ -84,7 +84,7 @@ function patchQueue (queryClient: QueryClient, queue: Queue): void {
 // The machine a deleted queue belonged to is not in the frame, so every cached
 // machine list is swept rather than the one it came from.
 function dropQueue (queryClient: QueryClient, queueId: string): void {
-	queryClient.setQueriesData<Queue[]>({ queryKey: queueKeys.all }, (previous) =>
+	queryClient.setQueriesData<Queue[]>({ queryKey: queueKeys.all() }, (previous) =>
 		previous?.filter((entry) => entry.id !== queueId)
 	)
 }
@@ -166,7 +166,7 @@ export function MachinesSocketProvider ({ children }: { children: ReactNode }) {
 			// The question is persisted on its run, so the frame is a nudge to refetch
 			// rather than the only copy of it.
 			if (msg.type === 'run.question') {
-				queryClient.invalidateQueries({ queryKey: queueKeys.all }).catch(() => {
+				queryClient.invalidateQueries({ queryKey: queueKeys.all() }).catch(() => {
 					// A refetch that fails leaves the panel as it was; the next one recovers.
 				})
 

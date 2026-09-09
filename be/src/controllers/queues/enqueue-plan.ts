@@ -17,14 +17,14 @@ export async function enqueuePlan(opts: {
 	idService: IdService;
 	queueId: string;
 	planId: string;
-	userId: string;
+	projectId: string;
 }): Promise<QueueItem> {
 	const queue = await getOwnedQueue({
 		queueRepo: opts.queueRepo,
 		id: opts.queueId,
-		userId: opts.userId
+		projectId: opts.projectId
 	});
-	const plan = await opts.planRepo.getOwnedById({ id: opts.planId, userId: opts.userId });
+	const plan = await opts.planRepo.getOwnedById({ id: opts.planId, projectId: opts.projectId });
 
 	if (!plan) {
 		throw new HttpError(404, 'Plan not found');

@@ -1,5 +1,5 @@
 import { AppShell, NavLink } from '@mantine/core'
-import { Layers, ListTodo, Server } from 'lucide-react'
+import { Layers, ListTodo, Server, Users } from 'lucide-react'
 import { Link, useLocation } from 'react-router'
 
 // `prefixes` rather than the href alone: the machines tab lives at `/`, so
@@ -7,7 +7,8 @@ import { Link, useLocation } from 'react-router'
 const LINKS = [
 	{ to: '/', label: 'Machines', icon: Server, prefixes: ['/machines'] },
 	{ to: '/plans', label: 'Plans', icon: ListTodo, prefixes: ['/plans'] },
-	{ to: '/queues', label: 'Queues', icon: Layers, prefixes: ['/queues'] }
+	{ to: '/queues', label: 'Queues', icon: Layers, prefixes: ['/queues'] },
+	{ to: '/members', label: 'Members', icon: Users, prefixes: ['/members'] }
 ]
 
 function isActive (opts: { pathname: string, to: string, prefixes: string[] }): boolean {

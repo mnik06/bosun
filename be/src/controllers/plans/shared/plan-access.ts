@@ -7,9 +7,9 @@ import { type Plan } from 'src/types/PlanSchema';
 export async function getOwnedPlan(opts: {
 	planRepo: PlanRepo;
 	id: string;
-	userId: string;
+	projectId: string;
 }): Promise<Plan> {
-	const plan = await opts.planRepo.getOwnedById({ id: opts.id, userId: opts.userId });
+	const plan = await opts.planRepo.getOwnedById({ id: opts.id, projectId: opts.projectId });
 
 	if (!plan) {
 		throw new HttpError(404, 'Plan not found');

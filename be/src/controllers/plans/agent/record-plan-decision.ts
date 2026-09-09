@@ -43,7 +43,7 @@ export async function recordPlanDecision(opts: {
 	// overnight is watched by somebody reading what it decided, not waiting for a
 	// pull request to find out.
 	opts.socketRegistry.broadcastToUi({
-		userId: plan.userId,
+		projectId: plan.projectId,
 		message: { type: 'plan.decision', planId: plan.id, decision }
 	});
 

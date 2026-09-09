@@ -82,44 +82,58 @@ async function describeState(deps: AskDeps, queueId: string): Promise<string> {
 
 export async function askQueue(
 	deps: AskDeps,
-	opts: { queueId: string; userId: string; question: string }
+	opts: { queueId: string; projectId: string; question: string }
 ): Promise<QueueMessage> {
 	const queue = await getOwnedQueue({
 		queueRepo: deps.queueRepo,
 		id: opts.queueId,
-		userId: opts.userId
+		projectId: opts.projectId
 	});
 
 	if (queue.worktreePath === null) {
 		throw new HttpError(409, 'That queue has no worktree yet');
 	}
 
+	const askId = deps.idService.createQueueMessageId();
+	const transcript = await deps.queueMessageRepo.listForQueue(queue.id);
+
+	// Delivered before it is recorded, for the same reason a plan answer is: a
+	// transcript holding a question no session ever received reads on the screen
+	// as asked, and the operator waits for an answer that nothing is coming to
+	// give. Recording it after the frame lands means the row exists only if
+	// somebody is on the other end of it.
+	if (
+		!deps.socketRegistry.sendToAgent({
+			machineId: queue.machineId,
+			message: {
+				type: 'queue.ask',
+				queueId: queue.id,
+				askId,
+				worktreePath: queue.worktreePath,
+				question: opts.question,
+				state: await describeState(deps, queue.id),
+				// Read before the question was recorded, so every entry is already
+				// history and the window keeps the size it had when the question was
+				// written first and then sliced back off.
+				transcript: transcript
+					.slice(-(TRANSCRIPT_KEPT - 1))
+					.map((entry) => ({ role: entry.role, content: entry.content }))
+			}
+		})
+	) {
+		throw new HttpError(409, 'this machine is offline');
+	}
+
 	const message = await deps.queueMessageRepo.create({
-		id: deps.idService.createQueueMessageId(),
+		id: askId,
 		queueId: queue.id,
 		role: 'user',
 		content: opts.question
 	});
 
-	const transcript = await deps.queueMessageRepo.listForQueue(queue.id);
-
 	deps.socketRegistry.broadcastToUi({
-		userId: opts.userId,
+		projectId: opts.projectId,
 		message: { type: 'queue.message', message }
-	});
-	deps.socketRegistry.sendToAgent({
-		machineId: queue.machineId,
-		message: {
-			type: 'queue.ask',
-			queueId: queue.id,
-			askId: message.id,
-			worktreePath: queue.worktreePath,
-			question: opts.question,
-			state: await describeState(deps, queue.id),
-			transcript: transcript
-				.slice(-TRANSCRIPT_KEPT, -1)
-				.map((entry) => ({ role: entry.role, content: entry.content }))
-		}
 	});
 
 	return message;

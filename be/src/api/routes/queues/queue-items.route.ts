@@ -22,7 +22,7 @@ const routes: FastifyPluginAsync = async function (f) {
 			await retryQueueItem(schedulerDeps(fastify), {
 				queueId: req.params.id,
 				itemId: req.params.itemId,
-				userId: req.user!.id
+				projectId: req.membership!.projectId
 			});
 
 			return reply.status(204).send(undefined);
@@ -38,7 +38,7 @@ const routes: FastifyPluginAsync = async function (f) {
 				queueItemRepo: fastify.repos.queueItemRepo,
 				queueId: req.params.id,
 				itemId: req.params.itemId,
-				userId: req.user!.id
+				projectId: req.membership!.projectId
 			});
 
 			return reply.status(204).send(undefined);
@@ -56,7 +56,7 @@ const routes: FastifyPluginAsync = async function (f) {
 		async (req, reply) => {
 			const message = await askQueue(askDeps(fastify), {
 				queueId: req.params.id,
-				userId: req.user!.id,
+				projectId: req.membership!.projectId,
 				question: req.body.question
 			});
 

@@ -19,7 +19,7 @@ export async function setPlanBlockers(opts: {
 	}
 
 	const wanted = [...new Set(opts.blockedByNumbers)].filter((number) => number !== plan.number);
-	const found = await opts.planRepo.getByNumbers({ userId: plan.userId, numbers: wanted });
+	const found = await opts.planRepo.getByNumbers({ projectId: plan.projectId, numbers: wanted });
 
 	// Named by number and refused by number: a session that mistyped one gets told
 	// which, rather than a plan that quietly waits on nothing.

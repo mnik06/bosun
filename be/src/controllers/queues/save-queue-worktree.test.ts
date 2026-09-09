@@ -7,7 +7,7 @@ import { type Queue, type QueueStatus } from 'src/types/QueueSchema';
 function queue(status: QueueStatus): Queue {
 	return {
 		id: 'q_1',
-		userId: 'u_1',
+		projectId: 'u_1',
 		machineId: 'm_1',
 		name: 'Auth work',
 		slug: 'auth-work',

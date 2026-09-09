@@ -35,7 +35,7 @@ const routes: FastifyPluginAsync = async function (f) {
 				idService: fastify.services.idService,
 				queueId: req.params.id,
 				planId: req.body.planId,
-				userId: req.user!.id
+				projectId: req.membership!.projectId
 			});
 
 			// An idle queue picks the plan up immediately; a running one does not need
@@ -58,7 +58,7 @@ const routes: FastifyPluginAsync = async function (f) {
 		async (req) => {
 			return controlQueue(schedulerDeps(fastify), {
 				id: req.params.id,
-				userId: req.user!.id,
+				projectId: req.membership!.projectId,
 				action: req.body.action
 			});
 		}
@@ -72,7 +72,7 @@ const routes: FastifyPluginAsync = async function (f) {
 				runId: req.params.runId,
 				questionId: req.body.questionId,
 				answers: req.body.answers,
-				userId: req.user!.id
+				projectId: req.membership!.projectId
 			});
 
 			return reply.status(204).send(undefined);

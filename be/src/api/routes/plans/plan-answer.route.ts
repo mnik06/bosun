@@ -26,7 +26,7 @@ const routes: FastifyPluginAsync = async function (f) {
 				idService: fastify.services.idService,
 				socketRegistry: fastify.services.socketRegistry,
 				id: req.params.id,
-				userId: req.user!.id,
+				projectId: req.membership!.projectId,
 				questionId: req.body.questionId,
 				answers: req.body.answers
 			});

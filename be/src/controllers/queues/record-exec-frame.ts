@@ -22,7 +22,7 @@ async function locate(deps: AdvanceDeps, opts: { runId: string; machineId: strin
 
 export async function recordExecFrame(
 	deps: AdvanceDeps,
-	opts: { machineId: string; userId: string; frame: ExecFrame }
+	opts: { machineId: string; projectId: string; frame: ExecFrame }
 ): Promise<void> {
 	const located = await locate(deps, { runId: opts.frame.runId, machineId: opts.machineId });
 
@@ -34,7 +34,7 @@ export async function recordExecFrame(
 
 	if (frame.type === 'exec.text' || frame.type === 'exec.activity') {
 		deps.socketRegistry.broadcastToUi({
-			userId: opts.userId,
+			projectId: opts.projectId,
 			message:
 				frame.type === 'exec.text'
 					? { type: 'run.text', runId: frame.runId, delta: frame.delta }
@@ -52,7 +52,7 @@ export async function recordExecFrame(
 		});
 		await deps.queueRepo.update({ id: located.queue.id, status: 'blocked' });
 		deps.socketRegistry.broadcastToUi({
-			userId: opts.userId,
+			projectId: opts.projectId,
 			message: {
 				type: 'run.question',
 				runId: frame.runId,

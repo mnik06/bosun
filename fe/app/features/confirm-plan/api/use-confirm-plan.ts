@@ -13,7 +13,7 @@ export function useConfirmPlan (planId: string) {
 
 			return PlanSchema.parse(data)
 		},
-		onSuccess: async () => queryClient.invalidateQueries({ queryKey: planKeys.all }),
+		onSuccess: async () => queryClient.invalidateQueries({ queryKey: planKeys.all() }),
 		onError: (error: unknown) => {
 			notifyError({ title: 'Could not confirm the plan', error })
 		}

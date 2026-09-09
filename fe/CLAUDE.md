@@ -8,11 +8,18 @@ There is no client-side database. Everything the UI shows comes from the bosun b
 `VITE_API_URL` (**127.0.0.1:1506** locally, and it must be `127.0.0.1`, not `localhost`), read over
 REST and pushed over a WebSocket that patches the React Query cache instead of polling.
 
-Authentication is the one exception. `supabase-js` owns the whole session lifecycle — sign-up,
-sign-in, storage and silent refresh — and `app/shared/api/supabase.ts` is the only module allowed to
-touch it. Every REST call carries the access token via an axios request interceptor, and the
-WebSocket is opened with a single-use ticket fetched over REST. Nothing else reads or writes a token,
-and supabase-js is never used for data.
+Authentication is the one exception. `supabase-js` owns the whole session lifecycle — sign-in,
+storage and silent refresh — and `app/shared/api/supabase.ts` is the only module allowed to touch it.
+There is no sign-up: accounts exist because a project leader created them, so the app has a login
+screen and nothing else. Every REST call carries the access token via an axios request interceptor,
+and the WebSocket is opened with a single-use ticket fetched over REST. Nothing else reads or writes
+a token, and supabase-js is never used for data.
+
+Everything the app reads belongs to a **project**, and the active one travels in the `X-Project-Id`
+header set by the same interceptor (`app/shared/api/active-project.ts`). Every query key carries that
+project id, so switching project cannot serve the previous one's rows out of cache. A membership is
+`leader` or `developer`; `useActiveProject().isLeader` is what hides machine management, and the
+backend refuses it regardless.
 
 ## Architecture — where code goes
 

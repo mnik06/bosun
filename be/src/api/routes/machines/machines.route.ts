@@ -16,6 +16,7 @@ const routes: FastifyPluginAsync = async function (f) {
 	fastify.post(
 		'/',
 		{
+			preValidation: fastify.requireLeader,
 			schema: {
 				body: CreateMachineReqSchema,
 				response: { 201: CreateMachineRespSchema }
@@ -26,7 +27,7 @@ const routes: FastifyPluginAsync = async function (f) {
 				machineRepo: fastify.repos.machineRepo,
 				idService: fastify.services.idService,
 				keyService: fastify.services.keyService,
-				userId: req.user!.id,
+				projectId: req.membership!.projectId,
 				name: req.body.name,
 				serverUrl: fastify.env.PUBLIC_SERVER_URL
 			});
@@ -43,7 +44,10 @@ const routes: FastifyPluginAsync = async function (f) {
 			}
 		},
 		async (req) => {
-			return listMachines({ machineRepo: fastify.repos.machineRepo, userId: req.user!.id });
+			return listMachines({
+				machineRepo: fastify.repos.machineRepo,
+				projectId: req.membership!.projectId
+			});
 		}
 	);
 
@@ -59,7 +63,7 @@ const routes: FastifyPluginAsync = async function (f) {
 			return getMachine({
 				machineRepo: fastify.repos.machineRepo,
 				id: req.params.id,
-				userId: req.user!.id
+				projectId: req.membership!.projectId
 			});
 		}
 	);
@@ -67,6 +71,7 @@ const routes: FastifyPluginAsync = async function (f) {
 	fastify.delete(
 		'/:id',
 		{
+			preValidation: fastify.requireLeader,
 			schema: {
 				params: MachineIdParamsSchema
 			}
@@ -76,7 +81,7 @@ const routes: FastifyPluginAsync = async function (f) {
 				machineRepo: fastify.repos.machineRepo,
 				socketRegistry: fastify.services.socketRegistry,
 				id: req.params.id,
-				userId: req.user!.id
+				projectId: req.membership!.projectId
 			});
 
 			return reply.status(204).send(undefined);

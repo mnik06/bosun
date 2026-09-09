@@ -11,9 +11,9 @@ export async function removeQueueItem(opts: {
 	queueItemRepo: QueueItemRepo;
 	queueId: string;
 	itemId: string;
-	userId: string;
+	projectId: string;
 }): Promise<void> {
-	await getOwnedQueue({ queueRepo: opts.queueRepo, id: opts.queueId, userId: opts.userId });
+	await getOwnedQueue({ queueRepo: opts.queueRepo, id: opts.queueId, projectId: opts.projectId });
 
 	if (!(await opts.queueItemRepo.removeQueued({ id: opts.itemId, queueId: opts.queueId }))) {
 		throw new HttpError(409, 'Only a plan that has not started yet can be removed');

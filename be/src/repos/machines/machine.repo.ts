@@ -15,7 +15,7 @@ type Db = ReturnType<typeof getDb>;
 
 const publicColumns = {
 	id: machines.id,
-	userId: machines.userId,
+	projectId: machines.projectId,
 	name: machines.name,
 	status: machines.status,
 	lastSeenAt: machines.lastSeenAt,
@@ -34,13 +34,13 @@ function reachabilityStatus(next: Extract<MachineStatus, 'online' | 'offline'>) 
 }
 
 // There is deliberately no unscoped read by id. A method that can be called
-// without an owner is a leak waiting for its first careless caller, so the
-// owner is part of the query rather than a check the controller might forget.
+// without a project is a leak waiting for its first careless caller, so the
+// project is part of the query rather than a check the controller might forget.
 export function getMachineRepo(db: Db) {
 	return {
 		async create(opts: {
 			id: string;
-			userId: string;
+			projectId: string;
 			name: string;
 			enrollmentToken: string;
 			tokenExpiresAt: Date;
@@ -50,11 +50,11 @@ export function getMachineRepo(db: Db) {
 			return MachineSchema.parse(row);
 		},
 
-		async listOwned(userId: string): Promise<Machine[]> {
+		async listOwned(projectId: string): Promise<Machine[]> {
 			const rows = await db
 				.select(publicColumns)
 				.from(machines)
-				.where(eq(machines.userId, userId))
+				.where(eq(machines.projectId, projectId))
 				.orderBy(desc(machines.createdAt));
 
 			return rows.map((row) => MachineSchema.parse(row));
@@ -68,11 +68,11 @@ export function getMachineRepo(db: Db) {
 			return row ? MachineSchema.parse(row) : null;
 		},
 
-		async getOwnedById(opts: { id: string; userId: string }): Promise<Machine | null> {
+		async getOwnedById(opts: { id: string; projectId: string }): Promise<Machine | null> {
 			const [row] = await db
 				.select(publicColumns)
 				.from(machines)
-				.where(and(eq(machines.id, opts.id), eq(machines.userId, opts.userId)));
+				.where(and(eq(machines.id, opts.id), eq(machines.projectId, opts.projectId)));
 
 			return row ? MachineSchema.parse(row) : null;
 		},
@@ -118,18 +118,18 @@ export function getMachineRepo(db: Db) {
 
 		async findAuthByKeyHash(
 			machineKeyHash: string
-		): Promise<{ id: string; userId: string; machineKeyHash: string } | null> {
+		): Promise<{ id: string; projectId: string; machineKeyHash: string } | null> {
 			const [row] = await db
 				.select({
 					id: machines.id,
-					userId: machines.userId,
+					projectId: machines.projectId,
 					machineKeyHash: machines.machineKeyHash
 				})
 				.from(machines)
 				.where(eq(machines.machineKeyHash, machineKeyHash));
 
 			return row?.machineKeyHash
-				? { id: row.id, userId: row.userId, machineKeyHash: row.machineKeyHash }
+				? { id: row.id, projectId: row.projectId, machineKeyHash: row.machineKeyHash }
 				: null;
 		},
 
@@ -163,24 +163,33 @@ export function getMachineRepo(db: Db) {
 			return row ? MachineSchema.parse(row) : null;
 		},
 
+		// The timestamp and nothing else. A pong says the socket is still there, not
+		// that anything about the machine changed, and writing a status here would
+		// fight the pause and enrollment paths over a row they own. Nothing is
+		// returned because no screen changes: `lastSeenAt` moving is the absence of
+		// news, and announcing it would repaint every machine card every minute.
+		async touch(opts: { id: string; now: Date }): Promise<void> {
+			await db.update(machines).set({ lastSeenAt: opts.now }).where(eq(machines.id, opts.id));
+		},
+
 		async setOwnedStatus(opts: {
 			id: string;
-			userId: string;
+			projectId: string;
 			status: MachineStatus;
 		}): Promise<Machine | null> {
 			const [row] = await db
 				.update(machines)
 				.set({ status: opts.status })
-				.where(and(eq(machines.id, opts.id), eq(machines.userId, opts.userId)))
+				.where(and(eq(machines.id, opts.id), eq(machines.projectId, opts.projectId)))
 				.returning(publicColumns);
 
 			return row ? MachineSchema.parse(row) : null;
 		},
 
-		async deleteOwned(opts: { id: string; userId: string }): Promise<boolean> {
+		async deleteOwned(opts: { id: string; projectId: string }): Promise<boolean> {
 			const rows = await db
 				.delete(machines)
-				.where(and(eq(machines.id, opts.id), eq(machines.userId, opts.userId)))
+				.where(and(eq(machines.id, opts.id), eq(machines.projectId, opts.projectId)))
 				.returning({ id: machines.id });
 
 			return rows.length > 0;
@@ -188,13 +197,13 @@ export function getMachineRepo(db: Db) {
 
 		async saveProjectProfile(opts: {
 			id: string;
-			userId: string;
+			projectId: string;
 			projectProfile: ProjectProfile;
 		}): Promise<Machine | null> {
 			const [row] = await db
 				.update(machines)
 				.set({ projectProfile: opts.projectProfile })
-				.where(and(eq(machines.id, opts.id), eq(machines.userId, opts.userId)))
+				.where(and(eq(machines.id, opts.id), eq(machines.projectId, opts.projectId)))
 				.returning(publicColumns);
 
 			return row ? MachineSchema.parse(row) : null;

@@ -50,14 +50,50 @@ async function setStatus(
 	}
 }
 
+// A dispatch that does not start work is not one thing. `empty` means there was
+// no bullet to take, which for a freshly claimed plan is what "finished" looks
+// like; `unreachable` means a bullet *was* claimed and the command was not
+// delivered. Collapsing the two into `false` is what let an undelivered
+// `exec.start` read as a plan that had run out of work.
+type DispatchOutcome = 'sent' | 'empty' | 'unreachable';
+
+// The socket was gone by the time the bullet was due to start. The claim is
+// undone rather than failed: nothing ran on the machine, so there is no
+// half-written worktree to reason about and resuming should run this bullet
+// again rather than skip to the next one. The queue stops so a person decides —
+// the same call `pauseMachineQueues` makes when a machine drops mid-bullet.
+const UNREACHABLE = 'the machine was not reachable when this bullet was due to start';
+
+async function stall(deps: AdvanceDeps, opts: { queue: Queue; runId: string }): Promise<void> {
+	await deps.sliceRunRepo.update({
+		id: opts.runId,
+		status: 'pending',
+		failureReason: null,
+		questionId: null,
+		question: null,
+		startedAt: null,
+		finishedAt: null
+	});
+
+	const paused = await deps.queueRepo.update({
+		id: opts.queue.id,
+		status: 'paused',
+		failureReason: UNREACHABLE
+	});
+
+	if (paused) {
+		announceQueue({ socketRegistry: deps.socketRegistry, queue: paused });
+	}
+}
+
 async function dispatch(
 	deps: AdvanceDeps,
 	opts: { queue: Queue; item: QueueItem }
-): Promise<boolean> {
+): Promise<DispatchOutcome> {
 	const run = await deps.sliceRunRepo.claimNext(opts.item.id);
 
 	if (!run) {
-		return false;
+		return 'empty';
 	}
 
 	const plan = await deps.planRepo.getByIdForMachine({
@@ -75,7 +111,7 @@ async function dispatch(
 			finishedAt: new Date()
 		});
 
-		return false;
+		return 'empty';
 	}
 
 	// Named from the plan rather than the item, so a branch and its pull request
@@ -97,7 +133,7 @@ async function dispatch(
 		entry.ordinal < lowest.ordinal ? entry : lowest
 	);
 
-	deps.socketRegistry.sendToAgent({
+	const delivered = deps.socketRegistry.sendToAgent({
 		machineId: opts.queue.machineId,
 		message: {
 			type: 'exec.start',
@@ -134,7 +170,13 @@ async function dispatch(
 		}
 	});
 
-	return true;
+	if (!delivered) {
+		await stall(deps, { queue: opts.queue, runId: run.id });
+
+		return 'unreachable';
+	}
+
+	return 'sent';
 }
 
 // A plan waits for its blockers to have finished *in this queue*. A blocker that
@@ -250,7 +292,7 @@ async function requestPublish(
 		return;
 	}
 
-	deps.socketRegistry.sendToAgent({
+	const published = deps.socketRegistry.sendToAgent({
 		machineId: opts.queue.machineId,
 		message: {
 			type: 'queue.publish',
@@ -266,6 +308,18 @@ async function requestPublish(
 			})
 		}
 	});
+
+	// The item stays `done`: every bullet landed and the commits are on the
+	// machine, so nothing about the work is in doubt. What did not happen is the
+	// pull request, and an item that reads `done` with no `prUrl` is
+	// indistinguishable from a plan nobody wanted one for — so the reason is
+	// written down rather than left for somebody to notice the PR missing.
+	if (!published) {
+		await deps.queueItemRepo.update({
+			id: opts.item.id,
+			failureReason: 'the machine was not reachable to open the pull request'
+		});
+	}
 }
 
 // The only place work starts. Called when a queue is started, when a run
@@ -291,10 +345,21 @@ export async function advanceQueue(deps: AdvanceDeps, opts: { queueId: string })
 		}
 	}
 
-	if (running && (await dispatch(deps, { queue, item: running }))) {
-		await setStatus(deps, { queue, status: 'running' });
+	if (running) {
+		const outcome = await dispatch(deps, { queue, item: running });
 
-		return;
+		if (outcome === 'sent') {
+			await setStatus(deps, { queue, status: 'running' });
+
+			return;
+		}
+
+		// `stall` has already paused the queue and put the bullet back. Falling
+		// through would find that bullet pending and set the queue running again,
+		// which is the paused row being overwritten by the thing that paused it.
+		if (outcome === 'unreachable') {
+			return;
+		}
 	}
 
 	// A running item with no bullets left is a finished plan — but dispatch
@@ -333,9 +398,17 @@ export async function advanceQueue(deps: AdvanceDeps, opts: { queueId: string })
 		return;
 	}
 
-	if (await dispatch(deps, { queue, item: next })) {
+	const outcome = await dispatch(deps, { queue, item: next });
+
+	if (outcome === 'sent') {
 		await setStatus(deps, { queue, status: 'running' });
 
+		return;
+	}
+
+	// Closing the item here would mark a plan done that never ran a line of it,
+	// and recursing would walk the whole queue doing the same to every plan in it.
+	if (outcome === 'unreachable') {
 		return;
 	}
 

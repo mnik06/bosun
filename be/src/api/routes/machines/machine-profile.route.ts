@@ -11,6 +11,7 @@ const routes: FastifyPluginAsync = async function (f) {
 	fastify.patch(
 		'/:id/profile',
 		{
+			preValidation: fastify.requireLeader,
 			schema: {
 				params: MachineIdParamsSchema,
 				body: ProjectProfileSchema,
@@ -22,12 +23,11 @@ const routes: FastifyPluginAsync = async function (f) {
 				machineRepo: fastify.repos.machineRepo,
 				socketRegistry: fastify.services.socketRegistry,
 				id: req.params.id,
-				userId: req.user!.id,
+				projectId: req.membership!.projectId,
 				projectProfile: req.body
 			});
 		}
 	);
-
 };
 
 export default routes;

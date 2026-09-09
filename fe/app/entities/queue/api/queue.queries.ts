@@ -6,13 +6,16 @@ import {
 	type Queue,
 	type QueueDetail
 } from '~/entities/queue/model/queue'
-import { apiClient } from '~/shared/api'
+import { apiClient, getActiveProjectId } from '~/shared/api'
 
+// Every key carries the active project. Without it a switch shows the previous
+// project's rows out of cache until the refetch lands, which is the one bug this
+// change invites and the cheapest possible place to prevent it.
 export const queueKeys = {
-	all: ['queues'] as const,
-	list: () => [...queueKeys.all, 'list'] as const,
-	forMachine: (machineId: string) => [...queueKeys.all, 'machine', machineId] as const,
-	detail: (id: string) => [...queueKeys.all, 'detail', id] as const
+	all: () => ['queues', getActiveProjectId()] as const,
+	list: () => [...queueKeys.all(), 'list'] as const,
+	forMachine: (machineId: string) => [...queueKeys.all(), 'machine', machineId] as const,
+	detail: (id: string) => [...queueKeys.all(), 'detail', id] as const
 }
 
 export async function fetchQueues (machineId?: string): Promise<Queue[]> {

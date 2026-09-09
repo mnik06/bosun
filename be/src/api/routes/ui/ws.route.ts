@@ -4,13 +4,13 @@ import { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { UiWsQuerySchema } from 'src/api/routes/schemas/ui/UiWsQuerySchema';
 import { UiCommandSchema } from 'src/types/protocol';
 
-// Subscribing is an authorization decision, not a routing one: without the owner
-// check any signed-in account could name somebody else's plan id and receive its
-// whole transcript.
+// Subscribing is an authorization decision, not a routing one: without the
+// project check any signed-in account could name another tenant's plan id and
+// receive its whole transcript.
 async function handleCommand(opts: {
 	fastify: FastifyInstance;
 	socket: WebSocket;
-	userId: string;
+	projectId: string;
 	raw: string;
 }): Promise<void> {
 	let json: unknown;
@@ -38,7 +38,7 @@ async function handleCommand(opts: {
 
 	const plan = await opts.fastify.repos.planRepo.getOwnedById({
 		id: parsed.data.planId,
-		userId: opts.userId
+		projectId: opts.projectId
 	});
 
 	if (plan) {
@@ -55,28 +55,28 @@ const routes: FastifyPluginAsync = async function (fastify) {
 	// single-use ticket that expires in seconds, not the bearer token itself.
 	fastify.addHook('preValidation', async (request, reply) => {
 		const query = UiWsQuerySchema.safeParse(request.query);
-		const userId = query.success
+		const session = query.success
 			? fastify.services.ticketService.consume(query.data.ticket)
 			: null;
 
-		if (!userId) {
+		if (!session) {
 			return reply.status(401).send({ message: 'Unauthorized' });
 		}
 
-		request.uiUserId = userId;
+		request.uiSession = session;
 	});
 
 	fastify.get('/ws', { websocket: true }, (socket, request) => {
-		const userId = request.uiUserId!;
+		const { userId, projectId } = request.uiSession!;
 
-		fastify.services.socketRegistry.addUiSocket({ userId, socket });
+		fastify.services.socketRegistry.addUiSocket({ projectId, userId, socket });
 
 		socket.on('message', (raw: RawData) => {
-			void handleCommand({ fastify, socket, userId, raw: raw.toString() });
+			void handleCommand({ fastify, socket, projectId, raw: raw.toString() });
 		});
 
 		socket.on('close', () => {
-			fastify.services.socketRegistry.removeUiSocket({ userId, socket });
+			fastify.services.socketRegistry.removeUiSocket({ projectId, socket });
 		});
 	});
 };

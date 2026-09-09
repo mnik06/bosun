@@ -21,7 +21,7 @@ export async function getPlanDetail(opts: {
 	acRepo: AcRepo;
 	sliceRepo: SliceRepo;
 	id: string;
-	userId: string;
+	projectId: string;
 }): Promise<{
 	plan: Plan;
 	messages: PlanMessage[];
@@ -30,7 +30,11 @@ export async function getPlanDetail(opts: {
 	blockedBy: Plan[];
 	decisions: PlanDecision[];
 }> {
-	const plan = await getOwnedPlan({ planRepo: opts.planRepo, id: opts.id, userId: opts.userId });
+	const plan = await getOwnedPlan({
+		planRepo: opts.planRepo,
+		id: opts.id,
+		projectId: opts.projectId
+	});
 	const [messages, acs, slices, blockedBy, decisions] = await Promise.all([
 		opts.planMessageRepo.listByPlan(plan.id),
 		opts.acRepo.listByPlan(plan.id),

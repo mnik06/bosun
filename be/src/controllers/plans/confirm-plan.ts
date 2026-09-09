@@ -16,9 +16,13 @@ export async function confirmPlan(opts: {
 	sliceRepo: SliceRepo;
 	socketRegistry: SocketRegistry;
 	id: string;
-	userId: string;
+	projectId: string;
 }): Promise<Plan> {
-	const plan = await getOwnedPlan({ planRepo: opts.planRepo, id: opts.id, userId: opts.userId });
+	const plan = await getOwnedPlan({
+		planRepo: opts.planRepo,
+		id: opts.id,
+		projectId: opts.projectId
+	});
 
 	if (plan.status !== 'ready') {
 		throw new HttpError(409, 'This plan is still being written');

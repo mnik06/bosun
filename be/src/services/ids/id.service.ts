@@ -5,6 +5,7 @@ export function getIdService() {
 		createMachineId: (): string => `m_${nanoid(12)}`,
 		createCommandId: (): string => `cmd_${nanoid(12)}`,
 		createUserId: (): string => `u_${nanoid(12)}`,
+		createProjectId: (): string => `prj_${nanoid(12)}`,
 		createPlanId: (): string => `p_${nanoid(12)}`,
 		createPlanMessageId: (): string => `pm_${nanoid(12)}`,
 		createAcId: (): string => `ac_${nanoid(12)}`,

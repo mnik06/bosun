@@ -18,7 +18,7 @@ function build(deleted: boolean) {
 	const deleteOwned = vi.fn().mockResolvedValue(deleted);
 
 	socketRegistry.registerAgentSocket({ machineId: 'm_1', socket: agent });
-	socketRegistry.addUiSocket({ userId: 'u_alice', socket: browser });
+	socketRegistry.addUiSocket({ projectId: 'u_alice', socket: browser });
 
 	return {
 		agent,
@@ -30,7 +30,7 @@ function build(deleted: boolean) {
 				machineRepo: { deleteOwned } as unknown as MachineRepo,
 				socketRegistry,
 				id: 'm_1',
-				userId: 'u_alice'
+				projectId: 'u_alice'
 			})
 	};
 }

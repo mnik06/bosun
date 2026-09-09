@@ -8,7 +8,7 @@ import { type Ac, type Plan } from 'src/types/PlanSchema';
 function plan(overrides: Partial<Plan> = {}): Plan {
 	return {
 		id: 'p_1',
-		userId: 'u_alice',
+		projectId: 'u_alice',
 		machineId: 'm_1',
 		title: 'A plan',
 		bodyMd: '## Overview',

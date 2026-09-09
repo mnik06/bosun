@@ -6,12 +6,15 @@ import {
 	type Plan,
 	type PlanDetail
 } from '~/entities/plan/model/plan'
-import { apiClient } from '~/shared/api'
+import { apiClient, getActiveProjectId } from '~/shared/api'
 
+// Every key carries the active project. Without it a switch shows the previous
+// project's rows out of cache until the refetch lands, which is the one bug this
+// change invites and the cheapest possible place to prevent it.
 export const planKeys = {
-	all: ['plans'] as const,
-	list: () => [...planKeys.all, 'list'] as const,
-	detail: (id: string) => [...planKeys.all, 'detail', id] as const
+	all: () => ['plans', getActiveProjectId()] as const,
+	list: () => [...planKeys.all(), 'list'] as const,
+	detail: (id: string) => [...planKeys.all(), 'detail', id] as const
 }
 
 export async function fetchPlans (): Promise<Plan[]> {

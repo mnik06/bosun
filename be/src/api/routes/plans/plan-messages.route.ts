@@ -29,7 +29,7 @@ const routes: FastifyPluginAsync = async function (f) {
 				idService: fastify.services.idService,
 				socketRegistry: fastify.services.socketRegistry,
 				id: req.params.id,
-				userId: req.user!.id,
+				projectId: req.membership!.projectId,
 				text: req.body.text
 			});
 
@@ -52,7 +52,7 @@ const routes: FastifyPluginAsync = async function (f) {
 				sliceRepo: fastify.repos.sliceRepo,
 				socketRegistry: fastify.services.socketRegistry,
 				id: req.params.id,
-				userId: req.user!.id
+				projectId: req.membership!.projectId
 			});
 		}
 	);

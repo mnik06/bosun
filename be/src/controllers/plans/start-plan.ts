@@ -36,7 +36,8 @@ export async function startPlan(opts: {
 	machineRepo: MachineRepo;
 	idService: IdService;
 	socketRegistry: SocketRegistry;
-	userId: string;
+	projectId: string;
+	createdByUserId: string;
 	machineId: string;
 	input: string;
 	verifyInUi: boolean;
@@ -44,7 +45,7 @@ export async function startPlan(opts: {
 }): Promise<Plan> {
 	const machine = await opts.machineRepo.getOwnedById({
 		id: opts.machineId,
-		userId: opts.userId
+		projectId: opts.projectId
 	});
 
 	if (!machine) {
@@ -65,7 +66,8 @@ export async function startPlan(opts: {
 
 	const plan = await opts.planRepo.create({
 		id: opts.idService.createPlanId(),
-		userId: opts.userId,
+		projectId: opts.projectId,
+		createdByUserId: opts.createdByUserId,
 		machineId: machine.id,
 		input: opts.input,
 		verifyInUi: opts.verifyInUi,

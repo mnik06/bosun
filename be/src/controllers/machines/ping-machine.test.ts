@@ -16,7 +16,7 @@ function fakeSocket() {
 function machine(status: MachineStatus): Machine {
 	return {
 		id: 'm_1',
-		userId: 'u_alice',
+		projectId: 'u_alice',
 		name: 'vps-1',
 		status,
 		lastSeenAt: null,

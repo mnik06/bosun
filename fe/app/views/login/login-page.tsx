@@ -1,5 +1,4 @@
-import { Anchor, Stack, Text, Title } from '@mantine/core'
-import { Link } from 'react-router'
+import { Stack, Text, Title } from '@mantine/core'
 
 import { CredentialsForm, SignInSchema, useSignIn } from '~/features/auth'
 
@@ -21,10 +20,7 @@ export default function LoginPage () {
 			/>
 
 			<Text size="sm" c="dimmed">
-				No account yet?{' '}
-				<Anchor component={Link} to="/signup" size="sm">
-					Sign up
-				</Anchor>
+				Accounts are created by a project leader. Ask yours for an email and password.
 			</Text>
 		</Stack>
 	)

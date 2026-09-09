@@ -1,5 +1,6 @@
 import axios, { isAxiosError } from 'axios'
 
+import { getActiveProjectId } from './active-project'
 import { supabase } from './supabase'
 
 export const apiClient = axios.create({
@@ -14,6 +15,15 @@ apiClient.interceptors.request.use(async (config) => {
 
 	if (data.session) {
 		config.headers.set('Authorization', `Bearer ${data.session.access_token}`)
+	}
+
+	// Every resource route is scoped by this header. It is set here, beside the
+	// token, so no call site can forget it — the backend answers 400 rather than
+	// guessing which project a request meant.
+	const projectId = getActiveProjectId()
+
+	if (projectId !== null) {
+		config.headers.set('X-Project-Id', projectId)
 	}
 
 	return config

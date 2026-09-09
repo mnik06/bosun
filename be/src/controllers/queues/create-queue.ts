@@ -12,14 +12,14 @@ export async function createQueue(opts: {
 	machineRepo: MachineRepo;
 	idService: IdService;
 	socketRegistry: SocketRegistry;
-	userId: string;
+	projectId: string;
 	machineId: string;
 	name: string;
 	afk: boolean;
 }): Promise<Queue> {
 	const machine = await opts.machineRepo.getOwnedById({
 		id: opts.machineId,
-		userId: opts.userId
+		projectId: opts.projectId
 	});
 
 	if (!machine) {
@@ -34,7 +34,7 @@ export async function createQueue(opts: {
 
 	const queue = await opts.queueRepo.create({
 		id: opts.idService.createQueueId(),
-		userId: opts.userId,
+		projectId: opts.projectId,
 		machineId: opts.machineId,
 		name: opts.name,
 		slug,

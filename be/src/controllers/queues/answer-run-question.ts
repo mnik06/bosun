@@ -8,12 +8,12 @@ import { type PlanAnswer } from 'src/types/PlanSchema';
 // inside a tool call — so nothing needs restarting.
 export async function answerRunQuestion(
 	deps: AdvanceDeps,
-	opts: { runId: string; questionId: string; answers: PlanAnswer[]; userId: string }
+	opts: { runId: string; questionId: string; answers: PlanAnswer[]; projectId: string }
 ): Promise<void> {
 	const run = await deps.sliceRunRepo.getById(opts.runId);
 	const item = run ? await deps.queueItemRepo.getById(run.queueItemId) : null;
 	const queue = item
-		? await deps.queueRepo.getOwnedById({ id: item.queueId, userId: opts.userId })
+		? await deps.queueRepo.getOwnedById({ id: item.queueId, projectId: opts.projectId })
 		: null;
 
 	if (!run || !queue) {
@@ -26,17 +26,26 @@ export async function answerRunQuestion(
 		throw new HttpError(409, 'That question has already been answered');
 	}
 
-	await deps.sliceRunRepo.setQuestion({ id: run.id, questionId: null, question: null });
+	// Delivered before the question is cleared. The other order loses both halves
+	// at once when the socket is gone: the session stays parked inside its tool
+	// call waiting on an answer, and the question it is waiting on has been wiped
+	// off the run — so the panel that could have answered it a second time no
+	// longer has anything to answer.
+	if (
+		!deps.socketRegistry.sendToAgent({
+			machineId: queue.machineId,
+			message: {
+				type: 'exec.answer',
+				runId: opts.runId,
+				questionId: opts.questionId,
+				answers: opts.answers
+			}
+		})
+	) {
+		throw new HttpError(409, 'this machine is offline');
+	}
 
-	deps.socketRegistry.sendToAgent({
-		machineId: queue.machineId,
-		message: {
-			type: 'exec.answer',
-			runId: opts.runId,
-			questionId: opts.questionId,
-			answers: opts.answers
-		}
-	});
+	await deps.sliceRunRepo.setQuestion({ id: run.id, questionId: null, question: null });
 
 	if (queue.status === 'blocked') {
 		const updated = await deps.queueRepo.update({ id: queue.id, status: 'running' });

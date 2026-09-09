@@ -10,7 +10,13 @@ import websocket from '@fastify/websocket';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import { errorHandler } from 'src/api/errors/error.handler';
 import { getLoggerOptions } from 'src/api/plugins/logger.plugin';
-import { getRequireUserHook } from 'src/api/plugins/auth.plugin';
+import {
+	getRequireMembershipHook,
+	getRequireProjectParamMembershipHook,
+	getRequireUserHook,
+	requireAppOwner,
+	requireLeader
+} from 'src/api/plugins/auth.plugin';
 import { getDb } from 'src/services/drizzle/drizzle.service';
 import { getServices } from 'src/services/index';
 import { getRepos } from 'src/repos/index';
@@ -56,6 +62,22 @@ function decorateContext(server: FastifyInstance, env: Env): void {
 			userRepo: repos.userRepo
 		})
 	);
+	server.decorate(
+		'requireMembership',
+		getRequireMembershipHook({
+			projectRepo: repos.projectRepo,
+			projectMemberRepo: repos.projectMemberRepo
+		})
+	);
+	server.decorate(
+		'requireProjectParamMembership',
+		getRequireProjectParamMembershipHook({
+			projectRepo: repos.projectRepo,
+			projectMemberRepo: repos.projectMemberRepo
+		})
+	);
+	server.decorate('requireLeader', requireLeader);
+	server.decorate('requireAppOwner', requireAppOwner);
 }
 
 function registerRoutes(server: FastifyInstance): void {

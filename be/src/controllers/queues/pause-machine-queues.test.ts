@@ -6,9 +6,9 @@ function build(opts?: { running?: boolean }) {
 	return {
 		queueRepo: {
 			listRunnableForMachine: vi.fn().mockResolvedValue([
-				{ id: 'q_1', machineId: 'm_1', status: 'running', userId: 'u_1' }
+				{ id: 'q_1', machineId: 'm_1', status: 'running', projectId: 'u_1' }
 			]),
-			update: vi.fn().mockResolvedValue({ id: 'q_1', userId: 'u_1', status: 'paused' })
+			update: vi.fn().mockResolvedValue({ id: 'q_1', projectId: 'u_1', status: 'paused' })
 		},
 		queueItemRepo: {
 			listForQueue: vi

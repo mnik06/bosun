@@ -8,7 +8,7 @@ type AnswerFrame = Extract<AgentMsg, { type: `queue.answer.${string}` }>;
 // what anybody is reading it for.
 export async function recordAnswerFrame(
 	deps: AskDeps,
-	opts: { machineId: string; userId: string; frame: AnswerFrame }
+	opts: { machineId: string; projectId: string; frame: AnswerFrame }
 ): Promise<void> {
 	const queue = await deps.queueRepo.getById(opts.frame.queueId);
 
@@ -18,7 +18,7 @@ export async function recordAnswerFrame(
 
 	if (opts.frame.type === 'queue.answer.text') {
 		deps.socketRegistry.broadcastToUi({
-			userId: opts.userId,
+			projectId: opts.projectId,
 			message: {
 				type: 'queue.answer',
 				queueId: queue.id,
@@ -43,7 +43,7 @@ export async function recordAnswerFrame(
 	});
 
 	deps.socketRegistry.broadcastToUi({
-		userId: opts.userId,
+		projectId: opts.projectId,
 		message: { type: 'queue.message', message }
 	});
 }

@@ -24,7 +24,7 @@ export function useCreateQueue () {
 	// known at the call site.
 	return useMutation({
 		mutationFn: createQueue,
-		onSuccess: async () => queryClient.invalidateQueries({ queryKey: queueKeys.all }),
+		onSuccess: async () => queryClient.invalidateQueries({ queryKey: queueKeys.all() }),
 		onError: (error: unknown) => {
 			notifyError({ title: 'Could not create queue', error })
 		}

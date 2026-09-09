@@ -8,12 +8,12 @@ export async function saveProjectProfile(opts: {
 	machineRepo: MachineRepo;
 	socketRegistry: SocketRegistry;
 	id: string;
-	userId: string;
+	projectId: string;
 	projectProfile: ProjectProfile;
 }): Promise<Machine> {
 	const machine = await opts.machineRepo.saveProjectProfile({
 		id: opts.id,
-		userId: opts.userId,
+		projectId: opts.projectId,
 		projectProfile: opts.projectProfile
 	});
 
@@ -22,7 +22,7 @@ export async function saveProjectProfile(opts: {
 	}
 
 	opts.socketRegistry.broadcastToUi({
-		userId: opts.userId,
+		projectId: opts.projectId,
 		message: { type: 'machine.updated', machine }
 	});
 

@@ -14,7 +14,9 @@ export function getLoggerOptions(env: Env): FastifyLoggerOptions {
 
 	const opts: FastifyLoggerOptions & { redact: string[] } = {
 		level: 'trace',
-		redact: ['req.headers.authorization'],
+		// The generated password is returned in exactly one response and must not be
+		// recoverable from a log line afterwards.
+		redact: ['req.headers.authorization', 'res.password', 'password'],
 		serializers: {
 			req(request) {
 				return {

@@ -1,4 +1,5 @@
 import { getAgentReleaseService } from 'src/services/agent-release/agent-release.service';
+import { getSupabaseAdmin } from 'src/services/auth/supabase-admin.service';
 import { getSupabaseAuth } from 'src/services/auth/supabase-auth.service';
 import { getIdService } from 'src/services/ids/id.service';
 import { getInstallerService } from 'src/services/installer/installer.service';
@@ -26,6 +27,10 @@ export function getServices(opts: { env: Env }) {
 		pendingPings: getPendingPingsService(),
 		planTextService: getPlanTextService(),
 		socketRegistry: getSocketRegistry(),
+		supabaseAdmin: getSupabaseAdmin({
+			url: opts.env.SUPABASE_URL,
+			secretKey: opts.env.SUPABASE_SECRET_KEY
+		}),
 		supabaseAuth: getSupabaseAuth({
 			url: opts.env.SUPABASE_URL,
 			publishableKey: opts.env.SUPABASE_PUBLISHABLE_KEY

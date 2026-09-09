@@ -22,7 +22,7 @@ export function useEnqueuePlans (queueId: string) {
 				throw new Error(`${failed} of ${planIds.length} plans could not be queued`)
 			}
 		},
-		onSettled: async () => queryClient.invalidateQueries({ queryKey: queueKeys.all }),
+		onSettled: async () => queryClient.invalidateQueries({ queryKey: queueKeys.all() }),
 		onError: (error: unknown) => {
 			notifyError({ title: 'Could not queue every plan', error })
 		}

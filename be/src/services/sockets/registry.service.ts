@@ -4,9 +4,10 @@ import { type ServerMsg, type UiMsg } from 'src/types/protocol';
 export function getSocketRegistry() {
 	const agentSockets = new Map<string, WebSocket>();
 
-	// Keyed by owner rather than one flat set: filtering at the point of send is a
-	// check that can be forgotten, and forgetting it puts one account's machines on
-	// another account's screen.
+	// Keyed by project rather than one flat set: filtering at the point of send is
+	// a check that can be forgotten, and forgetting it puts one tenant's machines
+	// on another tenant's screen. Every member of a project shares a key, which is
+	// the whole point — they are looking at the same machines.
 	const uiSockets = new Map<string, Set<WebSocket>>();
 
 	// Plan frames are high-volume and belong to one open chat, so they go to the
@@ -15,6 +16,10 @@ export function getSocketRegistry() {
 	// scan of every plan anyone is watching.
 	const planSubscribers = new Map<string, Set<WebSocket>>();
 	const socketPlans = new Map<WebSocket, Set<string>>();
+
+	// Which person is behind each browser socket. Only ever read to hang up on a
+	// member who has been removed — fan-out is by project, never by person.
+	const socketOwners = new Map<WebSocket, string>();
 
 	function dropPlanSubscriber(opts: { planId: string; socket: WebSocket }): void {
 		const subscribers = planSubscribers.get(opts.planId);
@@ -87,11 +92,12 @@ export function getSocketRegistry() {
 			return true;
 		},
 
-		addUiSocket(opts: { userId: string; socket: WebSocket }): void {
-			const sockets = uiSockets.get(opts.userId) ?? new Set<WebSocket>();
+		addUiSocket(opts: { projectId: string; userId: string; socket: WebSocket }): void {
+			const sockets = uiSockets.get(opts.projectId) ?? new Set<WebSocket>();
 
 			sockets.add(opts.socket);
-			uiSockets.set(opts.userId, sockets);
+			uiSockets.set(opts.projectId, sockets);
+			socketOwners.set(opts.socket, opts.userId);
 		},
 
 		subscribeUiToPlan(opts: { planId: string; socket: WebSocket }): void {
@@ -122,14 +128,15 @@ export function getSocketRegistry() {
 			}
 		},
 
-		removeUiSocket(opts: { userId: string; socket: WebSocket }): void {
+		removeUiSocket(opts: { projectId: string; socket: WebSocket }): void {
 			for (const planId of socketPlans.get(opts.socket) ?? []) {
 				dropPlanSubscriber({ planId, socket: opts.socket });
 			}
 
 			socketPlans.delete(opts.socket);
+			socketOwners.delete(opts.socket);
 
-			const sockets = uiSockets.get(opts.userId);
+			const sockets = uiSockets.get(opts.projectId);
 
 			if (!sockets) {
 				return;
@@ -137,10 +144,10 @@ export function getSocketRegistry() {
 
 			sockets.delete(opts.socket);
 
-			// Without this the map keeps one empty Set per account that has ever opened a
-			// tab, which never shrinks for the life of the process.
+			// Without this the map keeps one empty Set per project that has ever had a
+			// tab open, which never shrinks for the life of the process.
 			if (sockets.size === 0) {
-				uiSockets.delete(opts.userId);
+				uiSockets.delete(opts.projectId);
 			}
 		},
 
@@ -148,8 +155,19 @@ export function getSocketRegistry() {
 			broadcast({ sockets: planSubscribers.get(opts.planId), message: opts.message });
 		},
 
-		broadcastToUi(opts: { userId: string; message: UiMsg }): void {
-			broadcast({ sockets: uiSockets.get(opts.userId), message: opts.message });
+		broadcastToUi(opts: { projectId: string; message: UiMsg }): void {
+			broadcast({ sockets: uiSockets.get(opts.projectId), message: opts.message });
+		},
+
+		// A socket outlives the membership that authorized it, and there is no
+		// per-frame recheck. Without this an ex-member keeps receiving the project's
+		// frames until they happen to close the tab.
+		closeUiSocketsForMember(opts: { projectId: string; userId: string }): void {
+			for (const socket of uiSockets.get(opts.projectId) ?? []) {
+				if (socketOwners.get(socket) === opts.userId) {
+					socket.terminate();
+				}
+			}
 		}
 	};
 }

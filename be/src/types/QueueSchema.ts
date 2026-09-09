@@ -17,7 +17,7 @@ export type QueueStatus = z.infer<typeof QueueStatusSchema>;
 
 export const QueueSchema = z.object({
 	id: z.string(),
-	userId: z.string(),
+	projectId: z.string(),
 	machineId: z.string(),
 	name: z.string(),
 	slug: z.string(),

@@ -5,9 +5,9 @@ import { type Machine } from 'src/types/MachineSchema';
 export async function getMachine(opts: {
 	machineRepo: MachineRepo;
 	id: string;
-	userId: string;
+	projectId: string;
 }): Promise<Machine> {
-	const machine = await opts.machineRepo.getOwnedById({ id: opts.id, userId: opts.userId });
+	const machine = await opts.machineRepo.getOwnedById({ id: opts.id, projectId: opts.projectId });
 
 	// 404 rather than 403 for a machine owned by somebody else: a 403 confirms
 	// the row exists, which is what turns id guessing into a discovery tool.
