@@ -187,11 +187,16 @@ export const acs = pgTable(
 		sliceId: text().references(() => slices.id, { onDelete: 'set null' }),
 		ordinal: integer().notNull(),
 		// Ticked by the sessions, never by the browser. A build bullet may not
-		// finish while one of its criteria is unimplemented, and a verify bullet
-		// may not open a pull request while one is unverified — these two columns
-		// are what those refusals are decided from.
+		// finish while one of its criteria is unimplemented — this column is what
+		// that refusal is decided from.
 		implemented: boolean().notNull().default(false),
-		verified: boolean().notNull().default(false)
+		verified: boolean().notNull().default(false),
+		// Why this criterion could not be driven. A verify bullet must account for
+		// every criterion, but accounting for one is not the same as passing it: an
+		// app that will not start is a fact for the reviewer, not a reason to hold
+		// the whole branch back. Set means "explained"; null with `verified` false
+		// means "silently skipped", which is what the gate still refuses.
+		blockedReason: text()
 	},
 	(table) => [
 		index('acs_plan_id_idx').on(table.planId),
@@ -277,6 +282,11 @@ export const sliceRuns = pgTable(
 		questionId: text(),
 		question: jsonb().$type<PlanQuestion[]>(),
 		commitSha: text(),
+		// What the session said when it finished. The verify bullet is ordered to
+		// report a verdict per criterion and it is the only account of what was
+		// driven, so it is kept rather than dropped on arrival — the pull request
+		// quotes it and a failed gate is unreadable without it.
+		report: text(),
 		failureReason: text(),
 		startedAt: timestamp({ withTimezone: true }),
 		finishedAt: timestamp({ withTimezone: true })

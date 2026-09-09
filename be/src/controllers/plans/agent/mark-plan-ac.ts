@@ -17,6 +17,7 @@ export async function markPlanAc(opts: {
 	code: string;
 	implemented?: boolean;
 	verified?: boolean;
+	blockedReason?: string;
 }): Promise<Ac> {
 	const plan = await getMachinePlan({
 		planRepo: opts.planRepo,
@@ -24,15 +25,24 @@ export async function markPlanAc(opts: {
 		machineId: opts.machineId
 	});
 
-	if (opts.verified !== undefined && !plan.verifyInUi) {
-		throw new HttpError(400, 'this plan has UI verification off, so nothing is verified in a browser');
+	const touchesVerification = opts.verified !== undefined || opts.blockedReason !== undefined;
+
+	if (touchesVerification && !plan.verifyInUi) {
+		throw new HttpError(
+			400,
+			'this plan has UI verification off, so nothing is verified in a browser'
+		);
 	}
 
 	const marked = await opts.acRepo.markInPlan({
 		planId: plan.id,
 		code: opts.code,
 		...(opts.implemented === undefined ? {} : { implemented: opts.implemented }),
-		...(opts.verified === undefined ? {} : { verified: opts.verified })
+		// Verifying it clears any earlier blocker: whatever stood in the way, the
+		// criterion has now been watched holding, and a stale reason beside a green
+		// tick reads as a caveat nobody meant.
+		...(opts.verified === undefined ? {} : { verified: opts.verified, blockedReason: null }),
+		...(opts.blockedReason === undefined ? {} : { blockedReason: opts.blockedReason })
 	});
 
 	if (!marked) {

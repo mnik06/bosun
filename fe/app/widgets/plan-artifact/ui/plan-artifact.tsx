@@ -8,15 +8,24 @@ const VERIFY_JOB =
 	'Drives every acceptance criterion through the running product and repairs what it finds broken. It builds nothing of its own.'
 
 function AcLine ({ ac, verifyInUi }: { ac: Ac, verifyInUi: boolean }) {
+	// A criterion nobody could drive is neither a pass nor a defect, and showing it
+	// as an empty box says only the first half. The reason is the half that matters.
+	const blocked = verifyInUi && !ac.verified && ac.blockedReason != null
+
 	return (
 		<Group gap="sm" align="start">
 			<Badge variant="light" className="shrink-0">
 				{ac.code}
 			</Badge>
 
-			<Text size="sm" className="min-w-40 grow">
-				{ac.text}
-			</Text>
+			<Stack gap={2} className="min-w-40 grow">
+				<Text size="sm">{ac.text}</Text>
+				{blocked ? (
+					<Text size="xs" c="orange">
+						Not verified — {ac.blockedReason}
+					</Text>
+				) : null}
+			</Stack>
 
 			{/* Ticked by the sessions, never here: the boxes report what the build and
 			    verify bullets have actually done, so a click would be a lie. */}

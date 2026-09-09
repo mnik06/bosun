@@ -1,6 +1,7 @@
 import { type AdvanceDeps } from 'src/controllers/queues/advance-deps';
 import { announceQueue } from 'src/controllers/queues/announce-queue';
-import { type Ac, type Plan, type PlanDecision } from 'src/types/PlanSchema';
+import { pullRequestBody } from 'src/controllers/queues/pull-request-body';
+import { type Plan } from 'src/types/PlanSchema';
 import { toQueueSlug, type Queue, type QueueItem } from 'src/types/QueueSchema';
 import { DEFAULT_PROJECT_PROFILE } from 'src/types/ProjectProfileSchema';
 
@@ -196,42 +197,6 @@ async function blockedPlanIds(deps: AdvanceDeps, items: QueueItem[]): Promise<st
 // writes at the end. A decision recorded while executing is on the plan whether
 // or not the last bullet remembered to mention it, and the reviewer reads this
 // before the diff.
-function pullRequestBody(opts: {
-	plan: Plan;
-	acs: Ac[];
-	decisions: PlanDecision[];
-}): string {
-	const criteria =
-		opts.acs.length === 0
-			? '_None recorded._'
-			: opts.acs.map((ac) => `- **${ac.code}** ${ac.text}`).join('\n');
-	const decisions =
-		opts.decisions.length === 0
-			? '_None recorded._'
-			: opts.decisions
-				.map((entry) =>
-					[
-						`### ${entry.fork}`,
-						entry.options === null ? '' : `- **Options:** ${entry.options}`,
-						`- **Chose:** ${entry.chose}`,
-						entry.blastRadius === null ? '' : `- **Blast radius:** ${entry.blastRadius}`,
-						entry.reversing === null ? '' : `- **Reversing it:** ${entry.reversing}`
-					]
-						.filter(Boolean)
-						.join('\n')
-				)
-				.join('\n\n');
-
-	return [
-		opts.plan.bodyMd ?? '',
-		'## Acceptance criteria',
-		criteria,
-		'## Decisions taken',
-		decisions,
-		`_Planned and executed by bosun as plan #${opts.plan.number}._`
-	].join('\n\n');
-}
-
 // `bosun/plan/...` rather than `bosun/<queue>/...`: the worktree already holds a
 // branch named for the queue, and git cannot have a ref that is both a leaf and
 // a directory. Two queues can run the same plan, so the queue slug stays in the
@@ -246,6 +211,22 @@ function planBranch(opts: { queueSlug: string; plan: Plan }): string {
 // and its partial commits for somebody to look at, but opening a pull request
 // for work that did not finish would put it in front of reviewers as though it
 // had.
+// The verify bullet's own words, found through its slice rather than by position:
+// a plan does not have to end with one, and the last run is not reliably it.
+async function verifyReportFor(
+	deps: AdvanceDeps,
+	opts: { planId: string; runs: { sliceId: string; report: string | null }[] }
+): Promise<string | null> {
+	const slices = await deps.sliceRepo.listByPlan(opts.planId);
+	const verify = slices.find((slice) => slice.kind === 'verify');
+
+	if (!verify) {
+		return null;
+	}
+
+	return opts.runs.find((run) => run.sliceId === verify.id)?.report ?? null;
+}
+
 async function requestPublish(
 	deps: AdvanceDeps,
 	opts: { queue: Queue; item: QueueItem }
@@ -282,7 +263,8 @@ async function requestPublish(
 			body: pullRequestBody({
 				plan,
 				acs: await deps.acRepo.listByPlan(plan.id),
-				decisions: await deps.planDecisionRepo.listByPlan(plan.id)
+				decisions: await deps.planDecisionRepo.listByPlan(plan.id),
+				verifyReport: await verifyReportFor(deps, { planId: plan.id, runs })
 			})
 		}
 	});

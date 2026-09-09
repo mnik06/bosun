@@ -84,6 +84,7 @@ export function getAcRepo(db: DbOrTx) {
 			code: string;
 			implemented?: boolean;
 			verified?: boolean;
+			blockedReason?: string | null;
 		}): Promise<Ac | null> {
 			const { planId, code, ...values } = opts;
 			const [row] = await db

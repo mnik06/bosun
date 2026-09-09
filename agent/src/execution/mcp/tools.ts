@@ -34,6 +34,22 @@ const RECORD_DECISION_DEFINITION = {
 
 export const MarkAcArgsSchema = z.object({ code: z.string().min(1) });
 
+export const BlockAcArgsSchema = z.object({
+	code: z.string().min(1),
+	reason: z.string().min(1)
+});
+
+// The escape hatch that keeps the gate honest. Without it a criterion nobody
+// could drive left the session two options — claim it passed, or fail the whole
+// branch — and both are worse than saying so. Recording the reason is what makes
+// "not verified" reviewable instead of a mystery.
+const BLOCK_AC_DEFINITION = {
+	name: 'mark_ac_blocked',
+	description:
+		'Record that an acceptance criterion could not be driven, and why — the app would not start, the journey needs data that does not exist, the feature is unreachable from the interface. Use it only after trying: it is not a way to skip work, and the reason is carried verbatim into the pull request for a reviewer to judge. Every criterion must end either verified or blocked; one left silent fails this bullet.',
+	inputSchema: z.toJSONSchema(BlockAcArgsSchema, { target: 'draft-7' })
+};
+
 // Two tools rather than one with a flag: which of the two columns a session may
 // tick is decided by the bullet it is running, and a flag is something a model
 // can get wrong. A build bullet cannot reach `mark_ac_verified` at all.
@@ -55,7 +71,7 @@ export function executionDefinitions(opts: { afk: boolean; verify: boolean }): u
 	const always = [
 		LIST_PLANS_DEFINITION,
 		RECORD_DECISION_DEFINITION,
-		opts.verify ? MARK_VERIFIED_DEFINITION : MARK_IMPLEMENTED_DEFINITION
+		...(opts.verify ? [MARK_VERIFIED_DEFINITION, BLOCK_AC_DEFINITION] : [MARK_IMPLEMENTED_DEFINITION])
 	];
 
 	return opts.afk ? always : [ASK_DEFINITION, ...always];
@@ -65,7 +81,9 @@ export function executionMcpTools(opts: { afk: boolean; verify: boolean }): stri
 	const always = [
 		'mcp__bosun__list_plans',
 		'mcp__bosun__record_decision',
-		opts.verify ? 'mcp__bosun__mark_ac_verified' : 'mcp__bosun__mark_ac_implemented'
+		...(opts.verify
+			? ['mcp__bosun__mark_ac_verified', 'mcp__bosun__mark_ac_blocked']
+			: ['mcp__bosun__mark_ac_implemented'])
 	];
 
 	return opts.afk ? always : ['mcp__bosun__bosun_ask', ...always];
@@ -99,6 +117,20 @@ export function createExecutionDispatch(opts: {
 							planId: opts.planId,
 							code,
 							...(name === 'mark_ac_verified' ? { verified: true } : { implemented: true })
+						})
+					)
+				);
+			}
+
+			if (name === 'mark_ac_blocked') {
+				const { code, reason } = BlockAcArgsSchema.parse(args);
+
+				return textToolResult(
+					JSON.stringify(
+						await opts.bosunApi.markPlanAc({
+							planId: opts.planId,
+							code,
+							blockedReason: reason
 						})
 					)
 				);

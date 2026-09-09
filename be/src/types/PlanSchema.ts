@@ -92,7 +92,8 @@ export const AcSchema = z.object({
 	sliceId: z.string().nullable(),
 	ordinal: z.number().int(),
 	implemented: z.boolean(),
-	verified: z.boolean()
+	verified: z.boolean(),
+	blockedReason: z.string().nullable()
 });
 
 export type Ac = z.infer<typeof AcSchema>;

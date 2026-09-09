@@ -1,4 +1,4 @@
-import { Alert, Anchor, Badge, Group, Loader, Stack, Text, ThemeIcon } from '@mantine/core'
+import { Alert, Anchor, Badge, Group, Loader, Spoiler, Stack, Text, ThemeIcon } from '@mantine/core'
 import { Check, Circle, Loader as LoaderIcon, X } from 'lucide-react'
 
 import type { PlanExecution, PlanRun } from '~/entities/plan'
@@ -48,6 +48,21 @@ function RunRow ({ run }: { run: PlanRun }) {
 					<Text size="xs" c="red">
 						{run.failureReason}
 					</Text>
+				)}
+
+				{/* The session's own account of what it did. On a failed gate it is the
+				    only thing that says why, so it is open rather than behind a click. */}
+				{run.report == null ? null : (
+					<Spoiler
+						maxHeight={run.status === 'failed' ? 240 : 0}
+						showLabel="Show what the session reported"
+						hideLabel="Hide"
+						styles={{ control: { fontSize: 'var(--mantine-font-size-xs)' } }}
+					>
+						<Text size="xs" c="dimmed" className="whitespace-pre-wrap">
+							{run.report}
+						</Text>
+					</Spoiler>
 				)}
 			</div>
 		</Group>

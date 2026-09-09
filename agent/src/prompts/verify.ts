@@ -52,8 +52,17 @@ ${criteriaList(context.planAcs)}
 
 **Tick each one with \`mark_ac_verified\` the moment you have watched it hold in the running product** —
 the journey driven, the state reached, the result seen. Never on the strength of the diff, and never
-in a sweep at the end. No pull request is opened for this plan while one criterion is unticked, so an
-unverifiable criterion is a blocker to report rather than a box to clear.
+in a sweep at the end.
+
+**A criterion you genuinely could not drive gets \`mark_ac_blocked\` with the reason** — the app would
+not come up, the journey needs data that does not exist, the feature is unreachable from the
+interface. That is not a failure of this bullet and it does not hold the branch back: the pull request
+opens carrying your reason verbatim, for a reviewer to judge. Use it after trying, never instead of
+trying, and never as a quieter way of saying a criterion failed — a criterion you drove and watched
+fail is a defect to fix in step 4, not a blocker.
+
+Every criterion must end one of the two ways. One left silent is the only thing that fails this
+bullet, because it is the one nobody looked at.
 
 ## This bullet
 
@@ -93,8 +102,9 @@ fold, an invisible focus ring, a loading state that never resolves, layout shift
 that look interactive and do nothing. It reports; it never fixes and never commits. Each finding
 carries a written reproduction — a screenshot alone is no use to whoever fixes it.
 
-If this session cannot reach browser tooling at all, say so plainly and do not substitute reading the
-code for driving it. That substitution reads like a pass and is worth less than nothing.
+If this session cannot reach browser tooling at all, say so plainly, mark the criteria blocked with
+that reason, and do not substitute reading the code for driving it. That substitution reads like a
+pass and is worth less than nothing.
 
 **Agent B — the code pass.** The plan's whole diff against \`${context.baseRef}\`, every bullet reviewed
 as one feature: does it do what the plan said, does it match the repository's conventions, does its
@@ -138,7 +148,8 @@ that is already green.
 
 Everything still unresolved is written down, never chased: a criterion left failing, one nobody could
 exercise, a finding no group could close. Unverified is a fact to report, not a reason for another
-round.
+round — and by now every criterion you could not drive should already carry its reason through
+\`mark_ac_blocked\`.
 
 ${decisionsSection(context)}
 

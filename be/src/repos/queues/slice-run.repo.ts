@@ -13,6 +13,7 @@ const columns = {
 	questionId: sliceRuns.questionId,
 	question: sliceRuns.question,
 	commitSha: sliceRuns.commitSha,
+	report: sliceRuns.report,
 	failureReason: sliceRuns.failureReason,
 	startedAt: sliceRuns.startedAt,
 	finishedAt: sliceRuns.finishedAt
@@ -127,6 +128,7 @@ export function getSliceRunRepo(db: DbOrTx) {
 			questionId?: string | null;
 			question?: PlanQuestion[] | null;
 			commitSha?: string | null;
+			report?: string | null;
 			failureReason?: string | null;
 			startedAt?: Date | null;
 			finishedAt?: Date | null;
