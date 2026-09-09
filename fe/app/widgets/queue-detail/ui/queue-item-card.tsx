@@ -30,8 +30,8 @@ export function QueueItemCard ({
 	return (
 		<Card withBorder padding="md" radius="md">
 			<Stack gap="sm">
-				<Group justify="space-between" align="start" wrap="nowrap">
-					<Stack gap={2} className="min-w-0">
+				<Group justify="space-between" align="start" gap="sm">
+					<Stack gap={2} className="min-w-0 grow">
 						<Group gap="xs">
 							<Text fw={600} truncate>
 								{item.planTitle ?? 'Untitled plan'}
@@ -47,7 +47,7 @@ export function QueueItemCard ({
 						</Group>
 
 						{item.branch === null ? null : (
-							<Text size="xs" c="dimmed" className="font-mono">
+							<Text size="xs" c="dimmed" className="font-mono break-all">
 								{item.branch}
 							</Text>
 						)}
@@ -68,7 +68,7 @@ export function QueueItemCard ({
 						)}
 					</Stack>
 
-					<Group gap="xs" wrap="nowrap">
+					<Group gap="xs" wrap="nowrap" className="shrink-0">
 						<RetryPlanButton item={item} />
 
 						{item.status === 'queued' ? (

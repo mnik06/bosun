@@ -7,6 +7,7 @@ import {
 	useMachineQuery,
 	useUpgradingTo
 } from '~/entities/machine'
+import { queueRefreshBlock, useMachineQueuesQuery } from '~/entities/queue'
 import { AddMcpServerButton } from '~/features/add-mcp-server'
 import { ProjectProfileButton } from '~/features/edit-project-profile'
 import { PausedBanner } from '~/features/pause-machine'
@@ -24,6 +25,8 @@ export function MachineDetail ({ machineId }: { machineId: string }) {
 	// The agent stamps lastSeenAt on every push, so a change to it is the signal
 	// that its answer to the refresh has landed.
 	const refresh = useRefreshMachine({ machineId, settleKey: data?.lastSeenAt ?? null })
+	const queues = useMachineQueuesQuery(machineId)
+	const refreshBlockedBy = queueRefreshBlock(queues.data)
 
 	if (isPending) {
 		return (
@@ -43,17 +46,20 @@ export function MachineDetail ({ machineId }: { machineId: string }) {
 
 	return (
 		<Stack gap="lg">
-			<Group justify="space-between" align="start">
-				<Stack gap={4}>
+			<Group justify="space-between" align="start" gap="sm" wrap="nowrap">
+				<Stack gap={4} className="min-w-0">
 					<Group gap="sm">
 						<MachineStatusDot status={data.status} />
-						<Title order={2}>{data.name}</Title>
+						<Title order={2} className="min-w-0 break-words">
+							{data.name}
+						</Title>
 						<RefreshMachineButton
 							onRefresh={refresh.refresh}
 							isRefreshing={refresh.isRefreshing}
+							blockedReason={refreshBlockedBy}
 						/>
 					</Group>
-					<Text size="xs" c="dimmed" className="font-mono">
+					<Text size="xs" c="dimmed" className="font-mono break-all">
 						{data.id} · seen {formatRelativeTime(data.lastSeenAt)}
 						{data.agentVersion === null ? '' : ` · agent ${data.agentVersion}`}
 					</Text>
@@ -63,6 +69,7 @@ export function MachineDetail ({ machineId }: { machineId: string }) {
 					machine={data}
 					onRefresh={refresh.refresh}
 					isRefreshing={refresh.isRefreshing}
+					refreshBlockedBy={refreshBlockedBy}
 				/>
 			</Group>
 

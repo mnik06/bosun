@@ -1,4 +1,4 @@
-import { ActionIcon, Menu } from '@mantine/core'
+import { ActionIcon, Menu, Tooltip } from '@mantine/core'
 import { EllipsisVertical, RefreshCw } from 'lucide-react'
 
 import type { Machine } from '~/entities/machine'
@@ -8,11 +8,13 @@ import { PauseMenuItem } from '~/features/pause-machine'
 export function MachineActions ({
 	machine,
 	onRefresh,
-	isRefreshing
+	isRefreshing,
+	refreshBlockedBy
 }: {
 	machine: Machine,
 	onRefresh: () => void,
-	isRefreshing: boolean
+	isRefreshing: boolean,
+	refreshBlockedBy?: string | null
 }) {
 	return (
 		<Menu position="bottom-end" withinPortal>
@@ -23,13 +25,15 @@ export function MachineActions ({
 			</Menu.Target>
 
 			<Menu.Dropdown>
-				<Menu.Item
-					leftSection={<RefreshCw size={14} />}
-					disabled={isRefreshing}
-					onClick={onRefresh}
-				>
-					Refresh machine
-				</Menu.Item>
+				<Tooltip label={refreshBlockedBy ?? ''} disabled={refreshBlockedBy == null} multiline w={240}>
+					<Menu.Item
+						leftSection={<RefreshCw size={14} />}
+						disabled={isRefreshing || refreshBlockedBy != null}
+						onClick={onRefresh}
+					>
+						Refresh machine
+					</Menu.Item>
+				</Tooltip>
 
 				<PauseMenuItem machine={machine} />
 

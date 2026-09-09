@@ -24,7 +24,22 @@ export function Layout ({ children }: { children: React.ReactNode }) {
 		<html lang="en" {...mantineHtmlProps}>
 			<head>
 				<meta charSet="utf-8" />
-				<meta name="viewport" content="width=device-width, initial-scale=1" />
+				{/* `viewport-fit=cover` is what makes `env(safe-area-inset-*)` report
+				    anything at all, which the bottom bar needs to clear the home
+				    indicator on an installed iOS copy. */}
+				<meta
+					name="viewport"
+					content="width=device-width, initial-scale=1, viewport-fit=cover"
+				/>
+				<meta name="theme-color" content="#0a0a0c" />
+				<meta name="mobile-web-app-capable" content="yes" />
+				<meta name="apple-mobile-web-app-capable" content="yes" />
+				<meta name="apple-mobile-web-app-title" content="bosun" />
+				<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+				<link rel="manifest" href="/manifest.webmanifest" />
+				<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+				<link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
+				<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 				<ColorSchemeScript defaultColorScheme="dark" />
 				<Meta />
 				<Links />
@@ -63,7 +78,7 @@ export default function App () {
 	return (
 		<QueryProvider>
 			<MantineProvider theme={theme} defaultColorScheme="dark">
-				<ModalsProvider>
+				<ModalsProvider modalProps={{ centered: true }}>
 					<Notifications />
 					<SessionProvider>
 						<Outlet />

@@ -12,9 +12,9 @@ import { Page } from '~/shared/ui'
 function QueueCard ({ queue, machineName }: { queue: Queue, machineName: string }) {
 	return (
 		<Card withBorder padding="md" radius="md">
-			<Group justify="space-between" align="start" wrap="nowrap">
-				<Stack gap={2} className="min-w-0">
-					<Group gap="xs">
+			<Group justify="space-between" align="start" gap="sm">
+				<Stack gap={2} className="min-w-0 grow">
+					<Group gap="xs" wrap="wrap">
 						<Anchor component={Link} to={`/queues/${queue.id}`} fw={600}>
 							{queue.name}
 						</Anchor>
@@ -38,7 +38,7 @@ function QueueCard ({ queue, machineName }: { queue: Queue, machineName: string 
 					)}
 				</Stack>
 
-				<Group gap="xs" wrap="nowrap">
+				<Group gap="xs" wrap="nowrap" className="shrink-0">
 					<QueueControls queue={queue} />
 					<KillQueueButton queue={queue} />
 				</Group>

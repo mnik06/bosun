@@ -1,4 +1,4 @@
-import { Alert, Button, Modal, Select, Stack, Switch, Textarea } from '@mantine/core'
+import { Alert, Button, Select, Stack, Switch, Textarea } from '@mantine/core'
 import { useForm } from '@mantine/form'
 import { zod4Resolver } from 'mantine-form-zod-resolver'
 import { useNavigate } from 'react-router'
@@ -9,6 +9,7 @@ import {
 	CreatePlanFormSchema,
 	type CreatePlanForm
 } from '~/features/create-plan/model/create-plan'
+import { AppModal } from '~/shared/ui'
 
 export function NewPlanModal ({ opened, onClose }: { opened: boolean, onClose: () => void }) {
 	const navigate = useNavigate()
@@ -42,7 +43,7 @@ export function NewPlanModal ({ opened, onClose }: { opened: boolean, onClose: (
 	}
 
 	return (
-		<Modal opened={opened} onClose={close} title="New plan" centered size="lg">
+		<AppModal opened={opened} onClose={close} title="New plan" centered size="lg">
 			<form onSubmit={form.onSubmit(submit)}>
 				<Stack gap="md">
 					{options.length === 0 ? (
@@ -90,6 +91,6 @@ export function NewPlanModal ({ opened, onClose }: { opened: boolean, onClose: (
 					</Button>
 				</Stack>
 			</form>
-		</Modal>
+		</AppModal>
 	)
 }

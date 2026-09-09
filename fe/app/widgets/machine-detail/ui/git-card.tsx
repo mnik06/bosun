@@ -28,7 +28,7 @@ export function GitCard ({ machineName }: { machineName: string }) {
 				<Divider />
 
 				{PROVIDERS.map((provider) => (
-					<Group key={provider.id} justify="space-between" align="center" wrap="nowrap">
+					<Group key={provider.id} justify="space-between" align="center" gap="sm">
 						<Stack gap={2}>
 							<Text size="sm" fw={500}>
 								{provider.name}

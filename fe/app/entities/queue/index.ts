@@ -26,4 +26,5 @@ export {
 	type SliceRunDetail
 } from './model/queue'
 export { itemElapsedMs, queueElapsedMs } from './lib/elapsed'
+export { queueRefreshBlock } from './lib/refresh-block'
 export { QueueStatusBadge } from './ui/queue-status-badge'

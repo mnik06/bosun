@@ -11,12 +11,59 @@
   --font-mono: 'JetBrains Mono Variable', ui-monospace, 'SFMono-Regular', Menlo, monospace;
 }
 
+:root {
+  --mobile-nav-height: 3.5rem;
+}
+
 body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+  /* An installed copy is a window, not a document: the rubber-band scroll past
+     the ends of a chat reads as the app coming loose. */
+  overscroll-behavior-y: none;
 }
 
 button {
   @apply cursor-pointer;
+}
+
+/* The height a full-bleed screen may occupy inside the shell. Only the shell
+   knows the header and padding it reserved, and below `sm` the fixed bottom bar
+   and the home indicator come out of the same budget. */
+.app-shell {
+  --app-content-height: calc(
+    100dvh - var(--app-shell-header-offset) - 2 * var(--app-shell-padding)
+  );
+}
+
+@media (width < 48em) {
+  .app-shell {
+    --app-content-height: calc(
+      100dvh - var(--app-shell-header-offset) - var(--app-shell-padding) -
+        var(--mobile-nav-height) - env(safe-area-inset-bottom)
+    );
+  }
+
+  /* Safari zooms the page when a focused field is under 16px, and never zooms
+     back out. `max` keeps a field that is already larger where it is. */
+  input:not([type='checkbox'], [type='radio']),
+  textarea,
+  select {
+    font-size: max(16px, 1em);
+  }
+
+  /* A 24px icon button is a mouse target. Fingers need the whole 36. */
+  :where(.mantine-ActionIcon-root, .mantine-Button-root, .mantine-NavLink-root) {
+    min-height: 2.25rem;
+  }
+
+  :where(.mantine-ActionIcon-root) {
+    min-width: 2.25rem;
+  }
+}
+
+a,
+button {
+  -webkit-tap-highlight-color: transparent;
 }

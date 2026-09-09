@@ -1,8 +1,8 @@
-import { Alert, Card, Center, Loader, Modal, Stack, Text } from '@mantine/core'
+import { Alert, Card, Center, Loader, Stack, Text } from '@mantine/core'
 
 import { McpPresetSummary, useMcpPresetsQuery } from '~/entities/mcp-preset'
 import { toErrorMessage } from '~/shared/lib'
-import { CopyableCommand } from '~/shared/ui'
+import { AppModal, CopyableCommand } from '~/shared/ui'
 
 function PresetList ({ machineName }: { machineName: string }) {
 	const { data, isPending, error } = useMcpPresetsQuery({ enabled: true })
@@ -69,7 +69,7 @@ export function AddMcpServerModal ({
 	onClose: () => void
 }) {
 	return (
-		<Modal opened={opened} onClose={onClose} title="Add an MCP server" centered size="lg">
+		<AppModal opened={opened} onClose={onClose} title="Add an MCP server" centered size="lg">
 			<Stack gap="md">
 				<PresetList machineName={machineName} />
 
@@ -80,6 +80,6 @@ export function AddMcpServerModal ({
 					</Text>
 				</Alert>
 			</Stack>
-		</Modal>
+		</AppModal>
 	)
 }

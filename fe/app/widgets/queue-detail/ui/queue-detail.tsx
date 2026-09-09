@@ -61,10 +61,15 @@ export function QueueDetail ({ queueId }: { queueId: string }) {
 
 	return (
 		<Stack gap="lg">
-			<Group justify="space-between" align="start" wrap="nowrap">
-				<Stack gap={4} className="min-w-0">
-					<Group gap="sm" wrap="nowrap">
-						<Title order={2}>{data.queue.name}</Title>
+			{/* Stacked below `sm` rather than left to `Group` to wrap: a queue name is
+			    long enough to fill the row on its own, and the four controls need a
+			    line of their own before they will fit a phone. */}
+			<div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+				<Stack gap={4} className="min-w-0 grow">
+					<Group gap="sm">
+						<Title order={2} className="min-w-0 break-words">
+							{data.queue.name}
+						</Title>
 						<QueueStatusBadge
 							status={data.queue.status}
 							pausing={runningRun !== undefined}
@@ -77,7 +82,7 @@ export function QueueDetail ({ queueId }: { queueId: string }) {
 					</Text>
 				</Stack>
 
-				<Group gap="xs" align="center" wrap="nowrap">
+				<Group gap="xs" align="center" className="shrink-0">
 					<AfkSwitch queue={data.queue} />
 					<QueueControls queue={data.queue} running={runningRun !== undefined} />
 					<KillQueueButton queue={data.queue} goHome />
@@ -85,7 +90,7 @@ export function QueueDetail ({ queueId }: { queueId: string }) {
 						Add plans
 					</Button>
 				</Group>
-			</Group>
+			</div>
 
 			{data.queue.failureReason === null ? null : (
 				<Alert color="red" variant="light">

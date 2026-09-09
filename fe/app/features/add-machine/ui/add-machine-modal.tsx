@@ -1,4 +1,4 @@
-import { Button, Modal, Stack, TextInput } from '@mantine/core'
+import { Button, Stack, TextInput } from '@mantine/core'
 import { useForm } from '@mantine/form'
 import { zod4Resolver } from 'mantine-form-zod-resolver'
 import { useState } from 'react'
@@ -10,6 +10,7 @@ import {
 	type CreatedMachine
 } from '~/features/add-machine/model/add-machine'
 import { SetupInstructions } from '~/features/add-machine/ui/setup-instructions'
+import { AppModal } from '~/shared/ui'
 
 export function AddMachineModal ({ opened, onClose }: { opened: boolean, onClose: () => void }) {
 	const [created, setCreated] = useState<CreatedMachine | null>(null)
@@ -32,7 +33,7 @@ export function AddMachineModal ({ opened, onClose }: { opened: boolean, onClose
 	}
 
 	return (
-		<Modal opened={opened} onClose={close} title="Add machine" centered>
+		<AppModal opened={opened} onClose={close} title="Add machine" centered>
 			{created === null ? (
 				<form onSubmit={form.onSubmit(submit)}>
 					<Stack gap="md">
@@ -51,6 +52,6 @@ export function AddMachineModal ({ opened, onClose }: { opened: boolean, onClose
 			) : (
 				<SetupInstructions machine={created} onDone={close} />
 			)}
-		</Modal>
+		</AppModal>
 	)
 }

@@ -1,10 +1,11 @@
-import { Button, Modal, Select, Stack, Switch, Text, TextInput } from '@mantine/core'
+import { Button, Select, Stack, Switch, Text, TextInput } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
 import { Plus } from 'lucide-react'
 import { useState } from 'react'
 
 import { useMachinesQuery } from '~/entities/machine'
 import { useCreateQueue } from '~/features/create-queue/api/use-create-queue'
+import { AppModal } from '~/shared/ui'
 
 function CreateQueueForm ({
 	machineId,
@@ -80,9 +81,9 @@ export function CreateQueueButton ({ machineId }: { machineId?: string | undefin
 				New queue
 			</Button>
 
-			<Modal opened={opened} onClose={close} title="New queue" centered>
+			<AppModal opened={opened} onClose={close} title="New queue" centered>
 				<CreateQueueForm machineId={machineId} onDone={close} />
-			</Modal>
+			</AppModal>
 		</>
 	)
 }

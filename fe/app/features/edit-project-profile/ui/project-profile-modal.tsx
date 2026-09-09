@@ -1,8 +1,9 @@
-import { Button, Modal, Stack, Switch, Text, Textarea, TextInput } from '@mantine/core'
+import { Button, Stack, Switch, Text, Textarea, TextInput } from '@mantine/core'
 import { useState } from 'react'
 
 import { DEFAULT_PROJECT_PROFILE, type Machine, type ProjectProfile } from '~/entities/machine'
 import { useSaveProjectProfile } from '~/features/edit-project-profile/api/use-save-profile'
+import { AppModal } from '~/shared/ui'
 
 const AGENT_DECIDES = 'Leave it empty and the agent works it out from the repository itself.'
 
@@ -132,8 +133,8 @@ export function ProjectProfileModal ({
 	onClose: () => void
 }) {
 	return (
-		<Modal opened={opened} onClose={onClose} title="Project setup" centered size="lg">
+		<AppModal opened={opened} onClose={onClose} title="Project setup" centered size="lg">
 			<ProfileForm machine={machine} onDone={onClose} />
-		</Modal>
+		</AppModal>
 	)
 }

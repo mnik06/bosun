@@ -1,9 +1,10 @@
-import { Alert, Button, Modal, Select, Stack, Text } from '@mantine/core'
+import { Alert, Button, Select, Stack, Text } from '@mantine/core'
 import { useState } from 'react'
 
 import type { Plan } from '~/entities/plan'
 import { useMachineQueuesQuery } from '~/entities/queue'
 import { useEnqueuePlans } from '~/features/enqueue-plans'
+import { AppModal } from '~/shared/ui'
 
 function QueuePicker ({
 	machineId,
@@ -77,9 +78,9 @@ export function PushToQueueModal ({
 	const machineIds = [...new Set(plans.map((plan) => plan.machineId))]
 
 	return (
-		<Modal opened={opened} onClose={onClose} title="Push to a queue" centered>
+		<AppModal opened={opened} onClose={onClose} title="Push to a queue" centered>
 			<Body machineIds={machineIds} plans={plans} onDone={onClose} />
-		</Modal>
+		</AppModal>
 	)
 }
 

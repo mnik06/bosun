@@ -21,7 +21,7 @@ export function ProjectSwitcher () {
 				<Menu.Target>
 					<Button variant="subtle" color="gray" size="compact-sm">
 						<Group gap="xs" wrap="nowrap">
-							<Text size="sm" fw={500} truncate maw={180}>
+							<Text size="sm" fw={500} truncate className="max-w-32 sm:max-w-45">
 								{activeProject.name}
 							</Text>
 							<ChevronDown size={14} />

@@ -9,12 +9,12 @@ const VERIFY_JOB =
 
 function AcLine ({ ac, verifyInUi }: { ac: Ac, verifyInUi: boolean }) {
 	return (
-		<Group gap="sm" align="start" wrap="nowrap">
+		<Group gap="sm" align="start">
 			<Badge variant="light" className="shrink-0">
 				{ac.code}
 			</Badge>
 
-			<Text size="sm" className="grow">
+			<Text size="sm" className="min-w-40 grow">
 				{ac.text}
 			</Text>
 

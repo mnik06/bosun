@@ -16,7 +16,7 @@ export function Page ({
 		<Container size={size} px={0} py="md">
 			<Stack gap="lg">
 				{title === undefined ? null : (
-					<Group justify="space-between" align="center">
+					<Group justify="space-between" align="center" gap="sm">
 						<Title order={2}>{title}</Title>
 						{actions}
 					</Group>

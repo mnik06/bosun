@@ -1,6 +1,6 @@
-import { Alert, Card, Modal, Stack, Text } from '@mantine/core'
+import { Alert, Card, Stack, Text } from '@mantine/core'
 
-import { CopyableCommand } from '~/shared/ui'
+import { AppModal, CopyableCommand } from '~/shared/ui'
 
 const TOKEN_DOCS = 'Mints a one-year token against a Pro, Max, Team or Enterprise plan. It can only make model requests, which is all a planning session needs.'
 
@@ -43,7 +43,7 @@ export function SetupClaudeModal ({
 	const onMachine = `On ${machineName}`
 
 	return (
-		<Modal opened={opened} onClose={onClose} title="Set up Claude" centered size="lg">
+		<AppModal opened={opened} onClose={onClose} title="Set up Claude" centered size="lg">
 			<Stack gap="md">
 				<Text size="sm">
 					Planning sessions run the <Text component="span" className="font-mono">claude</Text> CLI
@@ -85,6 +85,6 @@ export function SetupClaudeModal ({
 					</Text>
 				</Alert>
 			</Stack>
-		</Modal>
+		</AppModal>
 	)
 }

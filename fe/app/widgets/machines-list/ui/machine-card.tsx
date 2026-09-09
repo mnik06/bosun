@@ -7,12 +7,14 @@ import { formatRelativeTime } from '~/shared/lib'
 export function MachineCard ({ machine }: { machine: Machine }) {
 	return (
 		<Card withBorder padding="md" radius="md" component={Link} to={`/machines/${machine.id}`}>
-			<Group justify="space-between" wrap="nowrap">
-				<Group gap="sm" wrap="nowrap">
+			<Group justify="space-between" gap="sm">
+				<Group gap="sm" wrap="nowrap" className="min-w-0">
 					<MachineStatusDot status={machine.status} />
-					<Stack gap={2}>
-						<Text fw={600}>{machine.name}</Text>
-						<Text size="xs" c="dimmed" className="font-mono">
+					<Stack gap={2} className="min-w-0">
+						<Text fw={600} truncate>
+							{machine.name}
+						</Text>
+						<Text size="xs" c="dimmed" truncate className="font-mono">
 							{machine.id}
 						</Text>
 					</Stack>

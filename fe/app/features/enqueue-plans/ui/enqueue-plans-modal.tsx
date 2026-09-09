@@ -1,9 +1,10 @@
-import { Alert, Button, Checkbox, Modal, Stack, Text } from '@mantine/core'
+import { Alert, Button, Checkbox, Stack, Text } from '@mantine/core'
 import { useState } from 'react'
 
-import { usePlansQuery } from '~/entities/plan'
+import { planQueueRefusal, usePlansQuery } from '~/entities/plan'
 import type { Queue } from '~/entities/queue'
 import { useEnqueuePlans } from '~/features/enqueue-plans/api/use-enqueue-plan'
+import { AppModal } from '~/shared/ui'
 
 function PlanPicker ({ queue, onDone }: { queue: Queue, onDone: () => void }) {
 	const { data } = usePlansQuery()
@@ -12,15 +13,18 @@ function PlanPicker ({ queue, onDone }: { queue: Queue, onDone: () => void }) {
 
 	// A queue runs in a worktree of its machine's repository, so a plan written
 	// against a different machine has nowhere to run. Filtered rather than shown
-	// and refused, which would only ask the user to work out why.
+	// and refused, which would only ask the user to work out why — and the same
+	// goes for a plan that is already queued or running somewhere, which the push
+	// endpoint refuses for the same reason it is hidden here.
 	const eligible = (data ?? []).filter(
-		(plan) => plan.machineId === queue.machineId && plan.status === 'ready'
+		(plan) => plan.machineId === queue.machineId && planQueueRefusal(plan) === null
 	)
 
 	if (eligible.length === 0) {
 		return (
 			<Text size="sm" c="dimmed">
-				No finished plans for this machine yet. A plan can be queued once its grill is done.
+				Nothing to add. A plan shows up here once its grill is finished, somebody has confirmed
+				it, and it is not already waiting or running in a queue.
 			</Text>
 		)
 	}
@@ -63,7 +67,7 @@ export function EnqueuePlansModal ({
 	onClose: () => void
 }) {
 	return (
-		<Modal opened={opened} onClose={onClose} title={`Add plans to ${queue.name}`} centered>
+		<AppModal opened={opened} onClose={onClose} title={`Add plans to ${queue.name}`} centered>
 			<Stack gap="md">
 				<PlanPicker queue={queue} onDone={onClose} />
 
@@ -76,6 +80,6 @@ export function EnqueuePlansModal ({
 					</Alert>
 				) : null}
 			</Stack>
-		</Modal>
+		</AppModal>
 	)
 }

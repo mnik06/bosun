@@ -1,4 +1,4 @@
-import { Button, Modal, Select, Stack, TextInput } from '@mantine/core'
+import { Button, Select, Stack, TextInput } from '@mantine/core'
 import { useForm } from '@mantine/form'
 import { zod4Resolver } from 'mantine-form-zod-resolver'
 import { useState } from 'react'
@@ -10,6 +10,7 @@ import {
 	type CreateMemberForm
 } from '~/features/create-member/model/create-member'
 import { NewMemberCredentials } from '~/features/create-member/ui/new-member-credentials'
+import { AppModal } from '~/shared/ui'
 
 export function CreateMemberModal (props: {
 	projectId: string
@@ -36,7 +37,7 @@ export function CreateMemberModal (props: {
 	}
 
 	return (
-		<Modal opened={props.opened} onClose={close} title="Add member" centered>
+		<AppModal opened={props.opened} onClose={close} title="Add member" centered>
 			{created === null ? (
 				<form onSubmit={form.onSubmit(submit)}>
 					<Stack gap="md">
@@ -65,6 +66,6 @@ export function CreateMemberModal (props: {
 			) : (
 				<NewMemberCredentials created={created} onDone={close} />
 			)}
-		</Modal>
+		</AppModal>
 	)
 }

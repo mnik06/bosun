@@ -35,28 +35,30 @@ export function MembersPanel () {
 			{isPending ? (
 				<Loader size="sm" />
 			) : (
-				<Table highlightOnHover>
-					<Table.Thead>
-						<Table.Tr>
-							<Table.Th>Email</Table.Th>
-							<Table.Th w={160}>Role</Table.Th>
-							<Table.Th w={60} />
-						</Table.Tr>
-					</Table.Thead>
-					<Table.Tbody>
-						{members.map((member) => (
-							<Table.Tr key={member.userId}>
-								<Table.Td>{member.email}</Table.Td>
-								<Table.Td>
-									<MemberRoleSelect projectId={activeProject.id} member={member} />
-								</Table.Td>
-								<Table.Td>
-									<RemoveMemberButton projectId={activeProject.id} member={member} />
-								</Table.Td>
+				<Table.ScrollContainer minWidth={480}>
+					<Table highlightOnHover>
+						<Table.Thead>
+							<Table.Tr>
+								<Table.Th>Email</Table.Th>
+								<Table.Th w={160}>Role</Table.Th>
+								<Table.Th w={60} />
 							</Table.Tr>
-						))}
-					</Table.Tbody>
-				</Table>
+						</Table.Thead>
+						<Table.Tbody>
+							{members.map((member) => (
+								<Table.Tr key={member.userId}>
+									<Table.Td>{member.email}</Table.Td>
+									<Table.Td>
+										<MemberRoleSelect projectId={activeProject.id} member={member} />
+									</Table.Td>
+									<Table.Td>
+										<RemoveMemberButton projectId={activeProject.id} member={member} />
+									</Table.Td>
+								</Table.Tr>
+							))}
+						</Table.Tbody>
+					</Table>
+				</Table.ScrollContainer>
 			)}
 
 			<CreateMemberModal projectId={activeProject.id} opened={adding} onClose={close} />

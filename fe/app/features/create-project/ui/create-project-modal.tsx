@@ -1,4 +1,4 @@
-import { Button, Modal, Stack, TextInput } from '@mantine/core'
+import { Button, Stack, TextInput } from '@mantine/core'
 import { useForm } from '@mantine/form'
 import { zod4Resolver } from 'mantine-form-zod-resolver'
 
@@ -7,6 +7,7 @@ import {
 	CreateProjectFormSchema,
 	type CreateProjectForm
 } from '~/features/create-project/model/create-project'
+import { AppModal } from '~/shared/ui'
 
 export function CreateProjectModal ({ opened, onClose }: { opened: boolean, onClose: () => void }) {
 	const createProject = useCreateProject()
@@ -27,7 +28,7 @@ export function CreateProjectModal ({ opened, onClose }: { opened: boolean, onCl
 	}
 
 	return (
-		<Modal opened={opened} onClose={close} title="New project" centered>
+		<AppModal opened={opened} onClose={close} title="New project" centered>
 			<form onSubmit={form.onSubmit(submit)}>
 				<Stack gap="md">
 					<TextInput
@@ -42,6 +43,6 @@ export function CreateProjectModal ({ opened, onClose }: { opened: boolean, onCl
 					</Button>
 				</Stack>
 			</form>
-		</Modal>
+		</AppModal>
 	)
 }

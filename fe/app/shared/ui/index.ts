@@ -1,3 +1,4 @@
+export { AppModal } from './app-modal'
 export { CopyableCommand } from './copyable-command'
 export { FullPageLoader } from './full-page-loader'
 export { InlineEdit } from './inline-edit'

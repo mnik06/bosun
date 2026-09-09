@@ -42,8 +42,8 @@ function PlanRow ({
 				component={Link}
 				to={`/plans/${plan.id}`}
 			>
-				<Group justify="space-between" wrap="nowrap" align="start">
-					<Stack gap={2} className="min-w-0">
+				<Group justify="space-between" align="start" gap="sm">
+					<Stack gap={2} className="min-w-0 grow">
 						<Text fw={600} truncate>
 							{plan.title ?? 'Untitled'}
 						</Text>
@@ -51,7 +51,7 @@ function PlanRow ({
 							{machineName} · {formatRelativeTime(plan.createdAt)}
 						</Text>
 					</Stack>
-					<Group gap="xs" wrap="nowrap">
+					<Group gap="xs" wrap="nowrap" className="shrink-0">
 						<PlanStatusBadge plan={plan} />
 						<DeletePlanAction planId={plan.id} title={`#${plan.number}`} />
 					</Group>

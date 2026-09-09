@@ -12,7 +12,7 @@ export function SetupCard ({
 }) {
 	return (
 		<Card withBorder padding="md" radius="md">
-			<Group justify="space-between" align="center" wrap="nowrap">
+			<Group justify="space-between" align="center" gap="sm">
 				<Stack gap={2} className="min-w-0">
 					<Text fw={600}>{title}</Text>
 					<Text size="sm" c="dimmed">

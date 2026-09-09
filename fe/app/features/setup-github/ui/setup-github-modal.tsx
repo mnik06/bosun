@@ -1,6 +1,6 @@
-import { Alert, Card, Modal, Stack, Text } from '@mantine/core'
+import { Alert, Card, Stack, Text } from '@mantine/core'
 
-import { CopyableCommand } from '~/shared/ui'
+import { AppModal, CopyableCommand } from '~/shared/ui'
 
 function Step ({
 	title,
@@ -37,7 +37,7 @@ export function SetupGithubModal ({
 	onClose: () => void
 }) {
 	return (
-		<Modal opened={opened} onClose={onClose} title="Set up GitHub" centered size="lg">
+		<AppModal opened={opened} onClose={onClose} title="Set up GitHub" centered size="lg">
 			<Stack gap="md">
 				<Text size="sm">
 					A queue commits every bullet on a branch of its own. With <strong>gh</strong> signed in on{' '}
@@ -75,6 +75,6 @@ export function SetupGithubModal ({
 					</Text>
 				</Alert>
 			</Stack>
-		</Modal>
+		</AppModal>
 	)
 }
