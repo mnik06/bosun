@@ -5,6 +5,7 @@ import { type QueueItemRepo } from 'src/repos/queues/queue-item.repo';
 import { type QueueRepo } from 'src/repos/queues/queue.repo';
 import { type QueueMessageRepo } from 'src/repos/queues/queue-message.repo';
 import { type SliceRunRepo } from 'src/repos/queues/slice-run.repo';
+import { type RunActivityService } from 'src/services/runs/run-activity.service';
 import { type QueueDetail } from 'src/types/QueueSchema';
 
 // Assembled here rather than joined in one query because the browser wants the
@@ -17,6 +18,7 @@ export async function getQueueDetail(opts: {
 	queueMessageRepo: QueueMessageRepo;
 	planRepo: PlanRepo;
 	sliceRepo: SliceRepo;
+	runActivity: RunActivityService;
 	id: string;
 	projectId: string;
 }): Promise<QueueDetail> {
@@ -43,6 +45,7 @@ export async function getQueueDetail(opts: {
 				runs: runs.map((run) => ({
 					...run,
 					sliceTitle: byId.get(run.sliceId)?.title ?? 'a bullet',
+					activity: opts.runActivity.label(run.id),
 					sliceKind: byId.get(run.sliceId)?.kind ?? 'build'
 				}))
 			};

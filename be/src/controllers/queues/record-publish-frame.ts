@@ -1,4 +1,4 @@
-import { type AdvanceDeps } from 'src/controllers/queues/advance-queue';
+import { type AdvanceDeps } from 'src/controllers/queues/advance-deps';
 import { type AgentMsg } from 'src/types/protocol';
 
 type PublishFrame = Extract<AgentMsg, { type: 'queue.published' | 'queue.publish.error' }>;

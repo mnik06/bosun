@@ -61,6 +61,9 @@ export const SliceRunDetailSchema = z.object({
 	startedAt: z.coerce.date().nullable(),
 	finishedAt: z.coerce.date().nullable(),
 	sliceTitle: z.string(),
+	// What the run is doing as of this read. Socket frames overwrite it while the
+	// tab is open; this is what a reload or a reconnect has instead of nothing.
+	activity: z.string().nullable(),
 	sliceKind: z.enum(['build', 'verify'])
 })
 

@@ -88,7 +88,7 @@ export function QueueItemCard ({
 
 				<Stack gap={6}>
 					{item.runs.map((run) => (
-						<SliceRunRow key={run.id} run={run} activity={activity[run.id]} />
+						<SliceRunRow key={run.id} run={run} activity={activity[run.id] ?? run.activity} />
 					))}
 				</Stack>
 			</Stack>

@@ -21,6 +21,16 @@ const PLANNING_TOOLS = {
 
 const STDERR_KEPT_CHARS = 500;
 
+// Sent once when a turn ends with nothing published. The failure it addresses is
+// always the same: the session spawned subagents, decided their work was still
+// running somewhere, and ended its turn to wait for a report that is never
+// coming. Saying so is what turns the retry into a plan instead of a repeat.
+const UNPUBLISHED_NUDGE = [
+	'Your turn ended without calling publish_plan, so nothing was written and this plan is still empty.',
+	'Subagent results arrive inside the turn that spawned them — nothing is running in the background and no report is on its way.',
+	'Publish the plan now with what you already know, or ask with bosun_ask if you genuinely cannot proceed without an answer.'
+].join(' ');
+
 // A published session is kept alive so the next thing the person types continues
 // the same conversation rather than re-reading the repository from nothing. It
 // is a `claude` process holding memory, so it does not stay forever: past this,
@@ -35,6 +45,10 @@ interface Session {
 	// A turn finished. The session stays up for follow-ups, and this is when it
 	// went quiet — a session mid-grill has never settled and is never reaped.
 	idleAt: number | null;
+	// Whether a plan has actually been written. A revision starts true, because
+	// the plan it was handed is already published.
+	published: boolean;
+	nudged: boolean;
 }
 
 export interface PlanningSessions {
@@ -101,6 +115,27 @@ export function createPlanningSessions(opts: {
 		opts.send({ type: 'plan.done', planId });
 	};
 
+	// A turn that ends without a published plan is nudged once rather than reported
+	// as finished: the backend fails an empty plan, and the session is still up and
+	// able to write one. Only once — a second would be arguing with it.
+	const settle = (planId: string): void => {
+		const session = sessions.get(planId);
+
+		if (!session) {
+			return;
+		}
+
+		if (session.published || session.nudged || !session.process) {
+			done(planId);
+
+			return;
+		}
+
+		session.nudged = true;
+		opts.send({ type: 'plan.activity', planId, label: 'Asking the session to publish' });
+		session.process.send(UNPUBLISHED_NUDGE);
+	};
+
 	const fail = (planId: string, message: string): void => {
 		if (!sessions.has(planId)) {
 			return;
@@ -110,7 +145,13 @@ export function createPlanningSessions(opts: {
 		teardown(planId);
 	};
 
-	const startProcess = async (planId: string, prompt: string, auto: boolean): Promise<void> => {
+	const startProcess = async (opts2: {
+		planId: string;
+		prompt: string;
+		auto: boolean;
+		published: boolean;
+	}): Promise<void> => {
+		const { planId, prompt, auto } = opts2;
 		const userMcp = opts.services.mcpConfig.read();
 
 		if (userMcp.error) {
@@ -124,6 +165,15 @@ export function createPlanningSessions(opts: {
 				planId,
 				auto,
 				bosunApi: opts.services.bosunApi,
+				// Read off the map rather than closed over: the session object does not
+				// exist yet here, and by the time a tool can fire it is registered.
+				onPublished: () => {
+					const current = sessions.get(planId);
+
+					if (current) {
+						current.published = true;
+					}
+				},
 				onQuestion: ({ questionId, questions, autoAnswers }) => {
 					opts.send({ type: 'plan.question', planId, questionId, questions, autoAnswers });
 				}
@@ -133,7 +183,14 @@ export function createPlanningSessions(opts: {
 				console.log(line);
 			}
 		});
-		const session: Session = { mcp, process: null, cancelled: false, idleAt: null };
+		const session: Session = {
+			mcp,
+			process: null,
+			cancelled: false,
+			idleAt: null,
+			published: opts2.published,
+			nudged: false
+		};
 
 		sessions.set(planId, session);
 		opts.send({ type: 'plan.activity', planId, label: 'Starting the session' });
@@ -158,7 +215,7 @@ export function createPlanningSessions(opts: {
 					return;
 				}
 
-				event.ok ? done(planId) : fail(planId, event.message);
+				event.ok ? settle(planId) : fail(planId, event.message);
 			},
 			onDropped: (line) => {
 				console.error(`dropped unrecognised claude frame: ${line.slice(0, 200)}`);
@@ -201,14 +258,19 @@ export function createPlanningSessions(opts: {
 		});
 	};
 
-	const spawnFor = async (planId: string, prompt: string, auto: boolean): Promise<void> => {
+	const spawnFor = async (payload: {
+		planId: string;
+		prompt: string;
+		auto: boolean;
+		published: boolean;
+	}): Promise<void> => {
 		try {
-			await startProcess(planId, prompt, auto);
+			await startProcess(payload);
 		} catch (error) {
-			teardown(planId);
+			teardown(payload.planId);
 			opts.send({
 				type: 'plan.error',
-				planId,
+				planId: payload.planId,
 				message: error instanceof Error ? error.message : 'could not start the session'
 			});
 		}
@@ -232,16 +294,17 @@ export function createPlanningSessions(opts: {
 				return;
 			}
 
-			await spawnFor(
-				payload.planId,
-				opts.prompt({
+			await spawnFor({
+				planId: payload.planId,
+				prompt: opts.prompt({
 					input: payload.input,
 					verifyInUi: payload.verifyInUi,
 					auto: payload.auto,
 					notes: payload.notes
 				}),
-				payload.auto
-			);
+				auto: payload.auto,
+				published: false
+			});
 		},
 
 		// Delivered to the session that is already up whenever there is one, so the
@@ -259,15 +322,18 @@ export function createPlanningSessions(opts: {
 
 			// A revision of an auto plan is still an auto plan: the snapshot carries the
 			// flag, because the agent holds no plan state between sessions.
-			await spawnFor(
-				payload.planId,
-				opts.revisionPrompt({
+			await spawnFor({
+				planId: payload.planId,
+				prompt: opts.revisionPrompt({
 					plan: payload.plan,
 					request: payload.text,
 					notes: payload.notes
 				}),
-				payload.plan.auto
-			);
+				auto: payload.plan.auto,
+				// A revision is handed a plan that is already written, so a turn that
+				// changes nothing is a legitimate answer rather than an empty plan.
+				published: payload.plan.bodyMd !== null
+			});
 		},
 
 		answer(payload): void {

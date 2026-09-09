@@ -1,4 +1,5 @@
-import { advanceMachine, advanceQueue, type AdvanceDeps } from 'src/controllers/queues/advance-queue';
+import { advanceMachine, advanceQueue } from 'src/controllers/queues/advance-queue';
+import { type AdvanceDeps } from 'src/controllers/queues/advance-deps';
 import { acGateFailure } from 'src/controllers/queues/shared/ac-gate';
 import { type AgentMsg } from 'src/types/protocol';
 
@@ -31,6 +32,10 @@ export async function recordExecFrame(
 	}
 
 	const { frame } = opts;
+
+	if (frame.type === 'exec.activity') {
+		deps.runActivity.record({ runId: frame.runId, label: frame.label });
+	}
 
 	if (frame.type === 'exec.text' || frame.type === 'exec.activity') {
 		deps.socketRegistry.broadcastToUi({
@@ -72,6 +77,7 @@ export async function recordExecFrame(
 		});
 
 		if (gate === null) {
+			deps.runActivity.forget(frame.runId);
 			await deps.sliceRunRepo.update({
 				id: frame.runId,
 				status: 'done',
@@ -107,6 +113,7 @@ async function failRun(
 		message: string;
 	}
 ): Promise<void> {
+	deps.runActivity.forget(opts.runId);
 	await deps.sliceRunRepo.update({
 		id: opts.runId,
 		status: 'failed',

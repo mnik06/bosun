@@ -1,5 +1,5 @@
 import { HttpError } from 'src/api/errors/HttpError';
-import { type AdvanceDeps } from 'src/controllers/queues/advance-queue';
+import { type AdvanceDeps } from 'src/controllers/queues/advance-deps';
 import { announceQueue } from 'src/controllers/queues/announce-queue';
 import { type PlanAnswer } from 'src/types/PlanSchema';
 

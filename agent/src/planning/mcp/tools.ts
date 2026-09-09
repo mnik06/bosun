@@ -67,6 +67,7 @@ export function createPlanDispatch(opts: {
 	planId: string;
 	auto: boolean;
 	bosunApi: BosunApiService;
+	onPublished: () => void;
 	onQuestion: (payload: {
 		questionId: string;
 		questions: PlanQuestion[];
@@ -108,6 +109,8 @@ export function createPlanDispatch(opts: {
 					planId: opts.planId,
 					artifact: PublishPlanArgsSchema.parse(args)
 				});
+
+				opts.onPublished();
 
 				return textToolResult(JSON.stringify(saved));
 			}

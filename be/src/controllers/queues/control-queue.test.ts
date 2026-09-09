@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { type AdvanceDeps } from 'src/controllers/queues/advance-queue';
+import { type AdvanceDeps } from 'src/controllers/queues/advance-deps';
 import { controlQueue } from 'src/controllers/queues/control-queue';
 import { type Queue, type QueueStatus } from 'src/types/QueueSchema';
 

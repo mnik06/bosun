@@ -58,6 +58,7 @@ const routes: FastifyPluginAsync = async function (f) {
 				queueMessageRepo: fastify.repos.queueMessageRepo,
 				planRepo: fastify.repos.planRepo,
 				sliceRepo: fastify.repos.sliceRepo,
+				runActivity: fastify.services.runActivity,
 				id: req.params.id,
 				projectId: req.membership!.projectId
 			});

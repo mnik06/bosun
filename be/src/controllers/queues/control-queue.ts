@@ -1,9 +1,9 @@
 import { HttpError } from 'src/api/errors/HttpError';
 import {
 	advanceMachine,
-	advanceQueue,
-	type AdvanceDeps
+	advanceQueue
 } from 'src/controllers/queues/advance-queue';
+import { type AdvanceDeps } from 'src/controllers/queues/advance-deps';
 import { announceQueue } from 'src/controllers/queues/announce-queue';
 import { getOwnedQueue } from 'src/controllers/queues/shared/queue-access';
 import { type Queue } from 'src/types/QueueSchema';

@@ -18,7 +18,7 @@ export function SliceRunRow ({
 	activity
 }: {
 	run: SliceRunDetail,
-	activity: string | undefined
+	activity: string | null | undefined
 }) {
 	const { color, icon } = ICONS[run.status]
 
@@ -39,7 +39,7 @@ export function SliceRunRow ({
 					) : null}
 				</Text>
 
-				{run.status === 'running' && activity !== undefined ? (
+				{run.status === 'running' && activity != null ? (
 					<Text size="xs" c="dimmed">
 						{activity}
 					</Text>

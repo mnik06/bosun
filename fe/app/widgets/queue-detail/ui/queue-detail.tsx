@@ -61,23 +61,23 @@ export function QueueDetail ({ queueId }: { queueId: string }) {
 
 	return (
 		<Stack gap="lg">
-			<Group justify="space-between" align="start">
-				<Stack gap={4}>
-					<Group gap="sm">
+			<Group justify="space-between" align="start" wrap="nowrap">
+				<Stack gap={4} className="min-w-0">
+					<Group gap="sm" wrap="nowrap">
 						<Title order={2}>{data.queue.name}</Title>
 						<QueueStatusBadge
 							status={data.queue.status}
 							pausing={runningRun !== undefined}
 						/>
 					</Group>
-					<Text size="xs" c="dimmed" className="font-mono">
+					<Text size="xs" c="dimmed" truncate className="font-mono">
 						{data.queue.worktreePath ?? 'no worktree yet'}
 						{data.queue.baseRef === null ? '' : ` · from ${data.queue.baseRef}`}
 						{` · ${formatDuration(queueElapsedMs({ items: data.items, now }))} of work`}
 					</Text>
 				</Stack>
 
-				<Group gap="md" align="center">
+				<Group gap="xs" align="center" wrap="nowrap">
 					<AfkSwitch queue={data.queue} />
 					<QueueControls queue={data.queue} running={runningRun !== undefined} />
 					<KillQueueButton queue={data.queue} goHome />

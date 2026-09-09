@@ -87,6 +87,10 @@ export function toQueueSlug(name: string): string {
 
 export const SliceRunDetailSchema = SliceRunSchema.extend({
 	sliceTitle: z.string(),
+	// What the session is doing right now. Lives in the server's memory rather
+	// than on the row, so it is null for anything not currently running and after
+	// a restart.
+	activity: z.string().nullable(),
 	sliceKind: z.enum(['build', 'verify'])
 });
 

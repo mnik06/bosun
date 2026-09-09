@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { type AdvanceDeps } from 'src/controllers/queues/advance-queue';
+import { type AdvanceDeps } from 'src/controllers/queues/advance-deps';
 import { pauseMachineQueues } from 'src/controllers/queues/pause-machine-queues';
 
 function build(opts?: { running?: boolean }) {

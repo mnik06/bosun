@@ -1,5 +1,5 @@
 import { type FastifyInstance } from 'fastify';
-import { type AdvanceDeps } from 'src/controllers/queues/advance-queue';
+import { type AdvanceDeps } from 'src/controllers/queues/advance-deps';
 
 // One place, because the agent socket and the HTTP routes both advance queues
 // and a scheduler assembled twice is two schedulers that can disagree about
@@ -15,6 +15,7 @@ export function schedulerDeps(fastify: FastifyInstance): AdvanceDeps {
 		planBlockerRepo: fastify.repos.planBlockerRepo,
 		planDecisionRepo: fastify.repos.planDecisionRepo,
 		machineRepo: fastify.repos.machineRepo,
-		socketRegistry: fastify.services.socketRegistry
+		socketRegistry: fastify.services.socketRegistry,
+		runActivity: fastify.services.runActivity
 	};
 }

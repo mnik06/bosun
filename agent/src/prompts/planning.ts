@@ -9,6 +9,12 @@ You are running inside their repository checkout. Read it rather than guess at i
 **You have no terminal and no other channel to the person.** The ONLY way to ask them anything is the
 \`bosun_ask\` tool. Never ask a question in plain prose — prose is narration they read, not a prompt
 they can answer, and a session that "asks" in prose hangs forever.
+
+**A turn ends in exactly three ways: the plan is published, \`bosun_ask\` is waiting on a person, or
+the session errors.** Waiting is not one of them. A \`Task\` subagent returns inside the turn that
+dispatched it — nothing of yours keeps running once you stop, and no result is ever delivered to you
+later. "I'll continue once recon reports back" ends the session on an empty plan, which is recorded
+as a failure. If you have dispatched work, stay in the turn until it comes back.
 {{AUTO_RULE}}
 ## The governing principle: grey box
 
@@ -491,6 +497,12 @@ You are running inside their repository checkout. Read it rather than guess at i
 
 **You have no terminal and no other channel to the person.** The ONLY way to ask them anything is the
 \`bosun_ask\` tool. Never ask a question in plain prose.
+
+**A turn ends in exactly three ways: the plan is published, \`bosun_ask\` is waiting on a person, or
+the session errors.** Waiting is not one of them. A \`Task\` subagent returns inside the turn that
+dispatched it — nothing of yours keeps running once you stop, and no result is ever delivered to you
+later. "I'll continue once recon reports back" ends the session on an empty plan, which is recorded
+as a failure. If you have dispatched work, stay in the turn until it comes back.
 
 ${operatorNotes(opts.notes)}
 ## The plan as it stands

@@ -1,19 +1,23 @@
-import { Alert, Button, Card, Center, Checkbox, Group, Loader, Stack, Text } from '@mantine/core'
-import { ListPlus } from 'lucide-react'
-import { useState } from 'react'
+import { Alert, Card, Center, Checkbox, Group, Loader, Stack, Text } from '@mantine/core'
 import { Link } from 'react-router'
 
 import { useMachinesQuery } from '~/entities/machine'
-import { PlanStatusBadge, usePlansQuery, type Plan } from '~/entities/plan'
+import { PlanStatusBadge, usePlansQuery } from '~/entities/plan'
 import { DeletePlanAction } from '~/features/delete-plan'
-import { PushToQueueModal } from '~/features/push-to-queue'
 import { formatRelativeTime, toErrorMessage } from '~/shared/lib'
 
-export function PlansList () {
+// Selection is the page's, not the list's: the button that acts on it lives in
+// the page header beside New plan, and two copies of the same state is how they
+// drift apart.
+export function PlansList ({
+	selected,
+	onSelectedChange
+}: {
+	selected: string[],
+	onSelectedChange: (next: string[]) => void
+}) {
 	const { data, isPending, error } = usePlansQuery()
 	const machines = useMachinesQuery()
-	const [selected, setSelected] = useState<string[]>([])
-	const [pushing, setPushing] = useState(false)
 
 	if (isPending) {
 		return (
@@ -39,28 +43,8 @@ export function PlansList () {
 		)
 	}
 
-	const chosen: Plan[] = data.filter((plan) => selected.includes(plan.id))
-
 	return (
 		<Stack gap="sm">
-			{chosen.length === 0 ? null : (
-				<Group justify="space-between">
-					<Text size="sm" c="dimmed">
-						{chosen.length} selected
-					</Text>
-					<Button
-						size="xs"
-						variant="light"
-						leftSection={<ListPlus size={14} />}
-						onClick={() => {
-							setPushing(true)
-						}}
-					>
-						Push to queue
-					</Button>
-				</Group>
-			)}
-
 			{data.map((plan) => (
 				<Group key={plan.id} gap="sm" align="center" wrap="nowrap">
 					<Checkbox
@@ -71,13 +55,10 @@ export function PlansList () {
 						// plan on a worktree, and an unconfirmed one is refused anyway.
 						disabled={plan.status !== 'ready' || plan.confirmedAt === null}
 						onChange={(event) => {
-							// Read before the updater runs: React clears `currentTarget`
-							// once the handler returns, and the updater is only evaluated
-							// inside it while nothing else has already queued a render.
-							const { checked } = event.currentTarget
-
-							setSelected((previous) =>
-								checked ? [...previous, plan.id] : previous.filter((id) => id !== plan.id)
+							onSelectedChange(
+								event.currentTarget.checked
+									? [...selected, plan.id]
+									: selected.filter((id) => id !== plan.id)
 							)
 						}}
 					/>
@@ -109,15 +90,6 @@ export function PlansList () {
 					</Card>
 				</Group>
 			))}
-
-			<PushToQueueModal
-				plans={chosen}
-				opened={pushing}
-				onClose={() => {
-					setPushing(false)
-					setSelected([])
-				}}
-			/>
 		</Stack>
 	)
 }

@@ -1,5 +1,5 @@
 import { announceQueue } from 'src/controllers/queues/announce-queue';
-import { type AdvanceDeps } from 'src/controllers/queues/advance-queue';
+import { type AdvanceDeps } from 'src/controllers/queues/advance-deps';
 
 const OFFLINE = 'the machine went offline while this bullet was running';
 

@@ -1,14 +1,5 @@
+import { type AdvanceDeps } from 'src/controllers/queues/advance-deps';
 import { announceQueue } from 'src/controllers/queues/announce-queue';
-import { type AcRepo } from 'src/repos/plans/ac.repo';
-import { type PlanRepo } from 'src/repos/plans/plan.repo';
-import { type SliceRepo } from 'src/repos/plans/slice.repo';
-import { type QueueItemRepo } from 'src/repos/queues/queue-item.repo';
-import { type QueueRepo } from 'src/repos/queues/queue.repo';
-import { type MachineRepo } from 'src/repos/machines/machine.repo';
-import { type PlanBlockerRepo } from 'src/repos/plans/plan-blocker.repo';
-import { type PlanDecisionRepo } from 'src/repos/plans/plan-decision.repo';
-import { type SliceRunRepo } from 'src/repos/queues/slice-run.repo';
-import { type SocketRegistry } from 'src/services/sockets/registry.service';
 import { type Ac, type Plan, type PlanDecision } from 'src/types/PlanSchema';
 import { toQueueSlug, type Queue, type QueueItem } from 'src/types/QueueSchema';
 import { DEFAULT_PROJECT_PROFILE } from 'src/types/ProjectProfileSchema';
@@ -16,19 +7,6 @@ import { DEFAULT_PROJECT_PROFILE } from 'src/types/ProjectProfileSchema';
 // Each running queue is a `claude` process holding a worktree. Two is what a
 // small VPS survives; the point is that the number exists at all, not the number.
 export const MAX_RUNNING_PER_MACHINE = 2;
-
-export interface AdvanceDeps {
-	queueRepo: QueueRepo;
-	queueItemRepo: QueueItemRepo;
-	sliceRunRepo: SliceRunRepo;
-	planRepo: PlanRepo;
-	sliceRepo: SliceRepo;
-	acRepo: AcRepo;
-	planBlockerRepo: PlanBlockerRepo;
-	planDecisionRepo: PlanDecisionRepo;
-	machineRepo: MachineRepo;
-	socketRegistry: SocketRegistry;
-}
 
 // The statuses that mean "stop dispatching". `blocked` is in here because a
 // question is outstanding: the run holding it is still alive, and starting a

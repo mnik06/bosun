@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { type AdvanceDeps } from 'src/controllers/queues/advance-queue';
+import { type AdvanceDeps } from 'src/controllers/queues/advance-deps';
 import { recordExecFrame } from 'src/controllers/queues/record-exec-frame';
 
 function build(opts?: { machineId?: string }) {
@@ -34,7 +34,8 @@ function build(opts?: { machineId?: string }) {
 		planRepo: { getByIdForMachine: vi.fn() },
 		sliceRepo: { listByPlan: vi.fn().mockResolvedValue([]) },
 		acRepo: { listBySlice: vi.fn().mockResolvedValue([]) },
-		socketRegistry: { sendToAgent: vi.fn(), broadcastToUi: vi.fn() }
+		socketRegistry: { sendToAgent: vi.fn(), broadcastToUi: vi.fn() },
+		runActivity: { record: vi.fn(), forget: vi.fn(), label: vi.fn() }
 	} as unknown as AdvanceDeps;
 
 	return deps;

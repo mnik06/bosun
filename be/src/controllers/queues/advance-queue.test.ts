@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
 	advanceQueue,
-	MAX_RUNNING_PER_MACHINE,
-	type AdvanceDeps
+	MAX_RUNNING_PER_MACHINE
 } from 'src/controllers/queues/advance-queue';
+import { type AdvanceDeps } from 'src/controllers/queues/advance-deps';
 import { type Queue, type QueueItem, type SliceRun } from 'src/types/QueueSchema';
 
 function queue(overrides: Partial<Queue> = {}): Queue {
