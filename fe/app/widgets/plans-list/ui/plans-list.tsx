@@ -1,4 +1,5 @@
 import { Alert, Button, Card, Center, Checkbox, Group, Loader, Stack, Text } from '@mantine/core'
+import { ListPlus } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router'
 
@@ -50,6 +51,7 @@ export function PlansList () {
 					<Button
 						size="xs"
 						variant="light"
+						leftSection={<ListPlus size={14} />}
 						onClick={() => {
 							setPushing(true)
 						}}
@@ -69,10 +71,13 @@ export function PlansList () {
 						// plan on a worktree, and an unconfirmed one is refused anyway.
 						disabled={plan.status !== 'ready' || plan.confirmedAt === null}
 						onChange={(event) => {
+							// Read before the updater runs: React clears `currentTarget`
+							// once the handler returns, and the updater is only evaluated
+							// inside it while nothing else has already queued a render.
+							const { checked } = event.currentTarget
+
 							setSelected((previous) =>
-								event.currentTarget.checked
-									? [...previous, plan.id]
-									: previous.filter((id) => id !== plan.id)
+								checked ? [...previous, plan.id] : previous.filter((id) => id !== plan.id)
 							)
 						}}
 					/>

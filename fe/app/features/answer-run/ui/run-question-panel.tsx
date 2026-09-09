@@ -48,7 +48,11 @@ export function RunQuestionPanel ({
 							size="xs"
 							placeholder="…or type your own answer"
 							onChange={(event) => {
-								setPicked((previous) => ({ ...previous, [index]: event.currentTarget.value }))
+								// Read before the updater runs: React clears `currentTarget`
+								// once the handler returns.
+								const { value } = event.currentTarget
+
+								setPicked((previous) => ({ ...previous, [index]: value }))
 							}}
 						/>
 					</Stack>
