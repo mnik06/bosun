@@ -128,6 +128,7 @@ export function getSliceRunRepo(db: DbOrTx) {
 			question?: PlanQuestion[] | null;
 			commitSha?: string | null;
 			failureReason?: string | null;
+			startedAt?: Date | null;
 			finishedAt?: Date | null;
 		}): Promise<SliceRun | null> {
 			const { id, ...changes } = opts;

@@ -5,7 +5,7 @@ import { useMachinesQuery } from '~/entities/machine'
 import { QueueStatusBadge, useQueuesQuery, type Queue } from '~/entities/queue'
 import { QueueControls } from '~/features/control-queue'
 import { CreateQueueButton } from '~/features/create-queue'
-import { DeleteQueueButton } from '~/features/delete-queue'
+import { KillQueueButton } from '~/features/kill-queue'
 import { toErrorMessage } from '~/shared/lib'
 import { Page } from '~/shared/ui'
 
@@ -40,7 +40,7 @@ function QueueCard ({ queue, machineName }: { queue: Queue, machineName: string 
 
 				<Group gap="xs" wrap="nowrap">
 					<QueueControls queue={queue} />
-					<DeleteQueueButton queue={queue} />
+					<KillQueueButton queue={queue} />
 				</Group>
 			</Group>
 		</Card>

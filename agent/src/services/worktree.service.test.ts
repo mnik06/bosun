@@ -105,6 +105,25 @@ describe('worktree service', () => {
 		expect(fs.existsSync(created.worktreePath)).toBe(false);
 	});
 
+	// Killing a queue takes its local branches with it — the worktree branch and
+	// every plan branch cut inside it — and nothing else. A branch belonging to
+	// another queue, or to the person's own work, is not this operation's to take.
+	it('deletes its own branches and leaves everybody else\'s alone', async () => {
+		await service().ensure({ slug: 'doomed' });
+		await service().ensure({ slug: 'kept' });
+		await git(repoPath, ['branch', 'bosun/plan/doomed/1-thing', 'main']);
+		await git(repoPath, ['branch', 'feature/mine', 'main']);
+
+		await service().remove('doomed');
+
+		const branches = await git(repoPath, ['branch', '--list']);
+
+		expect(branches).not.toContain('bosun/worktree/doomed');
+		expect(branches).not.toContain('bosun/plan/doomed/1-thing');
+		expect(branches).toContain('bosun/worktree/kept');
+		expect(branches).toContain('feature/mine');
+	});
+
 	// A directory deleted by hand leaves metadata git still believes in, and
 	// `worktree add` then refuses the path.
 	it('recreates a checkout whose directory was deleted behind its back', async () => {

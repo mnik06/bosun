@@ -52,7 +52,7 @@ function QueueList ({ machineId }: { machineId: string }) {
 	)
 }
 
-// Read-only on purpose: a queue is created, paused, stopped and deleted in one
+// Read-only on purpose: a queue is created, paused, resumed and killed in one
 // place, and that place is the queues page. This card only answers "what is
 // running on this box".
 export function QueuesPanel ({ machineId }: { machineId: string }) {

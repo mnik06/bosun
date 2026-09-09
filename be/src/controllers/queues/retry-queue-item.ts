@@ -21,17 +21,17 @@ export async function retryQueueItem(deps: AdvanceDeps, opts: {
 	if (!item) {
 		throw new HttpError(
 			409,
-			'Only a plan that failed, was stopped, or has bullets that never ran can be retried'
+			'Only a plan that failed or has bullets that never ran can be retried'
 		);
 	}
 
 	await deps.sliceRunRepo.resetUnfinished(item.id);
 
-	// A queue that stopped on this plan has to come off that status itself, or it
+	// A queue that failed on this plan has to come off that status itself, or it
 	// keeps the item queued and dispatches nothing. `paused` is left alone: the
 	// operator paused it deliberately, and retrying one plan is not a request to
 	// start the whole queue moving again.
-	if (queue.status === 'failed' || queue.status === 'stopped') {
+	if (queue.status === 'failed') {
 		const updated = await deps.queueRepo.update({
 			id: queue.id,
 			status: 'idle',

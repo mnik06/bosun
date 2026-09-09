@@ -33,7 +33,7 @@ export interface AdvanceDeps {
 // The statuses that mean "stop dispatching". `blocked` is in here because a
 // question is outstanding: the run holding it is still alive, and starting a
 // second slice beside it would have two sessions writing to one worktree.
-const HALTED = new Set(['paused', 'blocked', 'stopped', 'failed', 'provisioning']);
+const HALTED = new Set(['paused', 'blocked', 'failed', 'provisioning']);
 
 async function setStatus(
 	deps: AdvanceDeps,

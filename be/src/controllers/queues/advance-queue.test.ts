@@ -282,9 +282,9 @@ describe('advanceQueue', () => {
 		expect(deps.queueRepo.update).toHaveBeenCalledWith({ id: 'q_1', status: 'idle' });
 	});
 
-	// Every one of these means a run is either outstanding or deliberately stopped.
+	// Every one of these means a run is either outstanding or deliberately halted.
 	// Dispatching anyway would put two sessions in one worktree.
-	it.each(['paused', 'blocked', 'stopped', 'failed', 'provisioning'] as const)(
+	it.each(['paused', 'blocked', 'failed', 'provisioning'] as const)(
 		'dispatches nothing while %s',
 		async (status) => {
 			const { deps, sendToAgent } = build({

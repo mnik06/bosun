@@ -1,28 +1,43 @@
 import { Button, Group } from '@mantine/core'
 import { modals } from '@mantine/modals'
-import { Pause, Play, Square } from 'lucide-react'
+import { Pause, Play } from 'lucide-react'
 
 import type { Queue } from '~/entities/queue'
 import { useControlQueue } from '~/features/control-queue/api/use-control-queue'
 
-const RESUMABLE = new Set(['paused', 'stopped'])
-const PAUSABLE = new Set(['idle', 'running'])
+const RESUMABLE = new Set(['paused'])
+const PAUSABLE = new Set(['idle', 'running', 'blocked'])
 
-export function QueueControls ({ queue }: { queue: Queue }) {
+export function QueueControls ({
+	queue,
+	// True when a bullet is actually in flight. Only the queue page knows that —
+	// the list has the queue row and not its runs — and it decides whether pausing
+	// needs a warning or is a no-op between bullets.
+	running = false
+}: {
+	queue: Queue,
+	running?: boolean
+}) {
 	const control = useControlQueue({ queueId: queue.id, machineId: queue.machineId })
 
-	// Stop is the only one that kills a session mid-edit, so it is the only one
-	// that asks. Pause lands between bullets and needs no warning.
-	const confirmStop = () => {
+	// Pausing mid-bullet throws that attempt away, so it asks. Between bullets
+	// there is nothing to lose and nothing to confirm.
+	const pause = () => {
+		if (!running) {
+			control.mutate('pause')
+
+			return
+		}
+
 		modals.openConfirmModal({
-			title: `Stop ${queue.name}?`,
+			title: `Pause ${queue.name}?`,
 			centered: true,
-			labels: { confirm: 'Stop the queue', cancel: 'Cancel' },
-			confirmProps: { color: 'red' },
+			labels: { confirm: 'Pause the queue', cancel: 'Let it carry on' },
+			confirmProps: { color: 'yellow' },
 			children:
-				'The bullet running now is killed where it stands. What it already wrote stays in the worktree, uncommitted, for you to look at.',
+				'The bullet running now is killed where it stands. Resuming runs that same bullet again from its last commit — what this attempt had written and not committed is discarded.',
 			onConfirm: () => {
-				control.mutate('stop')
+				control.mutate('pause')
 			}
 		})
 	}
@@ -39,9 +54,7 @@ export function QueueControls ({ queue }: { queue: Queue }) {
 					size="xs"
 					leftSection={<Pause size={14} />}
 					loading={control.isPending}
-					onClick={() => {
-						control.mutate('pause')
-					}}
+					onClick={pause}
 				>
 					Pause
 				</Button>
@@ -58,19 +71,6 @@ export function QueueControls ({ queue }: { queue: Queue }) {
 					}}
 				>
 					Resume
-				</Button>
-			) : null}
-
-			{queue.status === 'running' ? (
-				<Button
-					variant="light"
-					color="red"
-					size="xs"
-					leftSection={<Square size={14} />}
-					loading={control.isPending}
-					onClick={confirmStop}
-				>
-					Stop
 				</Button>
 			) : null}
 		</Group>

@@ -114,7 +114,6 @@ export function getQueueRepo(db: DbOrTx) {
 						eq(queues.machineId, machineId),
 						ne(queues.status, 'paused'),
 						ne(queues.status, 'blocked'),
-						ne(queues.status, 'stopped'),
 						ne(queues.status, 'failed'),
 						ne(queues.status, 'provisioning')
 					)

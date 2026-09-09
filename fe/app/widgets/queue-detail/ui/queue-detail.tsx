@@ -10,6 +10,7 @@ import { RunQuestionPanel } from '~/features/answer-run'
 import { QueueChat } from '~/features/ask-queue'
 import { QueueControls } from '~/features/control-queue'
 import { EnqueuePlansModal } from '~/features/enqueue-plans'
+import { KillQueueButton } from '~/features/kill-queue'
 import { AfkSwitch } from '~/features/toggle-afk'
 import { apiClient } from '~/shared/api'
 import { notifyError, toErrorMessage } from '~/shared/lib'
@@ -75,7 +76,8 @@ export function QueueDetail ({ queueId }: { queueId: string }) {
 
 				<Group gap="md" align="center">
 					<AfkSwitch queue={data.queue} />
-					<QueueControls queue={data.queue} />
+					<QueueControls queue={data.queue} running={runningRun !== undefined} />
+					<KillQueueButton queue={data.queue} goHome />
 					<Button variant="light" size="xs" leftSection={<Plus size={14} />} onClick={open}>
 						Add plans
 					</Button>

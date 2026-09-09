@@ -76,6 +76,38 @@ async function resolveBaseRef(opts: { exec: ExecService; repoPath: string }): Pr
 	return head.ok && head.stdout ? head.stdout : null;
 }
 
+// A killed queue takes its local branches with it: the worktree branch and every
+// plan branch cut inside it. Only local ones — anything pushed is somebody's
+// pull request now, and deleting a remote ref is not a decision this makes on an
+// operator's behalf.
+async function deleteBranches(opts: {
+	exec: ExecService;
+	repoPath: string;
+	slug: string;
+}): Promise<void> {
+	const listed = await opts.exec.run(
+		'git',
+		[
+			'-C',
+			opts.repoPath,
+			'for-each-ref',
+			'--format=%(refname:short)',
+			`refs/heads/bosun/worktree/${opts.slug}`,
+			`refs/heads/bosun/plan/${opts.slug}`
+		],
+		{ timeoutMs: 30_000 }
+	);
+	const branches = listed.ok ? listed.stdout.split('\n').filter((line) => line !== '') : [];
+
+	if (branches.length === 0) {
+		return;
+	}
+
+	await opts.exec.run('git', ['-C', opts.repoPath, 'branch', '-D', ...branches], {
+		timeoutMs: 60_000
+	});
+}
+
 export function getWorktreeService(deps: {
 	exec: ExecService;
 	repoPath: string;
@@ -180,6 +212,7 @@ export function getWorktreeService(deps: {
 			);
 			fs.rmSync(worktreePath, { recursive: true, force: true });
 			await prune();
+			await deleteBranches({ exec: deps.exec, repoPath: deps.repoPath, slug });
 		}
 	};
 }

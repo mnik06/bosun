@@ -1,0 +1,198 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      targets:
+        description: 'Which targets to deploy: all, agent, be, fe (comma-separated)'
+        required: false
+        default: all
+
+concurrency:
+  group: deploy-main
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      agent: ${{ steps.filter.outputs.agent }}
+      be: ${{ steps.filter.outputs.be }}
+      fe: ${{ steps.filter.outputs.fe }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Deploys are scoped to what actually changed. A push whose base commit is
+      # unreachable (first push, force push, re-run after history rewrite) cannot
+      # be diffed, so it falls back to deploying everything rather than silently
+      # shipping nothing.
+      - id: filter
+        env:
+          BEFORE: ${{ github.event.before }}
+          MANUAL: ${{ github.event.inputs.targets }}
+        run: |
+          set -euo pipefail
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            selection="${MANUAL:-all}"
+            for target in agent be fe; do
+              if [ "$selection" = "all" ] || printf '%s' "$selection" | grep -qw "$target"; then
+                echo "$target=true" >> "$GITHUB_OUTPUT"
+              else
+                echo "$target=false" >> "$GITHUB_OUTPUT"
+              fi
+            done
+            exit 0
+          fi
+
+          if [ -z "${BEFORE:-}" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] \
+            || ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            echo "base commit unavailable — deploying everything"
+            printf 'agent=true\nbe=true\nfe=true\n' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          changed="$(git diff --name-only "$BEFORE" "${{ github.sha }}")"
+          echo "changed files:"
+          printf '%s\n' "$changed"
+
+          for target in agent be fe; do
+            if printf '%s\n' "$changed" | grep -q "^$target/"; then
+              echo "$target=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "$target=false" >> "$GITHUB_OUTPUT"
+            fi
+          done
+
+  # Released first: the backend discovers the newest agent build at runtime from
+  # releases/latest, so a version bump must be published before machines are told
+  # to refresh onto it.
+  agent:
+    needs: changes
+    if: needs.changes.outputs.agent == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: agent
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+          cache-dependency-path: agent/pnpm-lock.yaml
+
+      - uses: oven-sh/setup-bun@v2
+
+      - run: pnpm install --frozen-lockfile
+
+      # The release tag is derived from package.json, so a push that did not bump
+      # the version would fail on an existing tag. Skipping keeps unrelated agent
+      # changes (tests, refactors) from breaking the deploy.
+      - id: version
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./package.json').version")"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if gh release view "agent-v$version" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "agent-v$version is already released — skipping"
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - run: pnpm preflight
+        if: steps.version.outputs.release == 'true'
+
+      - run: pnpm release
+        if: steps.version.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  be:
+    needs: [changes, agent]
+    if: ${{ !cancelled() && !failure() && needs.changes.outputs.be == 'true' }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: be
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+          cache-dependency-path: be/pnpm-lock.yaml
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - run: pnpm install --frozen-lockfile
+
+      # scripts/deploy.sh is the only supported way to ship the backend: it runs
+      # preflight, verifies every variable EnvSchema requires exists on Fly,
+      # applies migrations, deploys with --ha=false and waits on /health.
+      - run: pnpm run deploy
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+  fe:
+    needs: [changes, be]
+    if: ${{ !cancelled() && !failure() && needs.changes.outputs.fe == 'true' }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: fe
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+          cache-dependency-path: fe/pnpm-lock.yaml
+
+      - run: npm install -g vercel@59
+
+      - run: vercel pull --yes --environment=production --token "$VERCEL_TOKEN"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+      # Vite resolves import.meta.env from .env files in the project root, which a
+      # CI checkout does not have. The pulled Vercel environment is written back as
+      # one so the bundle is built against the same values the dashboard holds.
+      - run: grep -E '^VITE_' .vercel/.env.production.local > .env.production
+
+      - run: vercel build --prod --token "$VERCEL_TOKEN"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+      # A build that lands the SPA entrypoint anywhere but the root of the static
+      # output serves 404 on every path, and the deploy itself still succeeds.
+      - run: test -f .vercel/output/static/index.html
+
+      - run: vercel deploy --prebuilt --prod --token "$VERCEL_TOKEN"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}

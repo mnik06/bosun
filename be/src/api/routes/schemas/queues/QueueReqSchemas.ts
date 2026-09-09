@@ -14,7 +14,7 @@ export const ListQueuesQuerySchema = z.object({ machineId: z.string().min(1).opt
 export const EnqueuePlanReqSchema = z.object({ planId: z.string().min(1) });
 
 export const ControlQueueReqSchema = z.object({
-	action: z.enum(['pause', 'resume', 'stop'])
+	action: z.enum(['pause', 'resume'])
 });
 
 export const RunIdParamsSchema = z.object({ runId: z.string().min(1) });

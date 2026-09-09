@@ -8,7 +8,6 @@ const COLORS: Record<QueueStatus, string> = {
 	running: 'green',
 	paused: 'yellow',
 	blocked: 'orange',
-	stopped: 'gray',
 	failed: 'red'
 }
 

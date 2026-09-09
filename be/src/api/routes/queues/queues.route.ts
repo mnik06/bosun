@@ -87,6 +87,8 @@ const routes: FastifyPluginAsync = async function (f) {
 	fastify.delete('/:id', { schema: { params: QueueIdParamsSchema } }, async (req, reply) => {
 		await deleteQueue({
 			queueRepo: fastify.repos.queueRepo,
+			queueItemRepo: fastify.repos.queueItemRepo,
+			sliceRunRepo: fastify.repos.sliceRunRepo,
 			socketRegistry: fastify.services.socketRegistry,
 			id: req.params.id,
 			userId: req.user!.id

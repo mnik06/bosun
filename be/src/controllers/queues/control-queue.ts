@@ -8,47 +8,38 @@ import { announceQueue } from 'src/controllers/queues/announce-queue';
 import { getOwnedQueue } from 'src/controllers/queues/shared/queue-access';
 import { type Queue } from 'src/types/QueueSchema';
 
-export type QueueAction = 'pause' | 'resume' | 'stop';
+export type QueueAction = 'pause' | 'resume';
 
-// Pausing never kills the bullet in flight. A `claude` process stopped mid-edit
-// leaves a worktree half-written and a plan whose next bullet would build on top
-// of it, so the pause lands between bullets rather than inside one.
+// Pausing stops the work, not just the dispatching: the session running the
+// current bullet is killed and its run goes back to `pending`, so resuming runs
+// that bullet again from the last commit rather than picking up half of an
+// attempt nobody watched finish. The plan stays `running` and nothing is
+// cancelled — that is the whole difference from killing the queue.
 async function pause(deps: AdvanceDeps, queue: Queue): Promise<Queue | null> {
-	return deps.queueRepo.update({ id: queue.id, status: 'paused', failureReason: null });
-}
-
-// Stopping does kill it, which is the difference between the two. What the
-// session had already written stays in the worktree, uncommitted, deliberately:
-// discarding somebody's half-finished work because they pressed stop is not a
-// trade to make for them.
-async function stop(deps: AdvanceDeps, queue: Queue): Promise<Queue | null> {
 	const items = await deps.queueItemRepo.listForQueue(queue.id);
 	const running = items.find((item) => item.status === 'running');
 
-	if (running) {
-		for (const run of await deps.sliceRunRepo.listForItem(running.id)) {
-			if (run.status === 'running') {
-				deps.socketRegistry.sendToAgent({
-					machineId: queue.machineId,
-					message: { type: 'exec.cancel', runId: run.id }
-				});
-				await deps.sliceRunRepo.update({
-					id: run.id,
-					status: 'failed',
-					failureReason: 'stopped by the operator',
-					finishedAt: new Date()
-				});
-			}
+	for (const run of running ? await deps.sliceRunRepo.listForItem(running.id) : []) {
+		if (run.status !== 'running') {
+			continue;
 		}
 
-		await deps.queueItemRepo.update({
-			id: running.id,
-			status: 'cancelled',
-			finishedAt: new Date()
+		deps.socketRegistry.sendToAgent({
+			machineId: queue.machineId,
+			message: { type: 'exec.cancel', runId: run.id }
+		});
+		await deps.sliceRunRepo.update({
+			id: run.id,
+			status: 'pending',
+			failureReason: null,
+			questionId: null,
+			question: null,
+			startedAt: null,
+			finishedAt: null
 		});
 	}
 
-	return deps.queueRepo.update({ id: queue.id, status: 'stopped' });
+	return deps.queueRepo.update({ id: queue.id, status: 'paused', failureReason: null });
 }
 
 export async function controlQueue(
@@ -71,7 +62,6 @@ export async function controlQueue(
 
 	const apply = {
 		pause: async () => pause(deps, queue),
-		stop: async () => stop(deps, queue),
 		resume: async () =>
 			deps.queueRepo.update({ id: queue.id, status: 'idle', failureReason: null })
 	};
@@ -87,8 +77,8 @@ export async function controlQueue(
 		await advanceQueue(deps, { queueId: updated.id });
 	}
 
-	// Pausing or stopping gives a slot back, so whatever else on this machine was
-	// held at the cap gets its turn without anybody pressing anything.
+	// Pausing gives a slot back, so whatever else on this machine was held at the
+	// cap gets its turn without anybody pressing anything.
 	if (opts.action !== 'resume') {
 		await advanceMachine(deps, { machineId: updated.machineId });
 	}

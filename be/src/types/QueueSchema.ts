@@ -10,7 +10,6 @@ export const QueueStatusSchema = z.enum([
 	'running',
 	'paused',
 	'blocked',
-	'stopped',
 	'failed'
 ]);
 

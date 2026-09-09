@@ -4,7 +4,7 @@ import { QueueSchema, queueKeys, type Queue } from '~/entities/queue'
 import { apiClient } from '~/shared/api'
 import { notifyError } from '~/shared/lib'
 
-export type QueueAction = 'pause' | 'resume' | 'stop'
+export type QueueAction = 'pause' | 'resume'
 
 export function useControlQueue (opts: { queueId: string, machineId: string }) {
 	const queryClient = useQueryClient()

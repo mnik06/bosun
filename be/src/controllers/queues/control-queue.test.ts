@@ -53,29 +53,23 @@ function build(status: QueueStatus, opts?: { running?: boolean }) {
 }
 
 describe('controlQueue', () => {
-	// The bullet in flight is left alone on purpose: killing a session mid-edit
-	// leaves a worktree half-written for the next bullet to build on.
-	it('pauses without touching the running bullet', async () => {
+	// Pausing stops the work rather than the dispatching, and re-arms it: the plan
+	// is not cancelled and the bullet is not failed, so resuming runs that same
+	// bullet again instead of skipping to the next plan.
+	it('pausing kills the bullet and re-arms it', async () => {
 		const deps = build('running', { running: true });
 
 		await controlQueue(deps, { id: 'q_1', userId: 'u_1', action: 'pause' });
 
-		expect(deps.queueRepo.update).toHaveBeenCalledWith(
-			expect.objectContaining({ id: 'q_1', status: 'paused' })
-		);
-		expect(deps.socketRegistry.sendToAgent).not.toHaveBeenCalled();
-	});
-
-	it('stopping cancels the run on the machine', async () => {
-		const deps = build('running', { running: true });
-
-		await controlQueue(deps, { id: 'q_1', userId: 'u_1', action: 'stop' });
-
 		expect(deps.socketRegistry.sendToAgent).toHaveBeenCalledWith(
 			expect.objectContaining({ message: { type: 'exec.cancel', runId: 'sr_1' } })
 		);
-		expect(deps.queueItemRepo.update).toHaveBeenCalledWith(
-			expect.objectContaining({ id: 'qi_1', status: 'cancelled' })
+		expect(deps.sliceRunRepo.update).toHaveBeenCalledWith(
+			expect.objectContaining({ id: 'sr_1', status: 'pending', startedAt: null })
+		);
+		expect(deps.queueItemRepo.update).not.toHaveBeenCalled();
+		expect(deps.queueRepo.update).toHaveBeenCalledWith(
+			expect.objectContaining({ id: 'q_1', status: 'paused' })
 		);
 	});
 
