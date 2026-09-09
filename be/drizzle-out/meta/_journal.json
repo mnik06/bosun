@@ -78,6 +78,13 @@
       "when": 1788868583906,
       "tag": "0010_early_mongoose",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1788945620067,
+      "tag": "0011_dear_scourge",
+      "breakpoints": true
     }
   ]
 }

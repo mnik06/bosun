@@ -28,6 +28,7 @@ function build(opts?: { machineId?: string }) {
 			getById: vi.fn().mockResolvedValue({ id: 'sr_1', queueItemId: 'qi_1', ordinal: 1 }),
 			claimNext: vi.fn().mockResolvedValue(null),
 			listForItem: vi.fn().mockResolvedValue([]),
+			setQuestion: vi.fn(),
 			update: vi.fn()
 		},
 		planRepo: { getByIdForMachine: vi.fn() },
@@ -52,6 +53,39 @@ describe('recordExecFrame', () => {
 
 		expect(deps.sliceRunRepo.update).toHaveBeenCalledWith(
 			expect.objectContaining({ id: 'sr_1', status: 'done', commitSha: 'abc123' })
+		);
+	});
+
+	// The question is the only thing that can unblock the queue, and it used to
+	// live in the browser's socket state: a reload lost the control that answers
+	// it while the session sat waiting.
+	it('stores the question a blocked run is waiting on, and clears it when the run settles', async () => {
+		const deps = build();
+
+		await recordExecFrame(deps, {
+			...base,
+			frame: {
+				type: 'exec.question',
+				runId: 'sr_1',
+				questionId: 'q_1',
+				questions: [{ header: 'Storage', question: 'Where?', options: [], multiSelect: false }]
+			}
+		});
+
+		expect(deps.sliceRunRepo.setQuestion).toHaveBeenCalledWith(
+			expect.objectContaining({ id: 'sr_1', questionId: 'q_1' })
+		);
+		expect(deps.queueRepo.update).toHaveBeenCalledWith(
+			expect.objectContaining({ status: 'blocked' })
+		);
+
+		await recordExecFrame(deps, {
+			...base,
+			frame: { type: 'exec.done', runId: 'sr_1', commitSha: 'abc123', report: 'done' }
+		});
+
+		expect(deps.sliceRunRepo.update).toHaveBeenCalledWith(
+			expect.objectContaining({ id: 'sr_1', questionId: null, question: null })
 		);
 	});
 

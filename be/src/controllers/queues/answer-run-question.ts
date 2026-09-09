@@ -20,6 +20,14 @@ export async function answerRunQuestion(
 		throw new HttpError(404, 'Run not found');
 	}
 
+	// A stale panel — one left open in a tab while somebody else answered — must
+	// not re-answer a question the session has moved past.
+	if (run.questionId !== null && run.questionId !== opts.questionId) {
+		throw new HttpError(409, 'That question has already been answered');
+	}
+
+	await deps.sliceRunRepo.setQuestion({ id: run.id, questionId: null, question: null });
+
 	deps.socketRegistry.sendToAgent({
 		machineId: queue.machineId,
 		message: {

@@ -1,6 +1,7 @@
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { type DbOrTx } from 'src/services/drizzle/drizzle.service';
 import { sliceRuns } from 'src/services/drizzle/schema';
+import { type PlanQuestion } from 'src/types/PlanSchema';
 import { SliceRunSchema, type SliceRun, type SliceRunStatus } from 'src/types/QueueSchema';
 
 const columns = {
@@ -9,6 +10,8 @@ const columns = {
 	sliceId: sliceRuns.sliceId,
 	ordinal: sliceRuns.ordinal,
 	status: sliceRuns.status,
+	questionId: sliceRuns.questionId,
+	question: sliceRuns.question,
 	commitSha: sliceRuns.commitSha,
 	failureReason: sliceRuns.failureReason,
 	startedAt: sliceRuns.startedAt,
@@ -85,7 +88,14 @@ export function getSliceRunRepo(db: DbOrTx) {
 		async resetUnfinished(queueItemId: string): Promise<number> {
 			const rows = await db
 				.update(sliceRuns)
-				.set({ status: 'pending', failureReason: null, startedAt: null, finishedAt: null })
+				.set({
+					status: 'pending',
+					failureReason: null,
+					questionId: null,
+					question: null,
+					startedAt: null,
+					finishedAt: null
+				})
 				.where(
 					and(
 						eq(sliceRuns.queueItemId, queueItemId),
@@ -97,9 +107,25 @@ export function getSliceRunRepo(db: DbOrTx) {
 			return rows.length;
 		},
 
+		// Set when a session asks, cleared when it is answered and whenever the run
+		// stops waiting for any other reason — a question outlived by its session is
+		// a control that answers nothing.
+		async setQuestion(opts: {
+			id: string;
+			questionId: string | null;
+			question: PlanQuestion[] | null;
+		}): Promise<void> {
+			await db
+				.update(sliceRuns)
+				.set({ questionId: opts.questionId, question: opts.question })
+				.where(eq(sliceRuns.id, opts.id));
+		},
+
 		async update(opts: {
 			id: string;
 			status?: SliceRunStatus;
+			questionId?: string | null;
+			question?: PlanQuestion[] | null;
 			commitSha?: string | null;
 			failureReason?: string | null;
 			finishedAt?: Date | null;

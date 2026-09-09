@@ -38,12 +38,25 @@ export const SliceRunStatusSchema = z.enum(['pending', 'running', 'done', 'faile
 
 export type SliceRunStatus = z.infer<typeof SliceRunStatusSchema>
 
+// The queue's own copy of the question shape. An entity never reaches into a
+// sibling entity, and this is the same three fields either way.
+export const QueueQuestionSchema = z.object({
+	header: z.string(),
+	question: z.string(),
+	options: z.array(z.object({ label: z.string(), description: z.string() })),
+	multiSelect: z.boolean()
+})
+
+export type QueueQuestion = z.infer<typeof QueueQuestionSchema>
+
 export const SliceRunDetailSchema = z.object({
 	id: z.string(),
 	queueItemId: z.string(),
 	sliceId: z.string(),
 	ordinal: z.number().int(),
 	status: SliceRunStatusSchema,
+	questionId: z.string().nullable(),
+	question: z.array(QueueQuestionSchema).nullable(),
 	commitSha: z.string().nullable(),
 	failureReason: z.string().nullable(),
 	startedAt: z.coerce.date().nullable(),

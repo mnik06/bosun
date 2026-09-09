@@ -45,6 +45,11 @@ export async function recordExecFrame(
 	}
 
 	if (frame.type === 'exec.question') {
+		await deps.sliceRunRepo.setQuestion({
+			id: frame.runId,
+			questionId: frame.questionId,
+			question: frame.questions
+		});
 		await deps.queueRepo.update({ id: located.queue.id, status: 'blocked' });
 		deps.socketRegistry.broadcastToUi({
 			userId: opts.userId,
@@ -70,6 +75,8 @@ export async function recordExecFrame(
 			await deps.sliceRunRepo.update({
 				id: frame.runId,
 				status: 'done',
+				questionId: null,
+				question: null,
 				commitSha: frame.commitSha,
 				finishedAt: new Date()
 			});
@@ -104,6 +111,8 @@ async function failRun(
 		id: opts.runId,
 		status: 'failed',
 		failureReason: opts.message,
+		questionId: null,
+		question: null,
 		finishedAt: new Date()
 	});
 	await deps.queueItemRepo.update({

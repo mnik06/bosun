@@ -3,11 +3,7 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 
 import { machineKeys } from '~/entities/machine/api/machine.queries'
 import type { Machine } from '~/entities/machine/model/machine'
-import {
-	UiMsgSchema,
-	type RunQuestionMsg,
-	type UiMsg
-} from '~/entities/machine/model/ui-message'
+import { UiMsgSchema, type UiMsg } from '~/entities/machine/model/ui-message'
 import { queueKeys, type Queue, type QueueDetail } from '~/entities/queue'
 import { subscribeToUiSocket } from '~/shared/api'
 
@@ -24,10 +20,7 @@ const UPGRADE_TIMEOUT_MS = 180_000
 const PongContext = createContext<Record<string, PongResult>>({})
 const UpgradeContext = createContext<Record<string, string>>({})
 const AnswerContext = createContext<Record<string, string>>({})
-const RunContext = createContext<{
-	activity: Record<string, string>,
-	questions: Record<string, RunQuestionMsg>
-}>({ activity: {}, questions: {} })
+const RunContext = createContext<Record<string, string>>({})
 
 export function useLastPong (machineId: string): PongResult | null {
 	return useContext(PongContext)[machineId] ?? null
@@ -44,13 +37,7 @@ export function useQueueAnswer (queueId: string): string | null {
 }
 
 export function useRunActivity (): Record<string, string> {
-	return useContext(RunContext).activity
-}
-
-export function useRunQuestion (runId: string | null): RunQuestionMsg | null {
-	const { questions } = useContext(RunContext)
-
-	return runId === null ? null : questions[runId] ?? null
+	return useContext(RunContext)
 }
 
 function dropMachine (queryClient: QueryClient, machineId: string): void {
@@ -107,7 +94,6 @@ export function MachinesSocketProvider ({ children }: { children: ReactNode }) {
 	const [pongs, setPongs] = useState<Record<string, PongResult>>({})
 	const [upgrades, setUpgrades] = useState<Record<string, string>>({})
 	const [runActivity, setRunActivity] = useState<Record<string, string>>({})
-	const [runQuestions, setRunQuestions] = useState<Record<string, RunQuestionMsg>>({})
 	const [answers, setAnswers] = useState<Record<string, string>>({})
 	const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>())
 	// Read through a ref so the subscription is not a function of the state it
@@ -177,8 +163,12 @@ export function MachinesSocketProvider ({ children }: { children: ReactNode }) {
 				return
 			}
 
+			// The question is persisted on its run, so the frame is a nudge to refetch
+			// rather than the only copy of it.
 			if (msg.type === 'run.question') {
-				setRunQuestions((previous) => ({ ...previous, [msg.runId]: msg }))
+				queryClient.invalidateQueries({ queryKey: queueKeys.all }).catch(() => {
+					// A refetch that fails leaves the panel as it was; the next one recovers.
+				})
 
 				return
 			}
@@ -244,7 +234,7 @@ export function MachinesSocketProvider ({ children }: { children: ReactNode }) {
 	return (
 		<PongContext.Provider value={pongs}>
 			<UpgradeContext.Provider value={upgrades}>
-				<RunContext.Provider value={{ activity: runActivity, questions: runQuestions }}>
+				<RunContext.Provider value={runActivity}>
 					<AnswerContext.Provider value={answers}>{children}</AnswerContext.Provider>
 				</RunContext.Provider>
 			</UpgradeContext.Provider>

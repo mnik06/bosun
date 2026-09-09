@@ -1,18 +1,26 @@
 import { Alert, Button, Radio, Stack, Text, TextInput } from '@mantine/core'
 import { useState } from 'react'
 
-import type { RunQuestionMsg } from '~/entities/machine'
+import type { QueueQuestion } from '~/entities/queue'
 import { useAnswerRun } from '~/features/answer-run/api/use-answer-run'
 
-export function RunQuestionPanel ({ question }: { question: RunQuestionMsg }) {
+export function RunQuestionPanel ({
+	runId,
+	questionId,
+	questions
+}: {
+	runId: string,
+	questionId: string,
+	questions: QueueQuestion[]
+}) {
 	const [picked, setPicked] = useState<Record<number, string>>({})
-	const answer = useAnswerRun(question.runId)
-	const ready = question.questions.every((_, index) => (picked[index] ?? '') !== '')
+	const answer = useAnswerRun(runId)
+	const ready = questions.every((_, index) => (picked[index] ?? '') !== '')
 
 	return (
 		<Alert color="orange" variant="light" title="This queue is waiting on you">
 			<Stack gap="md">
-				{question.questions.map((entry, index) => (
+				{questions.map((entry, index) => (
 					<Stack key={entry.header} gap="xs">
 						<Text size="sm" fw={600}>
 							{entry.question}
@@ -52,8 +60,8 @@ export function RunQuestionPanel ({ question }: { question: RunQuestionMsg }) {
 					disabled={!ready}
 					onClick={() => {
 						answer.mutate({
-							questionId: question.questionId,
-							answers: question.questions.map((_, index) => ({
+							questionId,
+							answers: questions.map((_, index) => ({
 								selected: [picked[index] ?? '']
 							}))
 						})

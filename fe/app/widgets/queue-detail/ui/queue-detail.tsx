@@ -4,7 +4,7 @@ import { Plus } from 'lucide-react'
 import { Button } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
 
-import { useQueueAnswer, useRunActivity, useRunQuestion } from '~/entities/machine'
+import { useQueueAnswer, useRunActivity } from '~/entities/machine'
 import { QueueStatusBadge, queueKeys, useQueueDetailQuery } from '~/entities/queue'
 import { RunQuestionPanel } from '~/features/answer-run'
 import { QueueChat } from '~/features/ask-queue'
@@ -25,7 +25,11 @@ export function QueueDetail ({ queueId }: { queueId: string }) {
 	const runningRun = data?.items
 		.flatMap((item) => item.runs)
 		.find((run) => run.status === 'running')
-	const question = useRunQuestion(runningRun?.id ?? null)
+	// Read off the run rather than out of the socket: the question is a row, so a
+	// reload still finds the control that answers it.
+	const asking = data?.items
+		.flatMap((item) => item.runs)
+		.find((run) => run.questionId !== null && run.question !== null)
 
 	if (isPending) {
 		return (
@@ -84,7 +88,13 @@ export function QueueDetail ({ queueId }: { queueId: string }) {
 				</Alert>
 			)}
 
-			{question === null ? null : <RunQuestionPanel question={question} />}
+			{asking?.questionId == null || asking.question === null ? null : (
+				<RunQuestionPanel
+					runId={asking.id}
+					questionId={asking.questionId}
+					questions={asking.question}
+				/>
+			)}
 
 			{data.items.length === 0 ? (
 				<Card withBorder padding="md" radius="md">

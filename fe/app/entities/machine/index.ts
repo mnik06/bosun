@@ -22,10 +22,9 @@ export {
 	useLastPong,
 	useQueueAnswer,
 	useRunActivity,
-	useRunQuestion,
 	useUpgradingTo,
 	type PongResult
 } from './model/machines-socket'
-export { UiMsgSchema, type RunQuestionMsg, type UiMsg } from './model/ui-message'
+export { UiMsgSchema, type UiMsg } from './model/ui-message'
 export { MachineStatusDot } from './ui/machine-status-dot'
 export { PreflightChecklist } from './ui/preflight-checklist'

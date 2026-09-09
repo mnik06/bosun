@@ -15,6 +15,7 @@ import { type ProjectProfile } from 'src/types/ProjectProfileSchema';
 import {
 	type PlanMessageContent,
 	type PlanMessageRole,
+	type PlanQuestion,
 	type PlanStatus,
 	type SliceKind
 } from 'src/types/PlanSchema';
@@ -224,6 +225,11 @@ export const sliceRuns = pgTable(
 			.references(() => slices.id, { onDelete: 'cascade' }),
 		ordinal: integer().notNull(),
 		status: text().$type<SliceRunStatus>().notNull().default('pending'),
+		// The question this run is blocked on, if any. Persisted rather than left in
+		// the browser's socket state: a reload used to lose the only control that
+		// could answer it, leaving a queue blocked on a session nobody could reach.
+		questionId: text(),
+		question: jsonb().$type<PlanQuestion[]>(),
 		commitSha: text(),
 		failureReason: text(),
 		startedAt: timestamp({ withTimezone: true }),

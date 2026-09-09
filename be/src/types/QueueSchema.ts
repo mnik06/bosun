@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { PlanQuestionSchema } from 'src/types/PlanSchema';
 
 // `provisioning` is a real state, not a nicety: creating a worktree is a command
 // sent to a machine that may be offline, so a queue exists in the browser before
@@ -65,6 +66,8 @@ export const SliceRunSchema = z.object({
 	sliceId: z.string(),
 	ordinal: z.number().int(),
 	status: SliceRunStatusSchema,
+	questionId: z.string().nullable(),
+	question: z.array(PlanQuestionSchema).nullable(),
 	commitSha: z.string().nullable(),
 	failureReason: z.string().nullable(),
 	startedAt: z.coerce.date().nullable(),
