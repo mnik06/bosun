@@ -2,6 +2,7 @@ import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import { type DbOrTx } from 'src/services/drizzle/drizzle.service';
 import { plans } from 'src/services/drizzle/schema';
 import { PlanSchema, type Plan, type PlanStatus } from 'src/types/PlanSchema';
+import { type PlanSummary } from 'src/types/PlanSummarySchema';
 
 export const planColumns = {
 	id: plans.id,
@@ -17,6 +18,8 @@ export const planColumns = {
 	confirmedAt: plans.confirmedAt,
 	failureReason: plans.failureReason,
 	input: plans.input,
+	summary: plans.summary,
+	summarisedAt: plans.summarisedAt,
 	createdAt: plans.createdAt
 };
 
@@ -139,6 +142,23 @@ export function getPlanRepo(db: DbOrTx) {
 				.returning(planColumns);
 
 			return rows.map((row) => PlanSchema.parse(row));
+		},
+
+		// Not part of `update`: it is written by a different session at a different
+		// time from everything else on the row, and folding it in would let a plan
+		// edit silently blank a summary by omitting the field.
+		async saveSummary(opts: {
+			id: string;
+			summary: PlanSummary;
+			now: Date;
+		}): Promise<Plan | null> {
+			const [row] = await db
+				.update(plans)
+				.set({ summary: opts.summary, summarisedAt: opts.now })
+				.where(eq(plans.id, opts.id))
+				.returning(planColumns);
+
+			return row ? PlanSchema.parse(row) : null;
 		},
 
 		async deleteOwned(opts: { id: string; projectId: string }): Promise<boolean> {

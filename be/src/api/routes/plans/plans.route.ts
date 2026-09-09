@@ -47,6 +47,7 @@ const routes: FastifyPluginAsync = async function (f) {
 	fastify.get('/', { schema: { response: { 200: PlanListRespSchema } } }, async (req) => {
 		return listPlans({
 			planRepo: fastify.repos.planRepo,
+			queueItemRepo: fastify.repos.queueItemRepo,
 			projectId: req.membership!.projectId
 		});
 	});
@@ -61,6 +62,10 @@ const routes: FastifyPluginAsync = async function (f) {
 		},
 		async (req) => {
 			return getPlanDetail({
+				queueRepo: fastify.repos.queueRepo,
+				queueItemRepo: fastify.repos.queueItemRepo,
+				sliceRunRepo: fastify.repos.sliceRunRepo,
+				runActivity: fastify.services.runActivity,
 				planRepo: fastify.repos.planRepo,
 				planMessageRepo: fastify.repos.planMessageRepo,
 				planBlockerRepo: fastify.repos.planBlockerRepo,

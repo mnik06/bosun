@@ -7,6 +7,7 @@ import { markMachineOnline } from 'src/controllers/machines/mark-machine-online'
 import { saveMachinePreflight } from 'src/controllers/machines/save-machine-preflight';
 import { failMachinePlans } from 'src/controllers/plans/fail-machine-plans';
 import { pauseMachineQueues } from 'src/controllers/queues/pause-machine-queues';
+import { stallMachineRuns } from 'src/controllers/queues/stall-machine-runs';
 import { schedulerDeps } from 'src/controllers/queues/scheduler-deps';
 import { type SocketRegistry } from 'src/services/sockets/registry.service';
 import { type Machine } from 'src/types/MachineSchema';
@@ -113,6 +114,10 @@ export async function applyMachineFrame(opts: {
 	fastify: FastifyInstance;
 	machineId: string;
 	socket: WebSocket;
+	// When this socket was registered, not when the frame arrived: it is what
+	// separates the work this connection was given from the work the one before it
+	// took to its grave.
+	connectedAt: Date;
 	msg: Extract<AgentMsg, { type: 'hello' | 'preflight' }>;
 	log: FastifyBaseLogger;
 }): Promise<void> {
@@ -143,6 +148,17 @@ export async function applyMachineFrame(opts: {
 	}
 
 	announceUpdate({ socketRegistry, machine });
+
+	// Before anything else this connection is told to do. The agent killed every
+	// session it was holding when its last socket closed, so whatever is still
+	// `running` here died with that socket — and a reconnect fast enough to keep
+	// the registry slot means `handleClose` bailed and nobody settled it.
+	if (opts.msg.type === 'hello') {
+		await stallMachineRuns(schedulerDeps(opts.fastify), {
+			machineId: machine.id,
+			connectedAt: opts.connectedAt
+		});
+	}
 
 	// Offered only when the operator asked for it. A connect-triggered upgrade
 	// would push a new build to every machine the moment it reconnects, which
@@ -252,6 +268,10 @@ function handleClose(opts: {
 const routes: FastifyPluginAsync = async function (fastify) {
 	fastify.get('/ws', { websocket: true }, (socket, request) => {
 		const { machineId, projectId } = request.agent!;
+		// Taken before the socket is registered, so a run dispatched over it can only
+		// ever be newer than this instant — which is what lets `hello` tell the runs
+		// this connection was handed from the ones the previous connection stranded.
+		const connectedAt = new Date();
 
 		fastify.services.socketRegistry.registerAgentSocket({ machineId, socket });
 		const stopHeartbeat = startHeartbeat({
@@ -270,7 +290,15 @@ const routes: FastifyPluginAsync = async function (fastify) {
 			}
 
 			const handle = async () =>
-				handleAgentFrame({ fastify, machineId, projectId, socket, msg, log: request.log });
+				handleAgentFrame({
+					fastify,
+					machineId,
+					projectId,
+					socket,
+					connectedAt,
+					msg,
+					log: request.log
+				});
 
 			if (isPlanFrame(msg) || isExecFrame(msg)) {
 				enqueue(handle);

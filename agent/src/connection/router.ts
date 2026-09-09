@@ -2,6 +2,7 @@ import WebSocket from 'ws';
 import { type AskSessions } from '../ask/session';
 import { type ExecutionSessions } from '../execution/session';
 import { type PlanningSessions } from '../planning/session';
+import { type SummarySessions } from '../summary/session';
 import { ServerMsgSchema, type ServerMsg } from '../protocol';
 import { type Services } from '../services/index';
 
@@ -38,6 +39,7 @@ export interface RouterDeps {
 	state: AgentState;
 	sessions: PlanningSessions;
 	executions: ExecutionSessions;
+	summaries: SummarySessions;
 	asks: AskSessions;
 	announce: (reason: 'connect' | 'refresh') => Promise<void>;
 	onUpgrade: (opts: { version: string; downloadBaseUrl: string }) => Promise<void>;
@@ -147,6 +149,11 @@ export async function routeServerFrame(deps: RouterDeps, msg: ServerMsg): Promis
 
 		case 'queue.ask':
 			await deps.asks.ask(msg);
+
+			return;
+
+		case 'queue.summarize':
+			await deps.summaries.start(msg);
 
 			return;
 

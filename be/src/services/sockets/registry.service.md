@@ -74,6 +74,19 @@ frames at 30s is a 60s worst case, and the machine has to be offline within 45s.
 close event of an evicted socket arrives after its replacement has already registered, so an
 unconditional delete would drop the live connection and mark a connected machine offline.
 
+**Corollary, and it is the sharp edge of the above:** the close handler in `ws.route.ts` returns on
+that `false`, so *nothing* on the disconnect path runs for a replaced socket — not
+`markMachineOffline`, which is right, and not `pauseMachineQueues`, which is not. The agent kills
+every `claude` process it holds whenever its socket closes, replacement or no replacement, so a
+reconnect fast enough to keep the slot used to leave the bullet that died with the old socket sitting
+in the database as `running` forever. `claimNext` then refuses to take the next bullet — one worktree
+holds one session — and the queue is stuck for good rather than for a moment.
+
+The settling therefore happens on the way *in*, not on the way out: `hello` calls `stallMachineRuns`,
+because a new agent connection is itself the proof that no session survived the old one. It compares
+each run's `startedAt` against the instant the socket was registered so that a bullet dispatched over
+the *new* connection — a resume racing the hello — is not reset by the reconnect that preceded it.
+
 ## Failure modes
 
 - **Machine stuck online.** The socket is in the map but dead, and the heartbeat is not running or
@@ -89,6 +102,10 @@ unconditional delete would drop the live connection and mark a connected machine
   socket before closing it, rather than waiting for the close event, so the entry is gone by the time
   the delete returns. Relying on the close event would leave a window in which the row does not exist
   and the socket still does.
+- **A queue is `running` with nothing running.** Its bullet died with a socket that was replaced
+  before its close event landed, so the disconnect path bailed. `stallMachineRuns` on the next
+  `hello` is what settles it; if the queue is still stuck, the agent never re-announced, and the
+  agent-side `dropped <frame>: the connection is not open` line says which frame went missing.
 - **An ex-member still sees frames.** `closeUiSocketsForMember` did not run, or ran before the
   membership delete committed and the transaction then rolled back. The hang-up belongs after the
   commit for exactly that reason.

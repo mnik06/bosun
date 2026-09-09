@@ -114,6 +114,14 @@ export function getBosunApiService(deps: { serverUrl: string; machineKey?: strin
 			});
 		},
 
+		async savePlanSummary(opts: { planId: string; summary: unknown }): Promise<unknown> {
+			return post({
+				path: `/agent/plans/${opts.planId}/summary`,
+				authorized: true,
+				body: opts.summary
+			});
+		},
+
 		async markPlanAc(opts: {
 			planId: string;
 			code: string;

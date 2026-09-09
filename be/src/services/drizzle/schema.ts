@@ -13,6 +13,7 @@ import {
 import { type MachineStatus, type PreflightCheck } from 'src/types/MachineSchema';
 import { type ProjectProfile } from 'src/types/ProjectProfileSchema';
 import { type ProjectRole } from 'src/types/ProjectSchema';
+import { type PlanSummary } from 'src/types/PlanSummarySchema';
 import {
 	type PlanMessageContent,
 	type PlanMessageRole,
@@ -122,6 +123,11 @@ export const plans = pgTable(
 		confirmedAt: timestamp({ withTimezone: true }),
 		failureReason: text(),
 		input: text().notNull(),
+		// Written after the branch lands, by a session that read the diff rather
+		// than by the ones that wrote it. Survives a republish: it describes code
+		// that exists, not the plan that asked for it.
+		summary: jsonb().$type<PlanSummary>(),
+		summarisedAt: timestamp({ withTimezone: true }),
 		createdAt: timestamp({ withTimezone: true }).notNull().defaultNow()
 	},
 	(table) => [

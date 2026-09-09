@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { PlanSummarySchema } from 'src/types/PlanSummarySchema';
 
 export const PlanStatusSchema = z.enum(['planning', 'ready', 'failed']);
 
@@ -18,6 +19,8 @@ export const PlanSchema = z.object({
 	confirmedAt: z.date().nullable(),
 	failureReason: z.string().nullable(),
 	input: z.string(),
+	summary: PlanSummarySchema.nullable(),
+	summarisedAt: z.date().nullable(),
 	createdAt: z.date()
 });
 

@@ -299,6 +299,19 @@ export const QueuePublishMsgSchema = z.object({
 	body: z.string()
 });
 
+// Sent after the pull request is asked for, not instead of it: the summary is a
+// convenience and the branch is the deliverable, so a machine that cannot write
+// one still opens the PR.
+export const QueueSummarizeMsgSchema = z.object({
+	type: z.literal('queue.summarize'),
+	planId: z.string(),
+	worktreePath: z.string(),
+	branch: z.string(),
+	baseRef: z.string(),
+	planTitle: z.string(),
+	planBodyMd: z.string()
+});
+
 export const QueueWorktreeEnsureMsgSchema = z.object({
 	type: z.literal('queue.worktree.ensure'),
 	queueId: z.string(),
@@ -329,6 +342,7 @@ export const ServerMsgSchema = z.discriminatedUnion('type', [
 	ExecCancelMsgSchema,
 	ExecAnswerMsgSchema,
 	QueuePublishMsgSchema,
+	QueueSummarizeMsgSchema,
 	QueueAskMsgSchema
 ]);
 

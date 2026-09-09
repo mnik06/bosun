@@ -41,6 +41,9 @@ export async function handleAgentFrame(opts: {
 	machineId: string;
 	projectId: string;
 	socket: WebSocket;
+	// Passed through untouched for `hello`, which is the only frame that cares:
+	// see `applyMachineFrame`.
+	connectedAt: Date;
 	msg: AgentMsg;
 	log: FastifyBaseLogger;
 }): Promise<void> {

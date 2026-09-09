@@ -54,6 +54,31 @@ export function getQueueItemRepo(db: DbOrTx) {
 			return rows.map((row) => QueueItemSchema.parse(row));
 		},
 
+		// One item per plan, for the badge. A plan is normally enqueued once; when it
+		// is not, the one that has been touched most recently is the one describing
+		// what the plan is doing, and an item still waiting outranks a finished run
+		// because being re-queued is the newer intent.
+		async latestForPlans(planIds: string[]): Promise<Map<string, QueueItem>> {
+			if (planIds.length === 0) {
+				return new Map();
+			}
+
+			const rows = await db
+				.select(columns)
+				.from(queueItems)
+				.where(inArray(queueItems.planId, planIds))
+				.orderBy(sql`${queueItems.startedAt} desc nulls first`);
+			const latest = new Map<string, QueueItem>();
+
+			for (const row of rows) {
+				if (!latest.has(row.planId)) {
+					latest.set(row.planId, QueueItemSchema.parse(row));
+				}
+			}
+
+			return latest;
+		},
+
 		async getById(id: string): Promise<QueueItem | null> {
 			const [row] = await db.select(columns).from(queueItems).where(eq(queueItems.id, id));
 

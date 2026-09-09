@@ -4,6 +4,42 @@ export const PlanStatusSchema = z.enum(['planning', 'ready', 'failed'])
 
 export type PlanStatus = z.infer<typeof PlanStatusSchema>
 
+// What the plan is doing, derived by the backend from the plan row and its
+// latest queue item. Optional because this app and the backend deploy
+// separately; the badge falls back to the raw status until one has shipped.
+export const PlanStateSchema = z.enum([
+	'planning',
+	'drafted',
+	'confirmed',
+	'queued',
+	'running',
+	'in_review',
+	'failed'
+])
+
+export type PlanState = z.infer<typeof PlanStateSchema>
+
+export const PlanSummaryEntrySchema = z.object({
+	path: z.string(),
+	kind: z.enum(['added', 'changed', 'removed']),
+	note: z.string()
+})
+
+export type PlanSummaryEntry = z.infer<typeof PlanSummaryEntrySchema>
+
+export const PlanSummarySchema = z.object({
+	headline: z.string(),
+	areas: z.array(
+		z.object({
+			name: z.string(),
+			why: z.string(),
+			entries: z.array(PlanSummaryEntrySchema)
+		})
+	)
+})
+
+export type PlanSummary = z.infer<typeof PlanSummarySchema>
+
 export const PlanSchema = z.object({
 	id: z.string(),
 	projectId: z.string(),
@@ -18,6 +54,9 @@ export const PlanSchema = z.object({
 	confirmedAt: z.iso.datetime().nullable(),
 	failureReason: z.string().nullable(),
 	input: z.string(),
+	state: PlanStateSchema.nullish().default(null),
+	summary: PlanSummarySchema.nullish().default(null),
+	summarisedAt: z.iso.datetime().nullish().default(null),
 	createdAt: z.iso.datetime()
 })
 
@@ -107,8 +146,42 @@ export const PlanDecisionSchema = z.object({
 
 export type PlanDecision = z.infer<typeof PlanDecisionSchema>
 
+// Declared here rather than borrowed from the queue slice, which this one may
+// not import. Only what the plan's execution tab renders: the queue screen shows
+// a run differently and asks for different fields.
+export const PlanRunSchema = z.object({
+	id: z.string(),
+	ordinal: z.number().int(),
+	status: z.enum(['pending', 'running', 'done', 'failed']),
+	sliceTitle: z.string(),
+	sliceKind: z.enum(['build', 'verify']),
+	activity: z.string().nullish().default(null),
+	commitSha: z.string().nullable(),
+	failureReason: z.string().nullable(),
+	startedAt: z.iso.datetime().nullable(),
+	finishedAt: z.iso.datetime().nullable()
+})
+
+export type PlanRun = z.infer<typeof PlanRunSchema>
+
+// Null until the plan has been handed to a queue.
+export const PlanExecutionSchema = z.object({
+	queueId: z.string(),
+	queueName: z.string(),
+	item: z.object({
+		status: z.enum(['queued', 'running', 'done', 'failed', 'cancelled']),
+		branch: z.string().nullable(),
+		prUrl: z.string().nullable(),
+		failureReason: z.string().nullable()
+	}),
+	runs: z.array(PlanRunSchema)
+})
+
+export type PlanExecution = z.infer<typeof PlanExecutionSchema>
+
 export const PlanDetailSchema = z.object({
 	plan: PlanSchema,
+	execution: PlanExecutionSchema.nullish().default(null),
 	messages: z.array(PlanMessageSchema),
 	acs: z.array(AcSchema),
 	slices: z.array(SliceSchema),

@@ -8,6 +8,8 @@ import { createAskSessions } from '../ask/session';
 import { createExecutionSessions } from '../execution/session';
 import { createPlanningSessions } from '../planning/session';
 import { planningPrompt, revisionPrompt } from '../prompts/planning';
+import { summaryPrompt } from '../prompts/summary';
+import { createSummarySessions } from '../summary/session';
 import { type AgentMsg } from '../protocol';
 import { type Services } from '../services/index';
 import { AGENT_VERSION } from '../version';
@@ -79,6 +81,22 @@ async function connectOnce(deps: ConnectionDeps): Promise<void> {
 		const socket = new WebSocket(socketUrl(deps.config.serverUrl), {
 			headers: { Authorization: `Bearer ${deps.config.machineKey}` }
 		});
+		// Dropped rather than queued for the next connection: closing this socket is
+		// also what kills the sessions these frames describe, so a replay would be
+		// reporting on processes that no longer exist. It is logged because a run
+		// settling into silence used to leave nothing anywhere saying so — the
+		// server settles those from its side when the agent says hello again, and
+		// this line is how the two accounts can be lined up afterwards.
+		const send = (message: AgentMsg): void => {
+			if (socket.readyState !== WebSocket.OPEN) {
+				console.error(`dropped ${message.type}: the connection is not open`);
+
+				return;
+			}
+
+			socket.send(JSON.stringify(message));
+		};
+
 		// Sessions are per-connection. A grill is answered over this socket, so one
 		// that has gone cannot deliver an answer to a question already in flight —
 		// keeping the process alive across a reconnect would only leak it.
@@ -87,28 +105,15 @@ async function connectOnce(deps: ConnectionDeps): Promise<void> {
 			services: deps.services,
 			prompt: planningPrompt,
 			revisionPrompt,
-			send: (message: AgentMsg) => {
-				if (socket.readyState === WebSocket.OPEN) {
-					socket.send(JSON.stringify(message));
-				}
-			}
+			send
 		});
-		const executions = createExecutionSessions({
+		const executions = createExecutionSessions({ services: deps.services, send });
+		const summaries = createSummarySessions({
+			config: deps.config,
 			services: deps.services,
-			send: (message: AgentMsg) => {
-				if (socket.readyState === WebSocket.OPEN) {
-					socket.send(JSON.stringify(message));
-				}
-			}
+			prompt: summaryPrompt
 		});
-		const asks = createAskSessions({
-			services: deps.services,
-			send: (message: AgentMsg) => {
-				if (socket.readyState === WebSocket.OPEN) {
-					socket.send(JSON.stringify(message));
-				}
-			}
-		});
+		const asks = createAskSessions({ services: deps.services, send });
 		const announce = createAnnouncer({ ...deps, socket });
 
 		// Exits rather than restarting itself: `Restart=on-failure` is what brings
@@ -168,6 +173,7 @@ async function connectOnce(deps: ConnectionDeps): Promise<void> {
 					state: deps.state,
 					sessions,
 					executions,
+					summaries,
 					asks,
 					announce,
 					onUpgrade
@@ -187,6 +193,7 @@ async function connectOnce(deps: ConnectionDeps): Promise<void> {
 		socket.on('error', (error) => {
 			sessions.cancelAll();
 			executions.cancelAll();
+			summaries.cancelAll();
 			asks.cancelAll();
 			settle(error);
 		});
@@ -194,6 +201,7 @@ async function connectOnce(deps: ConnectionDeps): Promise<void> {
 		socket.on('close', () => {
 			sessions.cancelAll();
 			executions.cancelAll();
+			summaries.cancelAll();
 			asks.cancelAll();
 			settle();
 		});

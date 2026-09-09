@@ -287,6 +287,24 @@ async function requestPublish(
 		}
 	});
 
+	// After the pull request, never instead of it. The branch is the deliverable
+	// and the map is a convenience, so a machine that fails to write one has still
+	// shipped the work.
+	if (plan.bodyMd) {
+		deps.socketRegistry.sendToAgent({
+			machineId: opts.queue.machineId,
+			message: {
+				type: 'queue.summarize',
+				planId: plan.id,
+				worktreePath: opts.queue.worktreePath!,
+				branch: opts.item.branch,
+				baseRef: opts.queue.baseRef,
+				planTitle: plan.title ?? 'Untitled plan',
+				planBodyMd: plan.bodyMd
+			}
+		});
+	}
+
 	// The item stays `done`: every bullet landed and the commits are on the
 	// machine, so nothing about the work is in doubt. What did not happen is the
 	// pull request, and an item that reads `done` with no `prUrl` is

@@ -24,7 +24,16 @@ export {
 	type PlanQuestion,
 	type PlanStatus,
 	type Slice,
-	type SliceKind
+	type SliceKind,
+	PlanExecutionSchema,
+	PlanRunSchema,
+	PlanStateSchema,
+	PlanSummarySchema,
+	type PlanExecution,
+	type PlanRun,
+	type PlanState,
+	type PlanSummary,
+	type PlanSummaryEntry
 } from './model/plan'
 export { PlanUiMsgSchema, type PlanUiMsg } from './model/plan-message'
 export { PlansSocketProvider } from './model/plans-socket'

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { parseServerFrame, routeServerFrame, type AgentState, type RouterDeps } from './router';
+import { type SummarySessions } from '../summary/session';
 import { type AskSessions } from '../ask/session';
 import { type ExecutionSessions } from '../execution/session';
 import { type PlanningSessions } from '../planning/session';
@@ -26,6 +27,10 @@ function build (opts?: { paused?: boolean }) {
 		cancelAll: vi.fn(),
 		running: vi.fn().mockReturnValue(0)
 	};
+	const summaries = {
+		start: vi.fn().mockResolvedValue(undefined),
+		cancelAll: vi.fn()
+	};
 	const asks = {
 		ask: vi.fn().mockResolvedValue(undefined),
 		cancelAll: vi.fn(),
@@ -40,6 +45,7 @@ function build (opts?: { paused?: boolean }) {
 		state,
 		sessions: sessions as unknown as PlanningSessions,
 		executions: executions as unknown as ExecutionSessions,
+		summaries: summaries as unknown as SummarySessions,
 		asks: asks as unknown as AskSessions,
 		announce,
 		onUpgrade

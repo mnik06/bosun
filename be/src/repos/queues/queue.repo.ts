@@ -1,4 +1,4 @@
-import { and, count, desc, eq, ne, sql } from 'drizzle-orm';
+import { and, count, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import { type DbOrTx } from 'src/services/drizzle/drizzle.service';
 import { queues } from 'src/services/drizzle/schema';
 import { QueueSchema, type Queue, type QueueStatus } from 'src/types/QueueSchema';
@@ -119,6 +119,21 @@ export function getQueueRepo(db: DbOrTx) {
 						ne(queues.status, 'failed'),
 						ne(queues.status, 'provisioning')
 					)
+				);
+
+			return rows.map((row) => QueueSchema.parse(row));
+		},
+
+		// The queues that can be holding a live session on that machine. `blocked` is
+		// in here and deliberately not in `listRunnableForMachine`: a queue waiting on
+		// a question still has a bullet in flight and a `claude` process holding the
+		// worktree, which is exactly what a caller settling stranded work has to see.
+		async listInFlightForMachine(machineId: string): Promise<Queue[]> {
+			const rows = await db
+				.select(columns)
+				.from(queues)
+				.where(
+					and(eq(queues.machineId, machineId), inArray(queues.status, ['running', 'blocked']))
 				);
 
 			return rows.map((row) => QueueSchema.parse(row));

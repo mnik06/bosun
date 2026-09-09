@@ -6,11 +6,25 @@ import {
 	PlanSchema,
 	SliceSchema
 } from 'src/types/PlanSchema';
+import { PlanStateSchema } from 'src/types/PlanStateSchema';
+import { QueueItemSchema, SliceRunDetailSchema } from 'src/types/QueueSchema';
 
-export const PlanListRespSchema = z.array(PlanSchema);
+export const PlanWithStateSchema = PlanSchema.extend({ state: PlanStateSchema });
+
+// Null until the plan has been handed to a queue. `runs` is the same shape the
+// queue screen renders, so a bullet reads the same wherever you meet it.
+export const PlanExecutionSchema = z.object({
+	queueId: z.string(),
+	queueName: z.string(),
+	item: QueueItemSchema,
+	runs: z.array(SliceRunDetailSchema)
+});
+
+export const PlanListRespSchema = z.array(PlanWithStateSchema);
 
 export const PlanDetailRespSchema = z.object({
-	plan: PlanSchema,
+	plan: PlanWithStateSchema,
+	execution: PlanExecutionSchema.nullable(),
 	messages: z.array(PlanMessageSchema),
 	acs: z.array(AcSchema),
 	slices: z.array(SliceSchema),
@@ -22,7 +36,11 @@ export const AnswerPlanRespSchema = z.object({ status: z.literal('accepted') });
 
 export const AgentPlanRespSchema = z.object({ planId: z.string() });
 
-export const AgentAcRespSchema = z.object({ code: z.string(), implemented: z.boolean(), verified: z.boolean() });
+export const AgentAcRespSchema = z.object({
+	code: z.string(),
+	implemented: z.boolean(),
+	verified: z.boolean()
+});
 
 export const AgentMachinePlansRespSchema = z.array(
 	z.object({

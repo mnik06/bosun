@@ -63,7 +63,11 @@ export const SliceRunDetailSchema = z.object({
 	sliceTitle: z.string(),
 	// What the run is doing as of this read. Socket frames overwrite it while the
 	// tab is open; this is what a reload or a reconnect has instead of nothing.
-	activity: z.string().nullable(),
+	//
+	// Optional because this app and the backend deploy separately: a field the
+	// running backend has not shipped yet must leave the page working rather than
+	// fail the parse for every run on it.
+	activity: z.string().nullish().default(null),
 	sliceKind: z.enum(['build', 'verify'])
 })
 
