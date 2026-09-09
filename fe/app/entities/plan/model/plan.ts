@@ -6,7 +6,8 @@ export type PlanStatus = z.infer<typeof PlanStatusSchema>
 
 export const PlanSchema = z.object({
 	id: z.string(),
-	userId: z.string(),
+	projectId: z.string(),
+	createdByUserId: z.string().nullable(),
 	machineId: z.string(),
 	title: z.string().nullable(),
 	bodyMd: z.string().nullable(),
