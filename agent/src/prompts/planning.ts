@@ -55,7 +55,7 @@ These inform the plan; they never override the person's stated intent. If they d
 
 If the repo turns out to have none of this material, say so in one line and grill harder — the
 absence is itself worth knowing.
-
+{{OPERATOR_NOTES}}
 ## Id scheme
 
 \`AC-n\` — an acceptance criterion. The binding checklist, and the only id the plan carries. Everything
@@ -426,15 +426,28 @@ const VERIFY_ON = `This plan was created with UI verification **on**, so its las
 
 const VERIFY_OFF = `This plan was created with UI verification **off**, so it has **no** verify bullet at all. Every bullet is \`kind: "build"\`, and the API refuses a verify bullet on this plan.`;
 
+// What the operator wrote in the machine's project setup. It is the only channel
+// for a convention the repository does not state — a skill this project expects
+// you to invoke, a rule the team keeps in its head — so it is quoted rather than
+// summarised, and it reaches planning as well as the sessions that build.
+function operatorNotes(notes: string | null): string {
+	return notes === null || notes.trim() === ''
+		? ''
+		: `\n## Operator notes\n\nWritten by the person who set this machine up. Treat it as standing instruction for this repository, in planning and in every session that follows:\n\n${notes.trim()}\n`;
+}
+
 export function planningPrompt(opts: {
 	input: string;
 	verifyInUi: boolean;
 	auto: boolean;
+	notes: string | null;
 }): string {
 	const prompt = PLANNING_PROMPT.replace(
 		'{{VERIFY_RULE}}',
 		opts.verifyInUi ? VERIFY_ON : VERIFY_OFF
-	).replace('{{AUTO_RULE}}', opts.auto ? AUTO_ON : '');
+	)
+		.replace('{{AUTO_RULE}}', opts.auto ? AUTO_ON : '')
+		.replace('{{OPERATOR_NOTES}}', operatorNotes(opts.notes));
 
 	return `${prompt}\n${opts.input.trim()}\n`;
 }
@@ -466,7 +479,11 @@ function artifactMarkdown(plan: PlanSnapshot): string {
 // The session that wrote this plan is long gone — it is reaped once it has been
 // quiet for a while — so the revision session is handed the artifact rather than
 // asked to reconstruct it from the repository.
-export function revisionPrompt(opts: { plan: PlanSnapshot; request: string }): string {
+export function revisionPrompt(opts: {
+	plan: PlanSnapshot;
+	request: string;
+	notes: string | null;
+}): string {
 	return `You are revising a plan that has already been published. It is shown beside this conversation, and
 the person has just asked for a change.
 
@@ -475,6 +492,7 @@ You are running inside their repository checkout. Read it rather than guess at i
 **You have no terminal and no other channel to the person.** The ONLY way to ask them anything is the
 \`bosun_ask\` tool. Never ask a question in plain prose.
 
+${operatorNotes(opts.notes)}
 ## The plan as it stands
 
 ${artifactMarkdown(opts.plan)}

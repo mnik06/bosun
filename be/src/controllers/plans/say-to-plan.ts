@@ -1,6 +1,7 @@
 import { HttpError } from 'src/api/errors/HttpError';
 import { getOwnedPlan } from 'src/controllers/plans/shared/plan-access';
 import { announcePlan, announcePlanMessage } from 'src/controllers/plans/shared/plan-broadcast';
+import { type MachineRepo } from 'src/repos/machines/machine.repo';
 import { type AcRepo } from 'src/repos/plans/ac.repo';
 import { type PlanMessageRepo } from 'src/repos/plans/plan-message.repo';
 import { type PlanRepo } from 'src/repos/plans/plan.repo';
@@ -17,6 +18,7 @@ export async function sayToPlan(opts: {
 	planMessageRepo: PlanMessageRepo;
 	acRepo: AcRepo;
 	sliceRepo: SliceRepo;
+	machineRepo: MachineRepo;
 	idService: IdService;
 	socketRegistry: SocketRegistry;
 	id: string;
@@ -57,9 +59,10 @@ export async function sayToPlan(opts: {
 		}
 	}
 
-	const [acs, slices] = await Promise.all([
+	const [acs, slices, machine] = await Promise.all([
 		opts.acRepo.listByPlan(plan.id),
-		opts.sliceRepo.listByPlan(plan.id)
+		opts.sliceRepo.listByPlan(plan.id),
+		opts.machineRepo.getById(plan.machineId)
 	]);
 	const ordinalOf = new Map(slices.map((slice) => [slice.id, slice.ordinal]));
 
@@ -69,6 +72,7 @@ export async function sayToPlan(opts: {
 			type: 'plan.say',
 			planId: plan.id,
 			text: opts.text,
+			notes: machine?.projectProfile?.notes ?? null,
 			plan: {
 				verifyInUi: plan.verifyInUi,
 				auto: plan.auto,

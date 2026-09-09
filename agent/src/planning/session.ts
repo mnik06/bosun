@@ -43,8 +43,14 @@ export interface PlanningSessions {
 		input: string;
 		verifyInUi: boolean;
 		auto: boolean;
+		notes: string | null;
 	}): Promise<void>;
-	say(opts: { planId: string; text: string; plan: PlanSnapshot }): Promise<void>;
+	say(opts: {
+		planId: string;
+		text: string;
+		notes: string | null;
+		plan: PlanSnapshot;
+	}): Promise<void>;
 	answer(opts: { planId: string; questionId: string; answers: PlanAnswer[] }): void;
 	cancel(planId: string): void;
 	cancelAll(): void;
@@ -55,8 +61,17 @@ export function createPlanningSessions(opts: {
 	config: AgentConfig;
 	services: Services;
 	send: (message: AgentMsg) => void;
-	prompt: (opts: { input: string; verifyInUi: boolean; auto: boolean }) => string;
-	revisionPrompt: (opts: { plan: PlanSnapshot; request: string }) => string;
+	prompt: (opts: {
+		input: string;
+		verifyInUi: boolean;
+		auto: boolean;
+		notes: string | null;
+	}) => string;
+	revisionPrompt: (opts: {
+		plan: PlanSnapshot;
+		request: string;
+		notes: string | null;
+	}) => string;
 }): PlanningSessions {
 	const sessions = new Map<string, Session>();
 
@@ -222,7 +237,8 @@ export function createPlanningSessions(opts: {
 				opts.prompt({
 					input: payload.input,
 					verifyInUi: payload.verifyInUi,
-					auto: payload.auto
+					auto: payload.auto,
+					notes: payload.notes
 				}),
 				payload.auto
 			);
@@ -245,7 +261,11 @@ export function createPlanningSessions(opts: {
 			// flag, because the agent holds no plan state between sessions.
 			await spawnFor(
 				payload.planId,
-				opts.revisionPrompt({ plan: payload.plan, request: payload.text }),
+				opts.revisionPrompt({
+					plan: payload.plan,
+					request: payload.text,
+					notes: payload.notes
+				}),
 				payload.plan.auto
 			);
 		},

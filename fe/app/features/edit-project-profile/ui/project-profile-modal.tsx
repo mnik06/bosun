@@ -6,8 +6,16 @@ import { useSaveProjectProfile } from '~/features/edit-project-profile/api/use-s
 
 const AGENT_DECIDES = 'Leave it empty and the agent works it out from the repository itself.'
 
-function trimmed (value: string): string | null {
-	return value.trim() === '' ? null : value.trim()
+// Kept exactly as typed. Trimming on every keystroke ate the space the moment
+// it was pressed, so "pnpm install" could not be typed at all. The trim belongs
+// at the save, where a trailing space is a mistake rather than a word in
+// progress.
+function typed (value: string): string | null {
+	return value === '' ? null : value
+}
+
+function trimmedOrNull (value: string | null): string | null {
+	return value === null || value.trim() === '' ? null : value.trim()
 }
 
 function ProfileForm ({ machine, onDone }: { machine: Machine, onDone: () => void }) {
@@ -45,7 +53,7 @@ function ProfileForm ({ machine, onDone }: { machine: Machine, onDone: () => voi
 						placeholder="pnpm db:migration:run"
 						value={draft.migrationCommand ?? ''}
 						onChange={(event) => {
-							field('migrationCommand', trimmed(event.currentTarget.value))
+							field('migrationCommand', typed(event.currentTarget.value))
 						}}
 					/>
 				) : null}
@@ -57,7 +65,7 @@ function ProfileForm ({ machine, onDone }: { machine: Machine, onDone: () => voi
 				placeholder="pnpm install"
 				value={draft.setupCommand ?? ''}
 				onChange={(event) => {
-					field('setupCommand', trimmed(event.currentTarget.value))
+					field('setupCommand', typed(event.currentTarget.value))
 				}}
 			/>
 
@@ -67,7 +75,7 @@ function ProfileForm ({ machine, onDone }: { machine: Machine, onDone: () => voi
 				placeholder="pnpm dev"
 				value={draft.startCommand ?? ''}
 				onChange={(event) => {
-					field('startCommand', trimmed(event.currentTarget.value))
+					field('startCommand', typed(event.currentTarget.value))
 				}}
 			/>
 
@@ -77,7 +85,7 @@ function ProfileForm ({ machine, onDone }: { machine: Machine, onDone: () => voi
 				placeholder="test-files/creds.md"
 				value={draft.testCredentialsPath ?? ''}
 				onChange={(event) => {
-					field('testCredentialsPath', trimmed(event.currentTarget.value))
+					field('testCredentialsPath', typed(event.currentTarget.value))
 				}}
 			/>
 
@@ -88,14 +96,24 @@ function ProfileForm ({ machine, onDone }: { machine: Machine, onDone: () => voi
 				minRows={2}
 				value={draft.notes ?? ''}
 				onChange={(event) => {
-					field('notes', trimmed(event.currentTarget.value))
+					field('notes', typed(event.currentTarget.value))
 				}}
 			/>
 
 			<Button
 				loading={save.isPending}
 				onClick={() => {
-					save.mutate(draft, { onSuccess: onDone })
+					save.mutate(
+						{
+							...draft,
+							migrationCommand: trimmedOrNull(draft.migrationCommand),
+							setupCommand: trimmedOrNull(draft.setupCommand),
+							startCommand: trimmedOrNull(draft.startCommand),
+							testCredentialsPath: trimmedOrNull(draft.testCredentialsPath),
+							notes: trimmedOrNull(draft.notes)
+						},
+						{ onSuccess: onDone }
+					)
 				}}
 			>
 				Save

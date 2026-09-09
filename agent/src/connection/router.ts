@@ -92,13 +92,19 @@ export async function routeServerFrame(deps: RouterDeps, msg: ServerMsg): Promis
 				planId: msg.planId,
 				input: msg.input,
 				verifyInUi: msg.verifyInUi,
-				auto: msg.auto
+				auto: msg.auto,
+				notes: msg.notes
 			});
 
 			return;
 
 		case 'plan.say':
-			await deps.sessions.say({ planId: msg.planId, text: msg.text, plan: msg.plan });
+			await deps.sessions.say({
+				planId: msg.planId,
+				text: msg.text,
+				notes: msg.notes,
+				plan: msg.plan
+			});
 
 			return;
 

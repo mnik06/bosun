@@ -86,7 +86,8 @@ export async function startPlan(opts: {
 			planId: plan.id,
 			input: opts.input,
 			verifyInUi: opts.verifyInUi,
-			auto: opts.auto
+			auto: opts.auto,
+			notes: machine.projectProfile?.notes ?? null
 		}
 	});
 

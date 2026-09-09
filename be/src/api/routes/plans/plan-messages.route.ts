@@ -25,6 +25,7 @@ const routes: FastifyPluginAsync = async function (f) {
 				planMessageRepo: fastify.repos.planMessageRepo,
 				acRepo: fastify.repos.acRepo,
 				sliceRepo: fastify.repos.sliceRepo,
+				machineRepo: fastify.repos.machineRepo,
 				idService: fastify.services.idService,
 				socketRegistry: fastify.services.socketRegistry,
 				id: req.params.id,

@@ -209,7 +209,12 @@ export const PlanStartMsgSchema = z.object({
 	planId: z.string(),
 	input: z.string(),
 	verifyInUi: z.boolean().default(true),
-	auto: z.boolean().default(false)
+	auto: z.boolean().default(false),
+	// The operator's notes from the machine's project setup. Planning gets them
+	// for the same reason execution does: a convention nobody can read off the
+	// code — a skill this repository expects a session to invoke, a rule the team
+	// keeps in its head — is exactly what a session cannot discover for itself.
+	notes: z.string().nullable().default(null)
 });
 
 // The published plan as it stands, carried on the frame rather than fetched:
@@ -246,6 +251,7 @@ export const PlanSayMsgSchema = z.object({
 	type: z.literal('plan.say'),
 	planId: z.string(),
 	text: z.string(),
+	notes: z.string().nullable().default(null),
 	plan: PlanSnapshotSchema
 });
 

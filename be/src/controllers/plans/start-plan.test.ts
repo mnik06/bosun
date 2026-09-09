@@ -120,7 +120,7 @@ describe('startPlan refusals', () => {
 			expect.objectContaining({ role: 'user', content: { text: 'make the thing' } })
 		);
 		expect(socket?.send).toHaveBeenCalledWith(
-			JSON.stringify({ type: 'plan.start', planId: 'p_1', input: 'make the thing' })
+			JSON.stringify({ type: 'plan.start', planId: 'p_1', input: 'make the thing', notes: null })
 		);
 	});
 });
