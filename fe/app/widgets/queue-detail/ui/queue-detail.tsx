@@ -1,21 +1,19 @@
-import { Alert, Card, Center, Group, Loader, Stack, Text, Title } from '@mantine/core'
+import { Alert, Center, Loader, Tabs } from '@mantine/core'
+import { useDisclosure, useMediaQuery } from '@mantine/hooks'
 import { useQueryClient } from '@tanstack/react-query'
-import { Plus } from 'lucide-react'
-import { Button } from '@mantine/core'
-import { useDisclosure } from '@mantine/hooks'
+import { useState } from 'react'
 
 import { useQueueAnswer, useRunActivity } from '~/entities/machine'
-import { QueueStatusBadge, queueElapsedMs, queueKeys, useQueueDetailQuery } from '~/entities/queue'
+import { queueElapsedMs, queueKeys, useQueueDetailQuery } from '~/entities/queue'
 import { RunQuestionPanel } from '~/features/answer-run'
 import { QueueChat } from '~/features/ask-queue'
-import { QueueControls } from '~/features/control-queue'
 import { EnqueuePlansModal } from '~/features/enqueue-plans'
-import { KillQueueButton } from '~/features/kill-queue'
-import { AfkSwitch } from '~/features/toggle-afk'
 import { apiClient } from '~/shared/api'
 import { useNow } from '~/shared/hooks'
 import { formatDuration, notifyError, toErrorMessage } from '~/shared/lib'
-import { QueueItemCard } from '~/widgets/queue-detail/ui/queue-item-card'
+import { SplitPane } from '~/shared/ui'
+import { QueueHeader } from '~/widgets/queue-detail/ui/queue-header'
+import { QueueWork } from '~/widgets/queue-detail/ui/queue-work'
 
 export function QueueDetail ({ queueId }: { queueId: string }) {
 	const { data, isPending, error } = useQueueDetailQuery(queueId)
@@ -24,6 +22,10 @@ export function QueueDetail ({ queueId }: { queueId: string }) {
 	const queryClient = useQueryClient()
 	const now = useNow()
 	const [opened, { open, close }] = useDisclosure(false)
+	const [tab, setTab] = useState<string | null>('work')
+	// Read synchronously rather than in an effect: the two layouts are different
+	// enough that settling into the right one a frame later reads as a glitch.
+	const wide = useMediaQuery('(width >= 48em)', true, { getInitialValueInEffect: false })
 
 	const runningRun = data?.items
 		.flatMap((item) => item.runs)
@@ -59,77 +61,74 @@ export function QueueDetail ({ queueId }: { queueId: string }) {
 			})
 	}
 
-	return (
-		<Stack gap="lg">
-			{/* Stacked below `sm` rather than left to `Group` to wrap: a queue name is
-			    long enough to fill the row on its own, and the four controls need a
-			    line of their own before they will fit a phone. */}
-			<div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-				<Stack gap={4} className="min-w-0 grow">
-					<Group gap="sm">
-						<Title order={2} className="min-w-0 break-words">
-							{data.queue.name}
-						</Title>
-						<QueueStatusBadge
-							status={data.queue.status}
-							pausing={runningRun !== undefined}
-						/>
-					</Group>
-					<Text size="xs" c="dimmed" truncate className="font-mono">
-						{data.queue.worktreePath ?? 'no worktree yet'}
-						{data.queue.baseRef === null ? '' : ` · from ${data.queue.baseRef}`}
-						{` · ${formatDuration(queueElapsedMs({ items: data.items, now }))} of work`}
-					</Text>
-				</Stack>
+	const work = (
+		<div className="min-h-0 grow overflow-y-auto pr-2">
+			<QueueWork items={data.items} activity={activity} now={now} onRemove={remove} />
+		</div>
+	)
 
-				<Group gap="xs" align="center" className="shrink-0">
-					<AfkSwitch queue={data.queue} />
-					<QueueControls queue={data.queue} running={runningRun !== undefined} />
-					<KillQueueButton queue={data.queue} goHome />
-					<Button variant="light" size="xs" leftSection={<Plus size={14} />} onClick={open}>
-						Add plans
-					</Button>
-				</Group>
-			</div>
+	const chat = (
+		<div className="flex min-h-0 grow flex-col">
+			<QueueChat queueId={queueId} messages={data.messages} streaming={streaming} />
+		</div>
+	)
+
+	const active = tab === 'chat' ? 'chat' : 'work'
+
+	// The page owns the viewport: the panes scroll, the page never does. Without
+	// it the chat is the last child of a column of run cards, and reaching it
+	// means scrolling past the whole queue.
+	return (
+		<div className="flex h-[var(--app-content-height)] min-h-0 flex-col gap-3 overflow-hidden">
+			<QueueHeader
+				queue={data.queue}
+				running={runningRun !== undefined}
+				subtitle={`${data.queue.worktreePath ?? 'no worktree yet'}${
+					data.queue.baseRef === null ? '' : ` · from ${data.queue.baseRef}`
+				} · ${formatDuration(queueElapsedMs({ items: data.items, now }))} of work`}
+				onAddPlans={open}
+			/>
 
 			{data.queue.failureReason === null ? null : (
-				<Alert color="red" variant="light">
+				<Alert color="red" variant="light" className="shrink-0">
 					{data.queue.failureReason}
 				</Alert>
 			)}
 
+			{/* Above the panes and never inside one: the queue is blocked on this,
+			    and a tab away is a tab it can be missed on. Capped so a long list of
+			    options cannot squeeze the panes to nothing. */}
 			{asking?.questionId == null || asking.question === null ? null : (
-				<RunQuestionPanel
-					runId={asking.id}
-					questionId={asking.questionId}
-					questions={asking.question}
+				<div className="max-h-2/5 shrink-0 overflow-y-auto">
+					<RunQuestionPanel
+						runId={asking.id}
+						questionId={asking.questionId}
+						questions={asking.question}
+					/>
+				</div>
+			)}
+
+			{wide ? (
+				<SplitPane
+					initial={0.6}
+					left={<div className="flex min-h-0 grow flex-col">{work}</div>}
+					right={<div className="flex min-h-0 grow flex-col pl-2">{chat}</div>}
 				/>
-			)}
-
-			{data.items.length === 0 ? (
-				<Card withBorder padding="md" radius="md">
-					<Text size="sm" c="dimmed">
-						Nothing queued. Add a finished plan and it runs here, bullet by bullet, on a branch of
-						its own.
-					</Text>
-				</Card>
 			) : (
-				<Stack gap="md">
-					{data.items.map((item) => (
-						<QueueItemCard
-							key={item.id}
-							item={item}
-							activity={activity}
-							now={now}
-							onRemove={remove}
-						/>
-					))}
-				</Stack>
-			)}
+				<Tabs value={active} onChange={setTab} className="flex min-h-0 grow flex-col">
+					<Tabs.List mb="sm">
+						<Tabs.Tab value="work">Work</Tabs.Tab>
+						<Tabs.Tab value="chat">Chat</Tabs.Tab>
+					</Tabs.List>
 
-			<QueueChat queueId={queueId} messages={data.messages} streaming={streaming} />
+					{/* Rendered by hand rather than through Tabs.Panel: the panel is
+					    hidden with a display rule, which fights the flex column the
+					    scrolling panes are laid out in. */}
+					{active === 'chat' ? chat : work}
+				</Tabs>
+			)}
 
 			<EnqueuePlansModal queue={data.queue} opened={opened} onClose={close} />
-		</Stack>
+		</div>
 	)
 }

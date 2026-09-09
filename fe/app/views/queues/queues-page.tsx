@@ -11,11 +11,18 @@ import { Page } from '~/shared/ui'
 
 function QueueCard ({ queue, machineName }: { queue: Queue, machineName: string }) {
 	return (
-		<Card withBorder padding="md" radius="md">
+		<Card withBorder padding="md" radius="md" className="relative">
 			<Group justify="space-between" align="start" gap="sm">
 				<Stack gap={2} className="min-w-0 grow">
 					<Group gap="xs" wrap="wrap">
-						<Anchor component={Link} to={`/queues/${queue.id}`} fw={600}>
+						{/* The pseudo-element covers the card, so the row is one big target
+						    and the accessible name is still the queue's own link. */}
+						<Anchor
+							component={Link}
+							to={`/queues/${queue.id}`}
+							fw={600}
+							className="after:absolute after:inset-0"
+						>
 							{queue.name}
 						</Anchor>
 						<QueueStatusBadge status={queue.status} />
@@ -38,7 +45,8 @@ function QueueCard ({ queue, machineName }: { queue: Queue, machineName: string 
 					)}
 				</Stack>
 
-				<Group gap="xs" wrap="nowrap" className="shrink-0">
+				{/* `relative` lifts the controls out from under the stretched link. */}
+				<Group gap="xs" wrap="nowrap" className="relative shrink-0">
 					<QueueControls queue={queue} />
 					<KillQueueButton queue={queue} />
 				</Group>

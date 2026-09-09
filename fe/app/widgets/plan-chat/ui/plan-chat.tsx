@@ -58,20 +58,22 @@ export function PlanChat ({
 
 			{/* Always here, whatever the plan's status. A ready plan is revised by
 			    saying so, and a running one takes a correction mid-grill. */}
-			<PlanComposer
-				planId={plan.id}
-				busy={plan.status === 'planning'}
-				answering={answer.isPending}
-				onAnswer={
-					open === null
-						? undefined
-						: async (text) =>
-							answer.mutateAsync({
-								questionId: open.questionId,
-								answers: [{ selected: [text] }]
-							})
-				}
-			/>
+			<div className="shrink-0 px-1 pb-1">
+				<PlanComposer
+					planId={plan.id}
+					busy={plan.status === 'planning'}
+					answering={answer.isPending}
+					onAnswer={
+						open === null
+							? undefined
+							: async (text) =>
+								answer.mutateAsync({
+									questionId: open.questionId,
+									answers: [{ selected: [text] }]
+								})
+					}
+				/>
+			</div>
 		</div>
 	)
 }

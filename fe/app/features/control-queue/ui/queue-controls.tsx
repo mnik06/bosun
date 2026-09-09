@@ -10,20 +10,20 @@ const PAUSABLE = new Set(['idle', 'running', 'blocked'])
 
 export function QueueControls ({
 	queue,
-	// True when a bullet is actually in flight. Only the queue page knows that —
-	// the list has the queue row and not its runs — and it decides whether pausing
-	// needs a warning or is a no-op between bullets.
-	running = false
+	// Whether a bullet is actually in flight. Only the queue page knows that — the
+	// list has the queue row and not its runs — so leaving it out means "unknown",
+	// and unknown asks.
+	running
 }: {
 	queue: Queue,
 	running?: boolean
 }) {
 	const control = useControlQueue({ queueId: queue.id, machineId: queue.machineId })
 
-	// Pausing mid-bullet throws that attempt away, so it asks. Between bullets
-	// there is nothing to lose and nothing to confirm.
+	// Pausing mid-bullet throws that attempt away, so it asks. Only a caller that
+	// has looked at the runs may skip the question, and it skips it by saying so.
 	const pause = () => {
-		if (!running) {
+		if (running === false) {
 			control.mutate('pause')
 
 			return
@@ -35,7 +35,9 @@ export function QueueControls ({
 			labels: { confirm: 'Pause the queue', cancel: 'Let it carry on' },
 			confirmProps: { color: 'yellow' },
 			children:
-				'The bullet running now is killed where it stands. Resuming runs that same bullet again from its last commit — what this attempt had written and not committed is discarded.',
+				running === true
+					? 'The bullet running now is killed where it stands. Resuming runs that same bullet again from its last commit — what this attempt had written and not committed is discarded.'
+					: 'A bullet in flight is killed where it stands. Resuming runs that same bullet again from its last commit — what the killed attempt had written and not committed is discarded.',
 			onConfirm: () => {
 				control.mutate('pause')
 			}
