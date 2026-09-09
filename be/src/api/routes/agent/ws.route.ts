@@ -156,7 +156,8 @@ export async function applyMachineFrame(opts: {
 	if (opts.msg.type === 'hello') {
 		await stallMachineRuns(schedulerDeps(opts.fastify), {
 			machineId: machine.id,
-			connectedAt: opts.connectedAt
+			connectedAt: opts.connectedAt,
+			heldRunIds: opts.msg.runIds
 		});
 	}
 

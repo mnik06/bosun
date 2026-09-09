@@ -1,10 +1,65 @@
-import { Alert, Card, Center, Checkbox, Group, Loader, Stack, Text } from '@mantine/core'
+import { Alert, Card, Center, Checkbox, Group, Loader, Stack, Text, Tooltip } from '@mantine/core'
 import { Link } from 'react-router'
 
 import { useMachinesQuery } from '~/entities/machine'
-import { PlanStatusBadge, usePlansQuery } from '~/entities/plan'
+import { planQueueRefusal, PlanStatusBadge, usePlansQuery, type Plan } from '~/entities/plan'
 import { DeletePlanAction } from '~/features/delete-plan'
 import { formatRelativeTime, toErrorMessage } from '~/shared/lib'
+
+function PlanRow ({
+	plan,
+	machineName,
+	checked,
+	onToggle
+}: {
+	plan: Plan,
+	machineName: string,
+	checked: boolean,
+	onToggle: (next: boolean) => void
+}) {
+	// The same rule the push endpoint enforces, so the checkbox never offers
+	// something the API is going to refuse.
+	const refusal = planQueueRefusal(plan)
+
+	return (
+		<Group gap="sm" align="center" wrap="nowrap">
+			<Tooltip label={refusal ?? ''} disabled={refusal === null}>
+				<Checkbox
+					aria-label={`Select ${plan.title ?? 'plan'}`}
+					checked={checked}
+					disabled={refusal !== null}
+					onChange={(event) => {
+						onToggle(event.currentTarget.checked)
+					}}
+				/>
+			</Tooltip>
+
+			<Card
+				className="grow"
+				withBorder
+				padding="md"
+				radius="md"
+				component={Link}
+				to={`/plans/${plan.id}`}
+			>
+				<Group justify="space-between" wrap="nowrap" align="start">
+					<Stack gap={2} className="min-w-0">
+						<Text fw={600} truncate>
+							{plan.title ?? 'Untitled'}
+						</Text>
+						<Text size="xs" c="dimmed">
+							{machineName} · {formatRelativeTime(plan.createdAt)}
+						</Text>
+					</Stack>
+					<Group gap="xs" wrap="nowrap">
+						<PlanStatusBadge plan={plan} />
+						<DeletePlanAction planId={plan.id} title={`#${plan.number}`} />
+					</Group>
+				</Group>
+			</Card>
+		</Group>
+	)
+}
 
 // Selection is the page's, not the list's: the button that acts on it lives in
 // the page header beside New plan, and two copies of the same state is how they
@@ -46,49 +101,20 @@ export function PlansList ({
 	return (
 		<Stack gap="sm">
 			{data.map((plan) => (
-				<Group key={plan.id} gap="sm" align="center" wrap="nowrap">
-					<Checkbox
-						aria-label={`Select ${plan.title ?? 'plan'}`}
-						checked={selected.includes(plan.id)}
-						// Only a finished, confirmed plan has tracer bullets somebody has
-						// agreed to: queueing one still being grilled would put an empty
-						// plan on a worktree, and an unconfirmed one is refused anyway.
-						disabled={plan.status !== 'ready' || plan.confirmedAt === null}
-						onChange={(event) => {
-							onSelectedChange(
-								event.currentTarget.checked
-									? [...selected, plan.id]
-									: selected.filter((id) => id !== plan.id)
-							)
-						}}
-					/>
-
-					<Card
-						className="grow"
-						withBorder
-						padding="md"
-						radius="md"
-						component={Link}
-						to={`/plans/${plan.id}`}
-					>
-						<Group justify="space-between" wrap="nowrap" align="start">
-							<Stack gap={2} className="min-w-0">
-								<Text fw={600} truncate>
-									{plan.title ?? 'Untitled'}
-								</Text>
-								<Text size="xs" c="dimmed">
-									{machines.data?.find((machine) => machine.id === plan.machineId)?.name ??
-									plan.machineId}{' '}
-								· {formatRelativeTime(plan.createdAt)}
-								</Text>
-							</Stack>
-							<Group gap="xs" wrap="nowrap">
-								<PlanStatusBadge plan={plan} />
-								<DeletePlanAction planId={plan.id} title={`#${plan.number}`} />
-							</Group>
-						</Group>
-					</Card>
-				</Group>
+				<PlanRow
+					key={plan.id}
+					plan={plan}
+					machineName={
+						machines.data?.find((machine) => machine.id === plan.machineId)?.name ??
+						plan.machineId
+					}
+					checked={selected.includes(plan.id)}
+					onToggle={(next) => {
+						onSelectedChange(
+							next ? [...selected, plan.id] : selected.filter((id) => id !== plan.id)
+						)
+					}}
+				/>
 			))}
 		</Stack>
 	)

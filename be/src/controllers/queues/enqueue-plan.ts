@@ -45,6 +45,22 @@ export async function enqueuePlan(opts: {
 		throw new HttpError(400, 'That plan has not been confirmed yet');
 	}
 
+	// Two queues are two worktrees, and both would cut a branch from the same
+	// plan, run its bullets against different trees and open two pull requests for
+	// one piece of work. A finished plan is fair game — that is a re-run — but one
+	// still queued or running is not.
+	const live = await opts.queueItemRepo.latestForPlans([plan.id]);
+	const inFlight = live.get(plan.id);
+
+	if (inFlight && (inFlight.status === 'queued' || inFlight.status === 'running')) {
+		throw new HttpError(
+			409,
+			inFlight.status === 'running'
+				? 'That plan is already running in a queue'
+				: 'That plan is already waiting in a queue'
+		);
+	}
+
 	const slices = await opts.sliceRepo.listByPlan(plan.id);
 
 	if (slices.length === 0) {

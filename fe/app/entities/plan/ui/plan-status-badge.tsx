@@ -1,4 +1,4 @@
-import { Badge, Tooltip } from '@mantine/core'
+import { Badge, Loader, Tooltip } from '@mantine/core'
 
 import type { Plan, PlanState, PlanStatus } from '~/entities/plan/model/plan'
 
@@ -31,7 +31,11 @@ export function PlanStatusBadge ({ plan }: { plan: Plan }) {
 	const { label, color } = STATE_LABEL[state]
 
 	const badge = (
-		<Badge color={color} variant="light">
+		<Badge
+			color={color}
+			variant="light"
+			leftSection={state === 'running' ? <Loader size={10} color={color} /> : null}
+		>
 			{label}
 		</Badge>
 	)

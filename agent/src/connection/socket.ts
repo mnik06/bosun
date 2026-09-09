@@ -1,11 +1,12 @@
 import os from 'os';
 import WebSocket, { type RawData } from 'ws';
 import { backoffDelay, nextAttempt } from './backoff';
+import { createFrameSink, type FrameSink } from './frame-sink';
 import { UPGRADE_EXIT_CODE } from '../services/upgrade.service';
 import { parseServerFrame, routeServerFrame, type AgentState } from './router';
 import { type AgentConfig } from '../config/config';
 import { createAskSessions } from '../ask/session';
-import { createExecutionSessions } from '../execution/session';
+import { createExecutionSessions, type ExecutionSessions } from '../execution/session';
 import { createPlanningSessions } from '../planning/session';
 import { planningPrompt, revisionPrompt } from '../prompts/planning';
 import { summaryPrompt } from '../prompts/summary';
@@ -37,6 +38,10 @@ interface ConnectionDeps {
 	configPath: string;
 	services: Services;
 	state: AgentState;
+	// Both outlive the connection, which is the point of them being passed in
+	// rather than built here: see `holdConnection`.
+	sink: FrameSink;
+	executions: ExecutionSessions;
 }
 
 // What `refresh` runs is deliberately the same thing `open` runs. Everything the
@@ -57,7 +62,14 @@ function createAnnouncer(deps: ConnectionDeps & { socket: WebSocket }) {
 				agentVersion: AGENT_VERSION,
 				hostname: os.hostname(),
 				repoPath: deps.config.repoPath,
-				reason
+				reason,
+				// Every run whose outcome this agent is still going to report: the ones
+				// it is building, and the ones that settled while the connection was
+				// down and are parked in the sink. A reconnect is otherwise
+				// indistinguishable from an agent that came back with nothing, and the
+				// backend settles every run it cannot account for — which would reset
+				// the very sessions this connection was opened to keep reporting on.
+				runIds: [...new Set([...deps.executions.held(), ...deps.sink.pendingRunIds()])]
 			})
 		);
 
@@ -81,12 +93,10 @@ async function connectOnce(deps: ConnectionDeps): Promise<void> {
 		const socket = new WebSocket(socketUrl(deps.config.serverUrl), {
 			headers: { Authorization: `Bearer ${deps.config.machineKey}` }
 		});
-		// Dropped rather than queued for the next connection: closing this socket is
-		// also what kills the sessions these frames describe, so a replay would be
-		// reporting on processes that no longer exist. It is logged because a run
-		// settling into silence used to leave nothing anywhere saying so — the
-		// server settles those from its side when the agent says hello again, and
-		// this line is how the two accounts can be lined up afterwards.
+		// Dropped rather than queued, for the sessions below only: closing this
+		// socket is also what kills them, so a replay would be reporting on
+		// processes that no longer exist. Logged because a session settling into
+		// silence otherwise leaves nothing anywhere saying so.
 		const send = (message: AgentMsg): void => {
 			if (socket.readyState !== WebSocket.OPEN) {
 				console.error(`dropped ${message.type}: the connection is not open`);
@@ -97,9 +107,11 @@ async function connectOnce(deps: ConnectionDeps): Promise<void> {
 			socket.send(JSON.stringify(message));
 		};
 
-		// Sessions are per-connection. A grill is answered over this socket, so one
-		// that has gone cannot deliver an answer to a question already in flight —
-		// keeping the process alive across a reconnect would only leak it.
+		// Planning and ask sessions are per-connection. A grill is answered over
+		// this socket, so one that has gone cannot deliver an answer to a question
+		// already in flight — keeping the process alive across a reconnect would
+		// only leak it. Execution is the exception and is built in `holdConnection`:
+		// an AFK bullet needs the socket to report, not to work.
 		const sessions = createPlanningSessions({
 			config: deps.config,
 			services: deps.services,
@@ -107,7 +119,6 @@ async function connectOnce(deps: ConnectionDeps): Promise<void> {
 			revisionPrompt,
 			send
 		});
-		const executions = createExecutionSessions({ services: deps.services, send });
 		const summaries = createSummarySessions({
 			config: deps.config,
 			services: deps.services,
@@ -122,7 +133,7 @@ async function connectOnce(deps: ConnectionDeps): Promise<void> {
 			const decision = deps.services.upgrade.decide({
 				current: AGENT_VERSION,
 				target: target.version,
-				sessionsRunning: sessions.running() + executions.running()
+				sessionsRunning: sessions.running() + deps.executions.running()
 			});
 
 			console.log(`upgrade: ${decision.reason}`);
@@ -155,7 +166,13 @@ async function connectOnce(deps: ConnectionDeps): Promise<void> {
 
 			console.log(`connected to ${deps.config.serverUrl}${paused}`);
 			deps.services.upgrade.clearProbation();
+			// Announced before the sink is attached, and `announce` sends `hello`
+			// before its first await, so the backend learns which runs survived
+			// before any frame buffered during the outage arrives to describe one.
 			void announce('connect');
+			deps.sink.attach((message: AgentMsg) => {
+				socket.send(JSON.stringify(message));
+			});
 		});
 
 		socket.on('message', (raw: RawData) => {
@@ -172,7 +189,7 @@ async function connectOnce(deps: ConnectionDeps): Promise<void> {
 					configPath: deps.configPath,
 					state: deps.state,
 					sessions,
-					executions,
+					executions: deps.executions,
 					summaries,
 					asks,
 					announce,
@@ -190,17 +207,20 @@ async function connectOnce(deps: ConnectionDeps): Promise<void> {
 			);
 		});
 
+		// `executions` is deliberately absent from both: a bullet is not cancelled by
+		// the socket it happened to be dispatched over. Detaching parks its frames
+		// until the next connection instead of throwing the session away.
 		socket.on('error', (error) => {
+			deps.sink.detach();
 			sessions.cancelAll();
-			executions.cancelAll();
 			summaries.cancelAll();
 			asks.cancelAll();
 			settle(error);
 		});
 
 		socket.on('close', () => {
+			deps.sink.detach();
 			sessions.cancelAll();
-			executions.cancelAll();
 			summaries.cancelAll();
 			asks.cancelAll();
 			settle();
@@ -215,10 +235,16 @@ export async function holdConnection(opts: {
 }): Promise<never> {
 	let attempt = 0;
 	const state: AgentState = { paused: false };
+	// Outside the loop, which is the whole fix: a bullet is not tied to the socket
+	// it was dispatched over. `claude` keeps building through a backend deploy, and
+	// the sessions map plus the frames they produced while nothing was listening
+	// have to still be here when the connection comes back.
+	const sink = createFrameSink();
+	const executions = createExecutionSessions({ services: opts.services, send: sink.send });
 
 	for (;;) {
 		try {
-			await connectOnce({ ...opts, state });
+			await connectOnce({ ...opts, state, sink, executions });
 			console.log('connection closed');
 			attempt = 0;
 		} catch (error) {

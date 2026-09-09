@@ -66,6 +66,52 @@ underneath us — a repo goes dirty, a token expires, someone installs pnpm. Re-
 connect means the reconnect path and the first-connect path are the same code, and the checklist in
 the browser always describes the current machine rather than the machine as it was at enrollment.
 
+## Why execution sessions outlive the connection
+
+Planning and ask sessions are per-connection and are cancelled on close. That is not tidiness: a
+grill is a question on somebody's screen answered over *that* socket, so a session whose socket has
+gone cannot be answered at all, and keeping the process alive across a reconnect would only leak it.
+
+Execution is the exception, and it took a backend deploy killing a twenty-minute bullet to make the
+difference obvious. An AFK run needs the socket to **report**, not to **work**. `claude` is building
+in a worktree; nothing about that depends on a TCP connection to bosun existing at any given instant.
+Cancelling it on close threw away real work for a one-second blip, and the deploy path made that
+routine — every release killed whatever the fleet was mid-way through.
+
+So `createExecutionSessions` is built in `holdConnection`, outside the reconnect loop, and the socket
+handlers do not cancel it. Three things follow, and all three are load-bearing:
+
+**Frames go through a sink, not a socket.** `frame-sink.ts` holds a slot for whatever connection is
+current. `attach` on `open`, `detach` on `close` or `error`. A session started on one connection
+reports on the next one without knowing that happened.
+
+**Settling frames are buffered; the live view is dropped.** `exec.done`, `exec.error` and
+`exec.question` change what the backend believes and are replayed on the next `attach`. `exec.text`
+and `exec.activity` are the browser's live view of a running bullet — buffering those would grow
+without bound for the length of the outage and then redraw a transcript the browser already has.
+
+**`hello` carries every run whose outcome is still coming.** That is the live sessions *plus* the
+sink's parked frames — a bullet that finished during the outage has no session left holding it, but
+its `exec.done` is sitting in the buffer, and a backend that settled that run as stranded would pause
+the queue over a plan which in fact landed and hand the same bullet out again on resume. The backend
+settles every run it cannot account for (`stallMachineRuns`), so this list is the whole of what keeps
+it from resetting the sessions the reconnect was supposed to preserve. `announce` sends `hello`
+before its first `await` and the sink is attached after, so the backend learns which runs survived
+before any buffered frame arrives describing one.
+
+An answer to a question asked before the drop still lands, because the per-run MCP server is part of
+the session and survives with it. `MCP_TOOL_TIMEOUT` is 30 minutes, which is the real ceiling on how
+long the backend can be away while a bullet is blocked on a grill.
+
+**Invariant:** the agent must not name a run in `hello.runIds` unless it is either holding a process
+for it or holding its settling frame. The backend trusts that list to mean "an outcome is still
+coming" and will leave the row `running` indefinitely on the strength of it — which is the exact bug
+this whole mechanism exists to prevent, reintroduced from the other side.
+
+What still kills a bullet: an agent restart or self-upgrade (already gated — `upgrade.decide` refuses
+while sessions run), a machine reboot, an explicit pause, and a backend away for longer than the MCP
+tool timeout while a question is outstanding.
+
 ## Why the backoff is jittered
 
 Capped exponential from 1s to 30s, multiplied by a random factor between 0.7 and 1.3. The cap keeps
@@ -88,6 +134,10 @@ reconnects in about a second rather than inheriting the delay from an earlier ou
 - **`paused` is remembered across reconnects and re-announced by the backend.** The row outranks the
   socket, so an agent that restarts comes back paused; the backend re-sends `pause` after `hello`,
   which is what keeps the agent's log honest rather than silent.
+- **Execution sessions are not cancelled by a socket closing; every other kind is.** `socket.on
+  ('close')` and `socket.on('error')` cancel planning, summary and ask sessions and detach the sink.
+  Adding `executions.cancelAll()` back to either would restore the bug where a deploy kills whatever
+  the fleet is mid-way through.
 - **Frames are parsed before they are acted on.** The protocol schema is duplicated between the two
   packages on purpose; if it drifts, an unparseable frame is logged and dropped rather than
   half-handled. Silence in the logs and a dead ping button is the symptom of drift.

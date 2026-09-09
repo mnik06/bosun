@@ -21,53 +21,33 @@ function isPublished (opts: { plan: Plan, acs: Ac[], slices: Slice[] }): boolean
 	return opts.plan.title !== null && opts.acs.length > 0 && opts.slices.length > 0
 }
 
-// The execution tab appears only once the plan has been signed off: before that
-// there is nothing to run and a tab saying so is a tab nobody needs.
 function ArtifactPane ({
-	planContent,
-	executionContent,
+	children,
 	expanded,
 	onToggle
 }: {
-	planContent: React.ReactNode,
-	executionContent: React.ReactNode | null,
+	children: React.ReactNode,
 	expanded: boolean,
 	onToggle: () => void
 }) {
-	const [tab, setTab] = useState<string | null>('plan')
-
 	return (
 		<Card withBorder radius="md" padding="md" className="flex min-h-0 grow flex-col">
-			<Tabs value={tab} onChange={setTab} className="flex min-h-0 grow flex-col">
-				<Group justify="space-between" align="center" mb="sm" wrap="nowrap">
-					<Tabs.List>
-						<Tabs.Tab value="plan">The plan</Tabs.Tab>
-						{executionContent === null ? null : (
-							<Tabs.Tab value="execution">Execution</Tabs.Tab>
-						)}
-					</Tabs.List>
+			<Group justify="space-between" align="center" mb="sm">
+				<Text size="xs" c="dimmed">
+					The plan
+				</Text>
+				<Tooltip label={expanded ? 'Show the chat again' : 'Fill the page with the plan'}>
+					<ActionIcon
+						variant="subtle"
+						aria-label={expanded ? 'Collapse the plan' : 'Expand the plan'}
+						onClick={onToggle}
+					>
+						{expanded ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+					</ActionIcon>
+				</Tooltip>
+			</Group>
 
-					<Tooltip label={expanded ? 'Show the chat again' : 'Fill the page with the plan'}>
-						<ActionIcon
-							variant="subtle"
-							aria-label={expanded ? 'Collapse the plan' : 'Expand the plan'}
-							onClick={onToggle}
-						>
-							{expanded ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-						</ActionIcon>
-					</Tooltip>
-				</Group>
-
-				<Tabs.Panel value="plan" className="min-h-0 grow overflow-y-auto pr-2">
-					{planContent}
-				</Tabs.Panel>
-
-				{executionContent === null ? null : (
-					<Tabs.Panel value="execution" className="min-h-0 grow overflow-y-auto pr-2">
-						{executionContent}
-					</Tabs.Panel>
-				)}
-			</Tabs>
+			<div className="min-h-0 grow overflow-y-auto pr-2">{children}</div>
 		</Card>
 	)
 }
@@ -77,6 +57,7 @@ export default function PlanPage ({ params }: Route.ComponentProps) {
 	const { data, isPending, error } = usePlanQuery(planId)
 	const stream = usePlanStream(planId)
 	const [expanded, setExpanded] = useState(false)
+	const [tab, setTab] = useState<string | null>('plan')
 
 	if (isPending) {
 		return (
@@ -112,26 +93,20 @@ export default function PlanPage ({ params }: Route.ComponentProps) {
 			onToggle={() => {
 				setExpanded((previous) => !previous)
 			}}
-			planContent={
-				published ? (
-					<PlanArtifact plan={plan} acs={acs} slices={slices} decisions={decisions} />
-				) : (
-					<Text size="sm" c="dimmed">
-						The plan appears here, whole, the moment the session publishes it.
-					</Text>
-				)
-			}
-			executionContent={
-				plan.confirmedAt === null && execution === null ? null : (
-					<PlanExecutionPanel
-						execution={execution ?? null}
-						summary={plan.summary ?? null}
-						summarisedAt={plan.summarisedAt ?? null}
-					/>
-				)
-			}
-		/>
+		>
+			{published ? (
+				<PlanArtifact plan={plan} acs={acs} slices={slices} decisions={decisions} />
+			) : (
+				<Text size="sm" c="dimmed">
+					The plan appears here, whole, the moment the session publishes it.
+				</Text>
+			)}
+		</ArtifactPane>
 	)
+
+	// Only once the plan has been signed off: before that there is nothing to run,
+	// and a tab that exists to say so is a tab nobody needs.
+	const showExecution = plan.confirmedAt !== null || execution != null
 
 	// The page owns the viewport: the two panes scroll, the page never does.
 	return (
@@ -169,15 +144,37 @@ export default function PlanPage ({ params }: Route.ComponentProps) {
 				</Group>
 			</Group>
 
-			{expanded ? (
-				artifact
-			) : (
-				<SplitPane
-					initial={2 / 3}
-					left={<div className="flex min-h-0 grow flex-col pr-2">{chat}</div>}
-					right={<div className="flex min-h-0 grow flex-col pl-2">{artifact}</div>}
-				/>
-			)}
+			<Tabs value={tab} onChange={setTab} className="flex min-h-0 grow flex-col">
+				<Tabs.List mb="sm">
+					<Tabs.Tab value="plan">Plan</Tabs.Tab>
+					{showExecution ? <Tabs.Tab value="execution">Execution</Tabs.Tab> : null}
+				</Tabs.List>
+
+				{/* Rendered by hand rather than through Tabs.Panel: the panel is hidden
+				    with a display rule, which fights the flex column the two scrolling
+				    panes are laid out in. */}
+				{tab === 'execution' && showExecution ? (
+					<div className="min-h-0 grow overflow-y-auto pr-2">
+						<PlanExecutionPanel
+							execution={execution ?? null}
+							summary={plan.summary ?? null}
+							summarisedAt={plan.summarisedAt ?? null}
+						/>
+					</div>
+				) : (
+					<div className="flex min-h-0 grow flex-col">
+						{expanded ? (
+							artifact
+						) : (
+							<SplitPane
+								initial={2 / 3}
+								left={<div className="flex min-h-0 grow flex-col pr-2">{chat}</div>}
+								right={<div className="flex min-h-0 grow flex-col pl-2">{artifact}</div>}
+							/>
+						)}
+					</div>
+				)}
+			</Tabs>
 		</div>
 	)
 }

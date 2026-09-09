@@ -25,7 +25,11 @@ export const HelloMsgSchema = z.object({
 	repoPath: z.string(),
 	// Absent from agents older than self-update, which is why it is optional and
 	// why anything but an explicit refresh is never offered an upgrade.
-	reason: z.enum(['connect', 'refresh']).optional()
+	reason: z.enum(['connect', 'refresh']).optional(),
+	// The bullets still running on that machine. Optional for the same reason: an
+	// agent that predates surviving reconnects holds nothing across one, and
+	// absent has to keep meaning exactly that rather than "unknown".
+	runIds: z.array(z.string()).optional()
 });
 
 export const PreflightMsgSchema = z.object({

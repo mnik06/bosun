@@ -59,6 +59,7 @@ export interface ExecutionSessions {
 	cancel(runId: string): void;
 	cancelAll(): void;
 	running(): number;
+	held(): string[];
 }
 
 export function createExecutionSessions(opts: {
@@ -275,6 +276,13 @@ export function createExecutionSessions(opts: {
 
 		running(): number {
 			return runs.size;
+		},
+
+		// The runs this agent still holds a session for. Sent on `hello` so the
+		// backend can tell a bullet that survived a reconnect from one that died
+		// with the connection before it and has to be put back.
+		held(): string[] {
+			return [...runs.keys()];
 		}
 	};
 }

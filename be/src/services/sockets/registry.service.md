@@ -82,10 +82,20 @@ reconnect fast enough to keep the slot used to leave the bullet that died with t
 in the database as `running` forever. `claimNext` then refuses to take the next bullet — one worktree
 holds one session — and the queue is stuck for good rather than for a moment.
 
-The settling therefore happens on the way *in*, not on the way out: `hello` calls `stallMachineRuns`,
-because a new agent connection is itself the proof that no session survived the old one. It compares
-each run's `startedAt` against the instant the socket was registered so that a bullet dispatched over
-the *new* connection — a resume racing the hello — is not reset by the reconnect that preceded it.
+The settling therefore happens on the way *in*, not on the way out: `hello` calls `stallMachineRuns`.
+Which runs it settles is not guesswork — the agent says. Its execution sessions outlive the socket
+they were dispatched over, so `hello` carries the run ids it is still building and everything else
+this machine has marked `running` is a ghost. Two further guards sit under that: a run whose
+`startedAt` is newer than the instant this socket was registered was dispatched over *this*
+connection (a resume racing the hello) and is left alone, and `runIds` absent means an agent too old
+to survive a reconnect, which holds nothing across one — so the empty default is the truth for those
+agents rather than a fallback.
+
+`stallMachineRuns` also runs the mirror check, because the same outage breaks the other direction:
+`exec.cancel` for a queue paused while the machine was unreachable was never delivered, and the
+session it was meant to stop is still writing to the worktree. Any run the agent reports holding
+whose row is not `running` on a queue of *this* machine is cancelled on the spot. The queue is
+derived from the run rather than trusted, the same as every other frame that names one.
 
 ## Failure modes
 
@@ -104,8 +114,14 @@ the *new* connection — a resume racing the hello — is not reset by the recon
   and the socket still does.
 - **A queue is `running` with nothing running.** Its bullet died with a socket that was replaced
   before its close event landed, so the disconnect path bailed. `stallMachineRuns` on the next
-  `hello` is what settles it; if the queue is still stuck, the agent never re-announced, and the
-  agent-side `dropped <frame>: the connection is not open` line says which frame went missing.
+  `hello` is what settles it; if the queue is still stuck, either the agent never re-announced, or it
+  named that run in `hello.runIds` while holding no process for it. `ps` on the machine decides
+  which.
+- **A bullet re-runs work that is already on its branch.** Its `exec.done` was produced while the
+  socket was down and the sink buffered it, but the agent process died before the flush — the commit
+  landed and nothing ever said so. The agent-side `dropped <frame>: the connection is not open` line
+  is the other half of this: it means a frame was thrown away rather than parked, which only happens
+  to the live view (`exec.text`, `exec.activity`), never to a settling frame.
 - **An ex-member still sees frames.** `closeUiSocketsForMember` did not run, or ran before the
   membership delete committed and the transaction then rolled back. The hang-up belongs after the
   commit for exactly that reason.

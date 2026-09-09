@@ -71,9 +71,12 @@ jobs:
             fi
           done
 
-  # Released first: the backend discovers the newest agent build at runtime from
-  # releases/latest, so a version bump must be published before machines are told
-  # to refresh onto it.
+  # Runs alongside the backend rather than ahead of it. The backend resolves the
+  # newest agent build at request time, so the only thing a release landing a
+  # minute later costs is a Refresh in that window offering the previous version —
+  # which the machine no-ops on, and the next Refresh corrects. Sequencing it
+  # ahead bought nothing and put an agent release failure in front of every
+  # backend fix.
   agent:
     needs: changes
     if: needs.changes.outputs.agent == 'true'
@@ -126,8 +129,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   be:
-    needs: [changes, agent]
-    if: ${{ !cancelled() && !failure() && needs.changes.outputs.be == 'true' }}
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.be == 'true' }}
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -166,9 +169,14 @@ jobs:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
+  # Stays behind the backend, deliberately. The app is a client of it: a bundle
+  # that reads a field the running API does not send yet fails its Zod parse and
+  # renders an error where the screen should be. `needs.be.result` rather than
+  # `failure()` so that a skipped backend (nothing changed in be/) still lets the
+  # frontend ship, and an agent release failure no longer blocks it.
   fe:
     needs: [changes, be]
-    if: ${{ !cancelled() && !failure() && needs.changes.outputs.fe == 'true' }}
+    if: ${{ !cancelled() && needs.be.result != 'failure' && needs.changes.outputs.fe == 'true' }}
     runs-on: ubuntu-latest
     defaults:
       run:

@@ -6,6 +6,7 @@ export {
 	patchPlanArtifact
 } from './lib/plan-cache'
 export { findPendingQuestion, type PendingQuestion } from './lib/pending-question'
+export { planQueueRefusal } from './lib/queueable'
 export {
 	AcSchema,
 	PlanDecisionSchema,
