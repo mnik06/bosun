@@ -34,6 +34,7 @@ export default defineConfig(
 	globalIgnores([
 		'build/**',
 		'dist/**',
+		'.vercel/**',
 		'public/**',
 		'.react-router/**',
 		'node_modules/**'

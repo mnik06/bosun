@@ -1,8 +1,9 @@
 import { ActionIcon, Anchor, Badge, Card, Group, Stack, Text } from '@mantine/core'
 import { ExternalLink, X } from 'lucide-react'
 
-import type { QueueItemDetail, QueueItemStatus } from '~/entities/queue'
+import { itemElapsedMs, type QueueItemDetail, type QueueItemStatus } from '~/entities/queue'
 import { RetryPlanButton } from '~/features/retry-plan'
+import { formatDuration } from '~/shared/lib'
 import { SliceRunRow } from '~/widgets/queue-detail/ui/slice-run-row'
 
 const COLORS: Record<QueueItemStatus, string> = {
@@ -16,12 +17,16 @@ const COLORS: Record<QueueItemStatus, string> = {
 export function QueueItemCard ({
 	item,
 	activity,
+	now,
 	onRemove
 }: {
 	item: QueueItemDetail,
 	activity: Record<string, string>,
+	now: number,
 	onRemove: (itemId: string) => void
 }) {
+	const elapsed = itemElapsedMs({ item, now })
+
 	return (
 		<Card withBorder padding="md" radius="md">
 			<Stack gap="sm">
@@ -34,6 +39,11 @@ export function QueueItemCard ({
 							<Badge size="sm" variant="light" color={COLORS[item.status]}>
 								{item.status}
 							</Badge>
+							{elapsed === null ? null : (
+								<Text size="xs" c="dimmed">
+									{formatDuration(elapsed)}
+								</Text>
+							)}
 						</Group>
 
 						{item.branch === null ? null : (

@@ -5,7 +5,7 @@ import { Button } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
 
 import { useQueueAnswer, useRunActivity } from '~/entities/machine'
-import { QueueStatusBadge, queueKeys, useQueueDetailQuery } from '~/entities/queue'
+import { QueueStatusBadge, queueElapsedMs, queueKeys, useQueueDetailQuery } from '~/entities/queue'
 import { RunQuestionPanel } from '~/features/answer-run'
 import { QueueChat } from '~/features/ask-queue'
 import { QueueControls } from '~/features/control-queue'
@@ -13,7 +13,8 @@ import { EnqueuePlansModal } from '~/features/enqueue-plans'
 import { KillQueueButton } from '~/features/kill-queue'
 import { AfkSwitch } from '~/features/toggle-afk'
 import { apiClient } from '~/shared/api'
-import { notifyError, toErrorMessage } from '~/shared/lib'
+import { useNow } from '~/shared/hooks'
+import { formatDuration, notifyError, toErrorMessage } from '~/shared/lib'
 import { QueueItemCard } from '~/widgets/queue-detail/ui/queue-item-card'
 
 export function QueueDetail ({ queueId }: { queueId: string }) {
@@ -21,6 +22,7 @@ export function QueueDetail ({ queueId }: { queueId: string }) {
 	const activity = useRunActivity()
 	const streaming = useQueueAnswer(queueId)
 	const queryClient = useQueryClient()
+	const now = useNow()
 	const [opened, { open, close }] = useDisclosure(false)
 
 	const runningRun = data?.items
@@ -71,6 +73,7 @@ export function QueueDetail ({ queueId }: { queueId: string }) {
 					<Text size="xs" c="dimmed" className="font-mono">
 						{data.queue.worktreePath ?? 'no worktree yet'}
 						{data.queue.baseRef === null ? '' : ` · from ${data.queue.baseRef}`}
+						{` · ${formatDuration(queueElapsedMs({ items: data.items, now }))} of work`}
 					</Text>
 				</Stack>
 
@@ -108,7 +111,13 @@ export function QueueDetail ({ queueId }: { queueId: string }) {
 			) : (
 				<Stack gap="md">
 					{data.items.map((item) => (
-						<QueueItemCard key={item.id} item={item} activity={activity} onRemove={remove} />
+						<QueueItemCard
+							key={item.id}
+							item={item}
+							activity={activity}
+							now={now}
+							onRemove={remove}
+						/>
 					))}
 				</Stack>
 			)}

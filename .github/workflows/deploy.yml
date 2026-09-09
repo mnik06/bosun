@@ -12,7 +12,7 @@ on:
 
 concurrency:
   group: deploy-main
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 permissions:
   contents: read
