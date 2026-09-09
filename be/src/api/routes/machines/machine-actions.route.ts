@@ -12,11 +12,10 @@ import { MachineSchema } from 'src/types/MachineSchema';
 const routes: FastifyPluginAsync = async function (f) {
 	const fastify = f.withTypeProvider<ZodTypeProvider>();
 
-	// Open to developers: a liveness read, and somebody who cannot tell whether a
-	// machine is reachable cannot decide whether to queue work on it.
 	fastify.post(
 		'/:id/ping',
 		{
+			preValidation: fastify.requireLeader,
 			schema: {
 				params: MachineIdParamsSchema,
 				response: { 202: PingMachineRespSchema }

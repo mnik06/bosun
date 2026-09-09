@@ -18,7 +18,7 @@ thing that needs the secret key. See `src/services/auth/supabase-auth.service.md
 **Authorization is by project.** `machines`, `plans` and `queues` belong to a project, never to a
 person. `fastify.requireMembership` reads `X-Project-Id`, resolves the caller's role and puts
 `request.membership = { projectId, role }` on the request; `fastify.requireLeader` refuses a
-`developer` on the machine-management routes. A `users.is_app_owner` row resolves as `leader` of every
+`developer` on every `/machines` route but the list, and on the member routes. A `users.is_app_owner` row resolves as `leader` of every
 project without holding a membership. A project the caller is not in answers **404**; a role they do
 not hold answers **403**. See `plans/006-projects-and-roles.md`.
 

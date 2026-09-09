@@ -36,6 +36,9 @@ const routes: FastifyPluginAsync = async function (f) {
 		}
 	);
 
+	// The list stays open to developers where the detail does not: the plan and
+	// queue pickers are built from it, and a plan has to name the machine it runs
+	// on. It carries a name and a status, not the repo path or the profile.
 	fastify.get(
 		'/',
 		{
@@ -54,6 +57,7 @@ const routes: FastifyPluginAsync = async function (f) {
 	fastify.get(
 		'/:id',
 		{
+			preValidation: fastify.requireLeader,
 			schema: {
 				params: MachineIdParamsSchema,
 				response: { 200: MachineSchema }

@@ -198,7 +198,33 @@ jobs:
       # Vite resolves import.meta.env from .env files in the project root, which a
       # CI checkout does not have. The pulled Vercel environment is written back as
       # one so the bundle is built against the same values the dashboard holds.
-      - run: grep -E '^VITE_' .vercel/.env.production.local > .env.production
+      #
+      # What the bundle needs is read out of the source rather than restated here.
+      # A hardcoded list drifts, and the symptom is the worst kind: a build that
+      # succeeds and ships an app pointing at nothing.
+      - name: Write the pulled Vercel environment as .env.production
+        run: |
+          set -euo pipefail
+
+          pulled=.vercel/.env.production.local
+
+          if [ ! -f "$pulled" ]; then
+            echo "::error::$pulled is missing — vercel pull produced no environment" >&2
+            exit 1
+          fi
+
+          grep -E '^VITE_' "$pulled" > .env.production || true
+
+          missing=''
+          for name in $(grep -rho 'import\.meta\.env\.VITE_[A-Z0-9_]*' app | sed 's/.*env\.//' | sort -u); do
+            grep -q "^$name=" .env.production || missing="$missing $name"
+          done
+
+          if [ -n "$missing" ]; then
+            echo "::error::missing from the Vercel production environment:$missing" >&2
+            echo "add each with: vercel env add <NAME> production" >&2
+            exit 1
+          fi
 
       - run: vercel build --prod --token "$VERCEL_TOKEN"
         env:

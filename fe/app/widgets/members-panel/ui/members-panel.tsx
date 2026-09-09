@@ -8,7 +8,7 @@ import { CreateMemberModal } from '~/features/create-member'
 import { RemoveMemberButton } from '~/features/remove-member'
 
 export function MembersPanel () {
-	const { activeProject, isLeader } = useActiveProject()
+	const { activeProject } = useActiveProject()
 	const { data: members, isPending, error } = useProjectMembersQuery(activeProject?.id ?? null)
 	const [adding, { open, close }] = useDisclosure(false)
 
@@ -27,9 +27,9 @@ export function MembersPanel () {
 					Leaders manage machines. Developers plan and execute on them.
 				</Text>
 
-				{isLeader ? <Button leftSection={<UserPlus size={16} />} onClick={open}>
-						Add member
-				</Button> : null}
+				<Button leftSection={<UserPlus size={16} />} onClick={open}>
+					Add member
+				</Button>
 			</Group>
 
 			{isPending ? (
@@ -48,14 +48,10 @@ export function MembersPanel () {
 							<Table.Tr key={member.userId}>
 								<Table.Td>{member.email}</Table.Td>
 								<Table.Td>
-									{isLeader ? (
-										<MemberRoleSelect projectId={activeProject.id} member={member} />
-									) : (
-										<Text size="sm">{member.role}</Text>
-									)}
+									<MemberRoleSelect projectId={activeProject.id} member={member} />
 								</Table.Td>
 								<Table.Td>
-									{isLeader ? <RemoveMemberButton projectId={activeProject.id} member={member} /> : null}
+									<RemoveMemberButton projectId={activeProject.id} member={member} />
 								</Table.Td>
 							</Table.Tr>
 						))}

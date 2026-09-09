@@ -37,8 +37,9 @@ delete one, and a member of another project sees none of them.
 
 **The role gate**
 
-- [ ] **AC-8** — A developer calling `POST /machines`, `DELETE /machines/:id`, `PATCH /machines/:id/profile`, `POST /machines/:id/refresh`, `POST /machines/:id/pause` or `/resume` gets `403`.
-- [ ] **AC-9** — A developer can list and read machines, and can create, run and answer plans and queues without restriction.
+- [ ] **AC-8** — A developer calling any route under `/machines` other than `GET /machines` gets `403`, and so does `GET /projects/:projectId/members`.
+- [ ] **AC-9** — A developer can list machines — the plan and queue pickers are built from it — and can create, run and answer plans and queues without restriction.
+- [ ] **AC-9b** — A developer navigating to `/`, `/machines/:id` or `/members` is redirected to `/plans`, and neither tab appears in the nav.
 - [ ] **AC-10** — A user with `is_app_owner` resolves as `leader` in any project, including one with no membership row for them.
 
 **Members**
@@ -216,14 +217,14 @@ Resource routes are unchanged in path and gain a required `X-Project-Id` header.
 | `POST /projects` | app owner |
 | `PATCH /projects/:projectId` | leader |
 | `DELETE /projects/:projectId` | app owner |
-| `GET /projects/:projectId/members` | member |
+| `GET /projects/:projectId/members` | leader |
 | `POST /projects/:projectId/members` | leader |
 | `PATCH /projects/:projectId/members/:userId` | leader |
 | `DELETE /projects/:projectId/members/:userId` | leader |
-| `POST /machines`, `DELETE /machines/:id` | leader |
+| `POST /machines`, `GET /machines/:id`, `DELETE /machines/:id` | leader |
 | `PATCH /machines/:id/profile` | leader |
-| `POST /machines/:id/refresh`, `/pause`, `/resume` | leader |
-| `GET /machines`, `GET /machines/:id`, `POST /machines/:id/ping` | member |
+| `POST /machines/:id/ping`, `/refresh`, `/pause`, `/resume` | leader |
+| `GET /machines` | member |
 | all `/plans/*`, all `/queues/*` | member |
 | `POST /ui/ticket` | member |
 
@@ -232,8 +233,10 @@ Resource routes are unchanged in path and gain a required `X-Project-Id` header.
 
 `GET /me` grows `isAppOwner`. `GET /projects` returns `{ id, name, role }[]`.
 
-Ping stays open to developers: it is a liveness read, and a developer who cannot tell whether a
-machine is reachable cannot decide whether to queue work on it.
+`GET /machines` is the one machine route a developer keeps, because the plan and queue pickers are
+built from it and a plan has to name the machine it runs on. The list carries a name and a status;
+the repo path, the profile and the preflight detail are on the detail route, which is leader-only
+along with everything else under `/machines`.
 
 ### Frontend
 
@@ -242,9 +245,12 @@ machine is reachable cannot decide whether to queue work on it.
 - **Every query key gains the project id.** Without it, switching project shows the previous
   project's machines from cache until the refetch lands — the one bug this change invites
 - The socket reconnects on a project switch, because its ticket is bound to the old pair
-- `widgets/project-switcher/` in the app layout; a `Members` nav entry visible to leaders; machine
-  management controls hidden for developers — hidden in the UI *and* refused by the API, since a
-  hidden button is not a permission
+- `widgets/project-switcher/` in the app layout. The `Machines` and `Members` tabs are leader-only
+  and absent from the nav for a developer
+- Machines, machine detail and members sit behind a **pathless layout route**
+  (`views/leader-layout/`) that redirects a developer to `/plans`. One gate declared in `routes.ts`
+  beside the routes it covers, rather than a check each new screen has to remember. The API refuses
+  the same calls independently — the redirect is for the person, not for the security
 - `views/members/` with create / change-role / remove features. Creating a member opens a copy-once
   dialog with the generated password
 - `views/signup/`, `features/auth/api/use-sign-up.ts` and the `/signup` route are deleted
@@ -322,7 +328,8 @@ Two accounts in one project and one account in another, signed in side by side:
 
 - Both members of project A see the same machine list; the outsider sees none of it and gets `404`
   on a direct id
-- The developer's delete button is absent, and `DELETE /machines/:id` by hand returns `403`
+- The developer has no Machines or Members tab, is bounced from `/` to `/plans`, and
+  `DELETE /machines/:id` by hand returns `403`
 - A machine going online in project A produces a frame in both A sockets and none in B's
 - The app owner, a member of neither, sees both projects and can act in each
 - A member created by a leader can sign in with the returned password on the first try, and that

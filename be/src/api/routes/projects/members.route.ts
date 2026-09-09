@@ -22,6 +22,7 @@ const routes: FastifyPluginAsync = async function (f) {
 	fastify.get(
 		'/:projectId/members',
 		{
+			preValidation: fastify.requireLeader,
 			schema: { params: ProjectIdParamsSchema, response: { 200: MemberListRespSchema } }
 		},
 		async (req) => {

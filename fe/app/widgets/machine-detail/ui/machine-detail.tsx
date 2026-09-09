@@ -7,7 +7,6 @@ import {
 	useMachineQuery,
 	useUpgradingTo
 } from '~/entities/machine'
-import { useActiveProject } from '~/entities/project'
 import { AddMcpServerButton } from '~/features/add-mcp-server'
 import { ProjectProfileButton } from '~/features/edit-project-profile'
 import { PausedBanner } from '~/features/pause-machine'
@@ -21,7 +20,6 @@ import { QueuesPanel } from '~/widgets/queues-panel'
 
 export function MachineDetail ({ machineId }: { machineId: string }) {
 	const { data, isPending, error } = useMachineQuery(machineId)
-	const { isLeader } = useActiveProject()
 	const upgradingTo = useUpgradingTo(machineId)
 	// The agent stamps lastSeenAt on every push, so a change to it is the signal
 	// that its answer to the refresh has landed.
@@ -50,10 +48,10 @@ export function MachineDetail ({ machineId }: { machineId: string }) {
 					<Group gap="sm">
 						<MachineStatusDot status={data.status} />
 						<Title order={2}>{data.name}</Title>
-						{isLeader ? <RefreshMachineButton
+						<RefreshMachineButton
 							onRefresh={refresh.refresh}
 							isRefreshing={refresh.isRefreshing}
-						/> : null}
+						/>
 					</Group>
 					<Text size="xs" c="dimmed" className="font-mono">
 						{data.id} · seen {formatRelativeTime(data.lastSeenAt)}
@@ -121,7 +119,7 @@ export function MachineDetail ({ machineId }: { machineId: string }) {
 			<SetupCard
 				title="Project setup"
 				description="What a session cannot work out by reading the repository — migrations, the commands to run it, where the test credentials live."
-				action={isLeader ? <ProjectProfileButton machine={data} /> : null}
+				action={<ProjectProfileButton machine={data} />}
 			/>
 
 			<QueuesPanel machineId={data.id} />
