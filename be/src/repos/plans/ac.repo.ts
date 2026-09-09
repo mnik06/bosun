@@ -11,7 +11,8 @@ const columns = {
 	sliceId: acs.sliceId,
 	ordinal: acs.ordinal,
 	implemented: acs.implemented,
-	verified: acs.verified
+	verified: acs.verified,
+	blockedReason: acs.blockedReason
 };
 
 export function getAcRepo(db: DbOrTx) {
@@ -84,6 +85,7 @@ export function getAcRepo(db: DbOrTx) {
 			code: string;
 			implemented?: boolean;
 			verified?: boolean;
+			blockedReason?: string | null;
 		}): Promise<Ac | null> {
 			const { planId, code, ...values } = opts;
 			const [row] = await db

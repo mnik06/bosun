@@ -127,6 +127,7 @@ export function getBosunApiService(deps: { serverUrl: string; machineKey?: strin
 			code: string;
 			implemented?: boolean;
 			verified?: boolean;
+			blockedReason?: string;
 		}): Promise<unknown> {
 			const { planId, code, ...body } = opts;
 

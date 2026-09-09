@@ -39,7 +39,11 @@ export const AgentPublishReqSchema = z.object({
 export const AgentAcMarkParamsSchema = z.object({ id: z.string(), code: z.string() });
 
 export const AgentAcMarkReqSchema = z
-	.object({ implemented: z.boolean(), verified: z.boolean() })
+	.object({
+		implemented: z.boolean(),
+		verified: z.boolean(),
+		blockedReason: z.string().min(1)
+	})
 	.partial();
 
 export const AgentBlockersReqSchema = z.object({

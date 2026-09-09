@@ -112,7 +112,10 @@ export const AcSchema = z.object({
 	sliceId: z.string().nullable(),
 	ordinal: z.number(),
 	implemented: z.boolean(),
-	verified: z.boolean()
+	verified: z.boolean(),
+	// Why this criterion could not be driven. Optional for the same reason every
+	// other new field here is: this app and the backend ship separately.
+	blockedReason: z.string().nullish().default(null)
 })
 
 export type Ac = z.infer<typeof AcSchema>
@@ -157,6 +160,7 @@ export const PlanRunSchema = z.object({
 	sliceKind: z.enum(['build', 'verify']),
 	activity: z.string().nullish().default(null),
 	commitSha: z.string().nullable(),
+	report: z.string().nullish().default(null),
 	failureReason: z.string().nullable(),
 	startedAt: z.iso.datetime().nullable(),
 	finishedAt: z.iso.datetime().nullable()

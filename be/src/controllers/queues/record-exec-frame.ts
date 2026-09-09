@@ -84,6 +84,7 @@ export async function recordExecFrame(
 				questionId: null,
 				question: null,
 				commitSha: frame.commitSha,
+				report: frame.report,
 				finishedAt: new Date()
 			});
 			await advanceQueue(deps, { queueId: located.queue.id });
@@ -92,7 +93,7 @@ export async function recordExecFrame(
 			return;
 		}
 
-		await failRun(deps, { ...opts, located, runId: frame.runId, message: gate });
+		await failRun(deps, { ...opts, located, runId: frame.runId, message: gate, report: frame.report });
 
 		return;
 	}
@@ -111,6 +112,7 @@ async function failRun(
 		located: NonNullable<Awaited<ReturnType<typeof locate>>>;
 		runId: string;
 		message: string;
+		report?: string;
 	}
 ): Promise<void> {
 	deps.runActivity.forget(opts.runId);
@@ -118,6 +120,9 @@ async function failRun(
 		id: opts.runId,
 		status: 'failed',
 		failureReason: opts.message,
+		// Kept even here — especially here. A gate failure is unreadable without
+		// what the session said it did.
+		...(opts.report === undefined ? {} : { report: opts.report }),
 		questionId: null,
 		question: null,
 		finishedAt: new Date()

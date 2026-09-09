@@ -68,6 +68,7 @@ export const SliceRunSchema = z.object({
 	questionId: z.string().nullable(),
 	question: z.array(PlanQuestionSchema).nullable(),
 	commitSha: z.string().nullable(),
+	report: z.string().nullable(),
 	failureReason: z.string().nullable(),
 	startedAt: z.coerce.date().nullable(),
 	finishedAt: z.coerce.date().nullable()

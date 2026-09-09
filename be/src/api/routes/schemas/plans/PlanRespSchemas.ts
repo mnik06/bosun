@@ -39,7 +39,8 @@ export const AgentPlanRespSchema = z.object({ planId: z.string() });
 export const AgentAcRespSchema = z.object({
 	code: z.string(),
 	implemented: z.boolean(),
-	verified: z.boolean()
+	verified: z.boolean(),
+	blockedReason: z.string().nullable()
 });
 
 export const AgentMachinePlansRespSchema = z.array(

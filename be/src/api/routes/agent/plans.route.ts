@@ -87,7 +87,12 @@ const routes: FastifyPluginAsync = async function (f) {
 				...req.body
 			});
 
-			return { code: ac.code, implemented: ac.implemented, verified: ac.verified };
+			return {
+				code: ac.code,
+				implemented: ac.implemented,
+				verified: ac.verified,
+				blockedReason: ac.blockedReason
+			};
 		}
 	);
 };
