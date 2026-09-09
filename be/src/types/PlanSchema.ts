@@ -13,6 +13,7 @@ export const PlanSchema = z.object({
 	number: z.number().int(),
 	status: PlanStatusSchema,
 	verifyInUi: z.boolean(),
+	auto: z.boolean(),
 	confirmedAt: z.date().nullable(),
 	failureReason: z.string().nullable(),
 	input: z.string(),

@@ -71,6 +71,7 @@ export async function sayToPlan(opts: {
 			text: opts.text,
 			plan: {
 				verifyInUi: plan.verifyInUi,
+				auto: plan.auto,
 				title: plan.title,
 				bodyMd: plan.bodyMd,
 				acs: acs.map((ac) => ({

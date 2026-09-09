@@ -168,7 +168,8 @@ export const PlanStartMsgSchema = z.object({
 	type: z.literal('plan.start'),
 	planId: z.string(),
 	input: z.string(),
-	verifyInUi: z.boolean().default(true)
+	verifyInUi: z.boolean().default(true),
+	auto: z.boolean().default(false)
 });
 
 // The published plan as it stands, carried on the frame rather than fetched:
@@ -176,6 +177,7 @@ export const PlanStartMsgSchema = z.object({
 // the grill ended needs the artifact handed to it.
 export const PlanSnapshotSchema = z.object({
 	verifyInUi: z.boolean(),
+	auto: z.boolean(),
 	title: z.string().nullable(),
 	bodyMd: z.string().nullable(),
 	acs: z.array(

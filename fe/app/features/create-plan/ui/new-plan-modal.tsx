@@ -17,7 +17,7 @@ export function NewPlanModal ({ opened, onClose }: { opened: boolean, onClose: (
 
 	const form = useForm<CreatePlanForm>({
 		mode: 'uncontrolled',
-		initialValues: { machineId: '', input: '', verifyInUi: true },
+		initialValues: { machineId: '', input: '', verifyInUi: true, auto: false },
 		validate: zod4Resolver(CreatePlanFormSchema)
 	})
 
@@ -76,6 +76,13 @@ export function NewPlanModal ({ opened, onClose }: { opened: boolean, onClose: (
 						description="On, the plan ends in a verify bullet that drives the finished feature through its interface and fixes what it finds. Off for work with no user-facing surface — no verify bullet is cut at all."
 						key={form.key('verifyInUi')}
 						{...form.getInputProps('verifyInUi', { type: 'checkbox' })}
+					/>
+
+					<Switch
+						label="Auto"
+						description="On, the grill runs exactly as it does now but nothing stops for you: the session answers each of its own questions with the option it recommended, and every question and answer still lands in the transcript."
+						key={form.key('auto')}
+						{...form.getInputProps('auto', { type: 'checkbox' })}
 					/>
 
 					<Button type="submit" loading={createPlan.isPending} disabled={options.length === 0}>

@@ -20,6 +20,11 @@ the last `question` message has no `answer` with the same `questionId`. The tran
 that fact; a column would be a second copy of it, and the two would drift the first time a frame was
 missed.
 
+That is also why an auto plan's answers are ordinary `answer` rows. The session on the machine
+answered its own question and has already moved on, so `recordPlanFrame` writes the question and the
+`autoAnswers` riding on the same frame as two messages. A question left without one would render a
+prompt in the browser for a tool call that returned long ago.
+
 ## Why a refusal writes nothing
 
 `startPlan` checks ownership, status, the `claude-cli` and `claude-credential` preflight results and

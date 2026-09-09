@@ -60,6 +60,27 @@ async function recordQuestion(
 		planId: opts.plan.id,
 		message
 	});
+
+	if (!opts.frame.autoAnswers) {
+		return;
+	}
+
+	// An auto answer is written as an ordinary answer row. The transcript is the
+	// only record of whether a question is still waiting, so a question left
+	// without one would offer the person a prompt for a session that has already
+	// moved past it and will never read the reply.
+	const answer = await opts.planMessageRepo.append({
+		id: opts.idService.createPlanMessageId(),
+		planId: opts.plan.id,
+		role: 'answer',
+		content: { questionId: opts.frame.questionId, answers: opts.frame.autoAnswers }
+	});
+
+	announcePlanMessage({
+		socketRegistry: opts.socketRegistry,
+		planId: opts.plan.id,
+		message: answer
+	});
 }
 
 export async function recordPlanFrame(

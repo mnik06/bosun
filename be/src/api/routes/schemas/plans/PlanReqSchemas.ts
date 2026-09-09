@@ -6,7 +6,8 @@ export const PlanIdParamsSchema = z.object({ id: z.string() });
 export const CreatePlanReqSchema = z.object({
 	machineId: z.string().min(1),
 	input: z.string().min(1),
-	verifyInUi: z.boolean().default(true)
+	verifyInUi: z.boolean().default(true),
+	auto: z.boolean().default(false)
 });
 
 export const SayToPlanReqSchema = z.object({ text: z.string().trim().min(1) });

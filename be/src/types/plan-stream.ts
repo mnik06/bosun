@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { PlanQuestionSchema } from 'src/types/PlanSchema';
+import { PlanAnswerSchema, PlanQuestionSchema } from 'src/types/PlanSchema';
 
 // Imported by both unions: a planning session's frames travel from the agent and
 // are forwarded to the browser unchanged. Declared here rather than in either
@@ -22,7 +22,11 @@ export const PlanQuestionMsgSchema = z.object({
 	type: z.literal('plan.question'),
 	planId: z.string(),
 	questionId: z.string(),
-	questions: z.array(PlanQuestionSchema).min(1)
+	questions: z.array(PlanQuestionSchema).min(1),
+	// Auto mode only: the session answered its own question with the option it
+	// recommended. Carried on the question rather than sent as a second frame, so
+	// the transcript never holds a question that briefly looks like it is waiting.
+	autoAnswers: z.array(PlanAnswerSchema).min(1).optional()
 });
 
 export const PlanDoneMsgSchema = z.object({

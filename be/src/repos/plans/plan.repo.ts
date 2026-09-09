@@ -12,6 +12,7 @@ const columns = {
 	bodyMd: plans.bodyMd,
 	status: plans.status,
 	verifyInUi: plans.verifyInUi,
+	auto: plans.auto,
 	confirmedAt: plans.confirmedAt,
 	failureReason: plans.failureReason,
 	input: plans.input,
@@ -32,6 +33,7 @@ export function getPlanRepo(db: DbOrTx) {
 			machineId: string;
 			input: string;
 			verifyInUi: boolean;
+			auto: boolean;
 		}): Promise<Plan> {
 			const [row] = await db
 				.insert(plans)

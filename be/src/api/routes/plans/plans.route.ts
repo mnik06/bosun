@@ -35,7 +35,8 @@ const routes: FastifyPluginAsync = async function (f) {
 				userId: req.user!.id,
 				machineId: req.body.machineId,
 				input: req.body.input,
-				verifyInUi: req.body.verifyInUi
+				verifyInUi: req.body.verifyInUi,
+				auto: req.body.auto
 			});
 
 			return reply.status(201).send(plan);

@@ -91,7 +91,8 @@ export async function routeServerFrame(deps: RouterDeps, msg: ServerMsg): Promis
 			await deps.sessions.start({
 				planId: msg.planId,
 				input: msg.input,
-				verifyInUi: msg.verifyInUi
+				verifyInUi: msg.verifyInUi,
+				auto: msg.auto
 			});
 
 			return;

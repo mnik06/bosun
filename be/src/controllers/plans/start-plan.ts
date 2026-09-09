@@ -40,6 +40,7 @@ export async function startPlan(opts: {
 	machineId: string;
 	input: string;
 	verifyInUi: boolean;
+	auto: boolean;
 }): Promise<Plan> {
 	const machine = await opts.machineRepo.getOwnedById({
 		id: opts.machineId,
@@ -67,7 +68,8 @@ export async function startPlan(opts: {
 		userId: opts.userId,
 		machineId: machine.id,
 		input: opts.input,
-		verifyInUi: opts.verifyInUi
+		verifyInUi: opts.verifyInUi,
+		auto: opts.auto
 	});
 
 	await opts.planMessageRepo.append({
@@ -83,7 +85,8 @@ export async function startPlan(opts: {
 			type: 'plan.start',
 			planId: plan.id,
 			input: opts.input,
-			verifyInUi: opts.verifyInUi
+			verifyInUi: opts.verifyInUi,
+			auto: opts.auto
 		}
 	});
 

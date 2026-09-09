@@ -61,7 +61,11 @@ export const PlanQuestionMsgSchema = z.object({
 	type: z.literal('plan.question'),
 	planId: z.string(),
 	questionId: z.string(),
-	questions: z.array(PlanQuestionSchema).min(1)
+	questions: z.array(PlanQuestionSchema).min(1),
+	// Present only in auto mode, where the session answered itself. Carried on the
+	// question rather than sent as a second frame so the transcript cannot record
+	// a question that is briefly, and wrongly, waiting on somebody.
+	autoAnswers: z.array(PlanAnswerSchema).min(1).optional()
 });
 
 export const PlanDoneMsgSchema = z.object({
@@ -204,7 +208,8 @@ export const PlanStartMsgSchema = z.object({
 	type: z.literal('plan.start'),
 	planId: z.string(),
 	input: z.string(),
-	verifyInUi: z.boolean().default(true)
+	verifyInUi: z.boolean().default(true),
+	auto: z.boolean().default(false)
 });
 
 // The published plan as it stands, carried on the frame rather than fetched:
@@ -212,6 +217,7 @@ export const PlanStartMsgSchema = z.object({
 // the grill ended needs the artifact handed to it.
 export const PlanSnapshotSchema = z.object({
 	verifyInUi: z.boolean(),
+	auto: z.boolean(),
 	title: z.string().nullable(),
 	bodyMd: z.string().nullable(),
 	acs: z.array(

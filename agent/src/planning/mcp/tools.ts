@@ -5,7 +5,7 @@ import {
 	textToolResult,
 	type PendingQuestion
 } from '../../sessions/mcp-server';
-import { type PlanQuestion } from '../../protocol';
+import { type PlanAnswer, type PlanQuestion } from '../../protocol';
 import { type BosunApiService } from '../../services/bosun-api.service';
 
 export const NamePlanArgsSchema = z.object({ title: z.string().min(1) });
@@ -65,11 +65,16 @@ export const TOOL_DEFINITIONS = [
 
 export function createPlanDispatch(opts: {
 	planId: string;
+	auto: boolean;
 	bosunApi: BosunApiService;
-	onQuestion: (payload: { questionId: string; questions: PlanQuestion[] }) => void;
+	onQuestion: (payload: {
+		questionId: string;
+		questions: PlanQuestion[];
+		autoAnswers?: PlanAnswer[];
+	}) => void;
 }) {
 	return function build(pending: Map<string, PendingQuestion>) {
-		const ask = createAskTool({ pending, onQuestion: opts.onQuestion });
+		const ask = createAskTool({ pending, onQuestion: opts.onQuestion, auto: opts.auto });
 
 		return async function dispatch(name: string, args: unknown) {
 			if (name === 'bosun_ask') {

@@ -38,7 +38,12 @@ interface Session {
 }
 
 export interface PlanningSessions {
-	start(opts: { planId: string; input: string; verifyInUi: boolean }): Promise<void>;
+	start(opts: {
+		planId: string;
+		input: string;
+		verifyInUi: boolean;
+		auto: boolean;
+	}): Promise<void>;
 	say(opts: { planId: string; text: string; plan: PlanSnapshot }): Promise<void>;
 	answer(opts: { planId: string; questionId: string; answers: PlanAnswer[] }): void;
 	cancel(planId: string): void;
@@ -50,7 +55,7 @@ export function createPlanningSessions(opts: {
 	config: AgentConfig;
 	services: Services;
 	send: (message: AgentMsg) => void;
-	prompt: (opts: { input: string; verifyInUi: boolean }) => string;
+	prompt: (opts: { input: string; verifyInUi: boolean; auto: boolean }) => string;
 	revisionPrompt: (opts: { plan: PlanSnapshot; request: string }) => string;
 }): PlanningSessions {
 	const sessions = new Map<string, Session>();
@@ -90,7 +95,7 @@ export function createPlanningSessions(opts: {
 		teardown(planId);
 	};
 
-	const startProcess = async (planId: string, prompt: string): Promise<void> => {
+	const startProcess = async (planId: string, prompt: string, auto: boolean): Promise<void> => {
 		const userMcp = opts.services.mcpConfig.read();
 
 		if (userMcp.error) {
@@ -102,9 +107,10 @@ export function createPlanningSessions(opts: {
 			definitions: TOOL_DEFINITIONS,
 			createDispatch: createPlanDispatch({
 				planId,
+				auto,
 				bosunApi: opts.services.bosunApi,
-				onQuestion: ({ questionId, questions }) => {
-					opts.send({ type: 'plan.question', planId, questionId, questions });
+				onQuestion: ({ questionId, questions, autoAnswers }) => {
+					opts.send({ type: 'plan.question', planId, questionId, questions, autoAnswers });
 				}
 			}),
 			userServers: userMcp.servers,
@@ -180,9 +186,9 @@ export function createPlanningSessions(opts: {
 		});
 	};
 
-	const spawnFor = async (planId: string, prompt: string): Promise<void> => {
+	const spawnFor = async (planId: string, prompt: string, auto: boolean): Promise<void> => {
 		try {
-			await startProcess(planId, prompt);
+			await startProcess(planId, prompt, auto);
 		} catch (error) {
 			teardown(planId);
 			opts.send({
@@ -213,7 +219,12 @@ export function createPlanningSessions(opts: {
 
 			await spawnFor(
 				payload.planId,
-				opts.prompt({ input: payload.input, verifyInUi: payload.verifyInUi })
+				opts.prompt({
+					input: payload.input,
+					verifyInUi: payload.verifyInUi,
+					auto: payload.auto
+				}),
+				payload.auto
 			);
 		},
 
@@ -230,9 +241,12 @@ export function createPlanningSessions(opts: {
 				return;
 			}
 
+			// A revision of an auto plan is still an auto plan: the snapshot carries the
+			// flag, because the agent holds no plan state between sessions.
 			await spawnFor(
 				payload.planId,
-				opts.revisionPrompt({ plan: payload.plan, request: payload.text })
+				opts.revisionPrompt({ plan: payload.plan, request: payload.text }),
+				payload.plan.auto
 			);
 		},
 

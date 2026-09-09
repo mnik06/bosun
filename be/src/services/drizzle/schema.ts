@@ -76,6 +76,10 @@ export const plans = pgTable(
 		// Settled when the ticket is pasted, not by the session: whether this plan
 		// ends in a verify bullet that drives the feature through its interface.
 		verifyInUi: boolean().notNull().default(true),
+		// Also settled when the ticket is pasted: the grill runs unchanged, but the
+		// session answers its own questions with the option it recommended instead
+		// of stopping for a person who is not there.
+		auto: boolean().notNull().default(false),
 		// The person's own sign-off. A session can publish a plan it is pleased
 		// with; only this says somebody read it and is willing to have it built.
 		// Cleared by a republish, because what was signed off no longer exists.

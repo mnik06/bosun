@@ -44,6 +44,24 @@ sets `MCP_TOOL_TIMEOUT` for the session. Changing that constant to something a p
 breaks the entire mechanism, and it breaks it silently — the session keeps running, it just stops
 listening.
 
+## Auto mode answers `bosun_ask` for the person
+
+A plan created with `auto` on runs the identical grill — same rounds, same one question at a time,
+same prompt — but `createAskTool` never registers a pending promise. It takes the **first** option of
+each question, which the prompt requires to be the session's own recommendation, and returns it as
+the tool result immediately.
+
+That choice of enforcement point is the whole design. Telling the model in the prompt to decide for
+itself leaves a session that can still call `bosun_ask` and then block forever on a browser nobody is
+watching, and it would block *silently* — the tool-call timeout above is raised precisely so a waiting
+question does not resolve on its own. Answering in the tool means the wait cannot happen at all,
+whatever the model does.
+
+The question is still emitted as a `plan.question` frame, carrying its answers as `autoAnswers`, and
+the backend writes both rows. So the transcript of an auto plan reads exactly like a manual one, and
+whether the plan is still waiting stays derivable from the transcript alone — a question written with
+no answer beside it is what the browser renders a prompt for.
+
 ## Why the MCP server runs in this process
 
 `mcp/server.ts` starts an HTTP server on loopback, on an ephemeral port, one per session. `claude` is handed

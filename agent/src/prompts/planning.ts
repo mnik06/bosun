@@ -9,7 +9,7 @@ You are running inside their repository checkout. Read it rather than guess at i
 **You have no terminal and no other channel to the person.** The ONLY way to ask them anything is the
 \`bosun_ask\` tool. Never ask a question in plain prose — prose is narration they read, not a prompt
 they can answer, and a session that "asks" in prose hangs forever.
-
+{{AUTO_RULE}}
 ## The governing principle: grey box
 
 The plan settles *what the feature must do* and *how it is put together*. It does not settle how a
@@ -397,15 +397,44 @@ What this work waits on and why. "None" if there are none.
 
 `;
 
+// The tool answers itself in auto mode whatever this says — the prompt exists so
+// the session knows *why* its own recommendation came back, and writes the plan
+// as one full of executive calls rather than one somebody signed off on.
+const AUTO_ON = `
+## Auto mode
+
+This session is running in **auto mode**: nobody is at the keyboard, and no question will ever reach a
+person. Run the grill exactly as written anyway — every round, one question at a time, each formed
+with its real options, its real trade-offs and your recommendation first. \`bosun_ask\` answers itself
+with that recommendation and hands it straight back to you. Take it as the ruling and carry on.
+
+Nothing else changes. Do not skip rounds, do not batch questions you would otherwise have asked one at
+a time, and do not lower the bar on what you ask. The questions and the answers you gave yourself are
+shown to the person afterwards, so a question whose first option is lazy is a decision nobody can
+audit.
+
+Two things this does change:
+
+- **Every answer is yours.** Record each one in the plan's **Key decisions** section, marked as a call
+  made on their behalf, so the person reading the plan can see what was settled without them.
+- **Nothing can be resolved by waiting.** Where the ticket contradicts the repository, or contradicts
+  itself, take the reading the repository supports, say so in one line, and record it as a key
+  decision with the conflict named. Never stall for a ruling that is not coming.
+`;
+
 const VERIFY_ON = `This plan was created with UI verification **on**, so its last bullet has \`kind: "verify"\` and there is exactly one of them.`;
 
 const VERIFY_OFF = `This plan was created with UI verification **off**, so it has **no** verify bullet at all. Every bullet is \`kind: "build"\`, and the API refuses a verify bullet on this plan.`;
 
-export function planningPrompt(opts: { input: string; verifyInUi: boolean }): string {
+export function planningPrompt(opts: {
+	input: string;
+	verifyInUi: boolean;
+	auto: boolean;
+}): string {
 	const prompt = PLANNING_PROMPT.replace(
 		'{{VERIFY_RULE}}',
 		opts.verifyInUi ? VERIFY_ON : VERIFY_OFF
-	);
+	).replace('{{AUTO_RULE}}', opts.auto ? AUTO_ON : '');
 
 	return `${prompt}\n${opts.input.trim()}\n`;
 }
@@ -466,6 +495,7 @@ anything you leave out is deleted. Keep the codes of criteria that have not chan
 marked implemented or verified survives a republish, and renumbering throws that away.
 
 ${opts.plan.verifyInUi ? 'This plan has UI verification on: the last bullet is the verify bullet, with no body and no claimed criteria.' : 'This plan has UI verification off: it takes no verify bullet, and the API refuses one.'}
+${opts.plan.auto ? 'This plan is in auto mode: nobody is at the keyboard. Ask with `bosun_ask` exactly where you would have, and it answers itself with the option you recommended first — take that as the ruling, and record what you settled in the key decisions section as a call made on their behalf.' : ''}
 
 Never paste a preview of the plan into the chat and never ask for permission to publish — the plan
 they are reading updates the moment you publish it. Say one sentence about what you changed, and

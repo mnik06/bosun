@@ -51,15 +51,50 @@ function readBody(req: http.IncomingMessage): Promise<string> {
 	});
 }
 
+// The session is told to put its recommendation first, so the first option is
+// the one it would have argued for. An empty option list is not a shape the
+// prompt asks for, but a tool that threw on it would kill the whole session over
+// a malformed question.
+function recommendedAnswers(questions: PlanQuestion[]): PlanAnswer[] {
+	return questions.map((question) => ({
+		selected: [question.options[0]?.label ?? 'Proceed with whatever you recommend.']
+	}));
+}
+
 // The one tool the transport owns, because answering it is the only thing that
 // needs the socket: everything else a session can call is the caller's business.
+//
+// `auto` answers the question with the session's own recommendation instead of
+// waiting for a person. The question is still formed and still emitted, so the
+// grill and the transcript are unchanged — only the wait is gone.
 export function createAskTool(opts: {
 	pending: Map<string, PendingQuestion>;
-	onQuestion: (payload: { questionId: string; questions: PlanQuestion[] }) => void;
+	onQuestion: (payload: {
+		questionId: string;
+		questions: PlanQuestion[];
+		autoAnswers?: PlanAnswer[];
+	}) => void;
+	auto?: boolean;
 }) {
 	return async function ask(args: unknown) {
 		const { questions } = AskArgsSchema.parse(args);
 		const questionId = `q_${crypto.randomBytes(9).toString('base64url')}`;
+
+		if (opts.auto) {
+			const autoAnswers = recommendedAnswers(questions);
+
+			opts.onQuestion({ questionId, questions, autoAnswers });
+
+			// Said back to the session rather than left implicit: it has to know the
+			// ruling was its own, because those are the ones the plan records as
+			// decisions taken on the person's behalf.
+			return textResult(
+				`Auto mode: nobody was asked. Your own recommended option was taken as the answer.\n${describeAnswers(
+					{ questions, answers: autoAnswers }
+				)}\nRecord it in the plan's key decisions as a call you made for them.`
+			);
+		}
+
 		const answers = await new Promise<PlanAnswer[]>((resolve) => {
 			opts.pending.set(questionId, { questionId, resolve });
 			opts.onQuestion({ questionId, questions });
