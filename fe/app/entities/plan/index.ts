@@ -6,11 +6,14 @@ export {
 	patchPlanArtifact
 } from './lib/plan-cache'
 export { findPendingQuestion, type PendingQuestion } from './lib/pending-question'
+export { planLabel } from './lib/plan-label'
 export { planQueueRefusal } from './lib/queueable'
 export {
 	AcSchema,
 	PlanDecisionSchema,
+	PlanBlockerRefSchema,
 	PlanDetailSchema,
+	PlanListEntrySchema,
 	PlanListSchema,
 	PlanMessageSchema,
 	PlanSchema,
@@ -18,7 +21,9 @@ export {
 	SliceSchema,
 	type Ac,
 	type Plan,
+	type PlanBlockerRef,
 	type PlanDecision,
+	type PlanListEntry,
 	type PlanAnswer,
 	type PlanDetail,
 	type PlanMessage,

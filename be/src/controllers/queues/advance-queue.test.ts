@@ -4,7 +4,12 @@ import {
 	MAX_RUNNING_PER_MACHINE
 } from 'src/controllers/queues/advance-queue';
 import { type AdvanceDeps } from 'src/controllers/queues/advance-deps';
-import { type Queue, type QueueItem, type SliceRun } from 'src/types/QueueSchema';
+import {
+	type Queue,
+	type QueueItem,
+	type QueueItemStatus,
+	type SliceRun
+} from 'src/types/QueueSchema';
 
 function queue(overrides: Partial<Queue> = {}): Queue {
 	return {
@@ -63,6 +68,7 @@ function build(opts: {
 	runs?: SliceRun[];
 	busy?: number;
 	edges?: { planId: string; blockedByPlanId: string }[];
+	blockerStatuses?: Record<string, QueueItemStatus[]>;
 	reachable?: boolean;
 }) {
 	// The real registry returns whether the frame reached a socket, and the
@@ -80,6 +86,9 @@ function build(opts: {
 		queueItemRepo: {
 			listForQueue: vi.fn().mockResolvedValue(opts.items ?? []),
 			claimNext: vi.fn().mockResolvedValue(opts.claimItem ?? null),
+			statusesForPlans: vi
+				.fn()
+				.mockResolvedValue(new Map(Object.entries(opts.blockerStatuses ?? {}))),
 			update: vi.fn().mockResolvedValue(item())
 		},
 		sliceRunRepo: {
@@ -261,12 +270,63 @@ describe('advanceQueue', () => {
 		expect(deps.queueItemRepo.claimNext).toHaveBeenCalledWith('q_1', []);
 	});
 
-	// Nothing in this worktree will ever complete a plan that was never pushed to
-	// it, so waiting on one stalls the queue for good.
-	it('does not wait on a blocker that is not in this queue', async () => {
+	// The gate the preparation plan relies on: the work it depends on is queued
+	// somewhere else on purpose, and waiting only for blockers in this queue would
+	// dispatch the plan before it lands.
+	it('waits on a blocker queued in another queue', async () => {
 		const { deps } = build({
 			items: [item({ id: 'qi_2', planId: 'p_blocked', status: 'queued' })],
 			edges: [{ planId: 'p_blocked', blockedByPlanId: 'p_elsewhere' }],
+			blockerStatuses: { p_elsewhere: ['queued'] },
+			claimItem: item(),
+			claimRun: run(),
+			runs: [run()]
+		});
+
+		await advanceQueue(deps, { queueId: 'q_1' });
+
+		expect(deps.queueItemRepo.claimNext).toHaveBeenCalledWith('q_1', ['p_blocked']);
+	});
+
+	it('stops waiting once a blocker in another queue has landed', async () => {
+		const { deps } = build({
+			items: [item({ id: 'qi_2', planId: 'p_blocked', status: 'queued' })],
+			edges: [{ planId: 'p_blocked', blockedByPlanId: 'p_elsewhere' }],
+			blockerStatuses: { p_elsewhere: ['done'] },
+			claimItem: item(),
+			claimRun: run(),
+			runs: [run()]
+		});
+
+		await advanceQueue(deps, { queueId: 'q_1' });
+
+		expect(deps.queueItemRepo.claimNext).toHaveBeenCalledWith('q_1', []);
+	});
+
+	// Nothing anywhere will ever complete a plan nobody pushed, so waiting on one
+	// stalls the queue for good. That protection survives the widening: what
+	// changed is only that "queued" stopped meaning "queued here".
+	it('does not wait on a blocker queued nowhere', async () => {
+		const { deps } = build({
+			items: [item({ id: 'qi_2', planId: 'p_blocked', status: 'queued' })],
+			edges: [{ planId: 'p_blocked', blockedByPlanId: 'p_elsewhere' }],
+			claimItem: item(),
+			claimRun: run(),
+			runs: [run()]
+		});
+
+		await advanceQueue(deps, { queueId: 'q_1' });
+
+		expect(deps.queueItemRepo.claimNext).toHaveBeenCalledWith('q_1', []);
+	});
+
+	// A blocker whose only run failed is not coming back on its own, and holding
+	// the queue for it is the permanent stall the never-queued case guards against.
+	it('does not wait on a blocker whose every item failed', async () => {
+		const { deps } = build({
+			items: [item({ id: 'qi_2', planId: 'p_blocked', status: 'queued' })],
+			edges: [{ planId: 'p_blocked', blockedByPlanId: 'p_elsewhere' }],
+			blockerStatuses: { p_elsewhere: ['failed', 'cancelled'] },
 			claimItem: item(),
 			claimRun: run(),
 			runs: [run()]

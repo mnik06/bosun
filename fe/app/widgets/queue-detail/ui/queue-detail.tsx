@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 
 import { useQueueAnswer, useRunActivity } from '~/entities/machine'
+import { planLabel } from '~/entities/plan'
 import { queueElapsedMs, queueKeys, useQueueDetailQuery } from '~/entities/queue'
 import { RunQuestionPanel } from '~/features/answer-run'
 import { QueueChat } from '~/features/ask-queue'
@@ -52,6 +53,13 @@ export function QueueDetail ({ queueId }: { queueId: string }) {
 		)
 	}
 
+	// Only while nothing is running: a queue with a bullet in flight is busy, and
+	// what the plan behind it waits for is on that item's own card.
+	const waiting =
+		runningRun === undefined
+			? data.items.find((item) => (item.waitingFor ?? []).length > 0)
+			: undefined
+
 	const remove = (itemId: string) => {
 		apiClient
 			.delete(`/queues/${queueId}/items/${itemId}`)
@@ -92,6 +100,16 @@ export function QueueDetail ({ queueId }: { queueId: string }) {
 			{data.queue.failureReason === null ? null : (
 				<Alert color="red" variant="light" className="shrink-0">
 					{data.queue.failureReason}
+				</Alert>
+			)}
+
+			{/* An idle queue holding a plan behind a blocker being built elsewhere is
+			    doing nothing for a reason, and a badge reading `idle` is how that gets
+			    mistaken for a queue that ran out of work. */}
+			{waiting === undefined ? null : (
+				<Alert color="orange" variant="light" className="shrink-0">
+					Holding {waiting.planTitle ?? 'a plan'} until{' '}
+					{(waiting.waitingFor ?? []).map(planLabel).join(', ')} lands.
 				</Alert>
 			)}
 

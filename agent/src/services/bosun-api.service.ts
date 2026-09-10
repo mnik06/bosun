@@ -106,6 +106,10 @@ export function getBosunApiService(deps: { serverUrl: string; machineKey?: strin
 		// The whole artifact in one call. Publishing it piece by piece put a plan
 		// with two of its four bullets in front of the person, and made a revision
 		// a diff against whatever the last session happened to write.
+		//
+		// A preparation session rewrites plans other than its own by carrying
+		// `preparedBy` in the artifact; the backend checks that plan's recorded
+		// scope rather than believing the claim.
 		async publishPlan(opts: { planId: string; artifact: unknown }): Promise<unknown> {
 			return post({
 				path: `/agent/plans/${opts.planId}/publish`,

@@ -12,6 +12,7 @@ import { createAskSessions } from '../ask/session';
 import { createExecutionSessions, type ExecutionSessions } from '../execution/session';
 import { createPlanningSessions } from '../planning/session';
 import { planningPrompt, revisionPrompt } from '../prompts/planning';
+import { preparationPrompt } from '../prompts/preparation';
 import { summaryPrompt } from '../prompts/summary';
 import { createSummarySessions } from '../summary/session';
 import { type AgentMsg } from '../protocol';
@@ -120,6 +121,7 @@ async function connectOnce(deps: ConnectionDeps): Promise<void> {
 			services: deps.services,
 			prompt: planningPrompt,
 			revisionPrompt,
+			preparationPrompt,
 			send
 		});
 		const summaries = createSummarySessions({

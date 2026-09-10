@@ -1,8 +1,25 @@
-import { Alert, Card, Center, Checkbox, Group, Loader, Stack, Text, Tooltip } from '@mantine/core'
+import {
+	Alert,
+	Badge,
+	Card,
+	Center,
+	Checkbox,
+	Group,
+	Loader,
+	Stack,
+	Text,
+	Tooltip
+} from '@mantine/core'
 import { Link } from 'react-router'
 
 import { useMachinesQuery } from '~/entities/machine'
-import { planQueueRefusal, PlanStatusBadge, usePlansQuery, type Plan } from '~/entities/plan'
+import {
+	planLabel,
+	planQueueRefusal,
+	PlanStatusBadge,
+	usePlansQuery,
+	type PlanListEntry
+} from '~/entities/plan'
 import { DeletePlanAction } from '~/features/delete-plan'
 import { formatRelativeTime, toErrorMessage } from '~/shared/lib'
 
@@ -12,7 +29,7 @@ function PlanRow ({
 	checked,
 	onToggle
 }: {
-	plan: Plan,
+	plan: PlanListEntry,
 	machineName: string,
 	checked: boolean,
 	onToggle: (next: boolean) => void
@@ -20,6 +37,7 @@ function PlanRow ({
 	// The same rule the push endpoint enforces, so the checkbox never offers
 	// something the API is going to refuse.
 	const refusal = planQueueRefusal(plan)
+	const blockedBy = plan.blockedBy ?? []
 
 	return (
 		<Group gap="sm" align="center" wrap="nowrap">
@@ -52,6 +70,14 @@ function PlanRow ({
 						</Text>
 					</Stack>
 					<Group gap="xs" wrap="nowrap" className="shrink-0">
+						{blockedBy.length === 0 ? null : (
+							<Tooltip label={blockedBy.map(planLabel).join(', ')}>
+								<Badge size="sm" variant="outline" color="orange">
+									blocked by {blockedBy.map((blocker) => `#${blocker.number}`).join(', ')}
+								</Badge>
+							</Tooltip>
+						)}
+
 						<PlanStatusBadge plan={plan} />
 						<DeletePlanAction planId={plan.id} title={`#${plan.number}`} />
 					</Group>

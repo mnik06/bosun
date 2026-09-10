@@ -47,6 +47,7 @@ const routes: FastifyPluginAsync = async function (f) {
 	fastify.get('/', { schema: { response: { 200: PlanListRespSchema } } }, async (req) => {
 		return listPlans({
 			planRepo: fastify.repos.planRepo,
+			planBlockerRepo: fastify.repos.planBlockerRepo,
 			queueItemRepo: fastify.repos.queueItemRepo,
 			projectId: req.membership!.projectId
 		});

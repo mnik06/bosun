@@ -128,6 +128,11 @@ export const plans = pgTable(
 		// that exists, not the plan that asked for it.
 		summary: jsonb().$type<PlanSummary>(),
 		summarisedAt: timestamp({ withTimezone: true }),
+		// Set only on a preparation plan, and only by the endpoint that creates one:
+		// the plans its session was asked to rewrite. It is the authorization scope
+		// for republishing somebody else's plan, so it is never written from a
+		// session — a session that could name its own scope has no scope at all.
+		preparesPlanIds: jsonb().$type<string[]>(),
 		createdAt: timestamp({ withTimezone: true }).notNull().defaultNow()
 	},
 	(table) => [

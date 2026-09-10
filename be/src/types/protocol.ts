@@ -9,6 +9,9 @@ import {
 	PlanQuestionMsgSchema,
 	PlanTextMsgSchema
 } from 'src/types/plan-stream';
+import { PlanPrepareMsgSchema } from 'src/types/plan-prepare';
+
+export { PlanPrepareMsgSchema, PreparePlanSchema, type PreparePlan } from 'src/types/plan-prepare';
 
 export {
 	PlanActivityMsgSchema,
@@ -356,6 +359,7 @@ export const ServerMsgSchema = z.discriminatedUnion('type', [
 	ResumeMsgSchema,
 	ShutdownMsgSchema,
 	PlanStartMsgSchema,
+	PlanPrepareMsgSchema,
 	PlanAnswerMsgSchema,
 	PlanCancelMsgSchema,
 	PlanSayMsgSchema,

@@ -20,6 +20,7 @@ export const planColumns = {
 	input: plans.input,
 	summary: plans.summary,
 	summarisedAt: plans.summarisedAt,
+	preparesPlanIds: plans.preparesPlanIds,
 	createdAt: plans.createdAt
 };
 
@@ -39,6 +40,7 @@ export function getPlanRepo(db: DbOrTx) {
 			input: string;
 			verifyInUi: boolean;
 			auto: boolean;
+			preparesPlanIds?: string[];
 		}): Promise<Plan> {
 			const [row] = await db
 				.insert(plans)
@@ -96,6 +98,20 @@ export function getPlanRepo(db: DbOrTx) {
 				.where(and(eq(plans.id, opts.id), eq(plans.projectId, opts.projectId)));
 
 			return row ? PlanSchema.parse(row) : null;
+		},
+
+		async listOwnedByIds(opts: { projectId: string; ids: string[] }): Promise<Plan[]> {
+			if (opts.ids.length === 0) {
+				return [];
+			}
+
+			const rows = await db
+				.select(planColumns)
+				.from(plans)
+				.where(and(eq(plans.projectId, opts.projectId), inArray(plans.id, opts.ids)))
+				.orderBy(asc(plans.number));
+
+			return rows.map((row) => PlanSchema.parse(row));
 		},
 
 		async getByIdForMachine(opts: { id: string; machineId: string }): Promise<Plan | null> {

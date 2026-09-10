@@ -85,6 +85,33 @@ function rejectBadVerify(opts: { verifyInUi: boolean; slices: PublishSlice[] }):
 	}
 }
 
+// A session that can publish any plan can rewrite work nobody asked it to touch,
+// so rewriting somebody else's plan is allowed only from a preparation plan that
+// was created with this one in its selection. The scope is read off that plan's
+// row rather than taken from the request: the session names which preparation it
+// is acting for, and the backend decides whether that preparation covers the
+// target. It closes when the preparation session ends, because a plan that has
+// left `planning` is no longer writing anything.
+async function requirePreparationScope(opts: {
+	planRepo: PlanRepo;
+	preparedBy: string;
+	machineId: string;
+	targetId: string;
+}): Promise<void> {
+	const preparation = await opts.planRepo.getByIdForMachine({
+		id: opts.preparedBy,
+		machineId: opts.machineId
+	});
+
+	if (
+		!preparation ||
+		preparation.status !== 'planning' ||
+		!preparation.preparesPlanIds?.includes(opts.targetId)
+	) {
+		throw new HttpError(403, 'That plan is not one this preparation was asked to rewrite');
+	}
+}
+
 export async function publishPlan(opts: {
 	db: Db;
 	planRepo: PlanRepo;
@@ -94,6 +121,7 @@ export async function publishPlan(opts: {
 	socketRegistry: SocketRegistry;
 	id: string;
 	machineId: string;
+	preparedBy?: string | null;
 	title: string;
 	bodyMd: string;
 	acs: PublishAc[];
@@ -104,6 +132,15 @@ export async function publishPlan(opts: {
 		id: opts.id,
 		machineId: opts.machineId
 	});
+
+	if (opts.preparedBy) {
+		await requirePreparationScope({
+			planRepo: opts.planRepo,
+			preparedBy: opts.preparedBy,
+			machineId: opts.machineId,
+			targetId: plan.id
+		});
+	}
 
 	rejectMalformed({ verifyInUi: plan.verifyInUi, acs: opts.acs, slices: opts.slices });
 

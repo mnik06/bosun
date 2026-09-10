@@ -1,9 +1,24 @@
 import { type AgentConfig } from '../config/config';
-import { type AgentMsg, type PlanAnswer, type PlanSnapshot } from '../protocol';
+import {
+	type AgentMsg,
+	type PlanAnswer,
+	type PlanQuestion,
+	type PlanSnapshot,
+	type PreparePlan
+} from '../protocol';
 import { type Services } from '../services/index';
 import { createActivityTracker } from './activity-labels';
-import { createPlanDispatch, TOOL_DEFINITIONS } from './mcp/tools';
-import { startSessionMcpServer, type SessionMcpServer } from '../sessions/mcp-server';
+import {
+	createPlanDispatch,
+	createPrepareDispatch,
+	PREPARE_TOOL_DEFINITIONS,
+	TOOL_DEFINITIONS
+} from './mcp/tools';
+import {
+	startSessionMcpServer,
+	type SessionDispatchFactory,
+	type SessionMcpServer
+} from '../sessions/mcp-server';
 import { spawnClaudeSession, type ClaudeSession } from '../sessions/process';
 import { createStreamParser } from './stream-parser';
 
@@ -16,6 +31,19 @@ const PLANNING_TOOLS = {
 		'mcp__bosun__name_plan',
 		'mcp__bosun__set_blockers',
 		'mcp__bosun__publish_plan'
+	]
+};
+
+const PREPARATION_TOOLS = {
+	builtin: PLANNING_TOOLS.builtin,
+	mcp: [
+		'mcp__bosun__bosun_ask',
+		'mcp__bosun__list_plans',
+		'mcp__bosun__name_plan',
+		'mcp__bosun__publish_plan',
+		'mcp__bosun__republish_plan',
+		'mcp__bosun__set_plan_blockers',
+		'mcp__bosun__abandon_preparation'
 	]
 };
 
@@ -49,6 +77,13 @@ interface Session {
 	// the plan it was handed is already published.
 	published: boolean;
 	nudged: boolean;
+	// Off for a preparation session: publishing nothing is a legitimate outcome
+	// there, and nudging one that decided the plans share nothing would argue with
+	// the answer it was asked for.
+	nudge: boolean;
+	// Set by `abandon_preparation`. Recorded rather than acted on inside the tool
+	// so the call returns before the process is torn down under it.
+	abandonedReason: string | null;
 }
 
 export interface PlanningSessions {
@@ -57,6 +92,12 @@ export interface PlanningSessions {
 		input: string;
 		verifyInUi: boolean;
 		auto: boolean;
+		notes: string | null;
+	}): Promise<void>;
+	prepare(opts: {
+		planId: string;
+		planNumber: number;
+		plans: PreparePlan[];
 		notes: string | null;
 	}): Promise<void>;
 	say(opts: {
@@ -85,6 +126,11 @@ export function createPlanningSessions(opts: {
 	revisionPrompt: (opts: {
 		plan: PlanSnapshot;
 		request: string;
+		notes: string | null;
+	}) => string;
+	preparationPrompt: (opts: {
+		planNumber: number;
+		plans: PreparePlan[];
 		notes: string | null;
 	}) => string;
 }): PlanningSessions {
@@ -126,7 +172,15 @@ export function createPlanningSessions(opts: {
 			return;
 		}
 
-		if (session.published || session.nudged || !session.process) {
+		// A preparation that found nothing to share ends as a failure with the reason
+		// it gave, rather than as an empty plan nobody can read an answer off.
+		if (session.abandonedReason !== null) {
+			fail(planId, session.abandonedReason);
+
+			return;
+		}
+
+		if (session.published || session.nudged || !session.nudge || !session.process) {
 			done(planId);
 
 			return;
@@ -146,13 +200,48 @@ export function createPlanningSessions(opts: {
 		teardown(planId);
 	};
 
+	// Read off the map rather than closed over: the session object does not exist
+	// when a dispatch is built, and by the time a tool can fire it is registered.
+	const onPublished = (planId: string) => (): void => {
+		const current = sessions.get(planId);
+
+		if (current) {
+			current.published = true;
+		}
+	};
+
+	const onAbandoned = (planId: string) => (reason: string): void => {
+		const current = sessions.get(planId);
+
+		if (current) {
+			current.abandonedReason = reason;
+		}
+	};
+
+	const onQuestion =
+		(planId: string) =>
+			({
+				questionId,
+				questions,
+				autoAnswers
+			}: {
+				questionId: string;
+				questions: PlanQuestion[];
+				autoAnswers?: PlanAnswer[];
+			}): void => {
+				opts.send({ type: 'plan.question', planId, questionId, questions, autoAnswers });
+			};
+
 	const startProcess = async (opts2: {
 		planId: string;
 		prompt: string;
-		auto: boolean;
 		published: boolean;
+		nudge: boolean;
+		tools: { builtin: string[]; mcp: string[] };
+		definitions: unknown[];
+		createDispatch: SessionDispatchFactory;
 	}): Promise<void> => {
-		const { planId, prompt, auto } = opts2;
+		const { planId, prompt } = opts2;
 		const userMcp = opts.services.mcpConfig.read();
 
 		if (userMcp.error) {
@@ -161,24 +250,8 @@ export function createPlanningSessions(opts: {
 
 		const mcp = await startSessionMcpServer({
 			sessionId: planId,
-			definitions: TOOL_DEFINITIONS,
-			createDispatch: createPlanDispatch({
-				planId,
-				auto,
-				bosunApi: opts.services.bosunApi,
-				// Read off the map rather than closed over: the session object does not
-				// exist yet here, and by the time a tool can fire it is registered.
-				onPublished: () => {
-					const current = sessions.get(planId);
-
-					if (current) {
-						current.published = true;
-					}
-				},
-				onQuestion: ({ questionId, questions, autoAnswers }) => {
-					opts.send({ type: 'plan.question', planId, questionId, questions, autoAnswers });
-				}
-			}),
+			definitions: opts2.definitions,
+			createDispatch: opts2.createDispatch,
 			userServers: userMcp.servers,
 			log: (line) => {
 				console.log(line);
@@ -190,7 +263,9 @@ export function createPlanningSessions(opts: {
 			cancelled: false,
 			idleAt: null,
 			published: opts2.published,
-			nudged: false
+			nudged: false,
+			nudge: opts2.nudge,
+			abandonedReason: null
 		};
 
 		sessions.set(planId, session);
@@ -228,7 +303,7 @@ export function createPlanningSessions(opts: {
 			prompt,
 			mcpConfigPath: mcp.configPath,
 			userServerNames: userMcp.serverNames,
-			tools: PLANNING_TOOLS,
+			tools: opts2.tools,
 			claudeAuth: opts.services.claudeAuth,
 			onStdout: (chunk) => {
 				parser.push(chunk);
@@ -259,12 +334,7 @@ export function createPlanningSessions(opts: {
 		});
 	};
 
-	const spawnFor = async (payload: {
-		planId: string;
-		prompt: string;
-		auto: boolean;
-		published: boolean;
-	}): Promise<void> => {
+	const spawnFor = async (payload: Parameters<typeof startProcess>[0]): Promise<void> => {
 		try {
 			await startProcess(payload);
 		} catch (error) {
@@ -303,8 +373,49 @@ export function createPlanningSessions(opts: {
 					auto: payload.auto,
 					notes: payload.notes
 				}),
-				auto: payload.auto,
-				published: false
+				published: false,
+				nudge: true,
+				tools: PLANNING_TOOLS,
+				definitions: TOOL_DEFINITIONS,
+				createDispatch: createPlanDispatch({
+					planId: payload.planId,
+					auto: payload.auto,
+					bosunApi: opts.services.bosunApi,
+					onPublished: onPublished(payload.planId),
+					onQuestion: onQuestion(payload.planId)
+				})
+			});
+		},
+
+		// One session, three outputs: its own plan, the selected plans rewritten
+		// without the shared work, and the blockers that hold them until it lands.
+		// All three here because this is the only moment one reader has every plan
+		// in front of it — split across sessions, the second re-derives days later
+		// from a diff what this one already knew.
+		async prepare(payload): Promise<void> {
+			if (sessions.has(payload.planId)) {
+				return;
+			}
+
+			await spawnFor({
+				planId: payload.planId,
+				prompt: opts.preparationPrompt({
+					planNumber: payload.planNumber,
+					plans: payload.plans,
+					notes: payload.notes
+				}),
+				published: false,
+				nudge: false,
+				tools: PREPARATION_TOOLS,
+				definitions: PREPARE_TOOL_DEFINITIONS,
+				createDispatch: createPrepareDispatch({
+					planId: payload.planId,
+					plans: payload.plans,
+					bosunApi: opts.services.bosunApi,
+					onPublished: onPublished(payload.planId),
+					onAbandoned: onAbandoned(payload.planId),
+					onQuestion: onQuestion(payload.planId)
+				})
 			});
 		},
 
@@ -321,8 +432,6 @@ export function createPlanningSessions(opts: {
 				return;
 			}
 
-			// A revision of an auto plan is still an auto plan: the snapshot carries the
-			// flag, because the agent holds no plan state between sessions.
 			await spawnFor({
 				planId: payload.planId,
 				prompt: opts.revisionPrompt({
@@ -330,10 +439,22 @@ export function createPlanningSessions(opts: {
 					request: payload.text,
 					notes: payload.notes
 				}),
-				auto: payload.plan.auto,
 				// A revision is handed a plan that is already written, so a turn that
 				// changes nothing is a legitimate answer rather than an empty plan.
-				published: payload.plan.bodyMd !== null
+				published: payload.plan.bodyMd !== null,
+				nudge: true,
+				tools: PLANNING_TOOLS,
+				definitions: TOOL_DEFINITIONS,
+				createDispatch: createPlanDispatch({
+					planId: payload.planId,
+					// A revision of an auto plan is still an auto plan: the snapshot
+					// carries the flag, because the agent holds no plan state between
+					// sessions.
+					auto: payload.plan.auto,
+					bosunApi: opts.services.bosunApi,
+					onPublished: onPublished(payload.planId),
+					onQuestion: onQuestion(payload.planId)
+				})
 			});
 		},
 

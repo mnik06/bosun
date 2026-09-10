@@ -1,4 +1,4 @@
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, inArray } from 'drizzle-orm';
 import { type DbOrTx } from 'src/services/drizzle/drizzle.service';
 import { slices } from 'src/services/drizzle/schema';
 import { SliceSchema, type Slice, type SliceKind } from 'src/types/PlanSchema';
@@ -32,6 +32,20 @@ export function getSliceRepo(db: DbOrTx) {
 				.select(columns)
 				.from(slices)
 				.where(eq(slices.planId, planId))
+				.orderBy(asc(slices.ordinal));
+
+			return rows.map((row) => SliceSchema.parse(row));
+		},
+
+		async listByPlans(planIds: string[]): Promise<Slice[]> {
+			if (planIds.length === 0) {
+				return [];
+			}
+
+			const rows = await db
+				.select(columns)
+				.from(slices)
+				.where(inArray(slices.planId, planIds))
 				.orderBy(asc(slices.ordinal));
 
 			return rows.map((row) => SliceSchema.parse(row));

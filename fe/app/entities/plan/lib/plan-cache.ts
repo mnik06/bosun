@@ -1,22 +1,31 @@
 import type { QueryClient } from '@tanstack/react-query'
 
 import { planKeys } from '~/entities/plan/api/plan.queries'
-import type { Ac, Plan, PlanDetail, PlanMessage, Slice } from '~/entities/plan/model/plan'
+import type {
+	Ac,
+	Plan,
+	PlanDetail,
+	PlanListEntry,
+	PlanMessage,
+	Slice
+} from '~/entities/plan/model/plan'
 
 export function patchPlan (queryClient: QueryClient, plan: Plan): void {
 	queryClient.setQueryData<PlanDetail>(planKeys.detail(plan.id), (previous) =>
 		previous === undefined ? previous : { ...previous, plan }
 	)
-	queryClient.setQueryData<Plan[]>(planKeys.list(), (previous) =>
+	// Merged onto the row already held rather than replacing it: the push carries
+	// the plan alone, and what the list knows about its blockers is not on it.
+	queryClient.setQueryData<PlanListEntry[]>(planKeys.list(), (previous) =>
 		previous?.some((entry) => entry.id === plan.id)
-			? previous.map((entry) => (entry.id === plan.id ? plan : entry))
-			: [plan, ...(previous ?? [])]
+			? previous.map((entry) => (entry.id === plan.id ? { ...entry, ...plan } : entry))
+			: [{ ...plan, blockedBy: [] }, ...(previous ?? [])]
 	)
 }
 
 export function dropPlan (queryClient: QueryClient, planId: string): void {
 	queryClient.removeQueries({ queryKey: planKeys.detail(planId) })
-	queryClient.setQueryData<Plan[]>(planKeys.list(), (previous) =>
+	queryClient.setQueryData<PlanListEntry[]>(planKeys.list(), (previous) =>
 		previous?.filter((entry) => entry.id !== planId)
 	)
 }

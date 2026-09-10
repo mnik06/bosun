@@ -57,12 +57,30 @@ export const PlanSchema = z.object({
 	state: PlanStateSchema.nullish().default(null),
 	summary: PlanSummarySchema.nullish().default(null),
 	summarisedAt: z.iso.datetime().nullish().default(null),
+	// Non-null only on a preparation plan: the plans its session was asked to
+	// rewrite. Optional because this app and the backend deploy separately.
+	preparesPlanIds: z.array(z.string()).nullish().default(null),
 	createdAt: z.iso.datetime()
 })
 
 export type Plan = z.infer<typeof PlanSchema>
 
-export const PlanListSchema = z.array(PlanSchema)
+export const PlanBlockerRefSchema = z.object({
+	number: z.number().int(),
+	title: z.string().nullable()
+})
+
+export type PlanBlockerRef = z.infer<typeof PlanBlockerRefSchema>
+
+// Only the list carries this: a plan pushed over the socket is the row alone, so
+// a shape that expected blockers on every plan would blank them on every push.
+export const PlanListEntrySchema = PlanSchema.extend({
+	blockedBy: z.array(PlanBlockerRefSchema).nullish().default([])
+})
+
+export type PlanListEntry = z.infer<typeof PlanListEntrySchema>
+
+export const PlanListSchema = z.array(PlanListEntrySchema)
 
 export const PlanQuestionSchema = z.object({
 	header: z.string(),

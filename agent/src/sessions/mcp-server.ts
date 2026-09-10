@@ -165,15 +165,16 @@ export interface PendingQuestions {
 	pending: Map<string, PendingQuestion>;
 }
 
+// Built by the caller from `pending`, which is why the map is handed in rather
+// than owned here: `bosun_ask` is a tool only some sessions are given.
+export type SessionDispatchFactory = (
+	pending: Map<string, PendingQuestion>
+) => (name: string, args: unknown) => Promise<unknown>;
+
 export async function startSessionMcpServer(opts: {
 	sessionId: string;
 	definitions: unknown[];
-	// Built by the caller from `pending`, which is why the map is handed in rather
-	// than owned here: `bosun_ask` is a tool only some sessions are given.
-	createDispatch: (pending: Map<string, PendingQuestion>) => (
-		name: string,
-		args: unknown
-	) => Promise<unknown>;
+	createDispatch: SessionDispatchFactory;
 	userServers?: Record<string, unknown>;
 	log: (message: string) => void;
 }): Promise<SessionMcpServer> {

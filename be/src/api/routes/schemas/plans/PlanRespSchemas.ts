@@ -20,7 +20,11 @@ export const PlanExecutionSchema = z.object({
 	runs: z.array(SliceRunDetailSchema)
 });
 
-export const PlanListRespSchema = z.array(PlanWithStateSchema);
+export const PlanListRespSchema = z.array(
+	PlanWithStateSchema.extend({
+		blockedBy: z.array(z.object({ number: z.number().int(), title: z.string().nullable() }))
+	})
+);
 
 export const PlanDetailRespSchema = z.object({
 	plan: PlanWithStateSchema,

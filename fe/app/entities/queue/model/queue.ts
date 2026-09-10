@@ -86,6 +86,13 @@ export const QueueItemDetailSchema = z.object({
 	startedAt: z.coerce.date().nullable(),
 	finishedAt: z.coerce.date().nullable(),
 	planTitle: z.string().nullable(),
+	// The blockers holding this item back, wherever in the project they were
+	// queued. Optional for the same reason `activity` is: the running backend may
+	// not have shipped it yet, and a missing field must leave the page working.
+	waitingFor: z
+		.array(z.object({ number: z.number().int(), title: z.string().nullable() }))
+		.nullish()
+		.default([]),
 	runs: z.array(SliceRunDetailSchema)
 })
 

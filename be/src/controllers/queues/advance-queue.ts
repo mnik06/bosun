@@ -1,6 +1,7 @@
 import { type AdvanceDeps } from 'src/controllers/queues/advance-deps';
 import { announceQueue } from 'src/controllers/queues/announce-queue';
 import { pullRequestBody } from 'src/controllers/queues/pull-request-body';
+import { blockerHolds } from 'src/controllers/queues/shared/blockers';
 import { type Plan } from 'src/types/PlanSchema';
 import { toQueueSlug, type Queue, type QueueItem } from 'src/types/QueueSchema';
 import { DEFAULT_PROJECT_PROFILE } from 'src/types/ProjectProfileSchema';
@@ -158,11 +159,13 @@ async function dispatch(
 	return 'sent';
 }
 
-// A plan waits for its blockers to have finished *in this queue*. A blocker that
-// was never queued here cannot be waited for at all — nothing will ever complete
-// it in this worktree — so it does not hold the plan back. That is deliberate: a
-// dependency nobody queued is a planning mistake, and stalling a queue forever
-// over it is worse than running in push order and letting the result show it.
+// A plan waits for its blockers wherever in the project they were queued, not
+// only here. `blockerHolds` carries the rule and the reasoning behind it.
+//
+// `items` is this queue as the caller now understands it, which is ahead of the
+// database for exactly one row: the item just closed above. Overlaying it is
+// what stops the plan waiting on it being skipped for a blocker that finished a
+// line ago.
 async function blockedPlanIds(deps: AdvanceDeps, items: QueueItem[]): Promise<string[]> {
 	const queued = items.filter((item) => item.status === 'queued');
 
@@ -176,18 +179,20 @@ async function blockedPlanIds(deps: AdvanceDeps, items: QueueItem[]): Promise<st
 		return [];
 	}
 
-	const finished = new Set(
-		items.filter((item) => item.status === 'done').map((item) => item.planId)
-	);
-	const present = new Set(items.map((item) => item.planId));
+	const statuses = await deps.queueItemRepo.statusesForPlans([
+		...new Set(edges.map((edge) => edge.blockedByPlanId))
+	]);
+
+	for (const item of items) {
+		statuses.set(item.planId, [...(statuses.get(item.planId) ?? []), item.status]);
+	}
 
 	return queued
 		.filter((item) =>
 			edges.some(
 				(edge) =>
 					edge.planId === item.planId &&
-					present.has(edge.blockedByPlanId) &&
-					!finished.has(edge.blockedByPlanId)
+					blockerHolds(statuses.get(edge.blockedByPlanId))
 			)
 		)
 		.map((item) => item.planId);

@@ -104,6 +104,28 @@ export async function routeServerFrame(deps: RouterDeps, msg: ServerMsg): Promis
 
 			return;
 
+		case 'plan.prepare':
+			if (deps.state.paused) {
+				deps.socket.send(
+					JSON.stringify({
+						type: 'plan.error',
+						planId: msg.planId,
+						message: 'this machine is paused'
+					})
+				);
+
+				return;
+			}
+
+			await deps.sessions.prepare({
+				planId: msg.planId,
+				planNumber: msg.planNumber,
+				plans: msg.plans,
+				notes: msg.notes
+			});
+
+			return;
+
 		case 'plan.say':
 			await deps.sessions.say({
 				planId: msg.planId,

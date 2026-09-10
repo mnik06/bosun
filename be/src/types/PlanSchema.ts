@@ -21,6 +21,7 @@ export const PlanSchema = z.object({
 	input: z.string(),
 	summary: PlanSummarySchema.nullable(),
 	summarisedAt: z.date().nullable(),
+	preparesPlanIds: z.array(z.string()).nullable(),
 	createdAt: z.date()
 });
 

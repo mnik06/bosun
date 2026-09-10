@@ -10,6 +10,13 @@ export const CreatePlanReqSchema = z.object({
 	auto: z.boolean().default(false)
 });
 
+// Two is the floor because a preparation plan holds what more than one plan
+// needs: with one selected there is nothing to share it with, and the session
+// would be asked to guess at a second consumer that does not exist.
+export const PreparePlansReqSchema = z.object({
+	planIds: z.array(z.string().min(1)).min(2)
+});
+
 export const SayToPlanReqSchema = z.object({ text: z.string().trim().min(1) });
 
 export const AnswerPlanReqSchema = z.object({
@@ -20,6 +27,10 @@ export const AnswerPlanReqSchema = z.object({
 export const AgentPlanNameReqSchema = z.object({ title: z.string().min(1) });
 
 export const AgentPublishReqSchema = z.object({
+	// The preparation plan on whose behalf another plan is being rewritten. The id
+	// is checked against that plan's recorded scope rather than believed, so a
+	// session naming one it was not created with is refused.
+	preparedBy: z.string().nullable().default(null),
 	title: z.string().min(1),
 	bodyMd: z.string().min(1),
 	acs: z.array(z.object({ code: z.string().min(1), text: z.string().min(1) })).min(1),

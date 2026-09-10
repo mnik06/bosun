@@ -39,6 +39,20 @@ export function getAcRepo(db: DbOrTx) {
 			return rows.map((row) => AcSchema.parse(row));
 		},
 
+		async listByPlans(planIds: string[]): Promise<Ac[]> {
+			if (planIds.length === 0) {
+				return [];
+			}
+
+			const rows = await db
+				.select(columns)
+				.from(acs)
+				.where(inArray(acs.planId, planIds))
+				.orderBy(asc(acs.ordinal));
+
+			return rows.map((row) => AcSchema.parse(row));
+		},
+
 		async listByCodes(opts: { planId: string; codes: string[] }): Promise<Ac[]> {
 			const rows = await db
 				.select(columns)

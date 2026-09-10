@@ -97,8 +97,19 @@ export const SliceRunDetailSchema = SliceRunSchema.extend({
 
 export type SliceRunDetail = z.infer<typeof SliceRunDetailSchema>;
 
+// The blockers actually holding this item back, so a queue sitting at `idle`
+// behind a plan being built in another queue says what it is waiting for instead
+// of looking like it ran out of work.
+export const QueueWaitingForSchema = z.object({
+	number: z.number().int(),
+	title: z.string().nullable()
+});
+
+export type QueueWaitingFor = z.infer<typeof QueueWaitingForSchema>;
+
 export const QueueItemDetailSchema = QueueItemSchema.extend({
 	planTitle: z.string().nullable(),
+	waitingFor: z.array(QueueWaitingForSchema),
 	runs: z.array(SliceRunDetailSchema)
 });
 

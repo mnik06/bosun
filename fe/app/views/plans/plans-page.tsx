@@ -1,10 +1,11 @@
 import { Button, Group } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
-import { ListPlus, Plus } from 'lucide-react'
+import { GitMerge, ListPlus, Plus } from 'lucide-react'
 import { useState } from 'react'
 
 import { usePlansQuery } from '~/entities/plan'
 import { NewPlanModal } from '~/features/create-plan'
+import { PrepareParallelModal } from '~/features/prepare-parallel'
 import { PushToQueueModal } from '~/features/push-to-queue'
 import { Page } from '~/shared/ui'
 import { PlansList } from '~/widgets/plans-list'
@@ -13,6 +14,7 @@ export default function PlansPage () {
 	const [opened, { open, close }] = useDisclosure(false)
 	const [selected, setSelected] = useState<string[]>([])
 	const [pushing, setPushing] = useState(false)
+	const [preparing, setPreparing] = useState(false)
 	const { data } = usePlansQuery()
 
 	// Filtered against the list rather than trusted: a plan deleted while it was
@@ -37,6 +39,22 @@ export default function PlansPage () {
 						</Button>
 					)}
 
+					{/* Two is the floor: a preparation plan holds what more than one plan
+					    needs, and with one selected there is no second consumer to share
+					    anything with. */}
+					{chosen.length < 2 ? null : (
+						<Button
+							variant="light"
+							size="xs"
+							leftSection={<GitMerge size={14} />}
+							onClick={() => {
+								setPreparing(true)
+							}}
+						>
+							Prepare for parallel work ({chosen.length})
+						</Button>
+					)}
+
 					<Button variant="light" size="xs" leftSection={<Plus size={14} />} onClick={open}>
 						New plan
 					</Button>
@@ -52,6 +70,15 @@ export default function PlansPage () {
 				opened={pushing}
 				onClose={() => {
 					setPushing(false)
+					setSelected([])
+				}}
+			/>
+
+			<PrepareParallelModal
+				plans={chosen}
+				opened={preparing}
+				onClose={() => {
+					setPreparing(false)
 					setSelected([])
 				}}
 			/>

@@ -79,6 +79,27 @@ export function getQueueItemRepo(db: DbOrTx) {
 			return latest;
 		},
 
+		// Every status a plan sits at, across every queue in the project rather than
+		// one of them. A blocker is waited for wherever it was pushed, so the
+		// scheduler cannot answer "has this landed" from the queue it is advancing.
+		async statusesForPlans(planIds: string[]): Promise<Map<string, QueueItemStatus[]>> {
+			if (planIds.length === 0) {
+				return new Map();
+			}
+
+			const rows = await db
+				.select({ planId: queueItems.planId, status: queueItems.status })
+				.from(queueItems)
+				.where(inArray(queueItems.planId, planIds));
+			const byPlan = new Map<string, QueueItemStatus[]>();
+
+			for (const row of rows) {
+				byPlan.set(row.planId, [...(byPlan.get(row.planId) ?? []), row.status]);
+			}
+
+			return byPlan;
+		},
+
 		async getById(id: string): Promise<QueueItem | null> {
 			const [row] = await db.select(columns).from(queueItems).where(eq(queueItems.id, id));
 

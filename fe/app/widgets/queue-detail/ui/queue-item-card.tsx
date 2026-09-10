@@ -1,6 +1,7 @@
 import { ActionIcon, Anchor, Badge, Card, Group, Stack, Text } from '@mantine/core'
 import { ExternalLink, X } from 'lucide-react'
 
+import { planLabel } from '~/entities/plan'
 import { itemElapsedMs, type QueueItemDetail, type QueueItemStatus } from '~/entities/queue'
 import { RetryPlanButton } from '~/features/retry-plan'
 import { formatDuration } from '~/shared/lib'
@@ -26,6 +27,7 @@ export function QueueItemCard ({
 	onRemove: (itemId: string) => void
 }) {
 	const elapsed = itemElapsedMs({ item, now })
+	const waiting = item.waitingFor ?? []
 
 	return (
 		<Card withBorder padding="md" radius="md">
@@ -55,6 +57,12 @@ export function QueueItemCard ({
 						{item.failureReason === null ? null : (
 							<Text size="xs" c="red">
 								{item.failureReason}
+							</Text>
+						)}
+
+						{waiting.length === 0 ? null : (
+							<Text size="xs" c="orange">
+								Waiting for {waiting.map(planLabel).join(', ')}
 							</Text>
 						)}
 

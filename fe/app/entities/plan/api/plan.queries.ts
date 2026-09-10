@@ -3,8 +3,8 @@ import { useQuery } from '@tanstack/react-query'
 import {
 	PlanDetailSchema,
 	PlanListSchema,
-	type Plan,
-	type PlanDetail
+	type PlanDetail,
+	type PlanListEntry
 } from '~/entities/plan/model/plan'
 import { apiClient, getActiveProjectId } from '~/shared/api'
 
@@ -17,7 +17,7 @@ export const planKeys = {
 	detail: (id: string) => [...planKeys.all(), 'detail', id] as const
 }
 
-export async function fetchPlans (): Promise<Plan[]> {
+export async function fetchPlans (): Promise<PlanListEntry[]> {
 	const { data } = await apiClient.get<unknown>('/plans')
 
 	return PlanListSchema.parse(data)
