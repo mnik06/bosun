@@ -9,6 +9,7 @@ import cors from '@fastify/cors';
 import websocket from '@fastify/websocket';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import { errorHandler } from 'src/api/errors/error.handler';
+import { startStalePlanSweep } from 'src/controllers/plans/sweep-stale-plans';
 import { getLoggerOptions } from 'src/api/plugins/logger.plugin';
 import {
 	getRequireMembershipHook,
@@ -124,6 +125,18 @@ export async function buildServer(): Promise<FastifyInstance> {
 	decorateContext(server, env);
 
 	registerRoutes(server);
+
+	// Nothing else settles a grill whose machine never comes back: a planning
+	// session outlives its socket, so a close reports nothing and the agent's
+	// `hello` is what settles the rest.
+	const stopSweep = startStalePlanSweep({
+		planRepo: server.repos.planRepo,
+		planTextService: server.services.planTextService,
+		socketRegistry: server.services.socketRegistry,
+		log: server.log
+	});
+
+	server.addHook('onClose', stopSweep);
 
 	return server;
 }

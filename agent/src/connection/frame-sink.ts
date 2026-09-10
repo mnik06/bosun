@@ -1,17 +1,29 @@
 import { type AgentMsg } from '../protocol';
 
 // The frames whose loss changes what the backend believes. Everything else is
-// the live view of a bullet that is still running — text deltas and activity
+// the live view of a session that is still running — text deltas and activity
 // labels — and replaying twenty minutes of those on reconnect would redraw a
 // transcript the browser already has, on top of growing without bound for as
 // long as the connection is down.
-const SETTLING = new Set(['exec.done', 'exec.error', 'exec.question']);
+//
+// A question is settling for the same reason a result is: it is the session
+// stopping to wait for a person, and losing it leaves a grill blocked on a tool
+// call the browser was never told about.
+const SETTLING = new Set([
+	'exec.done',
+	'exec.error',
+	'exec.question',
+	'plan.done',
+	'plan.error',
+	'plan.question'
+]);
 
 export interface FrameSink {
 	attach(deliver: (message: AgentMsg) => void): void;
 	detach(): void;
 	send(message: AgentMsg): void;
 	pendingRunIds(): string[];
+	pendingPlanIds(): string[];
 }
 
 // An execution session outlives the socket it was dispatched over: `claude` keeps
@@ -64,6 +76,14 @@ export function createFrameSink(): FrameSink {
 		// bullet out again on resume.
 		pendingRunIds(): string[] {
 			return pending.flatMap((message) => ('runId' in message ? [message.runId] : []));
+		},
+
+		// The same argument for a grill: a session that published and settled while
+		// the connection was down is gone from the sessions map, and its `plan.done`
+		// is parked here. A backend that failed it as stranded would mark a plan that
+		// in fact landed as one whose agent disappeared.
+		pendingPlanIds(): string[] {
+			return pending.flatMap((message) => ('planId' in message ? [message.planId] : []));
 		}
 	};
 }

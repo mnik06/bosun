@@ -66,38 +66,56 @@ underneath us — a repo goes dirty, a token expires, someone installs pnpm. Re-
 connect means the reconnect path and the first-connect path are the same code, and the checklist in
 the browser always describes the current machine rather than the machine as it was at enrollment.
 
-## Why execution sessions outlive the connection
+## Why execution and planning sessions outlive the connection
 
-Planning and ask sessions are per-connection and are cancelled on close. That is not tidiness: a
-grill is a question on somebody's screen answered over *that* socket, so a session whose socket has
-gone cannot be answered at all, and keeping the process alive across a reconnect would only leak it.
+Ask sessions are per-connection and are cancelled on close: one is a single question answered over
+*that* socket by a queue that is waiting on the reply, so a session whose socket has gone has nobody
+left to answer it.
 
-Execution is the exception, and it took a backend deploy killing a twenty-minute bullet to make the
-difference obvious. An AFK run needs the socket to **report**, not to **work**. `claude` is building
-in a worktree; nothing about that depends on a TCP connection to bosun existing at any given instant.
-Cancelling it on close threw away real work for a one-second blip, and the deploy path made that
-routine — every release killed whatever the fleet was mid-way through.
+Execution was the first exception, and it took a backend deploy killing a twenty-minute bullet to
+make the difference obvious. An AFK run needs the socket to **report**, not to **work**. `claude` is
+building in a worktree; nothing about that depends on a TCP connection to bosun existing at any given
+instant. Cancelling it on close threw away real work for a one-second blip, and the deploy path made
+that routine — every release killed whatever the fleet was mid-way through.
 
-So `createExecutionSessions` is built in `holdConnection`, outside the reconnect loop, and the socket
-handlers do not cancel it. Three things follow, and all three are load-bearing:
+Planning is the same argument arriving later. A grill was treated as belonging to its socket because
+an answer travels over one — but the *waiting* does not. The session is blocked in a `bosun_ask` tool
+call while somebody reads the question, goes to a meeting and comes back; an idle socket reaped by a
+proxy in the meantime used to end the grill and fail the plan, which is what "the planning session
+dies when I leave it alone" was. The answer still needs a socket, and there is one by the time
+anybody types.
+
+So `createExecutionSessions` and `createPlanningSessions` are both built in `holdConnection`, outside
+the reconnect loop, and the socket handlers do not cancel either. Three things follow, and all three
+are load-bearing:
 
 **Frames go through a sink, not a socket.** `frame-sink.ts` holds a slot for whatever connection is
 current. `attach` on `open`, `detach` on `close` or `error`. A session started on one connection
 reports on the next one without knowing that happened.
 
-**Settling frames are buffered; the live view is dropped.** `exec.done`, `exec.error` and
-`exec.question` change what the backend believes and are replayed on the next `attach`. `exec.text`
-and `exec.activity` are the browser's live view of a running bullet — buffering those would grow
-without bound for the length of the outage and then redraw a transcript the browser already has.
+**Settling frames are buffered; the live view is dropped.** `exec.done`, `exec.error`,
+`exec.question` and their `plan.` counterparts change what the backend believes and are replayed on
+the next `attach`. A question counts as settling for the same reason a result does: it is the session
+stopping to wait for a person, and losing it leaves a grill blocked on a tool call the browser was
+never told about. `exec.text`, `exec.activity`, `plan.text` and `plan.activity` are the browser's
+live view — buffering those would grow without bound for the length of the outage and then redraw a
+transcript the browser already has.
 
-**`hello` carries every run whose outcome is still coming.** That is the live sessions *plus* the
+**A stop signal reaps what a close no longer does.** The children are spawned `detached` so
+cancelling takes their process group with them, which also means nothing takes them when this process
+is stopped. `holdConnection` handles `SIGTERM` and `SIGINT` and cancels both maps before exiting —
+without it every `systemctl restart` leaves a `claude` per live session holding a port, a worktree and
+a credential.
+
+**`hello` carries every run and every plan whose outcome is still coming.** That is the live sessions *plus* the
 sink's parked frames — a bullet that finished during the outage has no session left holding it, but
 its `exec.done` is sitting in the buffer, and a backend that settled that run as stranded would pause
 the queue over a plan which in fact landed and hand the same bullet out again on resume. The backend
 settles every run it cannot account for (`stallMachineRuns`), so this list is the whole of what keeps
-it from resetting the sessions the reconnect was supposed to preserve. `announce` sends `hello`
-before its first `await` and the sink is attached after, so the backend learns which runs survived
-before any buffered frame arrives describing one.
+it from resetting the sessions the reconnect was supposed to preserve. `planIds` is the identical
+mechanism for grills, read by `stallMachinePlans`. `announce` sends `hello` before its first `await`
+and the sink is attached after, so the backend learns what survived before any buffered frame arrives
+describing it.
 
 An answer to a question asked before the drop still lands, because the per-run MCP server is part of
 the session and survives with it. `MCP_TOOL_TIMEOUT` is 30 minutes, which is the real ceiling on how

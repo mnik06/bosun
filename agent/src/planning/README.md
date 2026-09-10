@@ -148,12 +148,33 @@ interleaved.
   reason for a machine to stop being able to plan.
 - **The prompt travels on stdin, never argv.** `/proc/<pid>/cmdline` is world-readable and the input
   is the user's own ticket.
-- **A session dies with its socket.** `connection/socket.ts` cancels every session when the
-  connection drops. A
-  grill is answered over that socket, so one that has gone cannot deliver an answer to a question
-  already in flight; keeping the process alive across a reconnect would leak it and its port. The
-  backend fails those plans on the same event, which is what stops a plan sitting in `planning`
-  forever.
+- **A session outlives its socket.** `holdConnection` builds the sessions map once and hands it to
+  every connection, so a proxy reaping an idle socket or a backend deploy does not end a grill the
+  person is halfway through answering — which is exactly what "the session died while I was at
+  lunch" was. Frames produced while nothing is attached go through the `FrameSink`: a question, a
+  result and an error are held for the next connection, and the live view — text deltas and activity
+  labels — is dropped, because the browser refetches the transcript on reconnect anyway. `hello`
+  names every session still held, and the backend fails whatever it has marked `planning` that the
+  agent did not name. That is the only thing stopping a plan sitting in `planning` forever, so an
+  agent that stops sending `planIds` reintroduces exactly that bug.
+- **A session ends on sign-off, or after 24 hours.** Confirming the plan sends `plan.cancel`; nothing
+  else ends a session that is behaving. The 24-hour cap in `session.ts` is the backstop, and it is
+  the same number as `MCP_TOOL_TIMEOUT` in `sessions/process.ts` on purpose: the tool call a grill
+  blocks in must not be able to time out before the session holding it does. A shorter tool timeout
+  hands the model `The operation timed out.` and it carries on as though the person had refused to
+  answer — which is where a question asked twice and a plan written with no grill behind it both
+  come from.
+- **The same question is asked once.** `createAskTool` fingerprints a question by its headers, text
+  and option labels. A second call while the first is still waiting joins it rather than putting a
+  duplicate prompt on the screen; one that repeats a question already answered is handed the answer
+  back. A model that re-asks has lost the tool result — a compaction, a restarted turn — and asking
+  the person again reads as the grill going in circles.
+- **A non-auto plan cannot be published before it is grilled.** `publish_plan` refuses until one
+  `bosun_ask` has been answered by a person, and the nudge for a turn that ended early says to keep
+  grilling rather than to publish. The point of a planning session is that the plan is not the
+  model's own first draft; a session that loses the thread and writes one anyway produces something
+  that looks reviewed and is not. Auto mode is exempt because its answers are the model's own by
+  design, and a revision is exempt because the plan it edits was already grilled into existence.
 - **Cancelling reaps the process group.** The child is spawned `detached`, so `SIGTERM` goes to the
   group and takes any subagent with it. A `claude` process outliving its session holds a port and a
   credential.

@@ -5,7 +5,7 @@ import { type MachineRepo } from 'src/repos/machines/machine.repo';
 import { markMachineOffline } from 'src/controllers/machines/mark-machine-offline';
 import { markMachineOnline } from 'src/controllers/machines/mark-machine-online';
 import { saveMachinePreflight } from 'src/controllers/machines/save-machine-preflight';
-import { failMachinePlans } from 'src/controllers/plans/fail-machine-plans';
+import { stallMachinePlans } from 'src/controllers/plans/stall-machine-plans';
 import { pauseMachineQueues } from 'src/controllers/queues/pause-machine-queues';
 import { stallMachineRuns } from 'src/controllers/queues/stall-machine-runs';
 import { schedulerDeps } from 'src/controllers/queues/scheduler-deps';
@@ -186,15 +186,24 @@ export async function applyMachineFrame(opts: {
 
 	announceUpdate({ socketRegistry, machine });
 
-	// Before anything else this connection is told to do. The agent killed every
-	// session it was holding when its last socket closed, so whatever is still
-	// `running` here died with that socket — and a reconnect fast enough to keep
-	// the registry slot means `handleClose` bailed and nobody settled it.
+	// Before anything else this connection is told to do. Neither a bullet nor a
+	// grill dies with the socket it was dispatched over, so `hello` is the only
+	// place the two sides can agree on what survived — and a reconnect fast enough
+	// to keep the registry slot means `handleClose` bailed and nobody settled
+	// anything.
 	if (opts.msg.type === 'hello') {
 		await stallMachineRuns(schedulerDeps(opts.fastify), {
 			machineId: machine.id,
 			connectedAt: opts.connectedAt,
 			heldRunIds: opts.msg.runIds
+		});
+		await stallMachinePlans({
+			planRepo: opts.fastify.repos.planRepo,
+			planTextService: opts.fastify.services.planTextService,
+			socketRegistry,
+			machineId: machine.id,
+			connectedAt: opts.connectedAt,
+			heldPlanIds: opts.msg.planIds
 		});
 	}
 
@@ -256,12 +265,16 @@ function createFrameQueue(log: FastifyBaseLogger) {
 	};
 }
 
+// Planning plans are deliberately left alone here. The agent keeps its `claude`
+// processes across a reconnect, so a close says nothing about whether a grill is
+// still alive — `stallMachinePlans` settles that on the next `hello`, against
+// what the agent says it still holds.
 function handleClose(opts: {
 	fastify: FastifyInstance;
 	machineId: string;
 	socket: WebSocket;
 }): void {
-	const { socketRegistry, planTextService } = opts.fastify.services;
+	const { socketRegistry } = opts.fastify.services;
 
 	if (!socketRegistry.unregisterAgentSocket({ machineId: opts.machineId, socket: opts.socket })) {
 		return;
@@ -276,12 +289,6 @@ function handleClose(opts: {
 		}
 	});
 	void pauseMachineQueues(schedulerDeps(opts.fastify), { machineId: opts.machineId });
-	void failMachinePlans({
-		planRepo: opts.fastify.repos.planRepo,
-		planTextService,
-		socketRegistry,
-		machineId: opts.machineId
-	});
 }
 
 const routes: FastifyPluginAsync = async function (fastify) {

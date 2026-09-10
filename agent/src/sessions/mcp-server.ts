@@ -61,12 +61,32 @@ function recommendedAnswers(questions: PlanQuestion[]): PlanAnswer[] {
 	}));
 }
 
+// What makes two `bosun_ask` calls the same question. The wording of the options
+// is part of it: a genuine follow-up that narrows the same header offers
+// different choices, and re-asking with the identical set is the model having
+// lost the answer rather than wanting a new one.
+function fingerprint(questions: PlanQuestion[]): string {
+	return JSON.stringify(
+		questions.map((question) => [
+			question.header,
+			question.question,
+			question.options.map((option) => option.label)
+		])
+	);
+}
+
 // The one tool the transport owns, because answering it is the only thing that
 // needs the socket: everything else a session can call is the caller's business.
 //
 // `auto` answers the question with the session's own recommendation instead of
 // waiting for a person. The question is still formed and still emitted, so the
 // grill and the transcript are unchanged — only the wait is gone.
+//
+// Asking the same thing twice is answered from what the session was already told
+// rather than put to the person again. A model that re-asks has lost the tool
+// result — a context compaction, a dropped frame, a turn that restarted — and a
+// second prompt for a decision already made reads as the grill going in circles.
+// Called once per session, so the two maps below are that session's memory.
 export function createAskTool(opts: {
 	pending: Map<string, PendingQuestion>;
 	onQuestion: (payload: {
@@ -75,9 +95,12 @@ export function createAskTool(opts: {
 		autoAnswers?: PlanAnswer[];
 	}) => void;
 	auto?: boolean;
+	onAnswered?: () => void;
 }) {
-	return async function ask(args: unknown) {
-		const { questions } = AskArgsSchema.parse(args);
+	const settled = new Map<string, { questions: PlanQuestion[]; answers: PlanAnswer[] }>();
+	const inFlight = new Map<string, Promise<PlanAnswer[]>>();
+
+	const emit = async (questions: PlanQuestion[]): Promise<PlanAnswer[]> => {
 		const questionId = `q_${crypto.randomBytes(9).toString('base64url')}`;
 
 		if (opts.auto) {
@@ -85,20 +108,60 @@ export function createAskTool(opts: {
 
 			opts.onQuestion({ questionId, questions, autoAnswers });
 
+			return autoAnswers;
+		}
+
+		return new Promise<PlanAnswer[]>((resolve) => {
+			opts.pending.set(questionId, { questionId, resolve });
+			opts.onQuestion({ questionId, questions });
+		});
+	};
+
+	return async function ask(args: unknown) {
+		const { questions } = AskArgsSchema.parse(args);
+		const key = fingerprint(questions);
+		const already = settled.get(key);
+
+		if (already) {
+			return textResult(
+				`You already asked this and it was answered. The answer stands:\n${describeAnswers(
+					already
+				)}\nDo not ask it again — carry on from here.`
+			);
+		}
+
+		// Two calls for the same question in one turn are one question. Emitting the
+		// second would put a duplicate prompt on the screen whose answer the model
+		// never waits for, because the first tool call is the one it is blocked on.
+		let waiting = inFlight.get(key);
+
+		if (!waiting) {
+			waiting = emit(questions);
+			inFlight.set(key, waiting);
+		}
+
+		const answers = await waiting;
+
+		inFlight.delete(key);
+
+		// An empty answer is the MCP server closing over a question nobody could
+		// answer, not a ruling. Remembering it would answer every later ask with
+		// silence.
+		if (answers.length > 0) {
+			settled.set(key, { questions, answers });
+			opts.onAnswered?.();
+		}
+
+		if (opts.auto) {
 			// Said back to the session rather than left implicit: it has to know the
 			// ruling was its own, because those are the ones the plan records as
 			// decisions taken on the person's behalf.
 			return textResult(
 				`Auto mode: nobody was asked. Your own recommended option was taken as the answer.\n${describeAnswers(
-					{ questions, answers: autoAnswers }
+					{ questions, answers }
 				)}\nRecord it in the plan's key decisions as a call you made for them.`
 			);
 		}
-
-		const answers = await new Promise<PlanAnswer[]>((resolve) => {
-			opts.pending.set(questionId, { questionId, resolve });
-			opts.onQuestion({ questionId, questions });
-		});
 
 		return textResult(describeAnswers({ questions, answers }));
 	};

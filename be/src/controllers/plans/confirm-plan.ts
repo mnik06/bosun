@@ -45,5 +45,15 @@ export async function confirmPlan(opts: {
 
 	announcePlan({ socketRegistry: opts.socketRegistry, plan: updated });
 
+	// Sign-off is what ends the session. Until then the agent keeps the `claude`
+	// that wrote the plan warm so a correction continues the same conversation, and
+	// after it there is nothing left to correct — a revision of a confirmed plan
+	// starts a fresh session from the plan itself. An agent that never receives
+	// this reaps the session on its own 24-hour limit.
+	opts.socketRegistry.sendToAgent({
+		machineId: plan.machineId,
+		message: { type: 'plan.cancel', planId: plan.id }
+	});
+
 	return updated;
 }

@@ -13,6 +13,10 @@ browser, one decision at a time — until it publishes a plan, its acceptance cr
 bullets as rows in bosun, all editable afterwards. See `plans/005-planning.md` and
 `agent/src/planning/README.md`.
 
+The session lives on the machine, not in the connection: closing the tab, losing the network or
+deploying the backend does not end it, and a question can sit unanswered for as long as you like. It
+ends when you confirm the plan, or after 24 hours, whichever comes first.
+
 Accounts are email and password, with **Supabase Auth** as the identity provider. Bosun never sees a
 password and never mints a session: the browser authenticates against Supabase and presents the
 resulting access token to `be/`, which hands it back to Supabase to resolve into a user on every

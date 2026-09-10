@@ -59,28 +59,44 @@ const UNPUBLISHED_NUDGE = [
 	'Publish the plan now with what you already know, or ask with bosun_ask if you genuinely cannot proceed without an answer.'
 ].join(' ');
 
-// A published session is kept alive so the next thing the person types continues
-// the same conversation rather than re-reading the repository from nothing. It
-// is a `claude` process holding memory, so it does not stay forever: past this,
-// the next message starts a revision session with the plan handed to it.
-const IDLE_REAP_MS = 30 * 60 * 1000;
+// The same failure before the grill has happened, where the nudge above would be
+// telling it to do the one thing it must not: write the plan from its own first
+// draft. `publish_plan` refuses in this state anyway, so a nudge to publish would
+// only spend a turn being refused.
+const UNGRILLED_NUDGE = [
+	'Your turn ended with nothing published and no question waiting, so this session is doing nothing and the plan is still empty.',
+	'Subagent results arrive inside the turn that spawned them — nothing is running in the background and no report is on its way.',
+	'The grill has not started: ask the next question now with bosun_ask, one question, and keep going until the decisions are settled.'
+].join(' ');
+
+// The whole life of a session, mid-grill or warm. A grill waits on a person, and
+// a person is entitled to go home and answer in the morning — so nothing shorter
+// can be a timeout without the session dying under somebody who is still using
+// it. What ends a session earlier is the plan being confirmed, which is a
+// `plan.cancel` from the backend.
+const SESSION_MAX_MS = 24 * 60 * 60 * 1000;
 const REAP_SWEEP_MS = 60 * 1000;
 
 interface Session {
 	mcp: SessionMcpServer;
 	process: ClaudeSession | null;
 	cancelled: boolean;
+	startedAt: number;
 	// A turn finished. The session stays up for follow-ups, and this is when it
-	// went quiet — a session mid-grill has never settled and is never reaped.
+	// went quiet — a session mid-grill has never settled.
 	idleAt: number | null;
 	// Whether a plan has actually been written. A revision starts true, because
 	// the plan it was handed is already published.
 	published: boolean;
+	// Whether a `bosun_ask` question has been answered. What separates a plan the
+	// person shaped from one the model wrote for itself.
+	grilled: boolean;
 	nudged: boolean;
 	// Off for a preparation session: publishing nothing is a legitimate outcome
 	// there, and nudging one that decided the plans share nothing would argue with
 	// the answer it was asked for.
 	nudge: boolean;
+	requireGrill: boolean;
 	// Set by `abandon_preparation`. Recorded rather than acted on inside the tool
 	// so the call returns before the process is torn down under it.
 	abandonedReason: string | null;
@@ -94,6 +110,7 @@ export interface PlanningSessions {
 		auto: boolean;
 		notes: string | null;
 	}): Promise<void>;
+	held(): string[];
 	prepare(opts: {
 		planId: string;
 		planNumber: number;
@@ -186,9 +203,15 @@ export function createPlanningSessions(opts: {
 			return;
 		}
 
+		const ungrilled = session.requireGrill && !session.grilled;
+
 		session.nudged = true;
-		opts.send({ type: 'plan.activity', planId, label: 'Asking the session to publish' });
-		session.process.send(UNPUBLISHED_NUDGE);
+		opts.send({
+			type: 'plan.activity',
+			planId,
+			label: ungrilled ? 'Asking the session to keep grilling' : 'Asking the session to publish'
+		});
+		session.process.send(ungrilled ? UNGRILLED_NUDGE : UNPUBLISHED_NUDGE);
 	};
 
 	const fail = (planId: string, message: string): void => {
@@ -218,6 +241,14 @@ export function createPlanningSessions(opts: {
 		}
 	};
 
+	const onGrilled = (planId: string) => (): void => {
+		const current = sessions.get(planId);
+
+		if (current) {
+			current.grilled = true;
+		}
+	};
+
 	const onQuestion =
 		(planId: string) =>
 			({
@@ -237,6 +268,7 @@ export function createPlanningSessions(opts: {
 		prompt: string;
 		published: boolean;
 		nudge: boolean;
+		requireGrill: boolean;
 		tools: { builtin: string[]; mcp: string[] };
 		definitions: unknown[];
 		createDispatch: SessionDispatchFactory;
@@ -261,10 +293,13 @@ export function createPlanningSessions(opts: {
 			mcp,
 			process: null,
 			cancelled: false,
+			startedAt: Date.now(),
 			idleAt: null,
 			published: opts2.published,
+			grilled: false,
 			nudged: false,
 			nudge: opts2.nudge,
+			requireGrill: opts2.requireGrill,
 			abandonedReason: null
 		};
 
@@ -347,13 +382,22 @@ export function createPlanningSessions(opts: {
 		}
 	};
 
+	// The only clock a session answers to. A settled one is torn down quietly — its
+	// plan is written and the next message starts a revision session from it — but
+	// one still mid-grill has a plan row sitting in `planning`, and tearing it down
+	// without saying so is what leaves a chat rendering a question nobody is
+	// listening for.
 	const reaper = setInterval(() => {
-		const deadline = Date.now() - IDLE_REAP_MS;
+		const deadline = Date.now() - SESSION_MAX_MS;
 
 		for (const [planId, session] of sessions) {
-			if (session.idleAt !== null && session.idleAt < deadline) {
-				teardown(planId);
+			if (session.startedAt >= deadline) {
+				continue;
 			}
+
+			session.idleAt === null
+				? fail(planId, 'this planning session reached its 24-hour limit and was ended')
+				: teardown(planId);
 		}
 	}, REAP_SWEEP_MS);
 
@@ -375,16 +419,26 @@ export function createPlanningSessions(opts: {
 				}),
 				published: false,
 				nudge: true,
+				requireGrill: !payload.auto,
 				tools: PLANNING_TOOLS,
 				definitions: TOOL_DEFINITIONS,
 				createDispatch: createPlanDispatch({
 					planId: payload.planId,
 					auto: payload.auto,
+					requireGrill: !payload.auto,
 					bosunApi: opts.services.bosunApi,
 					onPublished: onPublished(payload.planId),
+					onGrilled: onGrilled(payload.planId),
 					onQuestion: onQuestion(payload.planId)
 				})
 			});
+		},
+
+		// Named on every `hello` so the backend can tell a session that outlived a
+		// reconnect from one that died with the agent process. Everything it has
+		// marked `planning` and this does not name has nothing left to finish it.
+		held(): string[] {
+			return [...sessions.keys()];
 		},
 
 		// One session, three outputs: its own plan, the selected plans rewritten
@@ -406,6 +460,7 @@ export function createPlanningSessions(opts: {
 				}),
 				published: false,
 				nudge: false,
+				requireGrill: false,
 				tools: PREPARATION_TOOLS,
 				definitions: PREPARE_TOOL_DEFINITIONS,
 				createDispatch: createPrepareDispatch({
@@ -443,6 +498,11 @@ export function createPlanningSessions(opts: {
 				// changes nothing is a legitimate answer rather than an empty plan.
 				published: payload.plan.bodyMd !== null,
 				nudge: true,
+				// A revision edits a plan that was already grilled into existence, and
+				// a plan that was never published has nothing to revise — the person
+				// asked for a change in prose, which is the decision the grill exists to
+				// get.
+				requireGrill: false,
 				tools: PLANNING_TOOLS,
 				definitions: TOOL_DEFINITIONS,
 				createDispatch: createPlanDispatch({
@@ -451,8 +511,10 @@ export function createPlanningSessions(opts: {
 					// carries the flag, because the agent holds no plan state between
 					// sessions.
 					auto: payload.plan.auto,
+					requireGrill: false,
 					bosunApi: opts.services.bosunApi,
 					onPublished: onPublished(payload.planId),
+					onGrilled: onGrilled(payload.planId),
 					onQuestion: onQuestion(payload.planId)
 				})
 			});
@@ -482,8 +544,9 @@ export function createPlanningSessions(opts: {
 		// Only the ones mid-turn. A settled session is still in the map on purpose —
 		// it holds a warm `claude` so a follow-up continues the same conversation —
 		// but it is doing nothing, and counting it told the upgrade path that work
-		// was in flight for thirty minutes after every grill, and for good after one
-		// whose process hung. An upgrade somebody asked for outranks a warm cache.
+		// was in flight for the rest of the session's life after every grill, and for
+		// good after one whose process hung. An upgrade somebody asked for outranks a
+		// warm cache.
 		running(): number {
 			return [...sessions.values()].filter((session) => session.idleAt === null).length;
 		},

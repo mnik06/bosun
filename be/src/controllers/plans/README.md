@@ -101,9 +101,20 @@ overlapping appends collide; and an answer recorded before the question it answe
 that cannot be replayed in order. Pongs stay off the queue because a round-trip time measured from
 behind a database write is measuring the wrong thing.
 
-## A dropped agent socket ends every session on that machine
+## A dropped agent socket ends nothing; `hello` settles what did not survive
 
-`failMachinePlans` runs from the socket's `close` handler. A grill is answered over that socket, so
-one that has gone cannot receive an answer to a question already in flight. Leaving the plan in
-`planning` would mean a chat that renders a question nobody is listening for. The agent kills its own
-`claude` processes on the same event, so the two sides agree without needing to negotiate.
+A planning session outlives the socket it was started over — the `claude` process lives in the agent,
+holds its place in the grill through an idle socket being reaped or the backend deploying, and
+reports on whatever connection is current. Failing every `planning` plan from the `close` handler is
+what made a grill die of being left alone: somebody went to lunch, the socket was reaped for
+idleness, and the plan they were halfway through answering came back failed.
+
+So `stallMachinePlans` runs from `hello` instead, exactly as `stallMachineRuns` does. The frame names
+every session the agent still holds; everything this machine has marked `planning` that it does not
+name, and that predates this connection, died with the agent process and is failed here. The
+`connectedAt` cut-off is what spares a plan dispatched over this connection microseconds ago, which
+the agent may not have registered before it assembled its `hello`.
+
+It settles the other direction too: a plan the agent still holds that bosun no longer has running —
+deleted, or confirmed, while the connection was down — gets a `plan.cancel`, because a `claude`
+holding a port and a credential for a plan nobody will read is the orphan this exists to prevent.

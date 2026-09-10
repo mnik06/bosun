@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 
 import { useProjectsQuery } from '~/entities/project/api/project.queries'
+import { projectSwitchPath } from '~/entities/project/lib/project-switch-path'
 import type { Project, ProjectRole } from '~/entities/project/model/project'
 import { getActiveProjectId, setActiveProjectId } from '~/shared/api'
 
@@ -35,7 +36,7 @@ export function ActiveProjectProvider ({ children }: { children: ReactNode }) {
 	// choice a function of something an effect below writes, and the first render
 	// — before the projects arrive — wrote null into it, so the remembered project
 	// was cleared and every reload snapped back to the first one in the list.
-	const [chosenId, setChosenId] = useState(getActiveProjectId)
+	const [chosenId] = useState(getActiveProjectId)
 
 	// A stored id is a memory of a membership, not proof of one: it survives being
 	// removed from the project, and a header naming a project the caller is no
@@ -63,8 +64,17 @@ export function ActiveProjectProvider ({ children }: { children: ReactNode }) {
 		isLeader: activeProject?.role === 'leader',
 		isLoading: isPending,
 		selectProject: (projectId: string) => {
-			setChosenId(projectId)
+			if (projectId === activeProject?.id) {
+				return
+			}
+
 			setActiveProjectId(projectId)
+
+			// A document load rather than a re-render. Only the list keys carry the
+			// project id, so a detail query, the plan transcript the socket is
+			// subscribed to and every in-flight request still belong to the project
+			// being left — and re-rendering keeps all three.
+			window.location.assign(projectSwitchPath(window.location.pathname))
 		}
 	}), [projects, activeProject, isPending])
 

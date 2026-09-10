@@ -1,10 +1,14 @@
 import { spawn } from 'child_process';
 import { type ClaudeAuthService } from '../services/claude-auth.service';
 
-// A human can sit on a question for ten minutes. The CLI's default MCP tool-call
-// timeout is a minute, and `bosun_ask` blocking past it is what the whole grill
-// is built on, so the cap is raised for the session rather than worked around.
-const TOOL_TIMEOUT_MS = 30 * 60 * 1000;
+// A person is not obliged to answer within the working day. The CLI's default
+// MCP tool-call timeout is a minute, and `bosun_ask` blocking past it is what the
+// whole grill is built on, so the cap is raised to the session's own lifetime
+// rather than worked around. Anything shorter resolves the call with `The
+// operation timed out.` and the model carries on as though the person had refused
+// to answer — which is where a repeated question and a plan written without a
+// grill both come from.
+const TOOL_TIMEOUT_MS = 24 * 60 * 60 * 1000;
 const STARTUP_TIMEOUT_MS = 30 * 1000;
 const SIGKILL_GRACE_MS = 5_000;
 

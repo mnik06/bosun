@@ -32,7 +32,9 @@ export const HelloMsgSchema = z.object({
 	// The bullets still running on that machine. Optional for the same reason: an
 	// agent that predates surviving reconnects holds nothing across one, and
 	// absent has to keep meaning exactly that rather than "unknown".
-	runIds: z.array(z.string()).optional()
+	runIds: z.array(z.string()).optional(),
+	// The planning sessions still held, on the same terms.
+	planIds: z.array(z.string()).optional()
 });
 
 export const PreflightMsgSchema = z.object({

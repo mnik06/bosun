@@ -1,6 +1,6 @@
-import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, lt, ne, or, sql } from 'drizzle-orm';
 import { type DbOrTx } from 'src/services/drizzle/drizzle.service';
-import { plans } from 'src/services/drizzle/schema';
+import { machines, plans } from 'src/services/drizzle/schema';
 import { PlanSchema, type Plan, type PlanStatus } from 'src/types/PlanSchema';
 import { type PlanSummary } from 'src/types/PlanSummarySchema';
 
@@ -146,6 +146,27 @@ export function getPlanRepo(db: DbOrTx) {
 				.select(planColumns)
 				.from(plans)
 				.where(and(eq(plans.machineId, machineId), eq(plans.status, 'planning')));
+
+			return rows.map((row) => PlanSchema.parse(row));
+		},
+
+		// A grill whose machine has not been heard from since `unseenSince`. The
+		// agent ends its own sessions at that age, so one still `planning` past it on
+		// a machine that is not connected has no session left behind it — and nothing
+		// else will ever settle it, because settling happens on the agent's `hello`.
+		async listStalePlanning(opts: { unseenSince: Date }): Promise<Plan[]> {
+			const rows = await db
+				.select(planColumns)
+				.from(plans)
+				.innerJoin(machines, eq(machines.id, plans.machineId))
+				.where(
+					and(
+						eq(plans.status, 'planning'),
+						lt(plans.createdAt, opts.unseenSince),
+						ne(machines.status, 'online'),
+						or(lt(machines.lastSeenAt, opts.unseenSince), sql`${machines.lastSeenAt} is null`)
+					)
+				);
 
 			return rows.map((row) => PlanSchema.parse(row));
 		},

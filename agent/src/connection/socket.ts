@@ -10,7 +10,7 @@ import { parseServerFrame, routeServerFrame, type AgentState } from './router';
 import { type AgentConfig } from '../config/config';
 import { createAskSessions } from '../ask/session';
 import { createExecutionSessions, type ExecutionSessions } from '../execution/session';
-import { createPlanningSessions } from '../planning/session';
+import { createPlanningSessions, type PlanningSessions } from '../planning/session';
 import { planningPrompt, revisionPrompt } from '../prompts/planning';
 import { preparationPrompt } from '../prompts/preparation';
 import { summaryPrompt } from '../prompts/summary';
@@ -42,10 +42,11 @@ interface ConnectionDeps {
 	configPath: string;
 	services: Services;
 	state: AgentState;
-	// Both outlive the connection, which is the point of them being passed in
+	// All three outlive the connection, which is the point of them being passed in
 	// rather than built here: see `holdConnection`.
 	sink: FrameSink;
 	executions: ExecutionSessions;
+	sessions: PlanningSessions;
 }
 
 // What `refresh` runs is deliberately the same thing `open` runs. Everything the
@@ -73,7 +74,12 @@ function createAnnouncer(deps: ConnectionDeps & { socket: WebSocket }) {
 				// indistinguishable from an agent that came back with nothing, and the
 				// backend settles every run it cannot account for — which would reset
 				// the very sessions this connection was opened to keep reporting on.
-				runIds: [...new Set([...deps.executions.held(), ...deps.sink.pendingRunIds()])]
+				runIds: [...new Set([...deps.executions.held(), ...deps.sink.pendingRunIds()])],
+				// The grills this agent is still holding, for the same reason: a
+				// planning session outlives the socket it was started on, and a backend
+				// that failed every `planning` plan on a reconnect would kill the grill
+				// the person is in the middle of answering.
+				planIds: [...new Set([...deps.sessions.held(), ...deps.sink.pendingPlanIds()])]
 			})
 		);
 
@@ -97,10 +103,11 @@ async function connectOnce(deps: ConnectionDeps): Promise<void> {
 		const socket = new WebSocket(socketUrl(deps.config.serverUrl), {
 			headers: { Authorization: `Bearer ${deps.config.machineKey}` }
 		});
-		// Dropped rather than queued, for the sessions below only: closing this
-		// socket is also what kills them, so a replay would be reporting on
-		// processes that no longer exist. Logged because a session settling into
-		// silence otherwise leaves nothing anywhere saying so.
+		// Dropped rather than queued, for the per-connection senders only — ask
+		// sessions and the upgrade handshake. Both are answers to something this
+		// socket asked for, so replaying one on the next connection would be
+		// answering a question nobody is waiting on. Everything that outlives the
+		// connection sends through the sink instead.
 		const send = (message: AgentMsg): void => {
 			if (socket.readyState !== WebSocket.OPEN) {
 				console.error(`dropped ${message.type}: the connection is not open`);
@@ -111,19 +118,7 @@ async function connectOnce(deps: ConnectionDeps): Promise<void> {
 			socket.send(JSON.stringify(message));
 		};
 
-		// Planning and ask sessions are per-connection. A grill is answered over
-		// this socket, so one that has gone cannot deliver an answer to a question
-		// already in flight — keeping the process alive across a reconnect would
-		// only leak it. Execution is the exception and is built in `holdConnection`:
-		// an AFK bullet needs the socket to report, not to work.
-		const sessions = createPlanningSessions({
-			config: deps.config,
-			services: deps.services,
-			prompt: planningPrompt,
-			revisionPrompt,
-			preparationPrompt,
-			send
-		});
+		const { sessions } = deps;
 		const summaries = createSummarySessions({
 			config: deps.config,
 			services: deps.services,
@@ -290,13 +285,13 @@ async function connectOnce(deps: ConnectionDeps): Promise<void> {
 			);
 		});
 
-		// `executions` is deliberately absent from both: a bullet is not cancelled by
-		// the socket it happened to be dispatched over. Detaching parks its frames
-		// until the next connection instead of throwing the session away.
+		// `executions` and `sessions` are deliberately absent from both: neither a
+		// bullet nor a grill is cancelled by the socket it happened to be dispatched
+		// over. Detaching parks their frames until the next connection instead of
+		// throwing the session away.
 		socket.on('error', (error) => {
 			clearInterval(upgradeSweep);
 			deps.sink.detach();
-			sessions.cancelAll();
 			summaries.cancelAll();
 			asks.cancelAll();
 			settle(error);
@@ -304,7 +299,6 @@ async function connectOnce(deps: ConnectionDeps): Promise<void> {
 
 		socket.on('close', () => {
 			deps.sink.detach();
-			sessions.cancelAll();
 			summaries.cancelAll();
 			asks.cancelAll();
 			settle();
@@ -325,10 +319,36 @@ export async function holdConnection(opts: {
 	// have to still be here when the connection comes back.
 	const sink = createFrameSink();
 	const executions = createExecutionSessions({ services: opts.services, send: sink.send });
+	// A grill is a conversation with a person, and a person does not stop being in
+	// the middle of one because a proxy dropped an idle socket or the backend
+	// deployed. The session survives the gap and reports on whatever connection is
+	// current; `hello` names the ones it still holds so the backend can settle the
+	// rest.
+	const sessions = createPlanningSessions({
+		config: opts.config,
+		services: opts.services,
+		prompt: planningPrompt,
+		revisionPrompt,
+		preparationPrompt,
+		send: sink.send
+	});
+
+	// The children are detached so cancelling reaps their process groups, which
+	// also means nothing reaps them when this process is stopped. That was
+	// tolerable while a grill died with its socket; a session that now survives
+	// reconnects would otherwise leave a `claude` holding a port, a worktree and a
+	// credential behind every `systemctl restart`.
+	for (const signal of ['SIGTERM', 'SIGINT'] as const) {
+		process.once(signal, () => {
+			sessions.cancelAll();
+			executions.cancelAll();
+			process.exit(0);
+		});
+	}
 
 	for (;;) {
 		try {
-			await connectOnce({ ...opts, state, sink, executions });
+			await connectOnce({ ...opts, state, sink, executions, sessions });
 			console.log('connection closed');
 			attempt = 0;
 		} catch (error) {

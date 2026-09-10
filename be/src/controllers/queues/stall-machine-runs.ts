@@ -68,11 +68,12 @@ async function abandoned(
 	return queue === null || queue.machineId !== opts.machineId;
 }
 
-// The agent's planning and ask sessions are per-connection, but its execution
+// The agent's ask sessions are per-connection, but its execution and planning
 // sessions are not: a bullet keeps building through a reconnect and reports on
 // whatever socket is current when it settles. `hello` therefore carries the runs
 // it still holds, and everything else this machine has marked `running` died with
-// the socket before this one.
+// the socket before this one. `stallMachinePlans` is the same mechanism for
+// grills.
 //
 // Nothing settled those before. The close that killed them was often a *replaced*
 // socket: `unregisterAgentSocket` refuses to evict the live connection,
