@@ -90,9 +90,54 @@ export function getPreflightService(deps: {
 			{}
 		);
 
-		return inside.ok && inside.stdout.trim() === 'true'
-			? { name: 'git', ok: true, detail: `${version.stdout} · ${deps.repoPath}` }
-			: { name: 'git', ok: false, detail: `${deps.repoPath} is not a git repository` };
+		if (!inside.ok || inside.stdout.trim() !== 'true') {
+			return { name: 'git', ok: false, detail: `${deps.repoPath} is not a git repository` };
+		}
+
+		const reach = await checkRemote();
+
+		return {
+			name: 'git',
+			ok: reach.ok,
+			detail: `${version.stdout} · ${deps.repoPath} · ${reach.detail}`
+		};
+	}
+
+	// A machine that cannot reach the remote does not fail loudly — it plans and
+	// builds against whatever the last successful fetch left behind, which is the
+	// one failure mode that produces confidently wrong work. It is worth a red
+	// check even though sessions still start.
+	//
+	// `ls-remote` rather than `fetch`: it transfers no objects, and the question is
+	// only whether the credentials in the service environment reach the remote at
+	// all. Prompts are disabled on both transports, because a check that blocks on
+	// a passphrase never returns.
+	async function checkRemote(): Promise<{ ok: boolean; detail: string }> {
+		const remotes = await deps.exec.run('git', ['-C', deps.repoPath, 'remote'], {});
+
+		if (!remotes.ok || remotes.stdout.trim() === '') {
+			return { ok: true, detail: 'no remote — nothing to fetch' };
+		}
+
+		const reachable = await deps.exec.run(
+			'git',
+			['-C', deps.repoPath, 'ls-remote', '--quiet', '--exit-code', 'origin', 'HEAD'],
+			{
+				env: {
+					...process.env,
+					GIT_TERMINAL_PROMPT: '0',
+					GIT_SSH_COMMAND: 'ssh -oBatchMode=yes'
+				},
+				timeoutMs: 30_000
+			}
+		);
+
+		return reachable.ok
+			? { ok: true, detail: 'origin reachable' }
+			: {
+				ok: false,
+				detail: `cannot reach origin, so every session reads a stale checkout: ${reachable.reason}`
+			};
 	}
 
 	// `gh auth status` is the whole check: bosun holds no GitHub credential of its

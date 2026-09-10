@@ -2,6 +2,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { type ExecService } from './exec.service';
+import { copyUntracked, resolveBaseRef, untrackedPaths, type RepoService } from './repo.service';
 
 export const WORKTREE_DIRNAME = 'worktrees';
 
@@ -12,74 +13,6 @@ export interface WorktreeResult {
 	detail: string;
 }
 
-// The branch a worktree is cut from, and the one every plan's branch will later
-// be cut from too. `origin/HEAD` is preferred over the checkout's current branch
-// because the repository the operator happens to have checked out is not
-// necessarily the line of development they want work based on.
-// Everything git does not track is what a fresh worktree lacks: `.env` and its
-// neighbours. A directory that is ignored whole — node_modules, dist, .venv —
-// comes back from `--directory` as a single `name/` entry and is skipped: that
-// is what the setup command exists to rebuild, and copying it would move
-// gigabytes into every queue.
-async function untrackedPaths(opts: { exec: ExecService; repoPath: string }): Promise<string[]> {
-	const base = ['-C', opts.repoPath, 'ls-files', '-z', '--others'];
-	const [plain, ignored] = await Promise.all([
-		opts.exec.run('git', [...base, '--exclude-standard'], { timeoutMs: 60_000 }),
-		opts.exec.run('git', [...base, '--ignored', '--exclude-standard', '--directory'], {
-			timeoutMs: 60_000
-		})
-	]);
-
-	const entries = (result: { ok: boolean; stdout: string }): string[] =>
-		result.ok ? result.stdout.split('\0').filter((entry) => entry !== '') : [];
-
-	return [
-		...new Set([
-			...entries(plain),
-			...entries(ignored).filter((entry) => !entry.endsWith('/'))
-		])
-	];
-}
-
-function copyUntracked(opts: { from: string; to: string; files: string[] }): string[] {
-	const copied: string[] = [];
-
-	for (const file of opts.files) {
-		const source = path.join(opts.from, file);
-		const target = path.join(opts.to, file);
-
-		if (!fs.existsSync(source)) {
-			continue;
-		}
-
-		fs.mkdirSync(path.dirname(target), { recursive: true });
-		fs.copyFileSync(source, target);
-		copied.push(file);
-	}
-
-	return copied;
-}
-
-async function resolveBaseRef(opts: { exec: ExecService; repoPath: string }): Promise<string | null> {
-	const remote = await opts.exec.run(
-		'git',
-		['-C', opts.repoPath, 'symbolic-ref', '--short', 'refs/remotes/origin/HEAD'],
-		{}
-	);
-
-	if (remote.ok && remote.stdout) {
-		return remote.stdout;
-	}
-
-	const head = await opts.exec.run('git', ['-C', opts.repoPath, 'rev-parse', '--abbrev-ref', 'HEAD'], {});
-
-	return head.ok && head.stdout ? head.stdout : null;
-}
-
-// A killed queue takes its local branches with it: the worktree branch and every
-// plan branch cut inside it. Only local ones — anything pushed is somebody's
-// pull request now, and deleting a remote ref is not a decision this makes on an
-// operator's behalf.
 async function deleteBranches(opts: {
 	exec: ExecService;
 	repoPath: string;
@@ -110,6 +43,7 @@ async function deleteBranches(opts: {
 
 export function getWorktreeService(deps: {
 	exec: ExecService;
+	repo: RepoService;
 	repoPath: string;
 	homeDir?: string;
 }) {
@@ -152,6 +86,11 @@ export function getWorktreeService(deps: {
 		async ensure(opts: { slug: string }): Promise<WorktreeResult> {
 			const slug = opts.slug;
 			const worktreePath = pathFor(slug);
+			// Before the base ref is resolved, not after: `origin/HEAD` is only as
+			// current as the last fetch, and a worktree cut from a stale one starts
+			// every queue — and the setup command it runs — on code that has moved.
+			await deps.repo.fetch();
+
 			const baseRef = await resolveBaseRef({ exec: deps.exec, repoPath: deps.repoPath });
 
 			if (baseRef === null) {

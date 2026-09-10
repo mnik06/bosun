@@ -6,6 +6,7 @@ import {
 	type PlanSnapshot,
 	type PreparePlan
 } from '../protocol';
+import { type ReadTree } from '../services/repo.service';
 import { type Services } from '../services/index';
 import { createActivityTracker } from './activity-labels';
 import {
@@ -140,17 +141,20 @@ export function createPlanningSessions(opts: {
 		verifyInUi: boolean;
 		auto: boolean;
 		notes: string | null;
+		tree: ReadTree;
 	}) => string;
 	revisionPrompt: (opts: {
 		plan: PlanSnapshot;
 		request: string;
 		notes: string | null;
+		tree: ReadTree;
 	}) => string;
 	preparationPrompt: (opts: {
 		planNumber: number;
 		auto: boolean;
 		plans: PreparePlan[];
 		notes: string | null;
+		tree: ReadTree;
 	}) => string;
 }): PlanningSessions {
 	const sessions = new Map<string, Session>();
@@ -265,9 +269,31 @@ export function createPlanningSessions(opts: {
 				opts.send({ type: 'plan.question', planId, questionId, questions, autoAnswers });
 			};
 
+	// Fetched and resolved per session rather than once at connect: a machine can
+	// hold a socket for days, and what `origin/HEAD` pointed at when it connected
+	// is exactly the staleness this exists to remove.
+	const readTree = async (planId: string): Promise<ReadTree> => {
+		opts.send({ type: 'plan.activity', planId, label: 'Fetching the latest changes' });
+
+		const tree = await opts.services.repo.readTree();
+
+		console.log(`[${planId}] reading ${tree.path}: ${tree.detail}`);
+
+		if (!tree.fresh) {
+			opts.send({
+				type: 'plan.activity',
+				planId,
+				label: `Reading the machine checkout — ${tree.detail}`
+			});
+		}
+
+		return tree;
+	};
+
 	const startProcess = async (opts2: {
 		planId: string;
 		prompt: string;
+		cwd: string;
 		published: boolean;
 		nudge: boolean;
 		requireGrill: boolean;
@@ -336,7 +362,7 @@ export function createPlanningSessions(opts: {
 		});
 
 		session.process = spawnClaudeSession({
-			cwd: opts.config.repoPath,
+			cwd: opts2.cwd,
 			prompt,
 			mcpConfigPath: mcp.configPath,
 			userServerNames: userMcp.serverNames,
@@ -411,14 +437,18 @@ export function createPlanningSessions(opts: {
 				return;
 			}
 
+			const tree = await readTree(payload.planId);
+
 			await spawnFor({
 				planId: payload.planId,
 				prompt: opts.prompt({
 					input: payload.input,
 					verifyInUi: payload.verifyInUi,
 					auto: payload.auto,
-					notes: payload.notes
+					notes: payload.notes,
+					tree
 				}),
+				cwd: tree.path,
 				published: false,
 				nudge: true,
 				requireGrill: !payload.auto,
@@ -453,14 +483,18 @@ export function createPlanningSessions(opts: {
 				return;
 			}
 
+			const tree = await readTree(payload.planId);
+
 			await spawnFor({
 				planId: payload.planId,
 				prompt: opts.preparationPrompt({
 					planNumber: payload.planNumber,
 					auto: payload.auto,
 					plans: payload.plans,
-					notes: payload.notes
+					notes: payload.notes,
+					tree
 				}),
+				cwd: tree.path,
 				published: false,
 				nudge: false,
 				requireGrill: false,
@@ -491,13 +525,17 @@ export function createPlanningSessions(opts: {
 				return;
 			}
 
+			const tree = await readTree(payload.planId);
+
 			await spawnFor({
 				planId: payload.planId,
 				prompt: opts.revisionPrompt({
 					plan: payload.plan,
 					request: payload.text,
-					notes: payload.notes
+					notes: payload.notes,
+					tree
 				}),
+				cwd: tree.path,
 				// A revision is handed a plan that is already written, so a turn that
 				// changes nothing is a legitimate answer rather than an empty plan.
 				published: payload.plan.bodyMd !== null,

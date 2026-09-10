@@ -1,4 +1,5 @@
 import { type ProjectProfile } from '../project-profile';
+import { type ReadTree } from '../services/repo.service';
 
 export interface RunContext {
 	planNumber: number;
@@ -125,4 +126,30 @@ The branch \`${context.branch}\` is already checked out in this worktree, cut fr
 and the tree is clean. **Do not commit, do not push, do not touch git at all.** Bosun commits this
 bullet for you when you finish and opens one pull request per plan once every bullet has landed — a
 commit of your own splits the history it keeps and leaves no single sha against this bullet.`;
+}
+
+// Every read-only session is pointed at a checkout of the current default branch
+// that bosun fetched a moment ago, not at the operator's own working copy. The
+// session is told which, because the two lead to different answers: "this table
+// does not exist" off a tree that is a week behind is how a plan ends up asking
+// for something that landed on Tuesday.
+export function repoState(tree: ReadTree): string {
+	if (!tree.fresh) {
+		return `## The checkout you are reading
+
+You are reading the machine's own checkout at \`${tree.path}\`. **It could not be refreshed** —
+${tree.detail} — so it may be behind the default branch, may sit on an unrelated branch, and may hold
+uncommitted work. Say so in one line when you report, and treat "this does not exist" as "I could not
+find it in a tree of unknown age" rather than as a fact.`;
+	}
+
+	return `## The checkout you are reading
+
+You are reading \`${tree.path}\` — a checkout of **\`${tree.ref}\`** at \`${tree.sha ?? 'unknown'}\`,
+fetched from the remote a moment ago. It is the same ref every queue cuts its branches from, so what
+you see here is what the work will actually be built on top of.
+
+It is **not** the operator's own working copy, so uncommitted or unpushed work of theirs is not here
+and is not something to reason about. What is here is current: if you cannot find something, it is
+genuinely absent from \`${tree.ref}\` rather than merely absent from a stale tree.`;
 }

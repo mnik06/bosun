@@ -1,4 +1,6 @@
 import { type PreparePlan } from '../protocol';
+import { type ReadTree } from '../services/repo.service';
+import { repoState } from './shared';
 
 const PREPARATION_PROMPT = `You are running a **preparation session** for bosun. Somebody selected the plans below to run side
 by side, in different queues, at the same time. Each queue cuts its own branch from the base ref, so
@@ -25,8 +27,8 @@ Two failures make this session worthless, and both are silent:
 
 Everything below is arranged to make those two hard to commit.
 
-You are running inside their repository checkout. Read it rather than guess at it.
-
+Read the repository rather than guess at it.
+{{REPO_STATE}}
 **The person who pressed the button is at the keyboard and expects to be asked.** \`bosun_ask\` is the
 only channel to them — never ask a question in plain prose, which is narration they cannot answer.
 You do **not** publish anything until they have confirmed the dependency map in Phase 3.
@@ -289,8 +291,11 @@ export function preparationPrompt(opts: {
 	auto: boolean;
 	plans: PreparePlan[];
 	notes: string | null;
+	tree: ReadTree;
 }): string {
-	return `${PREPARATION_PROMPT}${opts.auto ? AUTO_RULE : ''}${operatorNotes(opts.notes)}
+	const prompt = PREPARATION_PROMPT.replace('{{REPO_STATE}}', `\n${repoState(opts.tree)}\n`);
+
+	return `${prompt}${opts.auto ? AUTO_RULE : ''}${operatorNotes(opts.notes)}
 This preparation plan is **#${opts.planNumber}**. That is the number the selected plans block on when
 it is published.
 

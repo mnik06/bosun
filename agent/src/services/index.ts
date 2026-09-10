@@ -7,6 +7,7 @@ import { getPublishService } from '../execution/publish';
 import { getMcpConfigService } from './mcp-config.service';
 import { getMcpProbeService } from './mcp-probe.service';
 import { getPreflightService } from './preflight.service';
+import { getRepoService } from './repo.service';
 import { getSkillsService } from './skills.service';
 import { getUpgradeService } from './upgrade.service';
 import { getTeardownService } from './teardown.service';
@@ -19,6 +20,7 @@ export function getServices(opts: { config: AgentConfig; env: NodeJS.ProcessEnv 
 	const claudeAuth = getClaudeAuthService({ exec, env });
 	const mcpConfig = getMcpConfigService({ env });
 	const skills = getSkillsService({ repoPath: opts.config.repoPath });
+	const repo = getRepoService({ exec, repoPath: opts.config.repoPath });
 
 	return {
 		bosunApi: getBosunApiService({
@@ -38,10 +40,11 @@ export function getServices(opts: { config: AgentConfig; env: NodeJS.ProcessEnv 
 			mcpConfig,
 			repoPath: opts.config.repoPath
 		}),
+		repo,
 		skills,
 		teardown: getTeardownService({}),
 		upgrade: getUpgradeService({ exec }),
-		worktree: getWorktreeService({ exec, repoPath: opts.config.repoPath })
+		worktree: getWorktreeService({ exec, repo, repoPath: opts.config.repoPath })
 	};
 }
 

@@ -1,11 +1,13 @@
 import { type PlanSnapshot } from '../protocol';
+import { type ReadTree } from '../services/repo.service';
+import { repoState } from './shared';
 
 const PLANNING_PROMPT = `You are running a planning session for bosun. A person has pasted a ticket and you are going to
 **grill them** until every product and architecture decision behind it is resolved, then publish the
 plan, its acceptance criteria and its tracer bullets.
 
-You are running inside their repository checkout. Read it rather than guess at it.
-
+Read the repository rather than guess at it.
+{{REPO_STATE}}
 **You have no terminal and no other channel to the person.** The ONLY way to ask them anything is the
 \`bosun_ask\` tool. Never ask a question in plain prose — prose is narration they read, not a prompt
 they can answer, and a session that "asks" in prose hangs forever.
@@ -462,12 +464,14 @@ export function planningPrompt(opts: {
 	verifyInUi: boolean;
 	auto: boolean;
 	notes: string | null;
+	tree: ReadTree;
 }): string {
 	const prompt = PLANNING_PROMPT.replace(
 		'{{VERIFY_RULE}}',
 		opts.verifyInUi ? VERIFY_ON : VERIFY_OFF
 	)
 		.replace('{{AUTO_RULE}}', opts.auto ? AUTO_ON : '')
+		.replace('{{REPO_STATE}}', `\n${repoState(opts.tree)}\n`)
 		.replace('{{OPERATOR_NOTES}}', operatorNotes(opts.notes));
 
 	return `${prompt}\n${opts.input.trim()}\n`;
@@ -504,11 +508,14 @@ export function revisionPrompt(opts: {
 	plan: PlanSnapshot;
 	request: string;
 	notes: string | null;
+	tree: ReadTree;
 }): string {
 	return `You are revising a plan that has already been published. It is shown beside this conversation, and
 the person has just asked for a change.
 
-You are running inside their repository checkout. Read it rather than guess at it.
+Read the repository rather than guess at it.
+
+${repoState(opts.tree)}
 
 **You have no terminal and no other channel to the person.** The ONLY way to ask them anything is the
 \`bosun_ask\` tool. Never ask a question in plain prose.

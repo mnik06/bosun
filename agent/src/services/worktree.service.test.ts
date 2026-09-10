@@ -3,6 +3,7 @@ import os from 'os';
 import path from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { getExecService } from './exec.service';
+import { getRepoService } from './repo.service';
 import { getWorktreeService } from './worktree.service';
 
 const exec = getExecService();
@@ -38,7 +39,9 @@ describe('worktree service', () => {
 	});
 
 	function service() {
-		return getWorktreeService({ exec, repoPath, homeDir: home });
+		const repo = getRepoService({ exec, repoPath, homeDir: home });
+
+		return getWorktreeService({ exec, repo, repoPath, homeDir: home });
 	}
 
 	it('creates a checkout of its own on a branch named for the queue', async () => {
@@ -153,7 +156,8 @@ describe('worktree service', () => {
 	});
 
 	it('reports a repo path that is not a git repository', async () => {
-		const notARepo = getWorktreeService({ exec, repoPath: home, homeDir: home });
+		const repo = getRepoService({ exec, repoPath: home, homeDir: home });
+		const notARepo = getWorktreeService({ exec, repo, repoPath: home, homeDir: home });
 		const result = await notARepo.ensure({ slug: 'nope' });
 
 		expect(result.ok).toBe(false);

@@ -18,6 +18,17 @@ the repository actually has, and does nothing when there is none. Every project-
 the original — a spec path, a named UI kit, a design prototype, a standing-criteria library, the
 GitHub and Jira halves — became either discovery or a bosun tool.
 
+## Sessions read a fetched tree, not the machine's checkout
+
+`start`, `say` and `prepare` all resolve `services.repo.readTree()` before spawning, and its path is
+the session's cwd. That is a checkout of the current default branch, fetched a moment earlier — not
+`config.repoPath`, which is the operator's own working copy and was never refreshed by anything.
+
+This was a correctness bug, not a nicety: every "does X already exist?" a session asks is decided
+against the tree it can see, and a tree that is days old answers confidently and wrongly. See
+`services/repo.service.md` for why the operator's checkout is not refreshed in place, and
+`prompts/shared.ts` `repoState` for what the session is told about the tree it got.
+
 ## Preparation sessions
 
 `prepare()` starts a second kind of session, from a `plan.prepare` frame. It is a planning session in
