@@ -61,11 +61,20 @@ just rewritten by something that is not you, and re-reading them is the point.
 Schema and migrations, enums and shared types, API contracts, and anything else the repository
 numbers in sequence. These are the pieces where two branches produce a merge that is clean and wrong.
 
-**Not shared UI components.** A component designed for five consumers that do not exist yet is an
-abstraction built from five guesses, and unlike a schema nothing errors when the shape is wrong — the
-five features quietly bend around it. Shared UI is a refactor for after the second consumer exists.
-This is a rule in the prompt rather than a matter of judgement, because it is the one every team gets
-wrong.
+**Shared UI components too — and shared hooks, services, mutations and the endpoints behind them.**
+The test is not what kind of thing a piece is, it is whether more than one selected plan needs it and
+nobody builds it. This started as the opposite rule, "never shared UI", on the grounds that a
+component designed for consumers that do not exist yet is an abstraction built from guesses. The
+grounds are real; the rule was wrong. A foundation that carries the schema and leaves the picker in
+one of the plans leaves those two plans shipping in order, which is the one thing pressing the button
+was meant to avoid — and the same argument, applied honestly, excludes the shared behaviour too and
+leaves nothing to prepare.
+
+What a lifted component does carry is that risk: nothing errors when a component's shape is wrong the
+way a migration errors. That is what the **"Who consumes this"** section is for, and it is binding —
+every lifted piece names its consumers by plan number and by the criterion that consumes them. A
+piece with one consumer is that plan's own work; a piece whose consumers had to be invented is not
+lifted; where two consumers want different shapes, only what they share moves.
 
 If the selected plans turn out to share nothing, the session says so and writes no plan. An empty
 preparation plan is worse than none: it is a merge everybody waits for.
@@ -103,7 +112,9 @@ backend-side, not trusted from the session.
 - **One session, three outputs.** The only moment all five plans are in one context
 - **The selected plans are rewritten now, not flagged for later.** A flag nobody must act on is a flag
   nobody acts on, and the information needed to act is freshest here
-- **No shared UI components**, stated as a rule
+- **Anything in bucket D lifts, shared UI and shared behaviour included.** The alternative is a
+  foundation that still leaves plans blocked on each other, which is not a foundation. The guard is
+  named consumers, not a banned category
 - **No new tables.** If this needed schema, it would be a sign the existing blocker model was wrong,
   and it is not
 - **Refuse rather than guess** when the selection spans two machines: a queue runs in a worktree of

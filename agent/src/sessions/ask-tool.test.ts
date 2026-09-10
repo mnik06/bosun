@@ -67,21 +67,59 @@ describe('createAskTool', () => {
 		expect(textOf(await second)).toContain('Redis');
 	});
 
-	it('asks again when the options differ', async () => {
+	// The repeat a model actually produces: the same decision retyped, never byte
+	// for byte. Matching on the exact wording let every one of these through.
+	it('collapses a repeat that was retyped with different case and punctuation', async () => {
+		const { ask, onQuestion, answerLatest } = build();
+		const first = ask({ questions: [question()] });
+
+		answerLatest([{ selected: ['Postgres (Recommended)'] }]);
+		await first;
+
+		const repeat = textOf(
+			await ask({ questions: [question({ question: 'Where do sessions live???' })] })
+		);
+
+		expect(onQuestion).toHaveBeenCalledTimes(1);
+		expect(repeat).toContain('Postgres (Recommended)');
+	});
+
+	// Same decision, different choices offered. The person is not asked twice, and
+	// the way out is said back: a genuinely different question says what makes it
+	// different in its own text rather than only in its options.
+	it('answers a repeat whose options differ and says how to ask a different one', async () => {
 		const { ask, onQuestion, answerLatest } = build();
 		const first = ask({ questions: [question()] });
 
 		answerLatest([{ selected: ['Redis'] }]);
 		await first;
 
+		const repeat = textOf(
+			await ask({
+				questions: [question({ options: [{ label: 'Redis cluster', description: 'Sharded' }] })]
+			})
+		);
+
+		expect(onQuestion).toHaveBeenCalledTimes(1);
+		expect(repeat).toContain('Redis');
+		expect(repeat).toContain('question text itself');
+	});
+
+	// A follow-up that narrows the same header is a different question, and it has
+	// to reach the person — the dedupe would be worse than the duplicate otherwise.
+	it('asks again when the question itself differs under the same header', async () => {
+		const { ask, onQuestion, answerLatest } = build();
+		const first = ask({ questions: [question()] });
+
+		answerLatest([{ selected: ['Postgres (Recommended)'] }]);
+		await first;
+
 		const next = ask({
-			questions: [
-				question({ options: [{ label: 'Redis cluster', description: 'Sharded' }] })
-			]
+			questions: [question({ question: 'Which Postgres schema holds them?' })]
 		});
 
 		expect(onQuestion).toHaveBeenCalledTimes(2);
-		answerLatest([{ selected: ['Redis cluster'] }]);
+		answerLatest([{ selected: ['Postgres (Recommended)'] }]);
 		await next;
 	});
 

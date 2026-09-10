@@ -61,16 +61,35 @@ function recommendedAnswers(questions: PlanQuestion[]): PlanAnswer[] {
 	}));
 }
 
-// What makes two `bosun_ask` calls the same question. The wording of the options
-// is part of it: a genuine follow-up that narrows the same header offers
-// different choices, and re-asking with the identical set is the model having
-// lost the answer rather than wanting a new one.
+// Compared with case, punctuation and spacing taken out. A model that re-asks
+// rarely retypes the question byte for byte, and a repeat that slips through on a
+// comma is a second prompt to the person for a decision they already made.
+function normalize(text: string): string {
+	return text
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, ' ')
+		.trim();
+}
+
+// The decision a question is about: its header and its own wording. Two asks that
+// read the same are the same decision however their options are worded — so
+// whatever makes one question different from another, the pair, the plan numbers,
+// the piece, belongs in the question text. The prompts say so, and this is what
+// holds them to it.
+function topic(questions: PlanQuestion[]): string {
+	return JSON.stringify(
+		questions.map((question) => [normalize(question.header), normalize(question.question)])
+	);
+}
+
+// The same question down to the choices it offered, order-insensitive: an exact
+// repeat, which is answered without a word about it.
 function fingerprint(questions: PlanQuestion[]): string {
 	return JSON.stringify(
 		questions.map((question) => [
-			question.header,
-			question.question,
-			question.options.map((option) => option.label)
+			normalize(question.header),
+			normalize(question.question),
+			question.options.map((option) => normalize(option.label)).sort()
 		])
 	);
 }
@@ -86,7 +105,10 @@ function fingerprint(questions: PlanQuestion[]): string {
 // rather than put to the person again. A model that re-asks has lost the tool
 // result — a context compaction, a dropped frame, a turn that restarted — and a
 // second prompt for a decision already made reads as the grill going in circles.
-// Called once per session, so the two maps below are that session's memory.
+// Sameness is judged on the header and the question, not on the options: a repeat
+// is rarely retyped exactly, and matching only the exact wording let every
+// reworded one through. Called once per session, so the two maps below are that
+// session's memory.
 export function createAskTool(opts: {
 	pending: Map<string, PendingQuestion>;
 	onQuestion: (payload: {
@@ -97,7 +119,10 @@ export function createAskTool(opts: {
 	auto?: boolean;
 	onAnswered?: () => void;
 }) {
-	const settled = new Map<string, { questions: PlanQuestion[]; answers: PlanAnswer[] }>();
+	const settled = new Map<
+		string,
+		{ questions: PlanQuestion[]; answers: PlanAnswer[]; fingerprint: string }
+	>();
 	const inFlight = new Map<string, Promise<PlanAnswer[]>>();
 
 	const emit = async (questions: PlanQuestion[]): Promise<PlanAnswer[]> => {
@@ -119,14 +144,25 @@ export function createAskTool(opts: {
 
 	return async function ask(args: unknown) {
 		const { questions } = AskArgsSchema.parse(args);
-		const key = fingerprint(questions);
+		const key = topic(questions);
+		const print = fingerprint(questions);
 		const already = settled.get(key);
 
 		if (already) {
+			// A repeat with the options reworded is still the same decision, and the
+			// person must not be asked it twice. Said back with the way out, because
+			// the one case this gets wrong is a model that wrote two genuinely
+			// different questions with identical text and put the difference only in
+			// the options — it can re-ask, once the question itself says which.
+			const reworded =
+				already.fingerprint === print
+					? 'Do not ask it again — carry on from here.'
+					: 'The options differ this time but the question reads the same, so it is the same decision and the answer stands. If you meant a different one, ask again with what makes it different written into the question text itself — the pair, the plan numbers, the piece — not only in the options.';
+
 			return textResult(
 				`You already asked this and it was answered. The answer stands:\n${describeAnswers(
 					already
-				)}\nDo not ask it again — carry on from here.`
+				)}\n${reworded}`
 			);
 		}
 
@@ -148,7 +184,7 @@ export function createAskTool(opts: {
 		// answer, not a ruling. Remembering it would answer every later ask with
 		// silence.
 		if (answers.length > 0) {
-			settled.set(key, { questions, answers });
+			settled.set(key, { questions, answers, fingerprint: print });
 			opts.onAnswered?.();
 		}
 

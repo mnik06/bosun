@@ -70,6 +70,23 @@ const UNGRILLED_NUDGE = [
 	'The grill has not started: ask the next question now with bosun_ask, one question, and keep going until the decisions are settled.'
 ].join(' ');
 
+// The same failure in a preparation session, which has a different pair of exits.
+// Publishing nothing is legitimate there, but only through `abandon_preparation`
+// — a turn that ends on a summary in prose leaves an empty plan, and an empty
+// plan is recorded as a session that died. Naming both exits is what turns that
+// into the answer the person was waiting for.
+const PREPARE_NUDGE = [
+	'Your turn ended without calling publish_plan or abandon_preparation, so nothing was written and this preparation is still empty.',
+	'Subagent results arrive inside the turn that spawned them — nothing is running in the background and no report is on its way.',
+	'A preparation ends in exactly one of two ways: publish_plan with the foundation, or abandon_preparation with the reason there is nothing left to lift.',
+	'Record any ordering you found with set_plan_blockers first, then make one of those two calls now.'
+].join(' ');
+
+// Twice, not once. The first prod is regularly answered with another turn of
+// thinking that ends the same way, and a session told twice what its exits are
+// has had the chance a person would give it. Past that, prodding is arguing.
+const MAX_NUDGES = 2;
+
 // The whole life of a session, mid-grill or warm. A grill waits on a person, and
 // a person is entitled to go home and answer in the morning — so nothing shorter
 // can be a timeout without the session dying under somebody who is still using
@@ -77,6 +94,8 @@ const UNGRILLED_NUDGE = [
 // `plan.cancel` from the backend.
 const SESSION_MAX_MS = 24 * 60 * 60 * 1000;
 const REAP_SWEEP_MS = 60 * 1000;
+
+type SessionKind = 'plan' | 'prepare';
 
 interface Session {
 	mcp: SessionMcpServer;
@@ -92,11 +111,11 @@ interface Session {
 	// Whether a `bosun_ask` question has been answered. What separates a plan the
 	// person shaped from one the model wrote for itself.
 	grilled: boolean;
-	nudged: boolean;
-	// Off for a preparation session: publishing nothing is a legitimate outcome
-	// there, and nudging one that decided the plans share nothing would argue with
-	// the answer it was asked for.
-	nudge: boolean;
+	nudges: number;
+	// Which set of endings this session has. A preparation may legitimately publish
+	// nothing, but only by calling `abandon_preparation`, so it is nudged too —
+	// towards whichever of its two exits it meant.
+	kind: SessionKind;
 	requireGrill: boolean;
 	// Set by `abandon_preparation`. Recorded rather than acted on inside the tool
 	// so the call returns before the process is torn down under it.
@@ -185,9 +204,9 @@ export function createPlanningSessions(opts: {
 		opts.send({ type: 'plan.done', planId });
 	};
 
-	// A turn that ends without a published plan is nudged once rather than reported
-	// as finished: the backend fails an empty plan, and the session is still up and
-	// able to write one. Only once — a second would be arguing with it.
+	// A turn that ends without an outcome is nudged rather than reported as
+	// finished: the backend fails an empty plan, and the session is still up and
+	// able to produce one. Capped, because past a couple of prods it is arguing.
 	const settle = (planId: string): void => {
 		const session = sessions.get(planId);
 
@@ -203,21 +222,30 @@ export function createPlanningSessions(opts: {
 			return;
 		}
 
-		if (session.published || session.nudged || !session.nudge || !session.process) {
+		if (session.published || session.nudges >= MAX_NUDGES || !session.process) {
 			done(planId);
 
 			return;
 		}
 
-		const ungrilled = session.requireGrill && !session.grilled;
+		const nudge = nudgeFor(session);
 
-		session.nudged = true;
-		opts.send({
-			type: 'plan.activity',
-			planId,
-			label: ungrilled ? 'Asking the session to keep grilling' : 'Asking the session to publish'
-		});
-		session.process.send(ungrilled ? UNGRILLED_NUDGE : UNPUBLISHED_NUDGE);
+		session.nudges += 1;
+		opts.send({ type: 'plan.activity', planId, label: nudge.label });
+		session.process.send(nudge.text);
+	};
+
+	// Which prod a stalled turn gets. A preparation has two endings rather than one,
+	// and a plan session mid-grill must not be told to publish — `publish_plan`
+	// refuses in that state, so the nudge would only spend a turn being refused.
+	const nudgeFor = (session: Session): { label: string; text: string } => {
+		if (session.kind === 'prepare') {
+			return { label: 'Asking the session to finish the preparation', text: PREPARE_NUDGE };
+		}
+
+		return session.requireGrill && !session.grilled
+			? { label: 'Asking the session to keep grilling', text: UNGRILLED_NUDGE }
+			: { label: 'Asking the session to publish', text: UNPUBLISHED_NUDGE };
 	};
 
 	const fail = (planId: string, message: string): void => {
@@ -295,7 +323,7 @@ export function createPlanningSessions(opts: {
 		prompt: string;
 		cwd: string;
 		published: boolean;
-		nudge: boolean;
+		kind: SessionKind;
 		requireGrill: boolean;
 		tools: { builtin: string[]; mcp: string[] };
 		definitions: unknown[];
@@ -325,8 +353,8 @@ export function createPlanningSessions(opts: {
 			idleAt: null,
 			published: opts2.published,
 			grilled: false,
-			nudged: false,
-			nudge: opts2.nudge,
+			nudges: 0,
+			kind: opts2.kind,
 			requireGrill: opts2.requireGrill,
 			abandonedReason: null
 		};
@@ -450,7 +478,7 @@ export function createPlanningSessions(opts: {
 				}),
 				cwd: tree.path,
 				published: false,
-				nudge: true,
+				kind: 'plan',
 				requireGrill: !payload.auto,
 				tools: PLANNING_TOOLS,
 				definitions: TOOL_DEFINITIONS,
@@ -496,7 +524,7 @@ export function createPlanningSessions(opts: {
 				}),
 				cwd: tree.path,
 				published: false,
-				nudge: false,
+				kind: 'prepare',
 				requireGrill: false,
 				tools: PREPARATION_TOOLS,
 				definitions: PREPARE_TOOL_DEFINITIONS,
@@ -539,7 +567,7 @@ export function createPlanningSessions(opts: {
 				// A revision is handed a plan that is already written, so a turn that
 				// changes nothing is a legitimate answer rather than an empty plan.
 				published: payload.plan.bodyMd !== null,
-				nudge: true,
+				kind: 'plan',
 				// A revision edits a plan that was already grilled into existence, and
 				// a plan that was never published has nothing to revise — the person
 				// asked for a change in prose, which is the decision the grill exists to
