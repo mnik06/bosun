@@ -34,7 +34,7 @@ export function DeletePlanButton ({
 		return (
 			<ActionIcon
 				className={className}
-				variant="subtle"
+				variant="light"
 				color="red"
 				size="sm"
 				aria-label="Delete this plan"

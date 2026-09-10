@@ -60,16 +60,16 @@ function ArtifactPane ({
 function PlanActions ({
 	plan,
 	published,
-	deletable
+	wide
 }: {
 	plan: Plan,
 	published: boolean,
-	deletable: boolean
+	wide: boolean
 }) {
 	return (
 		<Group gap="xs" wrap="nowrap" className="shrink-0">
 			{published ? <ConfirmPlanButton plan={plan} /> : null}
-			{deletable ? <DeletePlanButton planId={plan.id} /> : null}
+			<DeletePlanButton planId={plan.id} iconOnly={!wide} className="shrink-0" />
 		</Group>
 	)
 }
@@ -161,7 +161,6 @@ export default function PlanPage ({ params }: Route.ComponentProps) {
 					>
 						← Plans
 					</Anchor>
-					{wide ? null : <DeletePlanButton planId={plan.id} iconOnly className="shrink-0" />}
 					<Text size="sm" fw={600} truncate className="min-w-0 grow">
 						<Text component="span" c="dimmed" fw={500}>
 							#{plan.number}
@@ -184,7 +183,7 @@ export default function PlanPage ({ params }: Route.ComponentProps) {
 					))}
 				</Group>
 
-				<PlanActions plan={plan} published={published} deletable={wide} />
+				<PlanActions plan={plan} published={published} wide={wide} />
 			</div>
 
 			<Tabs value={active} onChange={setTab} className="flex min-h-0 grow flex-col">
