@@ -29,16 +29,20 @@ three ways that matter.
 outside that selection is refused here as well as by the backend, which checks the preparation plan's
 own recorded scope. `set_blockers` is not in the set: it only ever names the session's own plan.
 
-**Publishing nothing is a legitimate outcome.** If the selected plans share nothing worth building
-once, the session calls `abandon_preparation` and the plan fails with the reason it gave. So the
-unpublished nudge is off for these sessions — nudging one that answered the question it was asked
-would be arguing with the answer. `abandon_preparation` records the reason and lets the tool call
-return; the failure is sent when the turn settles, because tearing the process down inside its own
-tool call kills the call.
+**Publishing nothing is a legitimate outcome.** If nothing is left that two or more selected plans
+both need and nobody builds, the session records whatever ordering it found and calls
+`abandon_preparation`, and the plan fails with the reason it gave. So the unpublished nudge is off
+for these sessions — nudging one that answered the question it was asked would be arguing with the
+answer. `abandon_preparation` records the reason and lets the tool call return; the failure is sent
+when the turn settles, because tearing the process down inside its own tool call kills the call.
 
-**It runs in auto mode with nothing to grill about.** Every product decision it could ask about was
-settled in the plans it was handed. `bosun_ask` is still there so a session with nowhere to go has a
-valve, and it answers itself.
+**It grills.** `plan.prepare` carries `auto`, and `preparePlans` sets it false: the session reads
+dependencies off plans rather than off implementations, and the person who selected them is the only
+one who can catch a shape it inferred wrongly from a bullet — before five plans are rewritten against
+it. `prompts/preparation.ts` blocks every publish behind that confirmation. The prompt is written
+around **"what has to exist first"** rather than "what do these plans share", because the similarity
+question cannot see a one-way dependency between two selected plans and cannot tell absent from
+present without recon; both failures were observed.
 
 ## Why the CLI and not the Agent SDK
 

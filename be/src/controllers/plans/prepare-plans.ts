@@ -47,30 +47,44 @@ async function artifacts(opts: {
 	acRepo: AcRepo;
 	sliceRepo: SliceRepo;
 	planBlockerRepo: PlanBlockerRepo;
+	planRepo: PlanRepo;
+	projectId: string;
 	plans: Plan[];
 }): Promise<PreparePlan[]> {
 	const ids = opts.plans.map((plan) => plan.id);
+	const selected = new Set(ids);
 	const [acs, slices, edges] = await Promise.all([
 		opts.acRepo.listByPlans(ids),
 		opts.sliceRepo.listByPlans(ids),
 		opts.planBlockerRepo.listEdges(ids)
 	]);
-	const numberById = new Map(opts.plans.map((plan) => [plan.id, plan.number]));
+	// Blockers outside the selection are looked up rather than resolved against
+	// the selection: unresolved they read to the session as "blocked by nothing",
+	// and `set_blockers` replaces a plan's list wholesale, so the next declaration
+	// would silently retract a dependency nobody meant to drop.
+	const outside = await opts.planRepo.listOwnedByIds({
+		projectId: opts.projectId,
+		ids: [...new Set(edges.map((edge) => edge.blockedByPlanId))].filter(
+			(id) => !selected.has(id)
+		)
+	});
+	const numberById = new Map(
+		[...opts.plans, ...outside].map((plan) => [plan.id, plan.number])
+	);
 
 	return opts.plans.map((plan) => ({
 		id: plan.id,
 		number: plan.number,
 		title: plan.title,
 		bodyMd: plan.bodyMd,
-		// Carried so the session can re-declare a plan's existing blockers alongside
-		// the preparation plan: `set_blockers` replaces the list wholesale, and one
-		// that named only the new blocker would silently retract the rest.
 		blockedBy: edges
 			.filter((edge) => edge.planId === plan.id)
 			.flatMap((edge) => {
 				const number = numberById.get(edge.blockedByPlanId);
 
-				return number === undefined ? [] : [number];
+				return number === undefined
+					? []
+					: [{ number, selected: selected.has(edge.blockedByPlanId) }];
 			}),
 		acs: acs
 			.filter((ac) => ac.planId === plan.id)
@@ -126,6 +140,8 @@ export async function preparePlans(opts: {
 		acRepo: opts.acRepo,
 		sliceRepo: opts.sliceRepo,
 		planBlockerRepo: opts.planBlockerRepo,
+		planRepo: opts.planRepo,
+		projectId: opts.projectId,
 		plans: selected
 	});
 
@@ -136,11 +152,12 @@ export async function preparePlans(opts: {
 		machineId: machine.id,
 		input,
 		// A preparation plan is schema, contracts and shared types, so there is no
-		// interface to drive and no verify bullet to cut. Auto because there is no
-		// grill to run: every product decision it could ask about was settled in the
-		// plans it was handed.
+		// interface to drive and no verify bullet to cut. Not auto: the session is
+		// reading dependencies off plans rather than off implementations, and the
+		// person who selected them is the only one who can confirm the map before
+		// five plans are rewritten against it.
 		verifyInUi: false,
-		auto: true,
+		auto: false,
 		preparesPlanIds: selected.map((entry) => entry.id)
 	});
 
@@ -157,6 +174,7 @@ export async function preparePlans(opts: {
 			type: 'plan.prepare',
 			planId: plan.id,
 			planNumber: plan.number,
+			auto: plan.auto,
 			plans,
 			notes: machine.projectProfile?.notes ?? null
 		}

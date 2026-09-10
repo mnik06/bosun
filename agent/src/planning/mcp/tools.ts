@@ -53,9 +53,9 @@ const DESCRIPTIONS: Record<string, string> = {
 	republish_plan:
 		'Rewrite one of the plans this preparation was created for, named by its number. Same shape as publish_plan plus the number, and it replaces that plan wholesale — anything left out is deleted. Only the plans in this preparation can be rewritten; any other number is refused. It clears that plan\'s sign-off, which is intended: it is not the plan the person read.',
 	set_plan_blockers:
-		'Declare what one of the selected plans waits on, named by its number, with the blockers named by number too. Replaces that plan\'s list wholesale, so it must carry the blockers it already had as well as this preparation plan. Call it last, after every republish: a run that stops half way should leave plans unblocked rather than blocked and still describing work somebody else now owns.',
+		'Declare what one of the selected plans waits on, named by its number, with the blockers named by number too — any plan on this machine, not only this preparation. This is how a dependency between two selected plans is recorded when the piece is not worth lifting, and how a dependency on a plan outside the selection is recorded at all. Replaces that plan\'s list wholesale, so it must carry the blockers it already had. Call it last, after every republish: a run that stops half way should leave plans unblocked rather than blocked and still describing work somebody else now owns.',
 	abandon_preparation:
-		'End this preparation without writing a plan, with the reason. Call it when the selected plans turn out to share nothing worth building once — an empty preparation plan is a merge everybody waits for.'
+		'End this preparation without writing a plan, with the reason — which names what you found instead. Call it when nothing is left that two or more of the selected plans both need and nobody builds. Record any ordering you found with set_plan_blockers first: "they share no foundation" and "they can run at the same time" are different answers. An empty preparation plan is a merge everybody waits for.'
 };
 
 export const TOOL_SCHEMAS = {
@@ -189,6 +189,7 @@ export function createPlanDispatch(opts: {
 // refused here as well as by the backend.
 export function createPrepareDispatch(opts: {
 	planId: string;
+	auto: boolean;
 	plans: PreparePlan[];
 	bosunApi: BosunApiService;
 	onPublished: () => void;
@@ -214,7 +215,7 @@ export function createPrepareDispatch(opts: {
 	};
 
 	return function build(pending: Map<string, PendingQuestion>) {
-		const ask = createAskTool({ pending, onQuestion: opts.onQuestion, auto: true });
+		const ask = createAskTool({ pending, onQuestion: opts.onQuestion, auto: opts.auto });
 
 		return async function dispatch(name: string, args: unknown) {
 			if (name === 'bosun_ask') {

@@ -120,6 +120,7 @@ export async function routeServerFrame(deps: RouterDeps, msg: ServerMsg): Promis
 			await deps.sessions.prepare({
 				planId: msg.planId,
 				planNumber: msg.planNumber,
+				auto: msg.auto,
 				plans: msg.plans,
 				notes: msg.notes
 			});

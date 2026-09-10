@@ -114,6 +114,7 @@ export interface PlanningSessions {
 	prepare(opts: {
 		planId: string;
 		planNumber: number;
+		auto: boolean;
 		plans: PreparePlan[];
 		notes: string | null;
 	}): Promise<void>;
@@ -147,6 +148,7 @@ export function createPlanningSessions(opts: {
 	}) => string;
 	preparationPrompt: (opts: {
 		planNumber: number;
+		auto: boolean;
 		plans: PreparePlan[];
 		notes: string | null;
 	}) => string;
@@ -455,6 +457,7 @@ export function createPlanningSessions(opts: {
 				planId: payload.planId,
 				prompt: opts.preparationPrompt({
 					planNumber: payload.planNumber,
+					auto: payload.auto,
 					plans: payload.plans,
 					notes: payload.notes
 				}),
@@ -465,6 +468,7 @@ export function createPlanningSessions(opts: {
 				definitions: PREPARE_TOOL_DEFINITIONS,
 				createDispatch: createPrepareDispatch({
 					planId: payload.planId,
+					auto: payload.auto,
 					plans: payload.plans,
 					bosunApi: opts.services.bosunApi,
 					onPublished: onPublished(payload.planId),
