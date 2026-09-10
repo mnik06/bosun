@@ -53,7 +53,9 @@ export const MachineUpgradeDeclinedMsgSchema = z.object({
 	machineId: z.string(),
 	to: z.string(),
 	reason: z.string(),
-	retryable: z.boolean()
+	retryable: z.boolean(),
+	// The machine is busy and holding this version, not refusing it.
+	queued: z.boolean().default(false)
 });
 
 export const PlanUpdatedMsgSchema = z.object({

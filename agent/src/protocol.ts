@@ -170,7 +170,10 @@ export const UpgradeDeclinedMsgSchema = z.object({
 	version: z.string(),
 	reason: z.string(),
 	// Whether an operator asking again with `force` could get anywhere.
-	retryable: z.boolean()
+	retryable: z.boolean(),
+	// Held, not dropped: the machine was busy and will install this the moment its
+	// work ends, so nobody has to watch for the gap and press again.
+	queued: z.boolean().default(false)
 });
 
 export const AgentMsgSchema = z.discriminatedUnion('type', [

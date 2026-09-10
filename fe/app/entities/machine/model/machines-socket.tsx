@@ -24,6 +24,9 @@ export interface UpgradeDecline {
 	to: string
 	reason: string
 	retryable: boolean
+	// The machine is holding this version and will install it when its work ends,
+	// so there is nothing for anybody to come back and press.
+	queued: boolean
 }
 
 const DeclineContext = createContext<Record<string, UpgradeDecline>>({})
@@ -137,7 +140,12 @@ export function MachinesSocketProvider ({ children }: { children: ReactNode }) {
 				forget(msg.machineId)
 				setDeclines((previous) => ({
 					...previous,
-					[msg.machineId]: { to: msg.to, reason: msg.reason, retryable: msg.retryable }
+					[msg.machineId]: {
+						to: msg.to,
+						reason: msg.reason,
+						retryable: msg.retryable,
+						queued: msg.queued ?? false
+					}
 				}))
 
 				return

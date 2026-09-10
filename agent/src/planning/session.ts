@@ -69,6 +69,7 @@ export interface PlanningSessions {
 	cancel(planId: string): void;
 	cancelAll(): void;
 	running(): number;
+	endIdle(): void;
 }
 
 export function createPlanningSessions(opts: {
@@ -357,8 +358,24 @@ export function createPlanningSessions(opts: {
 			}
 		},
 
+		// Only the ones mid-turn. A settled session is still in the map on purpose —
+		// it holds a warm `claude` so a follow-up continues the same conversation —
+		// but it is doing nothing, and counting it told the upgrade path that work
+		// was in flight for thirty minutes after every grill, and for good after one
+		// whose process hung. An upgrade somebody asked for outranks a warm cache.
 		running(): number {
-			return sessions.size;
+			return [...sessions.values()].filter((session) => session.idleAt === null).length;
+		},
+
+		// Ends the settled ones and leaves anything mid-turn alone. Called before the
+		// binary is swapped: those processes are detached, so exiting without this
+		// orphans a `claude` per idle session.
+		endIdle(): void {
+			for (const [planId, session] of sessions) {
+				if (session.idleAt !== null) {
+					teardown(planId);
+				}
+			}
 		}
 	};
 }

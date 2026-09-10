@@ -52,6 +52,10 @@ export interface UpgradeDecision {
 	// already rolled back is the one refusal an operator can overrule; a session
 	// mid-bullet is not, and neither is a binary that cannot replace itself.
 	retryable: boolean;
+	// Not a refusal at all — a "not yet". The machine is willing and busy, so the
+	// caller holds the target and installs it when the work ends, rather than
+	// making somebody guess when the machine is free and press again.
+	deferred: boolean;
 }
 
 export function decideUpgrade(opts: {
@@ -66,12 +70,13 @@ export function decideUpgrade(opts: {
 		return {
 			proceed: false,
 			reason: 'not a packaged binary — upgrade skipped',
-			retryable: false
+			retryable: false,
+			deferred: false
 		};
 	}
 
 	if (opts.current === opts.target) {
-		return { proceed: false, reason: `already on ${opts.target}`, retryable: false };
+		return { proceed: false, reason: `already on ${opts.target}`, retryable: false, deferred: false };
 	}
 
 	// A version that came back broken once is not retried. Without this the
@@ -85,7 +90,8 @@ export function decideUpgrade(opts: {
 		return {
 			proceed: false,
 			reason: `${opts.target} was installed here before and failed to start, so it was rolled back`,
-			retryable: true
+			retryable: true,
+			deferred: false
 		};
 	}
 
@@ -95,11 +101,12 @@ export function decideUpgrade(opts: {
 		return {
 			proceed: false,
 			reason: `${opts.sessionsRunning} session(s) running — the binary is replaced by a restart, which would kill them`,
-			retryable: false
+			retryable: false,
+			deferred: true
 		};
 	}
 
-	return { proceed: true, reason: `upgrading to ${opts.target}`, retryable: false };
+	return { proceed: true, reason: `upgrading to ${opts.target}`, retryable: false, deferred: false };
 }
 
 function readLines(file: string): string[] {

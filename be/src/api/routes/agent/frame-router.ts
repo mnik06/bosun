@@ -56,7 +56,8 @@ function relayDecline(opts: {
 			machineId: opts.machineId,
 			to: opts.msg.version,
 			reason: opts.msg.reason,
-			retryable: opts.msg.retryable
+			retryable: opts.msg.retryable,
+			queued: opts.msg.queued
 		}
 	});
 }

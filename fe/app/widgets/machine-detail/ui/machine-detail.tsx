@@ -6,7 +6,8 @@ import {
 	PreflightChecklist,
 	useMachineQuery,
 	useUpgradeDecline,
-	useUpgradingTo
+	useUpgradingTo,
+	type UpgradeDecline
 } from '~/entities/machine'
 import { queueRefreshBlock, useMachineQueuesQuery } from '~/entities/queue'
 import { AddMcpServerButton } from '~/features/add-mcp-server'
@@ -19,6 +20,16 @@ import { GitCard } from '~/widgets/machine-detail/ui/git-card'
 import { MachineActions } from '~/widgets/machine-detail/ui/machine-actions'
 import { SetupCard } from '~/widgets/machine-detail/ui/setup-card'
 import { QueuesPanel } from '~/widgets/queues-panel'
+
+// Waiting is not a refusal, and a version this machine rolled back is not the
+// same as one it simply cannot take.
+function declineTone (decline: UpgradeDecline): string {
+	if (decline.queued) {
+		return 'blue'
+	}
+
+	return decline.retryable ? 'yellow' : 'gray'
+}
 
 export function MachineDetail ({ machineId }: { machineId: string }) {
 	const { data, isPending, error } = useMachineQuery(machineId)
@@ -79,9 +90,13 @@ export function MachineDetail ({ machineId }: { machineId: string }) {
 
 			{decline === null ? null : (
 				<Alert
-					color={decline.retryable ? 'yellow' : 'gray'}
+					color={declineTone(decline)}
 					variant="light"
-					title={`The agent did not upgrade to ${decline.to}`}
+					title={
+						decline.queued
+							? `${decline.to} will install when this machine finishes its work`
+							: `The agent did not upgrade to ${decline.to}`
+					}
 				>
 					<Stack gap="xs" align="start">
 						<Text size="sm">{decline.reason}</Text>

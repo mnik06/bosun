@@ -85,6 +85,15 @@ describe('decideUpgrade', () => {
 		expect(decideUpgrade({ ...base, sessionsRunning: 2 }).retryable).toBe(false);
 	});
 
+	// The difference between "no" and "not yet". Only a busy machine is held and
+	// installed later; everything else is answered once and dropped.
+	it('defers only for work in flight', () => {
+		expect(decideUpgrade({ ...base, sessionsRunning: 1 }).deferred).toBe(true);
+		expect(decideUpgrade({ ...base, blocked: ['2.1.0'] }).deferred).toBe(false);
+		expect(decideUpgrade({ ...base, selfContained: false }).deferred).toBe(false);
+		expect(decideUpgrade({ ...base, current: '2.1.0' }).deferred).toBe(false);
+	});
+
 	it('never retries a version that already failed to start', () => {
 		expect(decideUpgrade({ ...base, blocked: ['2.1.0'] }).proceed).toBe(false);
 	});

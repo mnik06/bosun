@@ -33,7 +33,8 @@ export const MachineUpgradeDeclinedMsgSchema = z.object({
 	machineId: z.string(),
 	to: z.string(),
 	reason: z.string(),
-	retryable: z.boolean()
+	retryable: z.boolean(),
+	queued: z.boolean().nullish().default(false)
 })
 
 export const QueueUpdatedMsgSchema = z.object({
