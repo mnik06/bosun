@@ -18,8 +18,8 @@ export function useRefreshMachine (opts: { machineId: string, settleKey: string 
 	const isRefreshing = flight !== null && flight.startedAt === opts.settleKey
 
 	const mutation = useMutation({
-		mutationFn: async () => {
-			await apiClient.post(`/machines/${opts.machineId}/refresh`)
+		mutationFn: async (force: boolean) => {
+			await apiClient.post(`/machines/${opts.machineId}/refresh`, { force })
 		},
 		onError: (error: unknown) => {
 			setFlight(null)
@@ -45,7 +45,14 @@ export function useRefreshMachine (opts: { machineId: string, settleKey: string 
 		isRefreshing,
 		refresh: () => {
 			setFlight({ startedAt: opts.settleKey })
-			mutation.mutate()
+			mutation.mutate(false)
+		},
+
+		// Overrules this machine's own record of a version that failed to start
+		// here. Only ever reached from the button the decline puts on screen.
+		retryUpgrade: () => {
+			setFlight({ startedAt: opts.settleKey })
+			mutation.mutate(true)
 		}
 	}
 }

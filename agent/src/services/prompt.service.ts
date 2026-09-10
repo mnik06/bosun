@@ -108,6 +108,35 @@ export function getPromptService(deps: {
 			return ask(`${label} (input hidden): `, { hidden: true });
 		},
 
+		// A secret long enough to wrap. `claude setup-token` prints a token wider
+		// than a terminal, and a copy taken off the screen brings the wrap back as a
+		// newline — which readline reads as Enter, submitting the first row and
+		// dropping the rest. The result is a token-shaped string the API refuses,
+		// with nothing on screen to say why, because the input is hidden. So the
+		// whole paste is collected instead of its first line, and the blank line is
+		// what ends it.
+		async secretBlock(label: string): Promise<string> {
+			const lines: string[] = [];
+
+			for (;;) {
+				const line = await ask(
+					lines.length === 0 ? `${label} (input hidden): ` : '',
+					{ hidden: true }
+				);
+
+				if (line === '') {
+					break;
+				}
+
+				lines.push(line);
+			}
+
+			// Joined without a separator and stripped throughout: every piece is a
+			// fragment of one value that a terminal broke in two, so any whitespace
+			// inside it came from the display, never from the token.
+			return lines.join('').replace(/\s/g, '');
+		},
+
 		close(): void {
 			rl?.close();
 			rl = null;

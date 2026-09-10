@@ -121,10 +121,23 @@ export const QueueWorktreeErrorMsgSchema = z.object({
 	message: z.string()
 });
 
+// The agent's answer to an upgrade it was offered and did not take. Without it
+// the browser is told an upgrade started and then watches a banner expire, which
+// reads as a broken upgrade rather than a refused one — and the reason only ever
+// reached the machine's own log.
+export const UpgradeDeclinedMsgSchema = z.object({
+	type: z.literal('upgrade.declined'),
+	version: z.string(),
+	reason: z.string(),
+	// Whether an operator asking again with `force` could get anywhere.
+	retryable: z.boolean()
+});
+
 export const AgentMsgSchema = z.discriminatedUnion('type', [
 	HelloMsgSchema,
 	PreflightMsgSchema,
 	PongMsgSchema,
+	UpgradeDeclinedMsgSchema,
 	PlanTextMsgSchema,
 	PlanActivityMsgSchema,
 	PlanQuestionMsgSchema,
@@ -156,7 +169,10 @@ export const RefreshMsgSchema = z.object({ type: z.literal('refresh') });
 export const UpgradeMsgSchema = z.object({
 	type: z.literal('upgrade'),
 	version: z.string(),
-	downloadBaseUrl: z.string()
+	downloadBaseUrl: z.string(),
+	// Set only when an operator asked for this version again after it was rolled
+	// back here. It overrules the block list and nothing else.
+	force: z.boolean().default(false)
 });
 
 export const PauseMsgSchema = z.object({ type: z.literal('pause') });

@@ -28,6 +28,14 @@ export const MachineUpgradingMsgSchema = z.object({
 	to: z.string()
 })
 
+export const MachineUpgradeDeclinedMsgSchema = z.object({
+	type: z.literal('machine.upgrade.declined'),
+	machineId: z.string(),
+	to: z.string(),
+	reason: z.string(),
+	retryable: z.boolean()
+})
+
 export const QueueUpdatedMsgSchema = z.object({
 	type: z.literal('queue.updated'),
 	queue: QueueSchema
@@ -94,6 +102,7 @@ export const UiMsgSchema = z.discriminatedUnion('type', [
 	MachinePongMsgSchema,
 	MachineDeletedMsgSchema,
 	MachineUpgradingMsgSchema,
+	MachineUpgradeDeclinedMsgSchema,
 	QueueUpdatedMsgSchema,
 	QueueDeletedMsgSchema,
 	RunTextMsgSchema,

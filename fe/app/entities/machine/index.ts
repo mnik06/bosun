@@ -22,7 +22,9 @@ export {
 	useLastPong,
 	useQueueAnswer,
 	useRunActivity,
+	useUpgradeDecline,
 	useUpgradingTo,
+	type UpgradeDecline,
 	type PongResult
 } from './model/machines-socket'
 export { UiMsgSchema, type UiMsg } from './model/ui-message'

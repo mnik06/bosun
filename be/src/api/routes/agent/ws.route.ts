@@ -110,6 +110,43 @@ function parseFrame(opts: {
 	return parsed.data;
 }
 
+async function offerUpgrade(opts: {
+	fastify: FastifyInstance;
+	machine: Machine;
+	reported: string;
+	log: FastifyBaseLogger;
+}): Promise<void> {
+	const target = await opts.fastify.services.agentRelease.target(opts.reported);
+
+	if (!target) {
+		return;
+	}
+
+	const { socketRegistry, pendingUpgrades } = opts.fastify.services;
+
+	// Logged with both versions because the comparison is equality, not "newer
+	// than": a pinned version below what a machine runs is a deliberate rollback,
+	// and it should read as one rather than as an upgrade that quietly went
+	// backwards.
+	opts.log.info(
+		{ machineId: opts.machine.id, from: opts.reported, to: target.version },
+		'offering the agent an upgrade'
+	);
+	socketRegistry.sendToAgent({
+		machineId: opts.machine.id,
+		message: { type: 'upgrade', ...target, force: pendingUpgrades.take(opts.machine.id) }
+	});
+	socketRegistry.broadcastToUi({
+		projectId: opts.machine.projectId,
+		message: {
+			type: 'machine.upgrading',
+			machineId: opts.machine.id,
+			from: opts.reported,
+			to: target.version
+		}
+	});
+}
+
 export async function applyMachineFrame(opts: {
 	fastify: FastifyInstance;
 	machineId: string;
@@ -165,31 +202,12 @@ export async function applyMachineFrame(opts: {
 	// would push a new build to every machine the moment it reconnects, which
 	// turns one bad release into a fleet-wide outage with nobody having chosen it.
 	if (opts.msg.type === 'hello' && opts.msg.reason === 'refresh') {
-		const target = await opts.fastify.services.agentRelease.target(opts.msg.agentVersion);
-
-		if (target) {
-			// Logged with both versions because the comparison is equality, not
-			// "newer than": a pinned version below what a machine runs is a
-			// deliberate rollback, and it should read as one rather than as an
-			// upgrade that quietly went backwards.
-			opts.log.info(
-				{ machineId: machine.id, from: opts.msg.agentVersion, to: target.version },
-				'offering the agent an upgrade'
-			);
-			socketRegistry.sendToAgent({
-				machineId: machine.id,
-				message: { type: 'upgrade', ...target }
-			});
-			socketRegistry.broadcastToUi({
-				projectId: machine.projectId,
-				message: {
-					type: 'machine.upgrading',
-					machineId: machine.id,
-					from: opts.msg.agentVersion,
-					to: target.version
-				}
-			});
-		}
+		await offerUpgrade({
+			fastify: opts.fastify,
+			machine,
+			reported: opts.msg.agentVersion,
+			log: opts.log
+		});
 	}
 
 	// A queue created while its machine was offline has a row and no directory.

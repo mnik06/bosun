@@ -2,6 +2,7 @@ import { FastifyPluginAsync } from 'fastify';
 import { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { MachineIdParamsSchema } from 'src/api/routes/schemas/machines/MachineIdParamsSchema';
 import { PingMachineRespSchema } from 'src/api/routes/schemas/machines/PingMachineRespSchema';
+import { RefreshMachineReqSchema } from 'src/api/routes/schemas/machines/RefreshMachineReqSchema';
 import { RefreshMachineRespSchema } from 'src/api/routes/schemas/machines/RefreshMachineRespSchema';
 import { getMachine } from 'src/controllers/machines/get-machine';
 import { pingMachine } from 'src/controllers/machines/ping-machine';
@@ -45,6 +46,7 @@ const routes: FastifyPluginAsync = async function (f) {
 			preValidation: fastify.requireLeader,
 			schema: {
 				params: MachineIdParamsSchema,
+				body: RefreshMachineReqSchema,
 				response: { 202: RefreshMachineRespSchema }
 			}
 		},
@@ -55,7 +57,12 @@ const routes: FastifyPluginAsync = async function (f) {
 				projectId: req.membership!.projectId
 			});
 
-			refreshMachine({ socketRegistry: fastify.services.socketRegistry, machine });
+			refreshMachine({
+				socketRegistry: fastify.services.socketRegistry,
+				pendingUpgrades: fastify.services.pendingUpgrades,
+				machine,
+				force: req.body?.force
+			});
 
 			return reply.status(202).send({ status: 'requested' as const });
 		}

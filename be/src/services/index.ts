@@ -8,6 +8,7 @@ import { getMcpPresetService } from 'src/services/mcp-presets/mcp-preset.service
 import { getPlanTextService } from 'src/services/plans/plan-text.service';
 import { getRunActivityService } from 'src/services/runs/run-activity.service';
 import { getPendingPingsService } from 'src/services/sockets/pending-pings.service';
+import { getPendingUpgradesService } from 'src/services/sockets/pending-upgrades.service';
 import { getSocketRegistry } from 'src/services/sockets/registry.service';
 import { getTicketService } from 'src/services/tickets/ticket.service';
 import { type Env } from 'src/types/EnvSchema';
@@ -26,6 +27,7 @@ export function getServices(opts: { env: Env }) {
 		keyService,
 		mcpPresets: getMcpPresetService(),
 		pendingPings: getPendingPingsService(),
+		pendingUpgrades: getPendingUpgradesService(),
 		planTextService: getPlanTextService(),
 		runActivity: getRunActivityService(),
 		socketRegistry: getSocketRegistry(),

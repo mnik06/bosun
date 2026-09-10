@@ -36,6 +36,31 @@ function isPublishFrame(msg: AgentMsg): msg is PublishFrame {
 	return msg.type === 'queue.published' || msg.type === 'queue.publish.error';
 }
 
+// The refusal used to reach the machine's own log and stop there, so an operator
+// watched a banner expire and read that as the upgrade being broken.
+function relayDecline(opts: {
+	fastify: FastifyInstance;
+	machineId: string;
+	projectId: string;
+	msg: Extract<AgentMsg, { type: 'upgrade.declined' }>;
+	log: FastifyBaseLogger;
+}): void {
+	opts.log.info(
+		{ machineId: opts.machineId, version: opts.msg.version, reason: opts.msg.reason },
+		'agent declined an upgrade'
+	);
+	opts.fastify.services.socketRegistry.broadcastToUi({
+		projectId: opts.projectId,
+		message: {
+			type: 'machine.upgrade.declined',
+			machineId: opts.machineId,
+			to: opts.msg.version,
+			reason: opts.msg.reason,
+			retryable: opts.msg.retryable
+		}
+	});
+}
+
 export async function handleAgentFrame(opts: {
 	fastify: FastifyInstance;
 	machineId: string;
@@ -63,6 +88,12 @@ export async function handleAgentFrame(opts: {
 				message: { type: 'machine.pong', machineId: opts.machineId, id: msg.id, rttMs }
 			});
 		}
+
+		return;
+	}
+
+	if (msg.type === 'upgrade.declined') {
+		relayDecline({ ...opts, msg });
 
 		return;
 	}

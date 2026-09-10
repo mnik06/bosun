@@ -19,6 +19,14 @@ const UPGRADE_TIMEOUT_MS = 180_000
 
 const PongContext = createContext<Record<string, PongResult>>({})
 const UpgradeContext = createContext<Record<string, string>>({})
+
+export interface UpgradeDecline {
+	to: string
+	reason: string
+	retryable: boolean
+}
+
+const DeclineContext = createContext<Record<string, UpgradeDecline>>({})
 const AnswerContext = createContext<Record<string, string>>({})
 const RunContext = createContext<Record<string, string>>({})
 
@@ -28,6 +36,13 @@ export function useLastPong (machineId: string): PongResult | null {
 
 export function useUpgradingTo (machineId: string): string | null {
 	return useContext(UpgradeContext)[machineId] ?? null
+}
+
+// Why the last upgrade offer was turned down. Survives until the next offer,
+// because the answer to "why is this machine still on the old version" has to
+// outlive the frame that delivered it.
+export function useUpgradeDecline (machineId: string): UpgradeDecline | null {
+	return useContext(DeclineContext)[machineId] ?? null
 }
 
 // The streamed half of an answer, keyed by queue. Dropped once the finished
@@ -54,7 +69,7 @@ function patchMachine (queryClient: QueryClient, machine: Machine): void {
 	)
 }
 
-function without (previous: Record<string, string>, machineId: string): Record<string, string> {
+function without <T> (previous: Record<string, T>, machineId: string): Record<string, T> {
 	const { [machineId]: _removed, ...rest } = previous
 
 	return rest
@@ -93,6 +108,7 @@ export function MachinesSocketProvider ({ children }: { children: ReactNode }) {
 	const queryClient = useQueryClient()
 	const [pongs, setPongs] = useState<Record<string, PongResult>>({})
 	const [upgrades, setUpgrades] = useState<Record<string, string>>({})
+	const [declines, setDeclines] = useState<Record<string, UpgradeDecline>>({})
 	const [runActivity, setRunActivity] = useState<Record<string, string>>({})
 	const [answers, setAnswers] = useState<Record<string, string>>({})
 	const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>())
@@ -115,9 +131,22 @@ export function MachinesSocketProvider ({ children }: { children: ReactNode }) {
 		}
 
 		const handle = (msg: UiMsg) => {
+			if (msg.type === 'machine.upgrade.declined') {
+				// The offer is settled, so the banner stops claiming otherwise rather
+				// than being left to expire on a timeout.
+				forget(msg.machineId)
+				setDeclines((previous) => ({
+					...previous,
+					[msg.machineId]: { to: msg.to, reason: msg.reason, retryable: msg.retryable }
+				}))
+
+				return
+			}
+
 			if (msg.type === 'machine.upgrading') {
 				clearTimeout(pending.get(msg.machineId))
 				pending.set(msg.machineId, setTimeout(() => { forget(msg.machineId) }, UPGRADE_TIMEOUT_MS))
+				setDeclines((previous) => without(previous, msg.machineId))
 				setUpgrades((previous) => ({ ...previous, [msg.machineId]: msg.to }))
 
 				return
@@ -234,9 +263,11 @@ export function MachinesSocketProvider ({ children }: { children: ReactNode }) {
 	return (
 		<PongContext.Provider value={pongs}>
 			<UpgradeContext.Provider value={upgrades}>
-				<RunContext.Provider value={runActivity}>
-					<AnswerContext.Provider value={answers}>{children}</AnswerContext.Provider>
-				</RunContext.Provider>
+				<DeclineContext.Provider value={declines}>
+					<RunContext.Provider value={runActivity}>
+						<AnswerContext.Provider value={answers}>{children}</AnswerContext.Provider>
+					</RunContext.Provider>
+				</DeclineContext.Provider>
 			</UpgradeContext.Provider>
 		</PongContext.Provider>
 	)

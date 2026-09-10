@@ -84,11 +84,12 @@ describe('routeServerFrame', () => {
 	it('passes an upgrade offer through to the installer', async () => {
 		const { onUpgrade, route } = build();
 
-		await route({ type: 'upgrade', version: '2.1.0', downloadBaseUrl: 'https://d/agent-v2.1.0' });
+		await route({ type: 'upgrade', force: false, version: '2.1.0', downloadBaseUrl: 'https://d/agent-v2.1.0' });
 
 		expect(onUpgrade).toHaveBeenCalledWith({
 			version: '2.1.0',
-			downloadBaseUrl: 'https://d/agent-v2.1.0'
+			downloadBaseUrl: 'https://d/agent-v2.1.0',
+			force: false
 		});
 	});
 

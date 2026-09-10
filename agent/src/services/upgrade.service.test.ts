@@ -62,11 +62,29 @@ describe('decideUpgrade', () => {
 		const decision = decideUpgrade({ ...base, sessionsRunning: 1 });
 
 		expect(decision.proceed).toBe(false);
-		expect(decision.reason).toContain('deferred');
+		expect(decision.reason).toContain('session');
+		// Nothing an operator can overrule: the restart would kill the bullet.
+		expect(decision.retryable).toBe(false);
 	});
 
 	// Without this the backend re-offers the bad build, the rollback restores the
 	// old one, and the machine flaps between them indefinitely.
+	// The one refusal an operator can overrule, and the only one `force` touches:
+	// a build that failed here may have been fixed, or the failure may have been
+	// this machine rather than the release.
+	it('lets a forced offer through the block list, and nothing else', () => {
+		expect(decideUpgrade({ ...base, blocked: ['2.1.0'], force: true }).proceed).toBe(true);
+		expect(
+			decideUpgrade({ ...base, blocked: ['2.1.0'], sessionsRunning: 1, force: true }).proceed
+		).toBe(false);
+		expect(decideUpgrade({ ...base, selfContained: false, force: true }).proceed).toBe(false);
+	});
+
+	it('marks a blocked version as worth retrying and a busy machine as not', () => {
+		expect(decideUpgrade({ ...base, blocked: ['2.1.0'] }).retryable).toBe(true);
+		expect(decideUpgrade({ ...base, sessionsRunning: 2 }).retryable).toBe(false);
+	});
+
 	it('never retries a version that already failed to start', () => {
 		expect(decideUpgrade({ ...base, blocked: ['2.1.0'] }).proceed).toBe(false);
 	});

@@ -45,6 +45,17 @@ export const MachineUpgradingMsgSchema = z.object({
 	to: z.string()
 });
 
+// The other half of `machine.upgrading`. Sent when the agent looked at the offer
+// and said no, so the browser can stop claiming an upgrade is under way and show
+// what actually happened.
+export const MachineUpgradeDeclinedMsgSchema = z.object({
+	type: z.literal('machine.upgrade.declined'),
+	machineId: z.string(),
+	to: z.string(),
+	reason: z.string(),
+	retryable: z.boolean()
+});
+
 export const PlanUpdatedMsgSchema = z.object({
 	type: z.literal('plan.updated'),
 	plan: PlanSchema
@@ -120,6 +131,7 @@ export const UiMsgSchema = z.discriminatedUnion('type', [
 	MachinePongMsgSchema,
 	MachineDeletedMsgSchema,
 	MachineUpgradingMsgSchema,
+	MachineUpgradeDeclinedMsgSchema,
 	PlanTextMsgSchema,
 	PlanActivityMsgSchema,
 	PlanQuestionMsgSchema,

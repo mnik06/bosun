@@ -42,7 +42,7 @@ export interface RouterDeps {
 	summaries: SummarySessions;
 	asks: AskSessions;
 	announce: (reason: 'connect' | 'refresh') => Promise<void>;
-	onUpgrade: (opts: { version: string; downloadBaseUrl: string }) => Promise<void>;
+	onUpgrade: (opts: { version: string; downloadBaseUrl: string; force: boolean }) => Promise<void>;
 }
 
 // A switch rather than a chain with a fallthrough: the chain's last branch was
@@ -61,7 +61,11 @@ export async function routeServerFrame(deps: RouterDeps, msg: ServerMsg): Promis
 			return;
 
 		case 'upgrade':
-			await deps.onUpgrade({ version: msg.version, downloadBaseUrl: msg.downloadBaseUrl });
+			await deps.onUpgrade({
+				version: msg.version,
+				downloadBaseUrl: msg.downloadBaseUrl,
+				force: msg.force
+			});
 
 			return;
 

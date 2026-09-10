@@ -129,25 +129,55 @@ async function connectOnce(deps: ConnectionDeps): Promise<void> {
 
 		// Exits rather than restarting itself: `Restart=on-failure` is what brings
 		// the unit back, now running the binary that was just swapped in.
-		const onUpgrade = async (target: { version: string; downloadBaseUrl: string }) => {
+		const onUpgrade = async (target: {
+			version: string;
+			downloadBaseUrl: string;
+			force: boolean;
+		}) => {
 			const decision = deps.services.upgrade.decide({
 				current: AGENT_VERSION,
 				target: target.version,
-				sessionsRunning: sessions.running() + deps.executions.running()
+				sessionsRunning: sessions.running() + deps.executions.running(),
+				force: target.force
 			});
 
 			console.log(`upgrade: ${decision.reason}`);
 
+			// Said out loud, not just logged. The operator pressed a button and the
+			// only place the answer used to appear was a file on this box.
 			if (!decision.proceed) {
+				send({
+					type: 'upgrade.declined',
+					version: target.version,
+					reason: decision.reason,
+					retryable: decision.retryable
+				});
+
 				return;
 			}
 
 			try {
 				await deps.services.upgrade.apply(target);
+
+				// After the install, never before: a version cleared from the block
+				// list by an attempt that then failed to download would be offered
+				// again on the next refresh with nothing having changed.
+				if (target.force) {
+					deps.services.upgrade.unblock(target.version);
+				}
+
 				console.log(`upgrade: installed ${target.version}, restarting`);
 				process.exit(UPGRADE_EXIT_CODE);
 			} catch (error) {
-				console.error(`upgrade failed: ${error instanceof Error ? error.message : error}`);
+				const message = error instanceof Error ? error.message : String(error);
+
+				console.error(`upgrade failed: ${message}`);
+				send({
+					type: 'upgrade.declined',
+					version: target.version,
+					reason: `install failed: ${message}`,
+					retryable: true
+				});
 			}
 		};
 		let settled = false;

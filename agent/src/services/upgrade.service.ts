@@ -48,6 +48,10 @@ export function findChecksum(opts: { sums: string; asset: string }): string | nu
 export interface UpgradeDecision {
 	proceed: boolean;
 	reason: string;
+	// Whether asking again, harder, could get anywhere. A version this machine
+	// already rolled back is the one refusal an operator can overrule; a session
+	// mid-bullet is not, and neither is a binary that cannot replace itself.
+	retryable: boolean;
 }
 
 export function decideUpgrade(opts: {
@@ -56,29 +60,46 @@ export function decideUpgrade(opts: {
 	blocked: string[];
 	sessionsRunning: number;
 	selfContained: boolean;
+	force?: boolean;
 }): UpgradeDecision {
 	if (!opts.selfContained) {
-		return { proceed: false, reason: 'not a packaged binary — upgrade skipped' };
+		return {
+			proceed: false,
+			reason: 'not a packaged binary — upgrade skipped',
+			retryable: false
+		};
 	}
 
 	if (opts.current === opts.target) {
-		return { proceed: false, reason: `already on ${opts.target}` };
+		return { proceed: false, reason: `already on ${opts.target}`, retryable: false };
 	}
 
 	// A version that came back broken once is not retried. Without this the
 	// backend keeps offering it, the rollback keeps restoring the old binary, and
 	// the machine flaps between the two for as long as anybody is watching.
-	if (opts.blocked.includes(opts.target)) {
-		return { proceed: false, reason: `${opts.target} previously failed to start — not retrying` };
+	// Forcing clears exactly this one, because it is the only refusal that is a
+	// judgement rather than a fact: the operator may know the build was fixed, or
+	// that the failure was the machine rather than the release. Everything else
+	// below stays refused however hard anybody asks.
+	if (!opts.force && opts.blocked.includes(opts.target)) {
+		return {
+			proceed: false,
+			reason: `${opts.target} was installed here before and failed to start, so it was rolled back`,
+			retryable: true
+		};
 	}
 
 	// The binary is replaced and the process restarts, so a session in flight
 	// would die with a question already on somebody's screen.
 	if (opts.sessionsRunning > 0) {
-		return { proceed: false, reason: `${opts.sessionsRunning} session(s) running — upgrade deferred` };
+		return {
+			proceed: false,
+			reason: `${opts.sessionsRunning} session(s) running — the binary is replaced by a restart, which would kill them`,
+			retryable: false
+		};
 	}
 
-	return { proceed: true, reason: `upgrading to ${opts.target}` };
+	return { proceed: true, reason: `upgrading to ${opts.target}`, retryable: false };
 }
 
 function readLines(file: string): string[] {
@@ -123,6 +144,21 @@ export function getUpgradeService(deps: { exec: ExecService; homeDir?: string; e
 		const all = new Set([...blocked(), version]);
 
 		fs.writeFileSync(blockedPath, `${[...all].join('\n')}\n`, { mode: 0o600 });
+	}
+
+	// Cleared when an operator forces the version through, so a build that then
+	// starts cleanly stops being refused. Without this the file is a one-way door
+	// that only an ssh session can open.
+	function unblock(version: string): void {
+		const rest = blocked().filter((entry) => entry !== version);
+
+		if (rest.length === 0) {
+			fs.rmSync(blockedPath, { force: true });
+
+			return;
+		}
+
+		fs.writeFileSync(blockedPath, `${rest.join('\n')}\n`, { mode: 0o600 });
 	}
 
 	async function stage(opts: { version: string; downloadBaseUrl: string; asset: string }) {
@@ -179,9 +215,16 @@ export function getUpgradeService(deps: { exec: ExecService; homeDir?: string; e
 
 		blocked,
 
-		decide(opts: { current: string; target: string; sessionsRunning: number }): UpgradeDecision {
+		decide(opts: {
+			current: string;
+			target: string;
+			sessionsRunning: number;
+			force?: boolean;
+		}): UpgradeDecision {
 			return decideUpgrade({ ...opts, blocked: blocked(), selfContained });
 		},
+
+		unblock,
 
 		// Everything is verified before the live binary is touched; the swap itself
 		// is a rename, which is atomic on one filesystem and safe to do to a running

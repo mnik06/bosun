@@ -1,10 +1,11 @@
-import { Alert, Card, Center, Group, Loader, Stack, Text, Title } from '@mantine/core'
+import { Alert, Button, Card, Center, Group, Loader, Stack, Text, Title } from '@mantine/core'
 import { Download } from 'lucide-react'
 
 import {
 	MachineStatusDot,
 	PreflightChecklist,
 	useMachineQuery,
+	useUpgradeDecline,
 	useUpgradingTo
 } from '~/entities/machine'
 import { queueRefreshBlock, useMachineQueuesQuery } from '~/entities/queue'
@@ -22,6 +23,7 @@ import { QueuesPanel } from '~/widgets/queues-panel'
 export function MachineDetail ({ machineId }: { machineId: string }) {
 	const { data, isPending, error } = useMachineQuery(machineId)
 	const upgradingTo = useUpgradingTo(machineId)
+	const decline = useUpgradeDecline(machineId)
 	// The agent stamps lastSeenAt on every push, so a change to it is the signal
 	// that its answer to the refresh has landed.
 	const refresh = useRefreshMachine({ machineId, settleKey: data?.lastSeenAt ?? null })
@@ -74,6 +76,28 @@ export function MachineDetail ({ machineId }: { machineId: string }) {
 			</Group>
 
 			<PausedBanner machine={data} />
+
+			{decline === null ? null : (
+				<Alert
+					color={decline.retryable ? 'yellow' : 'gray'}
+					variant="light"
+					title={`The agent did not upgrade to ${decline.to}`}
+				>
+					<Stack gap="xs" align="start">
+						<Text size="sm">{decline.reason}</Text>
+						{decline.retryable ? (
+							<Button
+								size="xs"
+								variant="light"
+								loading={refresh.isRefreshing}
+								onClick={refresh.retryUpgrade}
+							>
+								Install {decline.to} anyway
+							</Button>
+						) : null}
+					</Stack>
+				</Alert>
+			)}
 
 			{upgradingTo === null ? null : (
 				<Alert
