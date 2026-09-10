@@ -80,3 +80,42 @@ describe('getPromptService', () => {
 		expect(written.join('')).not.toContain(String.fromCharCode(27));
 	});
 });
+
+describe('secretBlock', () => {
+	// The bug this exists for: `claude setup-token` prints a token wider than a
+	// terminal, and a copy taken off the screen carries the wrap back as a newline.
+	// Read as one line, the token loses everything after the first row and the API
+	// refuses it — with the input hidden, nothing on screen says why.
+	it('rejoins a token the terminal wrapped', async () => {
+		const { prompt } = harness(['sk-ant-oat01-firstrow', 'secondrow', '']);
+
+		expect(await prompt.secretBlock('Claude token')).toBe('sk-ant-oat01-firstrowsecondrow');
+	});
+
+	it('reads a token that did not wrap', async () => {
+		const { prompt } = harness(['sk-ant-oat01-whole', '']);
+
+		expect(await prompt.secretBlock('Claude token')).toBe('sk-ant-oat01-whole');
+	});
+
+	// Every fragment is part of one value, so whitespace in it came from the
+	// display rather than from the token.
+	it('strips whitespace the display introduced', async () => {
+		const { prompt } = harness(['  sk-ant-oat01-first ', ' second  ', '']);
+
+		expect(await prompt.secretBlock('Claude token')).toBe('sk-ant-oat01-firstsecond');
+	});
+
+	// EOF with no blank line is what a piped heredoc looks like.
+	it('ends at EOF as well as at a blank line', async () => {
+		const { prompt } = harness(['sk-ant-oat01-piped']);
+
+		expect(await prompt.secretBlock('Claude token')).toBe('sk-ant-oat01-piped');
+	});
+
+	it('reads nothing when the first line is empty', async () => {
+		const { prompt } = harness(['', 'ignored']);
+
+		expect(await prompt.secretBlock('Claude token')).toBe('');
+	});
+});

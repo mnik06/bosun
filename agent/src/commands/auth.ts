@@ -10,6 +10,9 @@ import { getPromptService } from '../services/prompt.service';
 const SETUP_HINT =
 	'Run `claude setup-token` on your own machine — it needs a browser, this one does not have to.';
 
+const PASTE_HINT =
+	'Paste the token, then press Enter on an empty line. A token copied off a wrapped terminal line spans more than one — paste all of it.';
+
 function build() {
 	const exec = getExecService();
 	const env = getEnvService({ baseEnv: process.env });
@@ -22,10 +25,11 @@ export async function setClaudeToken(): Promise<void> {
 	const prompt = getPromptService({});
 
 	console.log(SETUP_HINT);
+	console.log(PASTE_HINT);
 	console.log('');
 
 	try {
-		const token = await prompt.secret('Claude token');
+		const token = await prompt.secretBlock('Claude token');
 
 		if (!token) {
 			throw new Error('nothing entered — no credential was written');
