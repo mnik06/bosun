@@ -1,4 +1,8 @@
-import { getClaudeAuthService, CLAUDE_TOKEN_VARIABLE } from '../services/claude-auth.service';
+import {
+	describeToken,
+	getClaudeAuthService,
+	CLAUDE_TOKEN_VARIABLE
+} from '../services/claude-auth.service';
 import { getEnvService } from '../services/env.service';
 import { getExecService } from '../services/exec.service';
 import { getPromptService } from '../services/prompt.service';
@@ -27,6 +31,18 @@ export async function setClaudeToken(): Promise<void> {
 			throw new Error('nothing entered — no credential was written');
 		}
 
+		// The prompt hides what is typed, so a truncated paste and a good one look
+		// identical. Reported back before the check runs, because "the API says your
+		// token is invalid" sends people to mint another one when what actually
+		// happened is that half of this one never arrived.
+		const described = describeToken(token);
+
+		console.log(`Read ${described.fingerprint}.`);
+
+		if (described.warning !== null) {
+			console.log(`! ${described.warning}`);
+		}
+
 		// Checked before it is written. A credential that the API refuses is a typo
 		// or an expired token, and storing it would leave the machine looking
 		// configured while every planning session fails.
@@ -35,7 +51,10 @@ export async function setClaudeToken(): Promise<void> {
 		const verified = await claudeAuth.verify({ token });
 
 		if (!verified.ok) {
-			throw new Error(`${verified.detail}\nNothing was written. ${SETUP_HINT}`);
+			const suspect =
+				described.warning === null ? '' : `\nThe token bosun read is suspect: ${described.warning}.`;
+
+			throw new Error(`${verified.detail}${suspect}\nNothing was written. ${SETUP_HINT}`);
 		}
 
 		env.set({ variable: CLAUDE_TOKEN_VARIABLE, value: token });

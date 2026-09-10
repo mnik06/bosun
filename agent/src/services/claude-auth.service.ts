@@ -6,8 +6,71 @@ export const CLAUDE_TOKEN_VARIABLE = 'CLAUDE_CODE_OAUTH_TOKEN';
 
 // Claude Code applies its own precedence between this and the token, so a stray
 // key left on the box could otherwise decide which account a session bills to.
-// Stripped from every session rather than merely ignored here.
+// Stripped rather than merely ignored here.
 export const CONFLICTING_VARIABLES = ['ANTHROPIC_API_KEY'];
+
+// Every OAuth token `claude setup-token` mints carries it. Not enforced, because
+// a prefix the CLI changes is not a reason for bosun to refuse a working
+// credential — it is only strong enough to say what looks wrong before the API
+// says it in less specific words.
+const TOKEN_PREFIX = 'sk-ant-oat01-';
+
+// The prefix is a constant and the last few characters are not enough to use, so
+// both can be shown. Anything shorter than the two combined is reported by length
+// alone rather than quoted back in full.
+const REVEALABLE_LENGTH = TOKEN_PREFIX.length + 8;
+
+// A verify and a session get the same environment: a box with a stale
+// ANTHROPIC_API_KEY on it would otherwise fail the check with a message naming
+// the token, which is the one thing on the box that was fine.
+export function credentialEnv(opts: {
+	env: NodeJS.ProcessEnv;
+	token?: string;
+}): NodeJS.ProcessEnv {
+	const env: NodeJS.ProcessEnv = { ...opts.env };
+
+	for (const variable of CONFLICTING_VARIABLES) {
+		delete env[variable];
+	}
+
+	if (opts.token) {
+		env[CLAUDE_TOKEN_VARIABLE] = opts.token;
+	}
+
+	return env;
+}
+
+export interface TokenDescription {
+	fingerprint: string;
+	warning: string | null;
+}
+
+// Echo is suppressed while the token is typed, so a paste that lost characters to
+// a terminal line wrap or a bracketed-paste escape looks exactly like a good one,
+// and the API's "invalid token" is then read as a lie. This is what makes the
+// difference visible without printing the secret.
+export function describeToken(token: string): TokenDescription {
+	const fingerprint =
+		token.length >= REVEALABLE_LENGTH
+			? `${token.length} characters, ${token.slice(0, TOKEN_PREFIX.length)}…${token.slice(-4)}`
+			: `${token.length} characters`;
+
+	if (/\s/.test(token)) {
+		return {
+			fingerprint,
+			warning: 'it contains a space or a line break — the paste picked up a wrapped line'
+		};
+	}
+
+	if (!token.startsWith(TOKEN_PREFIX)) {
+		return {
+			fingerprint,
+			warning: `it does not start with ${TOKEN_PREFIX} — an API key (sk-ant-api03-…) is not an OAuth token, and the API refuses it with the same message`
+		};
+	}
+
+	return { fingerprint, warning: null };
+}
 
 // nullish, not optional, throughout: the CLI emits absent fields as explicit
 // nulls, and `optional()` rejects null. A single null anywhere fails the whole
@@ -174,12 +237,11 @@ export function getClaudeAuthService(deps: { exec: ExecService; env: EnvService 
 		// Costs one tiny turn, which is why it is not part of preflight: this runs
 		// when somebody sets a credential or asks, not on every reconnect.
 		async verify(opts?: { token?: string }): Promise<VerifyResult> {
-			const env = deps.env.current();
 			const result = await deps.exec.run(
 				'claude',
 				['--print', '--tools=', '--output-format', 'json', 'ok'],
 				{
-					env: opts?.token ? { ...env, [CLAUDE_TOKEN_VARIABLE]: opts.token } : env,
+					env: credentialEnv({ env: deps.env.current(), token: opts?.token }),
 					timeoutMs: VERIFY_TIMEOUT_MS
 				}
 			);
@@ -195,13 +257,7 @@ export function getClaudeAuthService(deps: { exec: ExecService; env: EnvService 
 		// account bosun checked at preflight rather than whichever variable the CLI
 		// happens to prefer.
 		sessionEnv(): NodeJS.ProcessEnv {
-			const env: NodeJS.ProcessEnv = deps.env.current();
-
-			for (const variable of CONFLICTING_VARIABLES) {
-				delete env[variable];
-			}
-
-			return env;
+			return credentialEnv({ env: deps.env.current() });
 		}
 	};
 }

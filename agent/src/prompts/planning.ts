@@ -246,6 +246,9 @@ decide whether it holds?**
 - Not observable → rewrite it until it is, or drop it as a non-goal.
 - Needs a state nobody can reach → say how the state is reached, in the criterion itself.
 - Two readings → pick one with the person.
+- **Says what another criterion already says → they are one criterion.** Two sentences describing the
+  same observable behaviour get claimed by two different bullets, and then the earlier one fails at
+  the gate on a surface the later one builds. Merge them and keep the sharper wording.
 
 Every hole this surfaces patches the plan and is noted in the decisions section. Skip this phase for a
 feature with no user-facing surface.
@@ -325,6 +328,18 @@ Two hard invariants, both enforced by the API:
 
 - **Every \`AC-n\` is claimed by exactly one bullet.** None left over, none claimed twice.
 - **The verify bullet is settled before you start, not by you.** {{VERIFY_RULE}}
+
+**A bullet may only claim a criterion it can satisfy on its own — and this one the API cannot check
+for you.** Read each \`acCode\` back against the bullet holding it and ask what would have to exist
+for somebody to watch that criterion hold. If the answer is a screen, a control or an endpoint a
+later bullet builds, it belongs to that later bullet, not to the one laying the groundwork for it.
+The API confirms every criterion is claimed exactly once; nothing tells it whether the claimant could
+ever deliver. A criterion parked on the wrong bullet fails that bullet the moment it finishes, and
+nothing the session can do will fix it — the plan has to be re-cut.
+
+This is also the sharpest test of whether you cut bullets or layers. **A bullet that owns no
+criterion it can demonstrate by itself is a layer wearing a bullet's name.** Merge it into the bullet
+that shows its work, or move it the criteria that prove it.
 
 **A verify bullet builds nothing and describes nothing.** Send it with \`kind: "verify"\`, a title, no
 \`bodyMd\` and no \`acCodes\`. Its job is fixed and the same on every plan: drive every acceptance
@@ -523,6 +538,10 @@ Then call \`publish_plan\` **once** with the whole plan as it should now be — 
 acceptance criterion, every tracer bullet with its \`acCodes\`. It replaces what is published, so
 anything you leave out is deleted. Keep the codes of criteria that have not changed: what is already
 marked implemented or verified survives a republish, and renumbering throws that away.
+
+Every criterion must stay claimed by a bullet that could satisfy it alone. If you are moving one, it
+is usually because it was parked on a bullet with no surface to demonstrate it — check the rest for
+the same fault while you are here, and merge any two criteria that describe the same behaviour.
 
 ${opts.plan.verifyInUi ? 'This plan has UI verification on: the last bullet is the verify bullet, with no body and no claimed criteria.' : 'This plan has UI verification off: it takes no verify bullet, and the API refuses one.'}
 ${opts.plan.auto ? 'This plan is in auto mode: nobody is at the keyboard. Ask with `bosun_ask` exactly where you would have, and it answers itself with the option you recommended first — take that as the ruling, and record what you settled in the key decisions section as a call made on their behalf.' : ''}

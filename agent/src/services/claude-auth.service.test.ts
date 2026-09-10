@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+	credentialEnv,
+	describeToken,
 	CLAUDE_TOKEN_VARIABLE,
 	readClaudeAuthStatus,
 	readVerifyResult
@@ -186,5 +188,66 @@ describe('readClaudeAuthStatus against explicit nulls', () => {
 		});
 
 		expect(status).toMatchObject({ reported: true, loggedIn: true });
+	});
+});
+
+describe('credentialEnv', () => {
+	// The bug this exists for: a stale API key on the box outranks the token, and
+	// the 401 that follows names the token — the one thing that was fine.
+	it('strips a conflicting API key before a verify', () => {
+		const env = credentialEnv({
+			env: { ANTHROPIC_API_KEY: 'sk-ant-api03-stale', PATH: '/usr/bin' },
+			token: 'sk-ant-oat01-good'
+		});
+
+		expect(env.ANTHROPIC_API_KEY).toBeUndefined();
+		expect(env[CLAUDE_TOKEN_VARIABLE]).toBe('sk-ant-oat01-good');
+		expect(env.PATH).toBe('/usr/bin');
+	});
+
+	it('leaves the token in the environment alone when none is passed', () => {
+		const env = credentialEnv({ env: { [CLAUDE_TOKEN_VARIABLE]: 'sk-ant-oat01-stored' } });
+
+		expect(env[CLAUDE_TOKEN_VARIABLE]).toBe('sk-ant-oat01-stored');
+	});
+
+	it('does not mutate the environment it was given', () => {
+		const original = { ANTHROPIC_API_KEY: 'sk-ant-api03-stale' };
+
+		credentialEnv({ env: original });
+
+		expect(original.ANTHROPIC_API_KEY).toBe('sk-ant-api03-stale');
+	});
+});
+
+describe('describeToken', () => {
+	const token = `sk-ant-oat01-${'a'.repeat(80)}zzzz`;
+
+	it('quotes the prefix and the tail, never the middle', () => {
+		const described = describeToken(token);
+
+		expect(described.warning).toBeNull();
+		expect(described.fingerprint).toContain(`${token.length} characters`);
+		expect(described.fingerprint).toContain('sk-ant-oat01-');
+		expect(described.fingerprint).toContain('zzzz');
+		expect(described.fingerprint).not.toContain('aaaaaaaa');
+	});
+
+	// A short value is mostly prefix and tail, so quoting both would print it whole.
+	it('reports a short value by length alone', () => {
+		expect(describeToken('sk-ant-oat01-ab').fingerprint).toBe('15 characters');
+	});
+
+	it('names an API key as an API key rather than leaving it to the API', () => {
+		const described = describeToken(`sk-ant-api03-${'a'.repeat(80)}`);
+
+		expect(described.warning).toContain('sk-ant-oat01-');
+	});
+
+	// What a wrapped terminal line looks like once it has been copied.
+	it('flags whitespace picked up by the paste', () => {
+		const described = describeToken(`sk-ant-oat01-${'a'.repeat(40)} ${'b'.repeat(40)}`);
+
+		expect(described.warning).toContain('line break');
 	});
 });
