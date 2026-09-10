@@ -57,11 +57,19 @@ function ArtifactPane ({
 	)
 }
 
-function PlanActions ({ plan, published }: { plan: Plan, published: boolean }) {
+function PlanActions ({
+	plan,
+	published,
+	deletable
+}: {
+	plan: Plan,
+	published: boolean,
+	deletable: boolean
+}) {
 	return (
 		<Group gap="xs" wrap="nowrap" className="shrink-0">
 			{published ? <ConfirmPlanButton plan={plan} /> : null}
-			<DeletePlanButton planId={plan.id} />
+			{deletable ? <DeletePlanButton planId={plan.id} /> : null}
 		</Group>
 	)
 }
@@ -71,7 +79,7 @@ export default function PlanPage ({ params }: Route.ComponentProps) {
 	const { data, isPending, error } = usePlanQuery(planId)
 	const stream = usePlanStream(planId)
 	const [expanded, setExpanded] = useState(false)
-	const [tab, setTab] = useState<string | null>('plan')
+	const [tab, setTab] = useState<string | null>(null)
 	// Read synchronously rather than in an effect: the two layouts are different
 	// enough that settling into the right one a frame later reads as a glitch.
 	const wide = useMediaQuery('(width >= 48em)', true, { getInitialValueInEffect: false })
@@ -133,7 +141,10 @@ export default function PlanPage ({ params }: Route.ComponentProps) {
 		{ value: 'plan', label: 'Plan' },
 		...(showExecution ? [{ value: 'execution', label: 'Execution' }] : [])
 	]
-	const active = tabs.some((entry) => entry.value === tab) ? tab : 'plan'
+	// The chat is where a plan is actually worked on, so on a phone — where it is a
+	// tab of its own — it is what the page opens on.
+	const fallback = wide ? 'plan' : 'chat'
+	const active = tabs.some((entry) => entry.value === tab) ? tab : fallback
 
 	// The page owns the viewport: the two panes scroll, the page never does.
 	return (
@@ -150,7 +161,8 @@ export default function PlanPage ({ params }: Route.ComponentProps) {
 					>
 						← Plans
 					</Anchor>
-					<Text size="sm" fw={600} truncate className="min-w-0">
+					{wide ? null : <DeletePlanButton planId={plan.id} iconOnly className="shrink-0" />}
+					<Text size="sm" fw={600} truncate className="min-w-0 grow">
 						<Text component="span" c="dimmed" fw={500}>
 							#{plan.number}
 						</Text>{' '}
@@ -172,7 +184,7 @@ export default function PlanPage ({ params }: Route.ComponentProps) {
 					))}
 				</Group>
 
-				<PlanActions plan={plan} published={published} />
+				<PlanActions plan={plan} published={published} deletable={wide} />
 			</div>
 
 			<Tabs value={active} onChange={setTab} className="flex min-h-0 grow flex-col">
