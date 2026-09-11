@@ -196,7 +196,8 @@ export async function applyMachineFrame(opts: {
 		await stallMachineRuns(schedulerDeps(opts.fastify), {
 			machineId: machine.id,
 			connectedAt: opts.connectedAt,
-			heldRunIds: opts.msg.runIds
+			heldRunIds: opts.msg.runIds,
+			uptimeMs: opts.msg.uptimeMs
 		});
 		await stallMachinePlans({
 			planRepo: opts.fastify.repos.planRepo,

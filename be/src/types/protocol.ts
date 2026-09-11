@@ -34,7 +34,12 @@ export const HelloMsgSchema = z.object({
 	// absent has to keep meaning exactly that rather than "unknown".
 	runIds: z.array(z.string()).optional(),
 	// The planning sessions still held, on the same terms.
-	planIds: z.array(z.string()).optional()
+	planIds: z.array(z.string()).optional(),
+	// How long that agent process has been alive. A dropped socket and a restarted
+	// agent are indistinguishable here otherwise, and only one of them means every
+	// session on the machine is gone — which is the difference between a queue
+	// that was unlucky and a machine that is killing its own agent.
+	uptimeMs: z.number().optional()
 });
 
 export const PreflightMsgSchema = z.object({

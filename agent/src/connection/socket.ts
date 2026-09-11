@@ -79,7 +79,8 @@ function createAnnouncer(deps: ConnectionDeps & { socket: WebSocket }) {
 				// planning session outlives the socket it was started on, and a backend
 				// that failed every `planning` plan on a reconnect would kill the grill
 				// the person is in the middle of answering.
-				planIds: [...new Set([...deps.sessions.held(), ...deps.sink.pendingPlanIds()])]
+				planIds: [...new Set([...deps.sessions.held(), ...deps.sink.pendingPlanIds()])],
+				uptimeMs: Math.round(process.uptime() * 1000)
 			})
 		);
 

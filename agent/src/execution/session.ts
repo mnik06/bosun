@@ -46,7 +46,11 @@ function promptFor(msg: ExecStart): string {
 }
 
 interface Run {
-	mcp: SessionMcpServer;
+	// Null while the bullet is being set up. The run is in the map before either
+	// exists, because `hello` reads this map to say what this agent still holds:
+	// a run missing from it is one the backend puts back and pauses the queue over,
+	// and the setup below can take a `git fetch` and a worktree reset to finish.
+	mcp: SessionMcpServer | null;
 	process: ClaudeSession | null;
 	cancelled: boolean;
 	settled: boolean;
@@ -77,7 +81,7 @@ export function createExecutionSessions(opts: {
 
 		runs.delete(runId);
 		run.process?.kill();
-		void run.mcp.close();
+		void run.mcp?.close();
 	};
 
 	const fail = (runId: string, message: string): void => {
@@ -133,7 +137,7 @@ export function createExecutionSessions(opts: {
 		teardown(msg.runId);
 	};
 
-	const startProcess = async (msg: ExecStart): Promise<void> => {
+	const startProcess = async (msg: ExecStart, run: Run): Promise<void> => {
 		if (msg.freshBranch) {
 			const branched = await opts.services.commit.startBranch({
 				worktreePath: msg.worktreePath,
@@ -153,6 +157,12 @@ export function createExecutionSessions(opts: {
 			if (!cleaned.ok) {
 				throw new Error(`could not clean the worktree: ${cleaned.detail}`);
 			}
+		}
+
+		// Cancelled while the worktree was being prepared. Carrying on would start a
+		// session for a bullet the backend has already taken back.
+		if (run.cancelled) {
+			return;
 		}
 
 		const userMcp = opts.services.mcpConfig.read();
@@ -178,9 +188,13 @@ export function createExecutionSessions(opts: {
 				console.log(line);
 			}
 		});
-		const run: Run = { mcp, process: null, cancelled: false, settled: false, report: '' };
+		if (run.cancelled) {
+			await mcp.close();
 
-		runs.set(msg.runId, run);
+			return;
+		}
+
+		run.mcp = mcp;
 		opts.send({ type: 'exec.activity', runId: msg.runId, label: 'Starting the session' });
 
 		const activity = createActivityTracker();
@@ -246,8 +260,23 @@ export function createExecutionSessions(opts: {
 				return;
 			}
 
+			// Before the first await, so a reconnect that lands while the worktree is
+			// still being prepared finds this run in `held()`. Without it the backend
+			// reads a bullet it dispatched seconds ago as one that died with the old
+			// socket, puts it back, and pauses the queue — while the session it was
+			// told nothing about goes on to start and build.
+			const run: Run = {
+				mcp: null,
+				process: null,
+				cancelled: false,
+				settled: false,
+				report: ''
+			};
+
+			runs.set(msg.runId, run);
+
 			try {
-				await startProcess(msg);
+				await startProcess(msg, run);
 			} catch (error) {
 				teardown(msg.runId);
 				opts.send({
@@ -259,7 +288,7 @@ export function createExecutionSessions(opts: {
 		},
 
 		answer(payload): void {
-			runs.get(payload.runId)?.mcp.answer(payload);
+			runs.get(payload.runId)?.mcp?.answer(payload);
 		},
 
 		cancel(runId): void {

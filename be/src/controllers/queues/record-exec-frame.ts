@@ -15,6 +15,14 @@ async function locate(deps: AdvanceDeps, opts: { runId: string; machineId: strin
 		return null;
 	}
 
+	// A session whose run was already settled by somebody else — put back when the
+	// machine dropped, re-armed by hand — is a ghost: the row it is reporting on
+	// describes a different attempt now, and letting its `exec.done` through would
+	// mark a bullet finished that is waiting to be run again.
+	if (run.status !== 'running') {
+		return null;
+	}
+
 	const item = await deps.queueItemRepo.getById(run.queueItemId);
 	const queue = item ? await deps.queueRepo.getById(item.queueId) : null;
 

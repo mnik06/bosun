@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { type AdvanceDeps } from 'src/controllers/queues/advance-deps';
 import { recordExecFrame } from 'src/controllers/queues/record-exec-frame';
 
-function build(opts?: { machineId?: string }) {
+function build(opts?: { machineId?: string; runStatus?: string }) {
 	const deps = {
 		queueRepo: {
 			getById: vi.fn().mockResolvedValue({
@@ -25,7 +25,12 @@ function build(opts?: { machineId?: string }) {
 			update: vi.fn()
 		},
 		sliceRunRepo: {
-			getById: vi.fn().mockResolvedValue({ id: 'sr_1', queueItemId: 'qi_1', ordinal: 1 }),
+			getById: vi.fn().mockResolvedValue({
+				id: 'sr_1',
+				queueItemId: 'qi_1',
+				ordinal: 1,
+				status: opts?.runStatus ?? 'running'
+			}),
 			claimNext: vi.fn().mockResolvedValue(null),
 			listForItem: vi.fn().mockResolvedValue([]),
 			setQuestion: vi.fn(),
@@ -137,5 +142,38 @@ describe('recordExecFrame', () => {
 		});
 
 		expect(deps.sliceRunRepo.update).not.toHaveBeenCalled();
+	});
+});
+
+// A session the backend has already stopped waiting on — the machine dropped and
+// the bullet was put back, or somebody re-armed it — is reporting on a row that
+// now describes a different attempt.
+describe('recordExecFrame, ghost session', () => {
+	it('ignores a result for a bullet that is no longer running', async () => {
+		const deps = build({ runStatus: 'pending' });
+
+		await recordExecFrame(deps, {
+			...base,
+			frame: { type: 'exec.done', runId: 'sr_1', commitSha: 'abc123', report: 'done' }
+		});
+
+		expect(deps.sliceRunRepo.update).not.toHaveBeenCalled();
+	});
+
+	it('ignores a question from one', async () => {
+		const deps = build({ runStatus: 'failed' });
+
+		await recordExecFrame(deps, {
+			...base,
+			frame: {
+				type: 'exec.question',
+				runId: 'sr_1',
+				questionId: 'qn_1',
+				questions: [{ header: 'h', question: 'q', options: [], multiSelect: false }]
+			}
+		});
+
+		expect(deps.sliceRunRepo.setQuestion).not.toHaveBeenCalled();
+		expect(deps.queueRepo.update).not.toHaveBeenCalled();
 	});
 });

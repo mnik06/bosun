@@ -22,7 +22,11 @@ export const HelloMsgSchema = z.object({
 	// absent has to keep meaning exactly that.
 	runIds: z.array(z.string()).optional(),
 	// The planning sessions still held, on the same terms.
-	planIds: z.array(z.string()).optional()
+	planIds: z.array(z.string()).optional(),
+	// How long this agent process has been alive. It is what separates a socket
+	// that dropped from an agent that restarted — the two look identical from the
+	// backend, and only one of them means the sessions on that machine are gone.
+	uptimeMs: z.number().optional()
 });
 
 export const PreflightMsgSchema = z.object({

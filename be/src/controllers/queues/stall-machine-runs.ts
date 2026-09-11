@@ -3,14 +3,33 @@ import { type AdvanceDeps } from 'src/controllers/queues/advance-deps';
 import { reclaimRun, runningItem } from 'src/controllers/queues/shared/stranded';
 
 const DROPPED = 'the connection to the machine dropped while this bullet was running';
+const RESTARTED = 'the agent on the machine restarted while this bullet was running';
+
+// Both describe the same row — a bullet this machine was building and no longer
+// holds a session for — and they are worth telling apart, because they send the
+// operator to different places. A socket that dropped is the network. An agent
+// process that began *after* the bullet was dispatched is not the process that
+// was building it: it was killed and brought back, which on a machine that keeps
+// doing it is a box running out of memory rather than a flaky link.
+//
+// Agents too old to send their uptime read as a dropped connection, which is what
+// they always were: they held nothing across a reconnect either way.
+function strandedReason(opts: { agentStartedAt: Date | null; runStartedAt: Date | null }): string {
+	if (opts.agentStartedAt === null || opts.runStartedAt === null) {
+		return DROPPED;
+	}
+
+	return opts.agentStartedAt > opts.runStartedAt ? RESTARTED : DROPPED;
+}
 
 // Reports whether anything was actually stranded, because a queue whose bullet
 // is alive must not be paused for a reconnect its session survived.
 async function reclaim(
 	deps: AdvanceDeps,
 	opts: { queueItemId: string; connectedAt: Date; held: Set<string> }
-): Promise<boolean> {
+): Promise<{ stranded: boolean; runStartedAt: Date | null }> {
 	let stranded = false;
+	let runStartedAt: Date | null = null;
 
 	for (const run of await deps.sliceRunRepo.listForItem(opts.queueItemId)) {
 		// A run the agent still holds a session for outlived the socket it was
@@ -26,10 +45,11 @@ async function reclaim(
 		}
 
 		stranded = true;
+		runStartedAt = runStartedAt ?? run.startedAt;
 		await reclaimRun(deps, { runId: run.id });
 	}
 
-	return stranded;
+	return { stranded, runStartedAt };
 }
 
 // The queue is derived from the run rather than trusted, the same as every other
@@ -68,9 +88,11 @@ async function abandoned(
 // empty default is not a fallback — it is the truth for those agents.
 export async function stallMachineRuns(
 	deps: AdvanceDeps,
-	opts: { machineId: string; connectedAt: Date; heldRunIds?: string[] }
+	opts: { machineId: string; connectedAt: Date; heldRunIds?: string[]; uptimeMs?: number }
 ): Promise<void> {
 	const held = new Set(opts.heldRunIds ?? []);
+	const agentStartedAt =
+		opts.uptimeMs === undefined ? null : new Date(Date.now() - opts.uptimeMs);
 
 	for (const queue of await deps.queueRepo.listInFlightForMachine(opts.machineId)) {
 		const running = await runningItem(deps, { queueId: queue.id });
@@ -79,7 +101,7 @@ export async function stallMachineRuns(
 			continue;
 		}
 
-		const stranded = await reclaim(deps, {
+		const { stranded, runStartedAt } = await reclaim(deps, {
 			queueItemId: running.id,
 			connectedAt: opts.connectedAt,
 			held
@@ -92,7 +114,7 @@ export async function stallMachineRuns(
 		const paused = await deps.queueRepo.update({
 			id: queue.id,
 			status: 'paused',
-			failureReason: DROPPED
+			failureReason: strandedReason({ agentStartedAt, runStartedAt })
 		});
 
 		if (paused) {
