@@ -192,6 +192,7 @@ export async function applyMachineFrame(opts: {
 	// to keep the registry slot means `handleClose` bailed and nobody settled
 	// anything.
 	if (opts.msg.type === 'hello') {
+		opts.fastify.services.disconnectGrace.cancel(machine.id);
 		await stallMachineRuns(schedulerDeps(opts.fastify), {
 			machineId: machine.id,
 			connectedAt: opts.connectedAt,
@@ -288,7 +289,15 @@ function handleClose(opts: {
 			announceUpdate({ socketRegistry, machine });
 		}
 	});
-	void pauseMachineQueues(schedulerDeps(opts.fastify), { machineId: opts.machineId });
+	// Not settled here. The agent keeps its `claude` processes across a reconnect,
+	// so a close says nothing about whether the bullet on this machine is still
+	// being built — settling on it failed live bullets for every proxy timeout and
+	// every deploy. The window is cancelled by the `hello` that follows, which
+	// settles the same work against the runs the agent says it still holds.
+	opts.fastify.services.disconnectGrace.schedule({
+		machineId: opts.machineId,
+		settle: () => pauseMachineQueues(schedulerDeps(opts.fastify), { machineId: opts.machineId })
+	});
 }
 
 const routes: FastifyPluginAsync = async function (fastify) {

@@ -120,6 +120,7 @@ function build(opts: {
 		planDecisionRepo: { listByPlan: vi.fn().mockResolvedValue([]) },
 		machineRepo: { getById: vi.fn().mockResolvedValue({ id: 'm_1', projectProfile: null }) },
 		planBlockerRepo: { listEdges: vi.fn().mockResolvedValue(opts.edges ?? []) },
+		runActivity: { record: vi.fn(), forget: vi.fn(), label: vi.fn() },
 		socketRegistry: { sendToAgent, broadcastToUi: vi.fn() }
 	} as unknown as AdvanceDeps;
 

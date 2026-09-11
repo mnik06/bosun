@@ -2,6 +2,7 @@ import { type AdvanceDeps } from 'src/controllers/queues/advance-deps';
 import { announceQueue } from 'src/controllers/queues/announce-queue';
 import { pullRequestBody } from 'src/controllers/queues/pull-request-body';
 import { blockerHolds } from 'src/controllers/queues/shared/blockers';
+import { reclaimRun } from 'src/controllers/queues/shared/stranded';
 import { type Plan } from 'src/types/PlanSchema';
 import { toQueueSlug, type Queue, type QueueItem } from 'src/types/QueueSchema';
 import { DEFAULT_PROJECT_PROFILE } from 'src/types/ProjectProfileSchema';
@@ -45,15 +46,7 @@ type DispatchOutcome = 'sent' | 'empty' | 'unreachable';
 const UNREACHABLE = 'the machine was not reachable when this bullet was due to start';
 
 async function stall(deps: AdvanceDeps, opts: { queue: Queue; runId: string }): Promise<void> {
-	await deps.sliceRunRepo.update({
-		id: opts.runId,
-		status: 'pending',
-		failureReason: null,
-		questionId: null,
-		question: null,
-		startedAt: null,
-		finishedAt: null
-	});
+	await reclaimRun(deps, { runId: opts.runId });
 
 	const paused = await deps.queueRepo.update({
 		id: opts.queue.id,

@@ -48,6 +48,7 @@ function build(status: QueueStatus, opts?: { running?: boolean }) {
 		planRepo: { getByIdForMachine: vi.fn() },
 		sliceRepo: { listByPlan: vi.fn().mockResolvedValue([]) },
 		acRepo: { listBySlice: vi.fn().mockResolvedValue([]) },
+		runActivity: { record: vi.fn(), forget: vi.fn(), label: vi.fn() },
 		socketRegistry: { sendToAgent: vi.fn(), broadcastToUi: vi.fn() }
 	} as unknown as AdvanceDeps;
 }

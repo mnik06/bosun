@@ -6,6 +6,7 @@ import {
 import { type AdvanceDeps } from 'src/controllers/queues/advance-deps';
 import { announceQueue } from 'src/controllers/queues/announce-queue';
 import { getOwnedQueue } from 'src/controllers/queues/shared/queue-access';
+import { reclaimRun, runningItem } from 'src/controllers/queues/shared/stranded';
 import { type Queue } from 'src/types/QueueSchema';
 
 export type QueueAction = 'pause' | 'resume';
@@ -16,8 +17,7 @@ export type QueueAction = 'pause' | 'resume';
 // attempt nobody watched finish. The plan stays `running` and nothing is
 // cancelled — that is the whole difference from killing the queue.
 async function pause(deps: AdvanceDeps, queue: Queue): Promise<Queue | null> {
-	const items = await deps.queueItemRepo.listForQueue(queue.id);
-	const running = items.find((item) => item.status === 'running');
+	const running = await runningItem(deps, { queueId: queue.id });
 
 	for (const run of running ? await deps.sliceRunRepo.listForItem(running.id) : []) {
 		if (run.status !== 'running') {
@@ -28,15 +28,7 @@ async function pause(deps: AdvanceDeps, queue: Queue): Promise<Queue | null> {
 			machineId: queue.machineId,
 			message: { type: 'exec.cancel', runId: run.id }
 		});
-		await deps.sliceRunRepo.update({
-			id: run.id,
-			status: 'pending',
-			failureReason: null,
-			questionId: null,
-			question: null,
-			startedAt: null,
-			finishedAt: null
-		});
+		await reclaimRun(deps, { runId: run.id });
 	}
 
 	return deps.queueRepo.update({ id: queue.id, status: 'paused', failureReason: null });

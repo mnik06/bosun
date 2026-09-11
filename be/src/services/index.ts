@@ -7,6 +7,7 @@ import { getKeyService } from 'src/services/keys/key.service';
 import { getMcpPresetService } from 'src/services/mcp-presets/mcp-preset.service';
 import { getPlanTextService } from 'src/services/plans/plan-text.service';
 import { getRunActivityService } from 'src/services/runs/run-activity.service';
+import { getDisconnectGraceService } from 'src/services/sockets/disconnect-grace.service';
 import { getPendingPingsService } from 'src/services/sockets/pending-pings.service';
 import { getPendingUpgradesService } from 'src/services/sockets/pending-upgrades.service';
 import { getSocketRegistry } from 'src/services/sockets/registry.service';
@@ -22,6 +23,7 @@ export function getServices(opts: { env: Env }) {
 			latestReleaseUrl: opts.env.AGENT_LATEST_RELEASE_URL,
 			downloadBaseUrl: opts.env.AGENT_DOWNLOAD_BASE_URL
 		}),
+		disconnectGrace: getDisconnectGraceService(),
 		idService: getIdService(),
 		installerService: getInstallerService(),
 		keyService,

@@ -76,11 +76,11 @@ unconditional delete would drop the live connection and mark a connected machine
 
 **Corollary, and it is the sharp edge of the above:** the close handler in `ws.route.ts` returns on
 that `false`, so *nothing* on the disconnect path runs for a replaced socket — not
-`markMachineOffline`, which is right, and not `pauseMachineQueues`, which is not. The agent kills
-every `claude` process it holds whenever its socket closes, replacement or no replacement, so a
-reconnect fast enough to keep the slot used to leave the bullet that died with the old socket sitting
-in the database as `running` forever. `claimNext` then refuses to take the next bullet — one worktree
-holds one session — and the queue is stuck for good rather than for a moment.
+`markMachineOffline`, which is right, and not the grace window `pauseMachineQueues` settles on, which
+is not. A reconnect fast enough to keep the slot leaves the bullet dispatched over the old socket
+sitting in the database as `running` with nobody having settled it. `claimNext` then refuses to take
+the next bullet — one worktree holds one session — and the queue would be stuck for good rather than
+for a moment.
 
 The settling therefore happens on the way *in*, not on the way out: `hello` calls `stallMachineRuns`.
 Which runs it settles is not guesswork — the agent says. Its execution sessions outlive the socket
