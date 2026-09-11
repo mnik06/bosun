@@ -108,6 +108,40 @@ export function getSliceRunRepo(db: DbOrTx) {
 			return rows.length;
 		},
 
+		// One finished bullet, armed to run again while the ones before it keep their
+		// commits. The status guard is what makes it safe to expose: a `pending` or
+		// `running` row is either waiting its turn or holding the worktree, and
+		// clearing either of those would dispatch a second session into it.
+		//
+		// The report and the commit go with the attempt that produced them. The
+		// commits themselves stay on the branch — this is a re-run of a bullet, not
+		// an undo of one.
+		async rearm(opts: { id: string; queueItemId: string }): Promise<SliceRun | null> {
+			const [row] = await db
+				.update(sliceRuns)
+				.set({
+					status: 'pending',
+					failureReason: null,
+					questionId: null,
+					question: null,
+					commitSha: null,
+					report: null,
+					startedAt: null,
+					finishedAt: null
+				})
+				.where(
+					and(
+						eq(sliceRuns.id, opts.id),
+						eq(sliceRuns.queueItemId, opts.queueItemId),
+						inArray(sliceRuns.status, ['done', 'failed']),
+						noRunInFlight(opts.queueItemId)
+					)
+				)
+				.returning(columns);
+
+			return row ? SliceRunSchema.parse(row) : null;
+		},
+
 		// Set when a session asks, cleared when it is answered and whenever the run
 		// stops waiting for any other reason — a question outlived by its session is
 		// a control that answers nothing.

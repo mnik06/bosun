@@ -83,16 +83,35 @@ export function getCommitService(deps: { exec: ExecService }) {
 		// `HEAD`, never the base ref: the commits the finished bullets made are on
 		// this branch, and resetting past them would rebuild work the plan already
 		// has.
-		async cleanTree(worktreePath: string): Promise<{ ok: boolean; detail: string }> {
-			const reset = await git(worktreePath, ['reset', '--hard', 'HEAD']);
+		async cleanTree(opts: {
+			worktreePath: string;
+			branch: string;
+		}): Promise<{ ok: boolean; detail: string }> {
+			const reset = await git(opts.worktreePath, ['reset', '--hard', 'HEAD']);
 
 			if (!reset.ok) {
 				return { ok: false, detail: reset.reason };
 			}
 
-			await git(worktreePath, ['clean', '-fd']);
+			await git(opts.worktreePath, ['clean', '-fd']);
 
-			return { ok: true, detail: 'worktree clean at HEAD' };
+			// Named rather than assumed. A bullet that is not cutting the branch used
+			// to run on whatever the worktree was already on, which holds while a plan
+			// runs start to finish — and stops holding the moment one bullet of an
+			// older plan is run again, because the queue has moved the worktree to a
+			// later plan's branch since. That bullet would then commit onto the wrong
+			// branch, and the pull request it belongs to would never see the work.
+			const head = await git(opts.worktreePath, ['rev-parse', '--abbrev-ref', 'HEAD']);
+
+			if (head.ok && head.stdout.trim() === opts.branch) {
+				return { ok: true, detail: `${opts.branch} clean at HEAD` };
+			}
+
+			const checkout = await git(opts.worktreePath, ['checkout', opts.branch]);
+
+			return checkout.ok
+				? { ok: true, detail: `${opts.branch} checked out, clean at HEAD` }
+				: { ok: false, detail: `could not check out ${opts.branch}: ${checkout.reason}` };
 		},
 
 		async commitAll(opts: { worktreePath: string; message: string }): Promise<CommitResult> {

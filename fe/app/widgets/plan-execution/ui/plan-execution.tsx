@@ -2,6 +2,7 @@ import { Alert, Anchor, Badge, Group, Loader, Spoiler, Stack, Text, ThemeIcon } 
 import { Check, Circle, Loader as LoaderIcon, X } from 'lucide-react'
 
 import type { PlanExecution, PlanRun } from '~/entities/plan'
+import { RetryVerifyButton } from '~/features/retry-verify'
 import { formatRelativeTime } from '~/shared/lib'
 import { ChangeMap } from '~/widgets/plan-execution/ui/change-map'
 
@@ -127,6 +128,14 @@ export function PlanExecutionPanel ({
 						{execution.item.status}
 					</Badge>
 					{execution.item.status === 'running' ? <Loader size={12} /> : null}
+
+					<div className="ml-auto">
+						<RetryVerifyButton
+							queueId={execution.queueId}
+							itemId={execution.item.id}
+							runs={execution.runs}
+						/>
+					</div>
 				</Group>
 
 				{execution.runs.map((run) => (

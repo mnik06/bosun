@@ -1,8 +1,7 @@
 import { HttpError } from 'src/api/errors/HttpError';
-import { advanceQueue } from 'src/controllers/queues/advance-queue';
 import { type AdvanceDeps } from 'src/controllers/queues/advance-deps';
-import { announceQueue } from 'src/controllers/queues/announce-queue';
 import { getOwnedQueue } from 'src/controllers/queues/shared/queue-access';
+import { resumeAfterRetry } from 'src/controllers/queues/shared/resume-after-retry';
 
 export async function retryQueueItem(deps: AdvanceDeps, opts: {
 	queueId: string;
@@ -28,21 +27,5 @@ export async function retryQueueItem(deps: AdvanceDeps, opts: {
 
 	await deps.sliceRunRepo.resetUnfinished(item.id);
 
-	// A queue that failed on this plan has to come off that status itself, or it
-	// keeps the item queued and dispatches nothing. `paused` is left alone: the
-	// operator paused it deliberately, and retrying one plan is not a request to
-	// start the whole queue moving again.
-	if (queue.status === 'failed') {
-		const updated = await deps.queueRepo.update({
-			id: queue.id,
-			status: 'idle',
-			failureReason: null
-		});
-
-		if (updated) {
-			announceQueue({ socketRegistry: deps.socketRegistry, queue: updated });
-		}
-	}
-
-	await advanceQueue(deps, { queueId: queue.id });
+	await resumeAfterRetry(deps, { queue });
 }

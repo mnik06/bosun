@@ -62,7 +62,7 @@ describe('cleanTree', () => {
 		fs.writeFileSync(path.join(worktree, 'kept.txt'), 'half-written\n');
 		fs.writeFileSync(path.join(worktree, 'stray.txt'), 'junk\n');
 
-		expect((await service().cleanTree(worktree)).ok).toBe(true);
+		expect((await service().cleanTree({ worktreePath: worktree, branch: 'main' })).ok).toBe(true);
 		expect(fs.readFileSync(path.join(worktree, 'kept.txt'), 'utf8')).toBe('committed\n');
 		expect(fs.existsSync(path.join(worktree, 'stray.txt'))).toBe(false);
 	});
@@ -74,7 +74,7 @@ describe('cleanTree', () => {
 		await git(worktree, ['add', '-A']);
 		await git(worktree, ['commit', '-m', 'second']);
 
-		await service().cleanTree(worktree);
+		await service().cleanTree({ worktreePath: worktree, branch: 'main' });
 
 		expect(fs.existsSync(path.join(worktree, 'second.txt'))).toBe(true);
 		expect((await git(worktree, ['rev-list', '--count', 'HEAD'])).trim()).toBe('2');
@@ -83,7 +83,36 @@ describe('cleanTree', () => {
 	it('is a no-op on a tree that is already clean', async () => {
 		const before = await git(worktree, ['rev-parse', 'HEAD']);
 
-		expect((await service().cleanTree(worktree)).ok).toBe(true);
+		expect((await service().cleanTree({ worktreePath: worktree, branch: 'main' })).ok).toBe(true);
 		expect(await git(worktree, ['rev-parse', 'HEAD'])).toBe(before);
+	});
+
+	// Retrying one bullet of an older plan is the case: the queue has moved the
+	// worktree to a later plan's branch since, and a bullet that ran on whatever
+	// was checked out would commit into the wrong pull request.
+	it('checks out the branch the bullet belongs to', async () => {
+		await git(worktree, ['checkout', '-b', 'bosun/plan/q/1-first']);
+		fs.writeFileSync(path.join(worktree, 'first-plan.txt'), 'plan one\n');
+		await git(worktree, ['add', '-A']);
+		await git(worktree, ['commit', '-m', 'plan one']);
+		await git(worktree, ['checkout', '-b', 'bosun/plan/q/2-second', 'main']);
+
+		const cleaned = await service().cleanTree({
+			worktreePath: worktree,
+			branch: 'bosun/plan/q/1-first'
+		});
+
+		expect(cleaned.ok).toBe(true);
+		expect((await git(worktree, ['rev-parse', '--abbrev-ref', 'HEAD'])).trim()).toBe(
+			'bosun/plan/q/1-first'
+		);
+		expect(fs.existsSync(path.join(worktree, 'first-plan.txt'))).toBe(true);
+	});
+
+	it('reports a branch that is not there rather than running on the wrong one', async () => {
+		const cleaned = await service().cleanTree({ worktreePath: worktree, branch: 'no-such' });
+
+		expect(cleaned.ok).toBe(false);
+		expect(cleaned.detail).toContain('no-such');
 	});
 });

@@ -7,6 +7,7 @@ import {
 } from 'src/api/routes/schemas/queues/QueueReqSchemas';
 import { removeQueueItem } from 'src/controllers/queues/remove-queue-item';
 import { retryQueueItem } from 'src/controllers/queues/retry-queue-item';
+import { retryVerifyRun } from 'src/controllers/queues/retry-verify-run';
 import { askDeps } from 'src/controllers/queues/ask-deps';
 import { askQueue } from 'src/controllers/queues/ask-queue';
 import { schedulerDeps } from 'src/controllers/queues/scheduler-deps';
@@ -15,19 +16,25 @@ import { QueueMessageSchema } from 'src/types/QueueSchema';
 const routes: FastifyPluginAsync = async function (f) {
 	const fastify = f.withTypeProvider<ZodTypeProvider>();
 
-	fastify.post(
-		'/:id/items/:itemId/retry',
-		{ schema: { params: QueueItemParamsSchema } },
-		async (req, reply) => {
-			await retryQueueItem(schedulerDeps(fastify), {
+	// Two paths, one handler: a retry is the same transaction either way — settle
+	// what the caller asked for, then let the queue advance — and the difference
+	// is entirely in which controller decides what gets re-armed.
+	const RETRIES = [
+		['/:id/items/:itemId/retry', retryQueueItem],
+		['/:id/items/:itemId/verify/retry', retryVerifyRun]
+	] as const;
+
+	for (const [path, retry] of RETRIES) {
+		fastify.post(path, { schema: { params: QueueItemParamsSchema } }, async (req, reply) => {
+			await retry(schedulerDeps(fastify), {
 				queueId: req.params.id,
 				itemId: req.params.itemId,
 				projectId: req.membership!.projectId
 			});
 
 			return reply.status(204).send(undefined);
-		}
-	);
+		});
+	}
 
 	fastify.delete(
 		'/:id/items/:itemId',

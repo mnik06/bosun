@@ -4,6 +4,7 @@ import { ExternalLink, X } from 'lucide-react'
 import { planLabel } from '~/entities/plan'
 import { itemElapsedMs, type QueueItemDetail, type QueueItemStatus } from '~/entities/queue'
 import { RetryPlanButton } from '~/features/retry-plan'
+import { RetryVerifyButton } from '~/features/retry-verify'
 import { formatDuration } from '~/shared/lib'
 import { SliceRunRow } from '~/widgets/queue-detail/ui/slice-run-row'
 
@@ -77,6 +78,7 @@ export function QueueItemCard ({
 					</Stack>
 
 					<Group gap="xs" wrap="nowrap" className="shrink-0">
+						<RetryVerifyButton queueId={item.queueId} itemId={item.id} runs={item.runs} />
 						<RetryPlanButton item={item} />
 
 						{item.status === 'queued' ? (

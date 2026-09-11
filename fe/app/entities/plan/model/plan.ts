@@ -191,6 +191,7 @@ export const PlanExecutionSchema = z.object({
 	queueId: z.string(),
 	queueName: z.string(),
 	item: z.object({
+		id: z.string(),
 		status: z.enum(['queued', 'running', 'done', 'failed', 'cancelled']),
 		branch: z.string().nullable(),
 		prUrl: z.string().nullable(),

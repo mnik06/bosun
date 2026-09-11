@@ -56,8 +56,23 @@ export function getPublishService(deps: { exec: ExecService }) {
 			);
 			const prUrl = findPrUrl(`${created.stdout}\n${created.stderr}`);
 
-			if (prUrl) {
+			if (created.ok && prUrl) {
 				return { ok: true, prUrl, detail: 'opened' };
+			}
+
+			// The pull request was already open, so the body it carries describes the
+			// run before this one — which for a re-verified plan is the verdict the
+			// reviewer must not be left reading. The title is left alone: it names the
+			// plan, and the plan is the same one.
+			if (prUrl) {
+				const edited = await deps.exec.run('gh', ['pr', 'edit', prUrl, '--body', opts.body], {
+					cwd: opts.worktreePath,
+					timeoutMs: PUSH_TIMEOUT_MS
+				});
+
+				return edited.ok
+					? { ok: true, prUrl, detail: 'updated' }
+					: { ok: true, prUrl, detail: `open, but its description is stale: ${edited.reason}` };
 			}
 
 			// The branch is pushed either way, so a failure here loses no work — it

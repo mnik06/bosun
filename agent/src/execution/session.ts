@@ -145,7 +145,10 @@ export function createExecutionSessions(opts: {
 				throw new Error(branched.detail);
 			}
 		} else {
-			const cleaned = await opts.services.commit.cleanTree(msg.worktreePath);
+			const cleaned = await opts.services.commit.cleanTree({
+				worktreePath: msg.worktreePath,
+				branch: msg.branch
+			});
 
 			if (!cleaned.ok) {
 				throw new Error(`could not clean the worktree: ${cleaned.detail}`);
