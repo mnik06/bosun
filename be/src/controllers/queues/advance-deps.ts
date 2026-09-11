@@ -26,4 +26,7 @@ export interface AdvanceDeps {
 	machineRepo: MachineRepo;
 	socketRegistry: SocketRegistry;
 	runActivity: RunActivityService;
+	// The web app's origin, carried here because a pull request body links back to
+	// the plan it came from and the scheduler is the only place that body is built.
+	appUrl: string;
 }

@@ -16,6 +16,7 @@ export function schedulerDeps(fastify: FastifyInstance): AdvanceDeps {
 		planDecisionRepo: fastify.repos.planDecisionRepo,
 		machineRepo: fastify.repos.machineRepo,
 		socketRegistry: fastify.services.socketRegistry,
-		runActivity: fastify.services.runActivity
+		runActivity: fastify.services.runActivity,
+		appUrl: fastify.env.PUBLIC_APP_URL
 	};
 }

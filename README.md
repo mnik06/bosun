@@ -274,8 +274,14 @@ one `(yours)` or `(bosun default)`. Playwright ships as a default, so every mach
 running app without being configured for it.
 
 Two things a machine needs for that default to work: `npx` on the service PATH (the `package-manager`
-check covers it) and a browser build — `npx playwright install chromium`, once per machine. Without
-the browser the server starts and its tools fail when called.
+check covers it) and a browser build — `npx playwright install chromium`, once per machine. The
+`browser` preflight check looks for that build and goes red without it, because the server starts
+either way and its tools only fail when a bullet calls one, an hour into a plan.
+
+The default is pinned to `--browser chromium --headless` for the same reason. Playwright MCP
+otherwise launches the `chrome` channel — a real Google Chrome installed at a system path — and a
+machine that has run `playwright install chromium` does not have one; it is also headed by default,
+and a VPS has no display.
 
 A machine that cannot use a default switches it off by naming it `null`:
 
@@ -319,3 +325,7 @@ Secrets are set out of band, once:
 ```bash
 fly secrets set --app bosun-be SUPABASE_URL=... SUPABASE_PUBLISHABLE_KEY=...
 ```
+
+`PUBLIC_APP_URL` is one of those, and it is the web app's origin rather than the backend's: a pull
+request bosun opens links back to the plan that produced it, and the backend cannot derive where the
+browser reaches the app from where it reaches itself.

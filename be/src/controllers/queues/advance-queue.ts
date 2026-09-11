@@ -262,7 +262,8 @@ async function requestPublish(
 				plan,
 				acs: await deps.acRepo.listByPlan(plan.id),
 				decisions: await deps.planDecisionRepo.listByPlan(plan.id),
-				verifyReport: await verifyReportFor(deps, { planId: plan.id, runs })
+				verifyReport: await verifyReportFor(deps, { planId: plan.id, runs }),
+				planUrl: `${deps.appUrl}/plans/${plan.id}?tab=execution`
 			})
 		}
 	});

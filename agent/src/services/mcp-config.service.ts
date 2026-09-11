@@ -19,7 +19,14 @@ export const DEFAULT_SERVERS: Record<string, unknown> = {
 	playwright: {
 		type: 'stdio',
 		command: 'npx',
-		args: ['-y', '@playwright/mcp@latest']
+		// `--browser chromium` and not the default, which is the `chrome` channel —
+		// a real Google Chrome install at a system path. A machine is a headless box
+		// that has run `npx playwright install chromium`, so the default resolved to
+		// an executable that was not there and every browser tool failed at the
+		// point a bullet tried to verify something. `--headless` for the same
+		// reason: the server runs headed unless told otherwise, and there is no
+		// display on a VPS.
+		args: ['-y', '@playwright/mcp@latest', '--browser', 'chromium', '--headless']
 	},
 	context7: {
 		type: 'stdio',

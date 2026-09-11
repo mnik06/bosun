@@ -25,6 +25,10 @@ export const EnvSchema = z.object({
 	PORT: z.string().optional(),
 	DATABASE_URL: z.string(),
 	PUBLIC_SERVER_URL: z.url(),
+	// Where the browser reaches the web app. A pull request bosun opens links back
+	// to the plan it came from, and the backend cannot derive that origin from its
+	// own — the app is served from somewhere else entirely.
+	PUBLIC_APP_URL: z.url(),
 	AGENT_DOWNLOAD_BASE_URL: z.url(),
 	// Followed to find the newest published agent build, so releasing an agent is
 	// the only step: machines pick it up on the next Refresh with no redeploy here.

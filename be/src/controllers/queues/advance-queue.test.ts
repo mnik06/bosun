@@ -121,6 +121,7 @@ function build(opts: {
 		machineRepo: { getById: vi.fn().mockResolvedValue({ id: 'm_1', projectProfile: null }) },
 		planBlockerRepo: { listEdges: vi.fn().mockResolvedValue(opts.edges ?? []) },
 		runActivity: { record: vi.fn(), forget: vi.fn(), label: vi.fn() },
+		appUrl: 'https://bosun.test',
 		socketRegistry: { sendToAgent, broadcastToUi: vi.fn() }
 	} as unknown as AdvanceDeps;
 

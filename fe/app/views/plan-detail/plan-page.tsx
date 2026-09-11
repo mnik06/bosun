@@ -2,7 +2,7 @@ import { ActionIcon, Alert, Anchor, Badge, Card, Center, Group, Loader, Tabs, Te
 import { useMediaQuery } from '@mantine/hooks'
 import { Maximize2, Minimize2 } from 'lucide-react'
 import { useState } from 'react'
-import { Link } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 
 import { usePlanQuery, usePlanStream, type Ac, type Plan, type Slice } from '~/entities/plan'
 import { ConfirmPlanButton } from '~/features/confirm-plan'
@@ -79,7 +79,11 @@ export default function PlanPage ({ params }: Route.ComponentProps) {
 	const { data, isPending, error } = usePlanQuery(planId)
 	const stream = usePlanStream(planId)
 	const [expanded, setExpanded] = useState(false)
-	const [tab, setTab] = useState<string | null>(null)
+	const [searchParams] = useSearchParams()
+	// Seeded from the URL, not bound to it: a pull request bosun opened links
+	// straight at `?tab=execution`, and the tabs are otherwise a local control
+	// whose every click has no business in the history stack.
+	const [tab, setTab] = useState<string | null>(searchParams.get('tab'))
 	// Read synchronously rather than in an effect: the two layouts are different
 	// enough that settling into the right one a frame later reads as a glitch.
 	const wide = useMediaQuery('(width >= 48em)', true, { getInitialValueInEffect: false })

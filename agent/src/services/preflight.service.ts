@@ -1,9 +1,56 @@
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import { type ClaudeAuthService } from './claude-auth.service';
 import { type ExecService } from './exec.service';
 import { type McpConfigService } from './mcp-config.service';
 import { type PreflightCheck } from '../protocol';
 
 const MIN_CLAUDE_MAJOR = 2;
+
+// What `npx playwright install chromium` leaves behind. The headless shell is a
+// separate download in recent Playwright and is what a headless launch prefers,
+// so either one means a browser this machine can drive.
+const BROWSER_PREFIXES = ['chromium-', 'chromium_headless_shell-'];
+
+// Playwright keeps its browser builds in a cache directory rather than on the
+// PATH, so nothing that looks at a machine the ordinary way can tell whether one
+// is there.
+export function browserCachePath(opts: {
+	platform: NodeJS.Platform;
+	home: string;
+	configured?: string;
+}): string | null {
+	// `0` is Playwright's own opt-out: the build sits beside the package, wherever
+	// npx unpacked it, and there is nothing here to look at.
+	if (opts.configured === '0') {
+		return null;
+	}
+
+	if (opts.configured !== undefined && opts.configured !== '') {
+		return opts.configured;
+	}
+
+	if (opts.platform === 'darwin') {
+		return path.join(opts.home, 'Library', 'Caches', 'ms-playwright');
+	}
+
+	if (opts.platform === 'win32') {
+		return path.join(opts.home, 'AppData', 'Local', 'ms-playwright');
+	}
+
+	return path.join(opts.home, '.cache', 'ms-playwright');
+}
+
+export function hasBrowserBuild(cachePath: string): boolean {
+	try {
+		return fs
+			.readdirSync(cachePath)
+			.some((entry) => BROWSER_PREFIXES.some((prefix) => entry.startsWith(prefix)));
+	} catch {
+		return false;
+	}
+}
 
 export function claudeVersionIsSupported(version: string): boolean {
 	// The stream-json event shape is a looser contract than a package version, so
@@ -166,11 +213,48 @@ export function getPreflightService(deps: {
 		};
 	}
 
+	// Red rather than quiet, unlike `gh`. A machine with no browser build still
+	// starts the Playwright server and still plans a UI pass — the tools only fail
+	// when a bullet calls one, an hour in, and the plan comes back with every
+	// criterion it was meant to drive marked unverified.
+	function checkBrowser(): PreflightCheck {
+		const config = deps.mcpConfig.read();
+
+		// `read()` merges bosun's defaults, so a machine that has not configured
+		// anything still reports playwright; one that switched it off with `null`
+		// does not, and needs no browser.
+		if (!config.serverNames.includes('playwright')) {
+			return { name: 'browser', ok: true, detail: 'playwright is switched off here' };
+		}
+
+		const cachePath = browserCachePath({
+			platform: process.platform,
+			home: os.homedir(),
+			configured: process.env.PLAYWRIGHT_BROWSERS_PATH
+		});
+
+		if (cachePath === null) {
+			return {
+				name: 'browser',
+				ok: true,
+				detail: 'PLAYWRIGHT_BROWSERS_PATH=0 — browsers live beside the package'
+			};
+		}
+
+		return hasBrowserBuild(cachePath)
+			? { name: 'browser', ok: true, detail: `chromium in ${cachePath}` }
+			: {
+				name: 'browser',
+				ok: false,
+				detail: `no chromium build in ${cachePath} — run \`npx playwright install chromium\`, or no session can drive a browser`
+			};
+	}
+
 	return {
 		async collect(): Promise<PreflightCheck[]> {
 			const [claude, git, gh] = await Promise.all([checkClaude(), checkGit(), checkGh()]);
 
-			return [claude, git, gh, checkCustomMcp()];
+			return [claude, git, gh, checkCustomMcp(), checkBrowser()];
 		}
 	};
 }
