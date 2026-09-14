@@ -47,6 +47,13 @@ turned the first step of onboarding into "create a user and log in again". The i
   that version is already there.
 - Claude Code, with its own installer, when `claude` is neither on the PATH nor in `~/.local/bin`.
 - `npx playwright install chromium` into the user's cache.
+- `ldd` over that build — the check Playwright itself makes before it launches — and, when libraries
+  are unresolved, `sudo … npx playwright install-deps chromium`. The install is meant to leave a
+  machine that works without a second command, and those libraries are the one thing a user install
+  cannot add. `sudo -n` first; a password prompt only when `/dev/tty` opens. Never under the root
+  phase: root installed them before the user existed, and the agent user has no sudo, so a prompt
+  there is one nobody can answer — it only checks. Whatever is still missing ends in a `WARNING` line
+  with the command, since the next thing to fail would be a verify an hour later.
 - `~/.bosun/env`, `~/.bosun/mcp.json` and the unit, with bosun's node and `~/.local/bin` first on the
   unit's `PATH`. A re-run restarts the unit, so it runs the binary and config it just wrote.
 - `bosun-agent setup </dev/tty` when `/dev/tty` opens — stdin is the `curl` pipe, so the prompts

@@ -107,8 +107,9 @@ curl -fsSL <server>/install.sh | BOSUN_TOKEN=<code> sh
 - **As root** — the usual state of a fresh VPS — it installs git, curl and the system libraries
   headless Chromium needs, creates a `bosun` user (or uses the one `BOSUN_USER` names), enables
   linger for it, and installs everything else as that user. No agent process ever runs as root.
-- **As any other user** it installs for that user. A system package it cannot install without root is
-  named rather than failing the install.
+- **As any other user** it installs for that user. When that user may use `sudo`, it installs the
+  libraries Chromium needs through it, asking for a password only if sudo needs one. Anything it still
+  cannot install without root is named rather than failing the install.
 
 Either way it installs the agent, a checksummed LTS node for the agent's own tooling under
 `~/.bosun/toolchains`, Claude Code when it is missing, a Chromium build and the systemd unit — and

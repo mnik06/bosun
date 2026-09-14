@@ -204,7 +204,8 @@ root_phase() {
 	BOSUN_SERVER="$SERVER_URL"
 	BOSUN_DOWNLOAD_BASE="$DOWNLOAD_BASE"
 	BOSUN_SKIP_SETUP=1
-	export XDG_RUNTIME_DIR DBUS_SESSION_BUS_ADDRESS BOSUN_TOKEN BOSUN_SERVER BOSUN_DOWNLOAD_BASE BOSUN_SKIP_SETUP
+	BOSUN_ROOT_PHASE=1
+	export XDG_RUNTIME_DIR DBUS_SESSION_BUS_ADDRESS BOSUN_TOKEN BOSUN_SERVER BOSUN_DOWNLOAD_BASE BOSUN_SKIP_SETUP BOSUN_ROOT_PHASE
 
 	# Root's own directory is unreadable to the agent user, and node refuses to
 	# start in a working directory it cannot read.
@@ -320,6 +321,50 @@ install_browser() {
 		tail -n 3 "$TMP/playwright.log" >&2 || true
 		note "could not install Chromium — \`bosun-agent setup\` offers to try again"
 	fi
+}
+
+# `ldd` over the build is the check Playwright makes before it launches anything,
+# so a library named here is one the browser tool would refuse to start without.
+unresolved_libraries() {
+	build="$(find "$1" -maxdepth 3 -type f \( -name headless_shell -o -name chrome-headless-shell -o -name chrome \) 2>/dev/null | head -n1)"
+	[ -n "$build" ] || return 0
+
+	ldd "$build" "$(dirname "$build")"/*.so 2>/dev/null | awk '/=> not found/ {print $1}' | sort -u | xargs
+}
+
+# A password prompt only when sudo needs one and there is a terminal to type it
+# into; a non-interactive install without passwordless sudo cannot elevate.
+can_sudo() {
+	command -v sudo >/dev/null 2>&1 || return 1
+	! sudo -n true 2>/dev/null || return 0
+	( : </dev/tty ) 2>/dev/null || return 1
+
+	note "the libraries headless Chromium links against need root — sudo will ask for your password"
+	sudo -v </dev/tty
+}
+
+# Only root can add system packages, so a user install lacks them unless it asks
+# for root itself. Under the root phase they went in before this user existed, and
+# this user has no sudo to ask with: it only checks, and says so loudly.
+chromium_libraries_as_user() {
+	[ "${PLAYWRIGHT_BROWSERS_PATH:-}" != "0" ] || return 0
+
+	cache="${PLAYWRIGHT_BROWSERS_PATH:-$HOME/.cache/ms-playwright}"
+	missing="$(unresolved_libraries "$cache")"
+	[ -n "$missing" ] || return 0
+
+	if [ "${BOSUN_ROOT_PHASE:-0}" != "1" ] && [ -n "$NODE_DIR" ] && command -v apt-get >/dev/null 2>&1 && can_sudo; then
+		note "installing the system libraries headless Chromium needs"
+
+		sudo env "PATH=$NODE_DIR/bin:$PATH" npx -y playwright install-deps chromium >"$TMP/install-deps.log" 2>&1 ||
+			tail -n 5 "$TMP/install-deps.log" >&2 || true
+
+		missing="$(unresolved_libraries "$cache")"
+		[ -n "$missing" ] || return 0
+	fi
+
+	note "WARNING: Chromium cannot start, missing: $missing"
+	note "install them as a user with sudo: sudo env \"PATH=${NODE_DIR:-<node dir>}/bin:\$PATH\" npx -y playwright install-deps chromium"
 }
 
 seed_files() {
@@ -452,6 +497,7 @@ user_phase() {
 	install_node
 	install_claude
 	install_browser
+	chromium_libraries_as_user
 	seed_files
 	resolve_service_path
 	install_service
