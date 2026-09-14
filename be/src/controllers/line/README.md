@@ -49,14 +49,17 @@ fresh (`line-snapshot.ts`), takes **one** action, and reads again.
 Order of a pass:
 
 1. A scheduled build whose provider stopped before releasing it goes to `needs_you`.
-2. A holder with nothing running carries on without asking for memory again.
+2. A holder with nothing running carries on without asking for memory again — unless a verify waits
+   on this machine that fits only without it, in which case it goes back to `scheduled`.
 3. Admission: integrations, then the verify lane's head, then fix sessions, then the line — a plan
    another plan waits on first, then position.
 
 **Memory decides capacity** (`memory-budget.ts`). A lane reserves a drive's memory; while nothing
 waits to verify, builds borrow it. The moment a plan waits, a build admission must leave the lane's
-unheld reservation free — no new bullet starts in it and nothing running is stopped, so the wait is
-at most one bullet. A machine running nothing always takes a job.
+unheld reservation free — no new bullet starts in it and nothing running is stopped. On a machine
+too small for a drive beside a build, a plan between its bullets gives its slot to the waiting verify
+(`holderBlocksLane`) and resumes ahead of every plan not yet started; without that the wait is every
+bullet the plan has left rather than one. A machine running nothing always takes a job.
 
 **The verify line** is ordered by every provider verified, then `built_at`, then position. A plan
 never drives against a provider whose own verify could still change it.
@@ -112,5 +115,6 @@ run and the build goes to the front; the restarted bullet reads it in its prompt
 - **Waiting for a provider to merge.** Serialises every plan behind the slowest reviewer; stacking
   on the provider's branch does not.
 - **Switching plans between bullets.** Spreads every pull request out without finishing any sooner,
-  and throws away a warm worktree.
+  and throws away a warm worktree. The one exception is a verify that cannot fit otherwise, and the
+  worktree is kept.
 - **Stopping a running bullet to make room.** The cost of a lost bullet is always more than the wait.

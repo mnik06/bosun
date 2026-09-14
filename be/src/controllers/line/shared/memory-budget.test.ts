@@ -3,6 +3,7 @@ import {
 	admit,
 	admitOnboarding,
 	BUILD_BYTES,
+	holderBlocksLane,
 	LANE_BYTES,
 	usableBytes,
 	type MachineLoad
@@ -24,6 +25,27 @@ const BASE = { verifyLanes: 1, verifyWaiting: false, buildCap: null };
 describe('usableBytes', () => {
 	it('counts swap for half and keeps the reserve back', () => {
 		expect(usableBytes(box(8, 2))).toBe(7.5 * GIB);
+	});
+});
+
+describe('holderBlocksLane', () => {
+	const LANE = { verifyLanes: 1, buildCap: null };
+
+	it('is the holder when a drive fits only without it', () => {
+		expect(holderBlocksLane({ ...LANE, memory: box(7.5), load: load({ build: 1 }) })).toBe(true);
+	});
+
+	it('is not when the drive fits beside it', () => {
+		expect(holderBlocksLane({ ...LANE, memory: box(16), load: load({ build: 1 }) })).toBe(false);
+	});
+
+	it('is not when giving up one slot still leaves the drive out', () => {
+		expect(holderBlocksLane({ ...LANE, memory: box(10), load: load({ build: 2 }) })).toBe(false);
+	});
+
+	it('is not when the lane is taken or there is none', () => {
+		expect(holderBlocksLane({ ...LANE, memory: box(7.5), load: load({ build: 1, lane: 1 }) })).toBe(false);
+		expect(holderBlocksLane({ verifyLanes: 0, buildCap: null, memory: box(7.5), load: load({ build: 1 }) })).toBe(false);
 	});
 });
 

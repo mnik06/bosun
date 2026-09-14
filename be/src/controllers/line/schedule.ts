@@ -8,7 +8,7 @@ import {
 import { dispatchIntegration, dispatchRun, startBuild } from 'src/controllers/line/shared/dispatch';
 import { completeBuilding, settleBuild } from 'src/controllers/line/shared/lifecycle';
 import { loadRepositorySnapshot, type BuildState, type RepositorySnapshot } from 'src/controllers/line/shared/line-snapshot';
-import { admit, jobBytes, usableBytes, type JobClass, type MachineLoad } from 'src/controllers/line/shared/memory-budget';
+import { admit, holderBlocksLane, jobBytes, usableBytes, type JobClass, type MachineLoad } from 'src/controllers/line/shared/memory-budget';
 import {
 	BUILD_SLOT_STATUSES,
 	hasRunningJob,
@@ -133,6 +133,10 @@ async function continueHolder(pass: Pass, state: BuildState): Promise<boolean> {
 		return dispatchIntegration(pass.deps, { ...pass, state, integration: job.integration, memoryMaxBytes: limitFor(pass, 'build') });
 	}
 
+	if (job.kind === 'bullet' && (await blocksWaitingVerify(pass))) {
+		return yieldSlot(pass, state);
+	}
+
 	const lane = job.kind === 'lane';
 
 	return dispatchRun(pass.deps, {
@@ -143,6 +147,31 @@ async function continueHolder(pass: Pass, state: BuildState): Promise<boolean> {
 		memoryMaxBytes: limitFor(pass, lane ? 'lane' : 'build'),
 		status: lane && job.run.phase === 'recheck' ? 'rechecking' : state.build.status
 	});
+}
+
+async function blocksWaitingVerify(pass: Pass): Promise<boolean> {
+	if (!verifyLine(pass.snapshot).some((state) => state.build.machineId === pass.machine.id)) {
+		return false;
+	}
+
+	return holderBlocksLane({
+		memory: pass.deps.machineMemory.get(pass.machine.id),
+		load: await machineLoad(pass),
+		verifyLanes: pass.machine.verifyLanes,
+		buildCap: pass.machine.buildCap
+	});
+}
+
+// Back in the line with its worktree and branch, resumed ahead of any plan not yet
+// started once the drive leaves room.
+async function yieldSlot(pass: Pass, state: BuildState): Promise<boolean> {
+	const moved = await pass.deps.buildRepo.transition({ id: state.build.id, from: ['building'], changes: { status: 'scheduled' } });
+
+	if (moved) {
+		announceBuild({ socketRegistry: pass.deps.socketRegistry, projectId: state.plan.projectId, build: moved });
+	}
+
+	return moved !== null;
 }
 
 async function machineLoad(pass: Pass): Promise<MachineLoad> {
@@ -192,10 +221,14 @@ function runnableScheduled(pass: Pass): BuildState[] {
 		);
 	});
 
-	// A plan another plan waits on goes first: its foundation is what releases the
-	// next plan, so starting it sooner starts two plans sooner.
+	// A plan already started resumes first: it gave its slot up for a verify or a
+	// hold, not its place. Then a plan another plan waits on: its foundation is what
+	// releases the next plan, so starting it sooner starts two plans sooner.
 	return runnable.sort(
-		(a, b) => Number(waitedOn.has(b.plan.id)) - Number(waitedOn.has(a.plan.id)) || a.build.position - b.build.position
+		(a, b) =>
+			Number(b.build.startedAt !== null) - Number(a.build.startedAt !== null) ||
+			Number(waitedOn.has(b.plan.id)) - Number(waitedOn.has(a.plan.id)) ||
+			a.build.position - b.build.position
 	);
 }
 

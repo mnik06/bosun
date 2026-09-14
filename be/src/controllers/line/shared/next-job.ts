@@ -13,7 +13,8 @@ export type NextJob =
 
 // Statuses that hold a build slot on their machine — `building` between its own
 // bullets too, which is the point: switching plans between bullets spreads every
-// pull request out without finishing any sooner.
+// pull request out without finishing any sooner. The one yield is to a verify that
+// cannot fit beside it (`holderBlocksLane`).
 export const BUILD_SLOT_STATUSES: BuildStatus[] = ['building', 'integrating', 'fixing'];
 
 export const LANE_STATUSES: BuildStatus[] = ['driving', 'rechecking'];

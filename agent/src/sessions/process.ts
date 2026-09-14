@@ -119,7 +119,12 @@ export function spawnClaudeSession(opts: {
 			...opts.claudeAuth.sessionEnv(),
 			...opts.env,
 			MCP_TOOL_TIMEOUT: String(TOOL_TIMEOUT_MS),
-			MCP_TIMEOUT: String(STARTUP_TIMEOUT_MS)
+			MCP_TIMEOUT: String(STARTUP_TIMEOUT_MS),
+			// In print mode a sub-agent runs in the background unless the model asks
+			// otherwise, and a session that ends its turn waiting on one is settled at
+			// that `result` — the reviewer's findings, and every tick after them, never
+			// happen. Foreground is the only mode a turn-scoped session can wait on.
+			CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: '1'
 		},
 		detached: true,
 		stdio: ['pipe', 'pipe', 'pipe']

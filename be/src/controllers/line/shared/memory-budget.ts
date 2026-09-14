@@ -105,6 +105,24 @@ export function admit(opts: {
 		: { admitted: false };
 }
 
+// Whether a plan between its bullets is what keeps a waiting verify out. Only then
+// does it give its slot up: on a machine too small for a drive beside a build, the
+// verify would otherwise wait for every bullet the plan has left, not the one running.
+export function holderBlocksLane(opts: {
+	memory: MachineMemory | null;
+	load: MachineLoad;
+	verifyLanes: number;
+	buildCap: number | null;
+}): boolean {
+	if (opts.load.build === 0) {
+		return false;
+	}
+
+	const lane = { ...opts, jobClass: 'lane' as const, verifyWaiting: true };
+
+	return !admit(lane).admitted && admit({ ...lane, load: { ...opts.load, build: opts.load.build - 1 } }).admitted;
+}
+
 // Onboarding installs and starts the whole stack. It is admitted against
 // everything the line holds, and takes no lane — a lane is for plans.
 export function admitOnboarding(opts: { memory: MachineMemory | null; load: MachineLoad }): Admission {
