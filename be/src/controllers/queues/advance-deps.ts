@@ -8,6 +8,7 @@ import { type QueueItemRepo } from 'src/repos/queues/queue-item.repo';
 import { type QueueRepo } from 'src/repos/queues/queue.repo';
 import { type SliceRunRepo } from 'src/repos/queues/slice-run.repo';
 import { type RunActivityService } from 'src/services/runs/run-activity.service';
+import { type MachineMemoryService } from 'src/services/sockets/machine-memory.service';
 import { type SocketRegistry } from 'src/services/sockets/registry.service';
 
 // Everything the scheduler touches, in one place because the agent socket and
@@ -26,6 +27,7 @@ export interface AdvanceDeps {
 	machineRepo: MachineRepo;
 	socketRegistry: SocketRegistry;
 	runActivity: RunActivityService;
+	machineMemory: MachineMemoryService;
 	// The web app's origin, carried here because a pull request body links back to
 	// the plan it came from and the scheduler is the only place that body is built.
 	appUrl: string;

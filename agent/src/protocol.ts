@@ -9,6 +9,20 @@ export const PreflightCheckSchema = z.object({
 
 export type PreflightCheck = z.infer<typeof PreflightCheckSchema>;
 
+// What the scheduler budgets this machine's bullets against. Read fresh on every
+// announce: `totalBytes` and swap are what the budget is made of, and
+// `availableBytes` is only worth sending as what the machine has right now.
+export const MachineMemorySchema = z.object({
+	totalBytes: z.number(),
+	availableBytes: z.number(),
+	swapTotalBytes: z.number(),
+	// Whether each bullet runs in a systemd scope under its own limit. Without one,
+	// a bullet that runs out of memory can take the agent down with it.
+	sessionLimits: z.boolean()
+});
+
+export type MachineMemory = z.infer<typeof MachineMemorySchema>;
+
 export const HelloMsgSchema = z.object({
 	type: z.literal('hello'),
 	agentVersion: z.string(),
@@ -26,7 +40,14 @@ export const HelloMsgSchema = z.object({
 	// How long this agent process has been alive. It is what separates a socket
 	// that dropped from an agent that restarted — the two look identical from the
 	// backend, and only one of them means the sessions on that machine are gone.
-	uptimeMs: z.number().optional()
+	uptimeMs: z.number().optional(),
+	// Absent off Linux and from agents older than memory budgets; the backend then
+	// schedules with its fixed cap alone.
+	memory: MachineMemorySchema.optional(),
+	// How the previous agent process ended, as systemd recorded it — `oom-kill`
+	// when the kernel killed it for memory. Only meaningful beside an uptime that
+	// says this process is newer than the bullet it failed to hold.
+	previousExit: z.string().optional()
 });
 
 export const PreflightMsgSchema = z.object({
@@ -371,7 +392,11 @@ export const ExecStartMsgSchema = z.object({
 	decisions: z.array(
 		z.object({ fork: z.string(), chose: z.string() })
 	),
-	doneSlices: z.array(z.object({ ordinal: z.number().int(), title: z.string() }))
+	doneSlices: z.array(z.object({ ordinal: z.number().int(), title: z.string() })),
+	// The most memory this bullet's session may use, chosen by the scheduler so the
+	// limits of everything running fit the machine. Null from a backend older than
+	// memory budgets; the session is then limited to what the machine can spare.
+	memoryMaxBytes: z.number().int().positive().nullable().default(null)
 });
 
 export const ExecCancelMsgSchema = z.object({ type: z.literal('exec.cancel'), runId: z.string() });

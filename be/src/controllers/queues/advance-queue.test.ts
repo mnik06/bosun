@@ -10,6 +10,19 @@ import {
 	type QueueItemStatus,
 	type SliceRun
 } from 'src/types/QueueSchema';
+import { type SliceKind } from 'src/types/PlanSchema';
+import { type MachineMemory } from 'src/types/machine-memory';
+
+const GIB = 1024 ** 3;
+
+// The machine budgets were built for: 7.6 GB of RAM and no swap, where a verify
+// bullet fits alone and not beside a build.
+const SMALL_BOX: MachineMemory = {
+	totalBytes: 7746 * 1024 ** 2,
+	availableBytes: 6316 * 1024 ** 2,
+	swapTotalBytes: 0,
+	sessionLimits: true
+};
 
 function queue(overrides: Partial<Queue> = {}): Queue {
 	return {
@@ -70,6 +83,8 @@ function build(opts: {
 	edges?: { planId: string; blockedByPlanId: string }[];
 	blockerStatuses?: Record<string, QueueItemStatus[]>;
 	reachable?: boolean;
+	memory?: MachineMemory | null;
+	inFlight?: SliceKind[];
 }) {
 	// The real registry returns whether the frame reached a socket, and the
 	// difference between `true` and a bare `vi.fn()` is the whole bug this guards:
@@ -94,6 +109,7 @@ function build(opts: {
 		sliceRunRepo: {
 			claimNext: vi.fn().mockResolvedValue(opts.claimRun ?? null),
 			listForItem: vi.fn().mockResolvedValue(opts.runs ?? []),
+			listRunningKindsForMachine: vi.fn().mockResolvedValue(opts.inFlight ?? []),
 			update: vi.fn()
 		},
 		planRepo: {
@@ -122,6 +138,7 @@ function build(opts: {
 		planBlockerRepo: { listEdges: vi.fn().mockResolvedValue(opts.edges ?? []) },
 		runActivity: { record: vi.fn(), forget: vi.fn(), label: vi.fn() },
 		appUrl: 'https://bosun.test',
+		machineMemory: { get: vi.fn().mockReturnValue(opts.memory ?? null) },
 		socketRegistry: { sendToAgent, broadcastToUi: vi.fn() }
 	} as unknown as AdvanceDeps;
 
@@ -394,6 +411,68 @@ describe('advanceQueue', () => {
 		await advanceQueue(deps, { queueId: 'q_1' });
 
 		expect(sendToAgent).toHaveBeenCalled();
+	});
+
+	// The failure budgets exist for: a verify bullet started beside a build on an
+	// 8 GB box, and the kernel killed the agent along with both of them.
+	it('holds a bullet that does not fit beside what the machine is running', async () => {
+		const verify = run({ id: 'sr_2', sliceId: 'sl_2', ordinal: 2, status: 'pending' });
+		const { deps, sendToAgent } = build({
+			queue: queue({ status: 'running' }),
+			items: [item({ status: 'running' })],
+			claimRun: verify,
+			runs: [run({ status: 'done' }), verify],
+			memory: SMALL_BOX,
+			inFlight: ['build']
+		});
+
+		await advanceQueue(deps, { queueId: 'q_1' });
+
+		expect(deps.sliceRunRepo.claimNext).not.toHaveBeenCalled();
+		expect(sendToAgent).not.toHaveBeenCalled();
+	});
+
+	// Closing it would mark a plan done that never ran a line, and the sweep that
+	// comes when memory frees up would find nothing left to start.
+	it('keeps a newly claimed plan open while its first bullet waits for memory', async () => {
+		const { deps, sendToAgent } = build({
+			claimItem: item(),
+			runs: [run({ status: 'pending' })],
+			memory: SMALL_BOX,
+			inFlight: ['verify']
+		});
+
+		await advanceQueue(deps, { queueId: 'q_1' });
+
+		expect(sendToAgent).not.toHaveBeenCalled();
+		expect(deps.queueItemRepo.update).not.toHaveBeenCalledWith(
+			expect.objectContaining({ status: 'done' })
+		);
+		expect(deps.queueRepo.update).toHaveBeenCalledWith(
+			expect.objectContaining({ id: 'q_1', status: 'running' })
+		);
+	});
+
+	it('runs the bullet under the limit it was admitted with', async () => {
+		const { deps, sendToAgent } = build({
+			claimItem: item(),
+			claimRun: run(),
+			runs: [run({ status: 'pending' })],
+			memory: SMALL_BOX
+		});
+
+		await advanceQueue(deps, { queueId: 'q_1' });
+
+		expect(dispatched(sendToAgent).memoryMaxBytes).toBe(3 * GIB);
+	});
+
+	it('schedules a machine that has not reported its memory as it did before budgets', async () => {
+		const { deps, sendToAgent } = build({ claimItem: item(), claimRun: run(), runs: [run()] });
+
+		await advanceQueue(deps, { queueId: 'q_1' });
+
+		expect(dispatched(sendToAgent).memoryMaxBytes).toBeNull();
+		expect(deps.sliceRunRepo.listRunningKindsForMachine).not.toHaveBeenCalled();
 	});
 
 	it('dispatches nothing before the worktree exists', async () => {

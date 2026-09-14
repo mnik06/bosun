@@ -127,8 +127,14 @@ coming" and will leave the row `running` indefinitely on the strength of it — 
 this whole mechanism exists to prevent, reintroduced from the other side.
 
 What still kills a bullet: an agent restart or self-upgrade (already gated — `upgrade.decide` refuses
-while sessions run), a machine reboot, an explicit pause, and a backend away for longer than the MCP
-tool timeout while a question is outstanding.
+while sessions run), a machine reboot, an explicit pause, a backend away for longer than the MCP tool
+timeout while a question is outstanding, and a bullet that runs out of memory.
+
+That last one no longer takes the agent with it. Each bullet's `claude` runs in a systemd scope of its
+own, outside the agent's unit, under the limit the scheduler chose — see
+`../services/memory.service.md`. `hello` carries the machine's `memory`, which is what the scheduler
+budgets against, and `previousExit` as systemd recorded it, which is how a bullet stranded by the
+kernel killing the agent itself reads as out of memory rather than as a restart nobody can explain.
 
 ## Why the backoff is jittered
 

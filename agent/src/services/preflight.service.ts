@@ -4,6 +4,7 @@ import path from 'path';
 import { type ClaudeAuthService } from './claude-auth.service';
 import { type ExecService } from './exec.service';
 import { type McpConfigService } from './mcp-config.service';
+import { formatGib, type MemoryService } from './memory.service';
 import { type PreflightCheck } from '../protocol';
 
 const MIN_CLAUDE_MAJOR = 2;
@@ -62,6 +63,7 @@ export function getPreflightService(deps: {
 	exec: ExecService;
 	claudeAuth: ClaudeAuthService;
 	mcpConfig: McpConfigService;
+	memory: MemoryService;
 	repoPath: string;
 }) {
 	// One check, two probes. A missing binary and a missing login are different
@@ -250,11 +252,38 @@ export function getPreflightService(deps: {
 			};
 	}
 
+	// Red only where the limits are missing on Linux, the one case that changes what
+	// a bullet running out of memory does: without a scope it runs inside the
+	// agent's own unit and can take the agent down with it. Never blocks anything.
+	function checkMemory(): PreflightCheck {
+		const memory = deps.memory.report();
+
+		if (memory === undefined) {
+			return {
+				name: 'memory',
+				ok: true,
+				detail: 'not measured on this platform — bullets run without a memory limit'
+			};
+		}
+
+		const swap =
+			memory.swapTotalBytes === 0 ? 'no swap' : `${formatGib(memory.swapTotalBytes)} swap`;
+		const size = `${formatGib(memory.totalBytes)} RAM, ${swap}`;
+
+		return memory.sessionLimits
+			? { name: 'memory', ok: true, detail: `${size} · every bullet runs under its own memory limit` }
+			: {
+				name: 'memory',
+				ok: false,
+				detail: `${size} · systemd-run --user is unavailable, so bullets run without a memory limit and one that runs out can take the agent down with it`
+			};
+	}
+
 	return {
 		async collect(): Promise<PreflightCheck[]> {
 			const [claude, git, gh] = await Promise.all([checkClaude(), checkGit(), checkGh()]);
 
-			return [claude, git, gh, checkCustomMcp(), checkBrowser()];
+			return [claude, git, gh, checkCustomMcp(), checkBrowser(), checkMemory()];
 		}
 	};
 }

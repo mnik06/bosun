@@ -47,8 +47,8 @@ ${criteriaList(context.acs)}
 
 **These are the bar.** An unmet criterion is unfinished work, not a nice-to-have.
 
-**Tick each one with \`mark_ac_implemented\` as you satisfy it** — the moment the code is written and
-its feedback loop is green, not in a sweep at the end. The person watching the plan sees the boxes
+**Tick each one with \`mark_ac_implemented\` once it holds** — its code written and the loop that
+follows it green, not saved for a sweep after the review. The person watching the plan sees the boxes
 fill in as you go, and this bullet is refused if it finishes with one of its own criteria unticked.
 Tick it because it holds, never to clear the list: a criterion you cannot satisfy is a blocker to
 report.
@@ -73,7 +73,8 @@ edit, and on a bullet this size you pay that to save nothing.
 
 Order that avoids the usual dead ends: data layer and schema first, then the server, then anything
 generated from the server (types, clients — generated *after* the server is live, never before), then
-the interface. Run the loop for each side as you finish it rather than all at the end.
+the interface. Build every side before you run the loop: it runs once the implementation is complete,
+as step 1 sets out, not after each side.
 
 Implement exactly what this bullet describes and nothing beyond it. The later bullets are somebody's
 plan, not scope you were handed early. Match the surrounding code — naming, structure, idiom, comment
@@ -109,13 +110,18 @@ which it is rather than writing one out of duty.
 
 # Step 3 — run the loop until it is clean
 
-Run everything you found in step 1 for every side you touched, and fix what it reports. A red loop is
-not done. Then have it reviewed: spawn **one** \`general-purpose\` sub-agent to review this bullet's
-changes against the plan, the repository's conventions and its own loop — fresh context is the whole
-point, because you just wrote this code and are its worst reader.
+When the implementation is complete, run the loop — everything you found in step 1, for every side
+you touched, one command at a time — and fix what it reports. A red loop is not done: each round of
+fixes is another iteration, and the loop runs once at the end of each.
 
-Await it inside this turn. Fix what it found yourself, in severity order, and run the loop again. A
-finding you judge out of scope goes in your report with the reason — never dropped silently.
+Then have it reviewed: spawn **one** \`general-purpose\` sub-agent to review this bullet's changes
+against the plan and the repository's conventions — fresh context is the whole point, because you
+just wrote this code and are its worst reader. **Its brief says it runs nothing** — no typecheck,
+lint, tests, builds or dev server. It reads the change and reports; the loop is yours.
+
+Await it inside this turn. Fix what it found yourself, in severity order, then run the loop again —
+once, after the last fix. A finding you judge out of scope goes in your report with the reason —
+never dropped silently.
 
 **One sub-agent in the whole session, and that is the reviewer.** No implementation agents, no fix
 agents, no second review round.
@@ -133,11 +139,11 @@ ${gitFlow(context)}
 
 # When you are done
 
-Report, briefly: the feedback loops you found and whether they were green before you started; what
-you built and which files you touched; which acceptance criteria you believe now hold; what the
-review found and what you did about it; anything you deferred to the verify bullet, one line each
-with how to reproduce it. That report is what the operator reads in the browser, and what the next
-bullet inherits.
+Report, briefly: the feedback loops you found, their final result, and any failure you judged
+inherited with the file it was in; what you built and which files you touched; which acceptance
+criteria you believe now hold; what the review found and what you did about it; anything you deferred
+to the verify bullet, one line each with how to reproduce it. That report is what the operator reads
+in the browser, and what the next bullet inherits.
 
 If you could not finish, say what stopped you — plainly, first line.`;
 }

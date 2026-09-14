@@ -1,5 +1,12 @@
 import { spawn } from 'child_process';
+import fs from 'fs';
 import { type ClaudeAuthService } from '../services/claude-auth.service';
+import {
+	memoryEventsPath,
+	parseOomKills,
+	scopedCommand,
+	type SessionScope
+} from '../services/memory.service';
 
 // A person is not obliged to answer within the working day. The CLI's default
 // MCP tool-call timeout is a minute, and `bosun_ask` blocking past it is what the
@@ -11,6 +18,11 @@ import { type ClaudeAuthService } from '../services/claude-auth.service';
 const TOOL_TIMEOUT_MS = 24 * 60 * 60 * 1000;
 const STARTUP_TIMEOUT_MS = 30 * 1000;
 const SIGKILL_GRACE_MS = 5_000;
+
+// Often enough to read a kill while the scope still exists. It is removed with
+// its last process, and a count that was only ever going to be read after that is
+// a kill nobody hears about.
+const OOM_POLL_MS = 2_000;
 
 // Named by the caller because planning and execution want different sets:
 // planning reads, execution writes. `Skill` has to appear explicitly in either —
@@ -32,6 +44,14 @@ export interface ClaudeSession {
 	// until it closes, so a session stays answerable instead of ending with its
 	// first result.
 	send(text: string): void;
+}
+
+// How the process ended beyond its exit code. `oomKills` counts every process the
+// kernel killed inside the session's scope for going over its limit: `claude`
+// itself when `signal` is `SIGKILL`, otherwise a command it ran.
+export interface SessionExit {
+	signal: NodeJS.Signals | null;
+	oomKills: number;
 }
 
 function sessionArgs(opts: {
@@ -71,31 +91,68 @@ export function spawnClaudeSession(opts: {
 	userServerNames: string[];
 	tools: SessionTools;
 	claudeAuth: ClaudeAuthService;
+	// A systemd scope of its own, under its own memory limit. Without one the
+	// session runs inside the agent's unit, where the kernel killing anything for
+	// memory can stop the agent and every other session with it.
+	scope?: SessionScope | null;
+	onOomKill?: (count: number) => void;
 	onStdout: (chunk: string) => void;
 	onStderr: (chunk: string) => void;
-	onExit: (code: number | null) => void;
+	onExit: (code: number | null, exit: SessionExit) => void;
 }): ClaudeSession {
+	const args = sessionArgs({
+		mcpConfigPath: opts.mcpConfigPath,
+		userServerNames: opts.userServerNames,
+		tools: opts.tools
+	});
+	const command = opts.scope
+		? scopedCommand({ scope: opts.scope, command: 'claude', args })
+		: { command: 'claude', args };
 	// Its own process group, so cancelling reaps whatever the session spawned
 	// instead of leaving a subagent holding a port and a credential.
-	const child = spawn(
-		'claude',
-		sessionArgs({
-			mcpConfigPath: opts.mcpConfigPath,
-			userServerNames: opts.userServerNames,
-			tools: opts.tools
-		}),
-		{
-			cwd: opts.cwd,
-			env: {
-				...opts.claudeAuth.sessionEnv(),
-				MCP_TOOL_TIMEOUT: String(TOOL_TIMEOUT_MS),
-				MCP_TIMEOUT: String(STARTUP_TIMEOUT_MS)
-			},
-			detached: true,
-			stdio: ['pipe', 'pipe', 'pipe']
-		}
-	);
+	const child = spawn(command.command, command.args, {
+		cwd: opts.cwd,
+		env: {
+			...opts.claudeAuth.sessionEnv(),
+			MCP_TOOL_TIMEOUT: String(TOOL_TIMEOUT_MS),
+			MCP_TIMEOUT: String(STARTUP_TIMEOUT_MS)
+		},
+		detached: true,
+		stdio: ['pipe', 'pipe', 'pipe']
+	});
 	let killTimer: NodeJS.Timeout | null = null;
+	let oomKills = 0;
+	let eventsPath: string | null = null;
+
+	const readOomKills = (): void => {
+		if (!opts.scope || child.pid === undefined) {
+			return;
+		}
+
+		try {
+			eventsPath ??= memoryEventsPath({
+				cgroup: fs.readFileSync(`/proc/${child.pid}/cgroup`, 'utf8'),
+				unit: opts.scope.unit
+			});
+
+			if (eventsPath === null) {
+				return;
+			}
+
+			const count = parseOomKills(fs.readFileSync(eventsPath, 'utf8'));
+
+			if (count > oomKills) {
+				oomKills = count;
+				opts.onOomKill?.(count);
+			}
+		} catch {
+			// The scope went with its last process, or the pid with the process. What
+			// was counted before then stands.
+		}
+	};
+	const oomPoll = opts.scope ? setInterval(readOomKills, OOM_POLL_MS) : null;
+
+	oomPoll?.unref();
 
 	child.stdout.setEncoding('utf8');
 	child.stderr.setEncoding('utf8');
@@ -103,16 +160,27 @@ export function spawnClaudeSession(opts: {
 	child.stderr.on('data', opts.onStderr);
 
 	child.on('error', (error) => {
+		if (oomPoll) {
+			clearInterval(oomPoll);
+		}
+
 		opts.onStderr(error.message);
-		opts.onExit(null);
+		opts.onExit(null, { signal: null, oomKills });
 	});
 
-	child.on('exit', (code) => {
+	child.on('exit', (code, signal) => {
 		if (killTimer) {
 			clearTimeout(killTimer);
 		}
 
-		opts.onExit(code);
+		if (oomPoll) {
+			clearInterval(oomPoll);
+		}
+
+		// Once more before reporting: the kill that ended `claude` lands between
+		// polls, and the scope outlives it for as long as anything it started does.
+		readOomKills();
+		opts.onExit(code, { signal, oomKills });
 	});
 
 	const write = (text: string): void => {

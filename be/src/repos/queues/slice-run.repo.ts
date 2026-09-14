@@ -1,7 +1,7 @@
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { type DbOrTx } from 'src/services/drizzle/drizzle.service';
-import { sliceRuns } from 'src/services/drizzle/schema';
-import { type PlanQuestion } from 'src/types/PlanSchema';
+import { queueItems, queues, sliceRuns, slices } from 'src/services/drizzle/schema';
+import { SliceKindSchema, type PlanQuestion, type SliceKind } from 'src/types/PlanSchema';
 import { SliceRunSchema, type SliceRun, type SliceRunStatus } from 'src/types/QueueSchema';
 
 const columns = {
@@ -48,6 +48,21 @@ export function getSliceRunRepo(db: DbOrTx) {
 				.orderBy(asc(sliceRuns.ordinal));
 
 			return rows.map((row) => SliceRunSchema.parse(row));
+		},
+
+		// Every bullet in flight on a machine, across all of its queues, by kind — the
+		// unit the scheduler budgets memory in. A run blocked on a question is still
+		// `running` here, and rightly: its session is alive and holding its memory.
+		async listRunningKindsForMachine(machineId: string): Promise<SliceKind[]> {
+			const rows = await db
+				.select({ kind: slices.kind })
+				.from(sliceRuns)
+				.innerJoin(queueItems, eq(queueItems.id, sliceRuns.queueItemId))
+				.innerJoin(queues, eq(queues.id, queueItems.queueId))
+				.innerJoin(slices, eq(slices.id, sliceRuns.sliceId))
+				.where(and(eq(queues.machineId, machineId), eq(sliceRuns.status, 'running')));
+
+			return rows.map((row) => SliceKindSchema.parse(row.kind));
 		},
 
 		async getById(id: string): Promise<SliceRun | null> {

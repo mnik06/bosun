@@ -4,8 +4,9 @@ import { executionPrompt } from '../prompts/execution';
 import { verifyPrompt } from '../prompts/verify';
 import { type AgentMsg, type ExecStart, type PlanAnswer } from '../protocol';
 import { type Services } from '../services/index';
+import { formatGib } from '../services/memory.service';
 import { startSessionMcpServer, type SessionMcpServer } from '../sessions/mcp-server';
-import { spawnClaudeSession, type ClaudeSession } from '../sessions/process';
+import { spawnClaudeSession, type ClaudeSession, type SessionExit } from '../sessions/process';
 import { commitMessageFor } from './commit';
 import { createExecutionDispatch, executionDefinitions, executionMcpTools } from './mcp/tools';
 
@@ -43,6 +44,32 @@ function promptFor(msg: ExecStart): string {
 	return msg.slice.kind === 'verify'
 		? verifyPrompt(shared)
 		: executionPrompt({ ...shared, sliceKind: msg.slice.kind, acs: msg.acs });
+}
+
+// A session the kernel killed for memory exits the way a crash does — nothing on
+// stderr, no exit code — and "claude exited with code unknown" sends the operator
+// looking in the wrong place. The scope's own counter is what tells them apart.
+export function exitMessage(opts: {
+	code: number | null;
+	exit: SessionExit;
+	stderr: string;
+	limitBytes: number | null;
+}): string {
+	const said = opts.stderr.trim() || `claude exited with code ${opts.code ?? 'unknown'}`;
+
+	if (opts.exit.oomKills === 0) {
+		return said;
+	}
+
+	const limit = opts.limitBytes === null ? '' : ` of ${formatGib(opts.limitBytes)}`;
+
+	if (opts.exit.signal === 'SIGKILL') {
+		return `the bullet ran out of memory: the kernel killed its session at its limit${limit}`;
+	}
+
+	const commands = opts.exit.oomKills === 1 ? 'a command' : `${opts.exit.oomKills} commands`;
+
+	return `${said} (${commands} in this bullet ran out of memory at its limit${limit})`;
 }
 
 interface Run {
@@ -224,6 +251,10 @@ export function createExecutionSessions(opts: {
 				console.error(`dropped unrecognised claude frame: ${line.slice(0, 200)}`);
 			}
 		});
+		const scope = opts.services.memory.sessionScope({
+			runId: msg.runId,
+			memoryMaxBytes: msg.memoryMaxBytes ?? null
+		});
 
 		run.process = spawnClaudeSession({
 			cwd: msg.worktreePath,
@@ -235,6 +266,22 @@ export function createExecutionSessions(opts: {
 				mcp: executionMcpTools({ afk: msg.afk, verify: msg.slice.kind === 'verify' })
 			},
 			claudeAuth: opts.services.claudeAuth,
+			scope,
+			// Logged as well as shown: the browser's activity line is gone the moment
+			// the next tool call replaces it, and the journal is where somebody
+			// looks for why a machine keeps running out.
+			onOomKill: (count) => {
+				const limit = scope === null ? 'its' : `its ${formatGib(scope.memoryMaxBytes)}`;
+
+				console.error(
+					`[${msg.runId}] out of memory: the kernel killed a process at ${limit} limit (${count} so far)`
+				);
+				opts.send({
+					type: 'exec.activity',
+					runId: msg.runId,
+					label: 'A command ran out of memory'
+				});
+			},
 			onStdout: (chunk) => {
 				parser.push(chunk);
 			},
@@ -242,14 +289,17 @@ export function createExecutionSessions(opts: {
 				stderr = `${stderr}${chunk}`.slice(-STDERR_KEPT_CHARS);
 				console.error(`[${msg.runId}] ${chunk.trimEnd()}`);
 			},
-			onExit: (code) => {
+			onExit: (code, exit) => {
 				parser.flush();
 
 				if (run.cancelled) {
 					return;
 				}
 
-				fail(msg.runId, stderr.trim() || `claude exited with code ${code ?? 'unknown'}`);
+				fail(
+					msg.runId,
+					exitMessage({ code, exit, stderr, limitBytes: scope?.memoryMaxBytes ?? null })
+				);
 			}
 		});
 	};

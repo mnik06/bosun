@@ -6,6 +6,7 @@ import { getCommitService } from '../execution/commit';
 import { getPublishService } from '../execution/publish';
 import { getMcpConfigService } from './mcp-config.service';
 import { getMcpProbeService } from './mcp-probe.service';
+import { getMemoryService } from './memory.service';
 import { getPreflightService } from './preflight.service';
 import { getRepoService } from './repo.service';
 import { getSkillsService } from './skills.service';
@@ -19,6 +20,7 @@ export function getServices(opts: { config: AgentConfig; env: NodeJS.ProcessEnv 
 	const env = getEnvService({ baseEnv: opts.env });
 	const claudeAuth = getClaudeAuthService({ exec, env });
 	const mcpConfig = getMcpConfigService({ env });
+	const memory = getMemoryService({ exec, env: opts.env });
 	const skills = getSkillsService({ repoPath: opts.config.repoPath });
 	const repo = getRepoService({ exec, repoPath: opts.config.repoPath });
 
@@ -33,11 +35,13 @@ export function getServices(opts: { config: AgentConfig; env: NodeJS.ProcessEnv 
 		exec,
 		mcpConfig,
 		mcpProbe: getMcpProbeService(),
+		memory,
 		publish: getPublishService({ exec }),
 		preflight: getPreflightService({
 			exec,
 			claudeAuth,
 			mcpConfig,
+			memory,
 			repoPath: opts.config.repoPath
 		}),
 		repo,

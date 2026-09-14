@@ -178,4 +178,40 @@ describe('stallMachineRuns', () => {
 
 		expect(deps.socketRegistry.sendToAgent).not.toHaveBeenCalled();
 	});
+
+	// The reason is where the operator goes next: a restart that was the kernel
+	// running the box out of memory is fixed on the box, not by resuming the queue.
+	it('names memory when the agent that held the bullet was killed for it', async () => {
+		const deps = build();
+
+		await stallMachineRuns(deps, {
+			machineId: 'm_1',
+			connectedAt: CONNECTED_AT,
+			uptimeMs: 1_000,
+			previousExit: 'oom-kill'
+		});
+
+		expect(deps.queueRepo.update).toHaveBeenCalledWith(
+			expect.objectContaining({ failureReason: expect.stringContaining('ran out of memory') })
+		);
+	});
+
+	// `previousExit` describes the process before this one. An agent older than the
+	// bullet was never killed while holding it, whatever happened to an earlier one.
+	it('does not blame memory for a bullet the running agent outlived', async () => {
+		const deps = build();
+
+		await stallMachineRuns(deps, {
+			machineId: 'm_1',
+			connectedAt: CONNECTED_AT,
+			uptimeMs: Date.now() - BEFORE.getTime() + 60_000,
+			previousExit: 'oom-kill'
+		});
+
+		expect(deps.queueRepo.update).toHaveBeenCalledWith(
+			expect.objectContaining({
+				failureReason: expect.stringContaining('connection to the machine dropped')
+			})
+		);
+	});
 });

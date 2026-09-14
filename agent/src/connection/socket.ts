@@ -80,7 +80,13 @@ function createAnnouncer(deps: ConnectionDeps & { socket: WebSocket }) {
 				// that failed every `planning` plan on a reconnect would kill the grill
 				// the person is in the middle of answering.
 				planIds: [...new Set([...deps.sessions.held(), ...deps.sink.pendingPlanIds()])],
-				uptimeMs: Math.round(process.uptime() * 1000)
+				uptimeMs: Math.round(process.uptime() * 1000),
+				// What the scheduler budgets this machine's bullets against, and how the
+				// agent process before this one ended. Together they are how a bullet
+				// stranded by the kernel killing the agent reads as out of memory rather
+				// than as a restart nobody can explain.
+				memory: deps.services.memory.report(),
+				previousExit: deps.services.memory.previousExit() ?? undefined
 			})
 		);
 

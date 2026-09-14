@@ -40,7 +40,8 @@ function build(opts?: { machineId?: string; runStatus?: string }) {
 		sliceRepo: { listByPlan: vi.fn().mockResolvedValue([]) },
 		acRepo: { listBySlice: vi.fn().mockResolvedValue([]) },
 		socketRegistry: { sendToAgent: vi.fn(), broadcastToUi: vi.fn() },
-		runActivity: { record: vi.fn(), forget: vi.fn(), label: vi.fn() }
+		runActivity: { record: vi.fn(), forget: vi.fn(), label: vi.fn() },
+		machineMemory: { get: vi.fn().mockReturnValue(null) }
 	} as unknown as AdvanceDeps;
 
 	return deps;

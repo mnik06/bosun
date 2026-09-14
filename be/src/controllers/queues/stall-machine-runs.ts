@@ -4,22 +4,33 @@ import { reclaimRun, runningItem } from 'src/controllers/queues/shared/stranded'
 
 const DROPPED = 'the connection to the machine dropped while this bullet was running';
 const RESTARTED = 'the agent on the machine restarted while this bullet was running';
+const OUT_OF_MEMORY =
+	'the machine ran out of memory and the kernel killed the agent while this bullet was running';
 
-// Both describe the same row — a bullet this machine was building and no longer
-// holds a session for — and they are worth telling apart, because they send the
-// operator to different places. A socket that dropped is the network. An agent
-// process that began *after* the bullet was dispatched is not the process that
-// was building it: it was killed and brought back, which on a machine that keeps
-// doing it is a box running out of memory rather than a flaky link.
+// All three describe the same row — a bullet this machine was building and no
+// longer holds a session for — and they are worth telling apart, because they send
+// the operator to different places. A socket that dropped is the network. An agent
+// process that began *after* the bullet was dispatched is not the process that was
+// building it: it was killed and brought back. When systemd recorded that kill as
+// `oom-kill`, the fix is memory on the box or fewer bullets on it, and saying only
+// "restarted" is what once cost a morning of reading journals to find that out.
 //
 // Agents too old to send their uptime read as a dropped connection, which is what
 // they always were: they held nothing across a reconnect either way.
-function strandedReason(opts: { agentStartedAt: Date | null; runStartedAt: Date | null }): string {
-	if (opts.agentStartedAt === null || opts.runStartedAt === null) {
+function strandedReason(opts: {
+	agentStartedAt: Date | null;
+	runStartedAt: Date | null;
+	previousExit: string | undefined;
+}): string {
+	if (
+		opts.agentStartedAt === null ||
+		opts.runStartedAt === null ||
+		opts.agentStartedAt <= opts.runStartedAt
+	) {
 		return DROPPED;
 	}
 
-	return opts.agentStartedAt > opts.runStartedAt ? RESTARTED : DROPPED;
+	return opts.previousExit === 'oom-kill' ? OUT_OF_MEMORY : RESTARTED;
 }
 
 // Reports whether anything was actually stranded, because a queue whose bullet
@@ -88,7 +99,13 @@ async function abandoned(
 // empty default is not a fallback — it is the truth for those agents.
 export async function stallMachineRuns(
 	deps: AdvanceDeps,
-	opts: { machineId: string; connectedAt: Date; heldRunIds?: string[]; uptimeMs?: number }
+	opts: {
+		machineId: string;
+		connectedAt: Date;
+		heldRunIds?: string[];
+		uptimeMs?: number;
+		previousExit?: string;
+	}
 ): Promise<void> {
 	const held = new Set(opts.heldRunIds ?? []);
 	const agentStartedAt =
@@ -114,7 +131,11 @@ export async function stallMachineRuns(
 		const paused = await deps.queueRepo.update({
 			id: queue.id,
 			status: 'paused',
-			failureReason: strandedReason({ agentStartedAt, runStartedAt })
+			failureReason: strandedReason({
+				agentStartedAt,
+				runStartedAt,
+				previousExit: opts.previousExit
+			})
 		});
 
 		if (paused) {

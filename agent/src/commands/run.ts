@@ -34,6 +34,16 @@ export async function run(opts: { config: AgentConfig; configPath: string }): Pr
 		}, PROBATION_DEADLINE_MS).unref();
 	}
 
+	// Before the first bullet can arrive, so none starts without knowing whether it
+	// can be limited. Orphans are reaped while this process holds no session of its
+	// own, which is the only moment stopping every `bosun-run-*` scope is safe.
+	await services.memory.load();
+	await services.memory.reapOrphans();
+
+	if (services.memory.previousExit() === 'oom-kill') {
+		console.error('the previous agent process was killed by the kernel for running out of memory');
+	}
+
 	return holdConnection({
 		config: opts.config,
 		configPath: opts.configPath,

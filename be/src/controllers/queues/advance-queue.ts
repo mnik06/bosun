@@ -2,6 +2,7 @@ import { type AdvanceDeps } from 'src/controllers/queues/advance-deps';
 import { announceQueue } from 'src/controllers/queues/announce-queue';
 import { pullRequestBody } from 'src/controllers/queues/pull-request-body';
 import { blockerHolds } from 'src/controllers/queues/shared/blockers';
+import { admitBullet } from 'src/controllers/queues/shared/memory-budget';
 import { reclaimRun } from 'src/controllers/queues/shared/stranded';
 import { type Plan } from 'src/types/PlanSchema';
 import { toQueueSlug, type Queue, type QueueItem } from 'src/types/QueueSchema';
@@ -35,8 +36,10 @@ async function setStatus(
 // no bullet to take, which for a freshly claimed plan is what "finished" looks
 // like; `unreachable` means a bullet *was* claimed and the command was not
 // delivered. Collapsing the two into `false` is what let an undelivered
-// `exec.start` read as a plan that had run out of work.
-type DispatchOutcome = 'sent' | 'empty' | 'unreachable';
+// `exec.start` read as a plan that had run out of work. `waiting` means a bullet
+// is ready but does not fit beside what the machine is running: nothing was
+// claimed, and the machine sweep after the next run settles asks again.
+type DispatchOutcome = 'sent' | 'empty' | 'unreachable' | 'waiting';
 
 // The socket was gone by the time the bullet was due to start. The claim is
 // undone rather than failed: nothing ran on the machine, so there is no
@@ -59,9 +62,41 @@ async function stall(deps: AdvanceDeps, opts: { queue: Queue; runId: string }): 
 	}
 }
 
-async function dispatch(
+// Decided before the claim, never after: a claimed run that then waited would
+// read as in flight, and `claimNext` would refuse every later bullet of the item
+// behind a session that does not exist. `null` — a machine that has not reported
+// its memory, or an item whose bullet is already running and whose claim will be
+// refused anyway — dispatches exactly as it did before budgets existed.
+async function memoryLimitFor(
 	deps: AdvanceDeps,
 	opts: { queue: Queue; item: QueueItem }
+): Promise<number | null | 'waiting'> {
+	const memory = deps.machineMemory.get(opts.queue.machineId);
+
+	if (memory === null) {
+		return null;
+	}
+
+	const [runs, slices, inFlight] = await Promise.all([
+		deps.sliceRunRepo.listForItem(opts.item.id),
+		deps.sliceRepo.listByPlan(opts.item.planId),
+		deps.sliceRunRepo.listRunningKindsForMachine(opts.queue.machineId)
+	]);
+	const next = runs.find((entry) => entry.status === 'pending');
+	const kind = slices.find((entry) => entry.id === next?.sliceId)?.kind;
+
+	if (kind === undefined || runs.some((entry) => entry.status === 'running')) {
+		return null;
+	}
+
+	const admission = admitBullet({ memory, kind, inFlight });
+
+	return admission.admitted ? admission.limitBytes : 'waiting';
+}
+
+async function startBullet(
+	deps: AdvanceDeps,
+	opts: { queue: Queue; item: QueueItem; memoryMaxBytes: number | null }
 ): Promise<DispatchOutcome> {
 	const run = await deps.sliceRunRepo.claimNext(opts.item.id);
 
@@ -139,7 +174,8 @@ async function dispatch(
 				.map((entry) => ({
 					ordinal: entry.ordinal,
 					title: byId.get(entry.sliceId)?.title ?? 'a bullet'
-				}))
+				})),
+			memoryMaxBytes: opts.memoryMaxBytes
 		}
 	});
 
@@ -150,6 +186,17 @@ async function dispatch(
 	}
 
 	return 'sent';
+}
+
+async function dispatch(
+	deps: AdvanceDeps,
+	opts: { queue: Queue; item: QueueItem }
+): Promise<DispatchOutcome> {
+	const memoryMaxBytes = await memoryLimitFor(deps, opts);
+
+	return memoryMaxBytes === 'waiting'
+		? 'waiting'
+		: startBullet(deps, { ...opts, memoryMaxBytes });
 }
 
 // A plan waits for its blockers wherever in the project they were queued, not
@@ -377,7 +424,10 @@ export async function advanceQueue(deps: AdvanceDeps, opts: { queueId: string })
 
 	const outcome = await dispatch(deps, { queue, item: next });
 
-	if (outcome === 'sent') {
+	// A plan waiting on memory has started as far as this queue is concerned: its
+	// item is claimed and its bullets are pending. Falling through would close it
+	// as done without it having run a line.
+	if (outcome === 'sent' || outcome === 'waiting') {
 		await setStatus(deps, { queue, status: 'running' });
 
 		return;

@@ -10,6 +10,7 @@ import {
 	PlanTextMsgSchema
 } from 'src/types/plan-stream';
 import { PlanPrepareMsgSchema } from 'src/types/plan-prepare';
+import { MachineMemorySchema } from 'src/types/machine-memory';
 
 export { PlanPrepareMsgSchema, PreparePlanSchema, type PreparePlan } from 'src/types/plan-prepare';
 
@@ -39,7 +40,14 @@ export const HelloMsgSchema = z.object({
 	// agent are indistinguishable here otherwise, and only one of them means every
 	// session on the machine is gone — which is the difference between a queue
 	// that was unlucky and a machine that is killing its own agent.
-	uptimeMs: z.number().optional()
+	uptimeMs: z.number().optional(),
+	// Absent off Linux and from agents older than memory budgets, which are then
+	// scheduled with the fixed cap alone.
+	memory: MachineMemorySchema.optional(),
+	// How the agent process before this one ended, as systemd recorded it. `oom-kill`
+	// beside an uptime newer than a stranded bullet is the kernel having killed the
+	// agent for memory, not a restart anybody asked for.
+	previousExit: z.string().optional()
 });
 
 export const PreflightMsgSchema = z.object({
@@ -298,7 +306,11 @@ export const ExecStartMsgSchema = z.object({
 	decisions: z.array(
 		z.object({ fork: z.string(), chose: z.string() })
 	),
-	doneSlices: z.array(z.object({ ordinal: z.number().int(), title: z.string() }))
+	doneSlices: z.array(z.object({ ordinal: z.number().int(), title: z.string() })),
+	// The most memory this bullet's session may use: the same number it was admitted
+	// against, so the limits of everything running fit the machine. Null for an
+	// agent that has not reported its memory, which the scheduler cannot budget.
+	memoryMaxBytes: z.number().int().positive().nullable()
 });
 
 export const ExecCancelMsgSchema = z.object({ type: z.literal('exec.cancel'), runId: z.string() });

@@ -193,11 +193,15 @@ export async function applyMachineFrame(opts: {
 	// anything.
 	if (opts.msg.type === 'hello') {
 		opts.fastify.services.disconnectGrace.cancel(machine.id);
+		// Recorded before anything this connection carries next can settle a run and
+		// schedule the machine's next bullet against it.
+		opts.fastify.services.machineMemory.set(machine.id, opts.msg.memory);
 		await stallMachineRuns(schedulerDeps(opts.fastify), {
 			machineId: machine.id,
 			connectedAt: opts.connectedAt,
 			heldRunIds: opts.msg.runIds,
-			uptimeMs: opts.msg.uptimeMs
+			uptimeMs: opts.msg.uptimeMs,
+			previousExit: opts.msg.previousExit
 		});
 		await stallMachinePlans({
 			planRepo: opts.fastify.repos.planRepo,

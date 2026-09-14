@@ -28,7 +28,11 @@ function reachTheApp(context: VerifyContext): string {
 
 Start it yourself in this worktree — never point at a shared or deployed environment, and never take
 a port outside your range. Confirm the entry screen renders before you test anything. If it will not
-come up, stop and report it as blocked; never claim a criterion verified without opening it.`;
+come up, stop and report it as blocked; never claim a criterion verified without opening it.
+
+**The stack exists for Agent A and nothing else.** Stop it — every process you started for it — the
+moment Agent A has reported. Nothing after the browser pass drives the app, and a running stack holds
+memory the loop in step 4 needs.`;
 }
 
 export function verifyPrompt(context: VerifyContext): string {
@@ -86,6 +90,10 @@ ${reachTheApp(context)}
 Spawn all four in the **same message so they run in parallel**. They are independent and read-only,
 and running them in sequence multiplies the wall clock for nothing. Await all four in this turn.
 
+**None of the four runs anything** — no typecheck, lint, tests, builds or dev server. Say so in every
+brief. Agent A drives the stack you already started and never starts one of its own; the loop is
+yours, in step 4.
+
 **Agent A — the browser pass.** Its brief contains *only* the acceptance criteria above, verbatim,
 the URL, and where the credentials are. Not the diff, not the file list, not the bullets, not
 anything a previous bullet reported. The moment you tell it where to look it stops being an
@@ -107,8 +115,8 @@ that reason, and do not substitute reading the code for driving it. That substit
 pass and is worth less than nothing.
 
 **Agent B — the code pass.** The plan's whole diff against \`${context.baseRef}\`, every bullet reviewed
-as one feature: does it do what the plan said, does it match the repository's conventions, does its
-loop pass. Code only, no browser.
+as one feature: does it do what the plan said, does it match the repository's conventions. Code only —
+no browser, and nothing run.
 
 **Agent C — dead code.** What *this branch* orphaned: an export nothing calls any more, a component
 the rework replaced, a field it stopped writing, a route with no caller.
@@ -121,7 +129,10 @@ returns the project's pre-existing debt rather than anything this plan did. Give
 from \`git diff --name-only ${context.baseRef}...HEAD\` and the rule: report only what this branch
 caused. Debt in a file the branch merely touched is not a finding here.
 
-# Step 4 — merge, then fix in one round
+# Step 4 — merge, fix in one round, then run the loop
+
+The browser pass is over, so the stack from step 2 is stopped before anything else happens here. If
+any of it is still running, stop it now.
 
 Record every report before you decide anything about it: quote them in your own report verbatim,
 including the ones you disagree with. You commissioned both the work and its review, so your
@@ -133,15 +144,26 @@ duplication rank below anything that breaks behaviour.
 Then **group by file cluster** — two findings belong together when they touch the same file or the
 same tight cluster. One agent per group, not per finding: a cold agent spends minutes re-orienting,
 a warm one fixing its group's second defect pays none of that. Run at most three groups at once; they
-share one checkout and one running stack. Each fixes causes, adds a regression test only where the
-gate above allows one, and runs the loop. **No browser in a fix agent** — the evidence it needs is
-already in its brief.
+share one checkout. Each fixes causes and adds a regression test only where the gate above allows
+one. **No fix agent runs anything** — no loop, no browser, no dev server; the evidence it needs is
+already in its brief, and its brief says so.
 
 A group that finds nothing to fix is a result, not a failure.
 
+## Then the loop — once, after every group has reported
+
+When the last group has returned — or straight away, if there was nothing to fix — run the loop
+yourself, one command at a time, as step 1 sets out. The whole branch is measured here, not only the
+files the groups touched.
+
+Red in a file this branch changed: send those failures to one agent per file cluster, on the same
+terms, and run the loop once more when they have all reported. **Two iterations at most.** What is
+still red after the second goes in your report with the command and its output — a third round is how
+a verify bullet runs for hours and settles nothing.
+
 # Step 5 — stop
 
-Once every group has returned, you are done. **Do not re-drive the interface** — not for the fixed
+Once the last loop has run, you are done. **Do not re-drive the interface** — not for the fixed
 criteria, not for their neighbours, not to confirm. The one browser pass already happened, and the
 fixes are covered by the loop and the review. A second pass costs another full drive to re-check work
 that is already green.
@@ -162,5 +184,6 @@ recorded decisions — so what you leave out of the report is what the reviewer 
 
 Report, in this order: every acceptance criterion with its verdict — holds, fails, or could not test
 with the reason, **none quietly omitted**; the four agents' reports verbatim; what was fixed and what
-was left; and the known gaps, one line each with how to reproduce them.`;
+was left; the loop's final result, with anything still red and the command that shows it; and the
+known gaps, one line each with how to reproduce them.`;
 }

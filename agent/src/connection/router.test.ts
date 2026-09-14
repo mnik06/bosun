@@ -215,7 +215,8 @@ describe('exec frames', () => {
 		acs: [],
 		planAcs: [],
 		decisions: [],
-		doneSlices: []
+		doneSlices: [],
+		memoryMaxBytes: null
 	} satisfies ServerMsg;
 
 	it('starts a run', async () => {

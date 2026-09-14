@@ -72,9 +72,8 @@ Find, for each package or workspace you will touch:
 - anything else that fails the build: a formatter check, a bundle-size gate, a codegen step that must
   be re-run after a schema or API change
 
-Run the loop **once now, before you touch anything**. A repository that is already red tells you so
-in thirty seconds; discovering it after your changes are in means you cannot tell your breakage from
-what you inherited. Say in your report which it was.
+**Write the commands down; do not run them yet.** When and how they run is set out at the end of
+this step, and it is the same for every session bosun starts on this machine.
 
 ${configured.length === 0 ? '_The operator configured nothing — everything above is yours to discover._' : `What the operator has already told bosun about this project:\n\n${configured.join('\n')}`}
 
@@ -83,7 +82,34 @@ running their own copies of this project at the same time, from their own worktr
 start must be inside that range — take a port outside it and you take one another queue is using, and
 both stacks break in ways neither session can explain.
 
-Migrations: ${profile.applyMigrations ? 'apply them yourself when your work needs them, and never hand-write the SQL — change the schema and regenerate. Once applied, the new schema is live and you can exercise your work for real in this session, so an unapplied migration is never a blocker and never a reason to skip a check.' : '**do not apply them.** This machine points at a database bosun must not migrate. Generate the migration and commit it, then say in your report that it is pending.'}`;
+Migrations: ${profile.applyMigrations ? 'apply them yourself when your work needs them, and never hand-write the SQL — change the schema and regenerate. Once applied, the new schema is live and you can exercise your work for real in this session, so an unapplied migration is never a blocker and never a reason to skip a check.' : '**do not apply them.** This machine points at a database bosun must not migrate. Generate the migration and commit it, then say in your report that it is pending.'}
+
+## How the loop runs — once per iteration, by you, one command at a time
+
+This machine is shared with other queues and its memory is finite. Typechecking or linting a whole
+package can take gigabytes on its own; two of them at once, beside a dev stack, is how a session gets
+killed by the kernel halfway through its work.
+
+- **Only you run the loop.** Typecheck, lint, tests, duplication and dead-code checks, builds — none of
+  them is a sub-agent's job. Every brief you write says so in as many words: *do not run typecheck,
+  lint, tests, builds or a dev server; make your changes and report.*
+- **It runs once, at the end of an iteration.** An iteration is a round of work — your own, or every
+  sub-agent you dispatched for it — and the loop runs after all of it has reported. Never while a
+  sub-agent is still working, and never after each small change.
+- **One command at a time, in the foreground.** Wait for each to finish before starting the next.
+  Never two at once, never in the background, never a runner that fans out in parallel
+  (\`--parallel\`, \`concurrently\`, \`npm-run-all -p\`). A script that chains commands with \`&&\` is fine.
+- **Red is the next iteration.** Fix what the loop reported, then run it once more. A failure in a file
+  this branch did not change (\`git diff --name-only ${context.baseRef}\`) is inherited: report it with
+  the command and its output instead of fixing it.
+- **\`Killed\`, or exit code 137, means this machine ran out of memory** — it is not a failing check.
+  Stop anything of yours still running, a dev server or a watcher, and run that one command again on
+  its own. Killed a second time, stop: report it as blocked with the command.
+- **Never start infrastructure nobody gave you.** This project's own dev stack is not that; a database,
+  PGlite, a Docker container, a proxy or any other stand-in service of your own is, and so is anything
+  installed into \`/tmp\`. If the app needs a service that is not reachable, that is a blocker to report
+  with what you tried — a stand-in costs this machine memory it does not have and proves nothing about
+  the real one.`;
 }
 
 export function decisionsSection(context: RunContext): string {

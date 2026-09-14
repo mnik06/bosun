@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createExecutionSessions } from './session';
+import { createExecutionSessions, exitMessage } from './session';
 import { type ExecStart } from '../protocol';
 import { type Services } from '../services/index';
+
+const GIB = 1024 ** 3;
 
 vi.mock('../sessions/mcp-server', () => ({
 	startSessionMcpServer: vi.fn().mockResolvedValue({
@@ -37,10 +39,14 @@ const START = {
 	doneSlices: []
 } as unknown as ExecStart;
 
-function services(startBranch: () => Promise<{ ok: boolean; detail: string }>) {
+function services(
+	startBranch: () => Promise<{ ok: boolean; detail: string }>,
+	scope: { unit: string; memoryMaxBytes: number } | null = null
+) {
 	return {
 		commit: { startBranch, cleanTree: vi.fn() },
-		mcpConfig: { read: vi.fn().mockReturnValue({ servers: {}, serverNames: [], error: null }) }
+		mcpConfig: { read: vi.fn().mockReturnValue({ servers: {}, serverNames: [], error: null }) },
+		memory: { sessionScope: vi.fn().mockReturnValue(scope) }
 	} as unknown as Services;
 }
 
@@ -104,5 +110,60 @@ describe('createExecutionSessions', () => {
 
 		expect(spawnClaudeSession).not.toHaveBeenCalled();
 		expect(sessions.held()).toEqual([]);
+	});
+
+	// The limit is what keeps one bullet running out of memory from reaching the
+	// agent, and the scheduler is the only party that knows what else is running.
+	it('runs the session under the limit the scheduler chose', async () => {
+		const scope = { unit: 'bosun-run-sr_1', memoryMaxBytes: 3 * GIB };
+		const deps = services(async () => ({ ok: true, detail: 'branched' }), scope);
+		const sessions = createExecutionSessions({ services: deps, send: vi.fn() });
+
+		await sessions.start({ ...START, memoryMaxBytes: 3 * GIB });
+
+		const { spawnClaudeSession } = await import('../sessions/process');
+
+		expect(deps.memory.sessionScope).toHaveBeenCalledWith({
+			runId: 'sr_1',
+			memoryMaxBytes: 3 * GIB
+		});
+		expect(spawnClaudeSession).toHaveBeenCalledWith(expect.objectContaining({ scope }));
+	});
+});
+
+describe('exitMessage', () => {
+	it('passes a crash through as the session reported it', () => {
+		expect(
+			exitMessage({
+				code: 1,
+				exit: { signal: null, oomKills: 0 },
+				stderr: 'API error\n',
+				limitBytes: 3 * GIB
+			})
+		).toBe('API error');
+	});
+
+	// Killed for memory, `claude` leaves no stderr and no code. Without the scope's
+	// counter this read "claude exited with code unknown".
+	it('names memory when the kernel killed the session itself', () => {
+		expect(
+			exitMessage({
+				code: null,
+				exit: { signal: 'SIGKILL', oomKills: 1 },
+				stderr: '',
+				limitBytes: 6 * GIB
+			})
+		).toBe('the bullet ran out of memory: the kernel killed its session at its limit of 6.0 GB');
+	});
+
+	it('keeps what the session said when only its commands were killed', () => {
+		expect(
+			exitMessage({
+				code: 1,
+				exit: { signal: null, oomKills: 2 },
+				stderr: 'tests failed',
+				limitBytes: 3 * GIB
+			})
+		).toBe('tests failed (2 commands in this bullet ran out of memory at its limit of 3.0 GB)');
 	});
 });

@@ -338,6 +338,10 @@ EnvironmentFile=-%h/.bosun/env
 # against a 401 forever. A crash still restarts.
 Restart=on-failure
 RestartSec=5
+# continue, not the default stop: the kernel killing one process in this unit
+# for memory must not stop the agent and every session it holds. Bullets run in
+# scopes of their own and are held to their limits there first.
+OOMPolicy=continue
 
 [Install]
 WantedBy=default.target
