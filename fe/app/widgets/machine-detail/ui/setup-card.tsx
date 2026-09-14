@@ -1,27 +1,38 @@
-import { Card, Group, Stack, Text } from '@mantine/core'
+import { Card, Divider, Group, Stack, Text } from '@mantine/core'
 import type { ReactNode } from 'react'
 
 export function SetupCard ({
 	title,
 	description,
-	action
+	action,
+	children
 }: {
 	title: string,
 	description: string,
-	action: ReactNode
+	action: ReactNode,
+	children?: ReactNode
 }) {
 	return (
 		<Card withBorder padding="md" radius="md">
-			<Group justify="space-between" align="center" gap="sm">
-				<Stack gap={2} className="min-w-0">
-					<Text fw={600}>{title}</Text>
-					<Text size="sm" c="dimmed">
-						{description}
-					</Text>
-				</Stack>
+			<Stack gap="md">
+				<Group justify="space-between" align="center" gap="sm">
+					<Stack gap={2} className="min-w-0">
+						<Text fw={600}>{title}</Text>
+						<Text size="sm" c="dimmed">
+							{description}
+						</Text>
+					</Stack>
 
-				<div className="shrink-0">{action}</div>
-			</Group>
+					<div className="shrink-0">{action}</div>
+				</Group>
+
+				{children === undefined ? null : (
+					<>
+						<Divider />
+						{children}
+					</>
+				)}
+			</Stack>
 		</Card>
 	)
 }

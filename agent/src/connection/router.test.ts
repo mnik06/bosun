@@ -37,10 +37,19 @@ function build (opts?: { paused?: boolean }) {
 		running: vi.fn().mockReturnValue(0)
 	};
 	const state: AgentState = { paused: opts?.paused ?? false };
+	const projectEnv = {
+		set: vi.fn(),
+		delete: vi.fn(),
+		applyTo: vi.fn().mockReturnValue({ written: ['be/.env'], skipped: [] })
+	};
+	const worktree = {
+		ensure: vi.fn().mockResolvedValue({ ok: true, worktreePath: '/w', baseRef: 'main', detail: 'created' }),
+		setup: vi.fn().mockResolvedValue({ ok: true, detail: 'setup done' })
+	};
 
 	const deps = {
 		socket: { send } as unknown as RouterDeps['socket'],
-		services: { teardown: { terminateSelf } } as unknown as Services,
+		services: { teardown: { terminateSelf }, projectEnv, worktree } as unknown as Services,
 		configPath: '/home/u/.bosun/config.json',
 		state,
 		sessions: sessions as unknown as PlanningSessions,
@@ -56,10 +65,12 @@ function build (opts?: { paused?: boolean }) {
 		onUpgrade,
 		asks,
 		executions,
+		projectEnv,
 		send,
 		sessions,
 		state,
 		terminateSelf,
+		worktree,
 		route: async (msg: ServerMsg) => routeServerFrame(deps, msg)
 	};
 }
@@ -256,6 +267,49 @@ describe('exec frames', () => {
 		await harness.route({ type: 'shutdown', reason: 'deleted' });
 
 		expect(harness.executions.cancelAll).toHaveBeenCalled();
+	});
+});
+
+describe('env frames', () => {
+	const envSets = [{ path: 'be', keys: ['DATABASE_URL'], updatedAt: '2026-09-14T00:00:00.000Z' }];
+
+	it('answers a saved set with the summary, on the socket that asked', async () => {
+		const harness = build();
+		const vars = [{ key: 'DATABASE_URL', value: 'postgres://hunter2' }];
+
+		harness.projectEnv.set.mockReturnValue(envSets);
+		await harness.route({ type: 'env.set', requestId: 'r_1', path: 'be', vars });
+
+		expect(harness.projectEnv.set).toHaveBeenCalledWith({ path: 'be', vars });
+		expect(sent(harness.send)).toEqual([{ type: 'env.saved', requestId: 'r_1', envSets }]);
+	});
+
+	// Somebody is waiting on this request in the browser; a refusal that only
+	// reached the journal would leave the form spinning.
+	it('turns a refused change into env.error', async () => {
+		const harness = build();
+
+		harness.projectEnv.delete.mockImplementation(() => {
+			throw new Error('invalid path "../x"');
+		});
+		await harness.route({ type: 'env.delete', requestId: 'r_2', path: '../x' });
+
+		expect(sent(harness.send)).toEqual([
+			{ type: 'env.error', requestId: 'r_2', message: 'invalid path "../x"' }
+		]);
+	});
+
+	// A setup command that migrates or generates a client needs the real
+	// connection already in place.
+	it('writes the provided env into a worktree before its setup command runs', async () => {
+		const harness = build();
+
+		await harness.route({ type: 'queue.worktree.ensure', queueId: 'q_1', slug: 'auth', setupCommand: 'pnpm i' });
+
+		expect(harness.projectEnv.applyTo).toHaveBeenCalledWith('/w');
+		expect(harness.projectEnv.applyTo.mock.invocationCallOrder[0]).toBeLessThan(
+			harness.worktree.setup.mock.invocationCallOrder[0]!
+		);
 	});
 });
 

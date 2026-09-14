@@ -9,6 +9,7 @@ import { getPlanTextService } from 'src/services/plans/plan-text.service';
 import { getRunActivityService } from 'src/services/runs/run-activity.service';
 import { getDisconnectGraceService } from 'src/services/sockets/disconnect-grace.service';
 import { getMachineMemoryService } from 'src/services/sockets/machine-memory.service';
+import { getPendingEnvRequestsService } from 'src/services/sockets/pending-env-requests.service';
 import { getPendingPingsService } from 'src/services/sockets/pending-pings.service';
 import { getPendingUpgradesService } from 'src/services/sockets/pending-upgrades.service';
 import { getSocketRegistry } from 'src/services/sockets/registry.service';
@@ -30,6 +31,7 @@ export function getServices(opts: { env: Env }) {
 		keyService,
 		machineMemory: getMachineMemoryService(),
 		mcpPresets: getMcpPresetService(),
+		pendingEnvRequests: getPendingEnvRequestsService(),
 		pendingPings: getPendingPingsService(),
 		pendingUpgrades: getPendingUpgradesService(),
 		planTextService: getPlanTextService(),

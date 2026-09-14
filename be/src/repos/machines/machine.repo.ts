@@ -9,6 +9,7 @@ import {
 	type MachineStatus,
 	type PreflightCheck
 } from 'src/types/MachineSchema';
+import { type EnvSetSummary } from 'src/types/env-sets';
 import { type ProjectProfile } from 'src/types/ProjectProfileSchema';
 
 type Db = ReturnType<typeof getDb>;
@@ -23,6 +24,7 @@ const publicColumns = {
 	agentVersion: machines.agentVersion,
 	capabilities: machines.capabilities,
 	projectProfile: machines.projectProfile,
+	envSets: machines.envSets,
 	createdAt: machines.createdAt
 };
 
@@ -204,6 +206,18 @@ export function getMachineRepo(db: Db) {
 				.update(machines)
 				.set({ projectProfile: opts.projectProfile })
 				.where(and(eq(machines.id, opts.id), eq(machines.projectId, opts.projectId)))
+				.returning(publicColumns);
+
+			return row ? MachineSchema.parse(row) : null;
+		},
+
+		// Unscoped: reached from the agent's own socket or from a reply that already
+		// proved which machine it came from.
+		async saveEnvSets(opts: { id: string; envSets: EnvSetSummary[] }): Promise<Machine | null> {
+			const [row] = await db
+				.update(machines)
+				.set({ envSets: opts.envSets })
+				.where(eq(machines.id, opts.id))
 				.returning(publicColumns);
 
 			return row ? MachineSchema.parse(row) : null;

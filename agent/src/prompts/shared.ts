@@ -1,4 +1,5 @@
 import { type ProjectProfile } from '../project-profile';
+import { envFileFor } from '../services/project-env.service';
 import { type ReadTree } from '../services/repo.service';
 
 export interface RunContext {
@@ -13,6 +14,9 @@ export interface RunContext {
 	afk: boolean;
 	decisions: { fork: string; chose: string }[];
 	planAcs: { code: string; text: string }[];
+	// The `.env` files bosun wrote into this worktree, by key name. Never the values:
+	// a prompt ends up in a transcript, and the transcript leaves the machine.
+	providedEnv: { path: string; keys: string[] }[];
 }
 
 export function criteriaList(acs: { code: string; text: string }[]): string {
@@ -41,6 +45,32 @@ ${asking}
 - If something genuinely cannot be done here — no network route, a credential you lack, an infra
   change only a person can make — do not ask for it. Finish everything else and say what is blocked,
   what you tried, and what a human must do.`;
+}
+
+// Verify bullets used to arrive at a worktree with no database URL and build a
+// database of their own in /tmp. Naming the keys is what tells the session the
+// connection is already there and is the real one.
+function providedEnv(context: RunContext): string {
+	if (context.providedEnv.length === 0) {
+		return '';
+	}
+
+	const files = context.providedEnv
+		.map((set) => `- \`${envFileFor(set.path)}\`: ${set.keys.join(', ')}`)
+		.join('\n');
+
+	return `
+
+**The operator provided this project's real services.** Bosun wrote these into the worktree before
+this session started:
+
+${files}
+
+They are the real connections — the database and services this project runs against, not
+placeholders. Never override those keys, never point them anywhere else, and never start a local
+database, container, proxy or PGlite in their place. Never print or quote their values — not in a
+command's output you repeat, not in a brief, not in your report. If one of them is unreachable, that
+is a blocker: report it with the error it gave.`;
 }
 
 // The heart of the user's requirement: the session works out how this repository
@@ -75,7 +105,7 @@ Find, for each package or workspace you will touch:
 **Write the commands down; do not run them yet.** When and how they run is set out at the end of
 this step, and it is the same for every session bosun starts on this machine.
 
-${configured.length === 0 ? '_The operator configured nothing — everything above is yours to discover._' : `What the operator has already told bosun about this project:\n\n${configured.join('\n')}`}
+${configured.length === 0 ? '_The operator configured nothing — everything above is yours to discover._' : `What the operator has already told bosun about this project:\n\n${configured.join('\n')}`}${providedEnv(context)}
 
 **Ports are yours: ${context.portBase}–${context.portBase + 9}.** Other queues on this machine are
 running their own copies of this project at the same time, from their own worktrees. Any listener you
@@ -107,9 +137,11 @@ killed by the kernel halfway through its work.
   its own. Killed a second time, stop: report it as blocked with the command.
 - **Never start infrastructure nobody gave you.** This project's own dev stack is not that; a database,
   PGlite, a Docker container, a proxy or any other stand-in service of your own is, and so is anything
-  installed into \`/tmp\`. If the app needs a service that is not reachable, that is a blocker to report
-  with what you tried — a stand-in costs this machine memory it does not have and proves nothing about
-  the real one.`;
+  installed into \`/tmp\`. **A session never starts its own database, under any circumstances** — not
+  embedded, not in a container, not "just for the tests", not even when this project's own scripts
+  would start one. No database connection configured is a blocker to report, not something to build.
+  If the app needs a service that is not reachable, that is a blocker to report with what you tried —
+  a stand-in costs this machine memory it does not have and proves nothing about the real one.`;
 }
 
 export function decisionsSection(context: RunContext): string {

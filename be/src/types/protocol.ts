@@ -11,6 +11,22 @@ import {
 } from 'src/types/plan-stream';
 import { PlanPrepareMsgSchema } from 'src/types/plan-prepare';
 import { MachineMemorySchema } from 'src/types/machine-memory';
+import {
+	EnvDeleteMsgSchema,
+	EnvErrorMsgSchema,
+	EnvSavedMsgSchema,
+	EnvSetMsgSchema,
+	EnvSetSummarySchema
+} from 'src/types/env-sets';
+import {
+	QueueAnswerDoneMsgSchema,
+	QueueAnswerErrorMsgSchema,
+	QueueAnswerTextMsgSchema,
+	QueuePublishedMsgSchema,
+	QueuePublishErrorMsgSchema,
+	QueueWorktreeErrorMsgSchema,
+	QueueWorktreeReadyMsgSchema
+} from 'src/types/queue-frames';
 
 export { PlanPrepareMsgSchema, PreparePlanSchema, type PreparePlan } from 'src/types/plan-prepare';
 
@@ -47,7 +63,10 @@ export const HelloMsgSchema = z.object({
 	// How the agent process before this one ended, as systemd recorded it. `oom-kill`
 	// beside an uptime newer than a stranded bullet is the kernel having killed the
 	// agent for memory, not a restart anybody asked for.
-	previousExit: z.string().optional()
+	previousExit: z.string().optional(),
+	// Absent from agents older than env sets, and absent must leave the stored
+	// summary alone rather than read as a machine holding none.
+	envSets: z.array(EnvSetSummarySchema).optional()
 });
 
 export const PreflightMsgSchema = z.object({
@@ -93,52 +112,6 @@ export const ExecErrorMsgSchema = z.object({
 	message: z.string()
 });
 
-export const QueueAnswerTextMsgSchema = z.object({
-	type: z.literal('queue.answer.text'),
-	queueId: z.string(),
-	askId: z.string(),
-	delta: z.string()
-});
-
-export const QueueAnswerDoneMsgSchema = z.object({
-	type: z.literal('queue.answer.done'),
-	queueId: z.string(),
-	askId: z.string(),
-	content: z.string()
-});
-
-export const QueueAnswerErrorMsgSchema = z.object({
-	type: z.literal('queue.answer.error'),
-	queueId: z.string(),
-	askId: z.string(),
-	message: z.string()
-});
-
-export const QueuePublishedMsgSchema = z.object({
-	type: z.literal('queue.published'),
-	itemId: z.string(),
-	prUrl: z.string()
-});
-
-export const QueuePublishErrorMsgSchema = z.object({
-	type: z.literal('queue.publish.error'),
-	itemId: z.string(),
-	message: z.string()
-});
-
-export const QueueWorktreeReadyMsgSchema = z.object({
-	type: z.literal('queue.worktree.ready'),
-	queueId: z.string(),
-	worktreePath: z.string(),
-	baseRef: z.string()
-});
-
-export const QueueWorktreeErrorMsgSchema = z.object({
-	type: z.literal('queue.worktree.error'),
-	queueId: z.string(),
-	message: z.string()
-});
-
 // The agent's answer to an upgrade it was offered and did not take. Without it
 // the browser is told an upgrade started and then watches a banner expire, which
 // reads as a broken upgrade rather than a refused one — and the reason only ever
@@ -175,7 +148,9 @@ export const AgentMsgSchema = z.discriminatedUnion('type', [
 	QueuePublishErrorMsgSchema,
 	QueueAnswerTextMsgSchema,
 	QueueAnswerDoneMsgSchema,
-	QueueAnswerErrorMsgSchema
+	QueueAnswerErrorMsgSchema,
+	EnvSavedMsgSchema,
+	EnvErrorMsgSchema
 ]);
 
 export type AgentMsg = z.infer<typeof AgentMsgSchema>;
@@ -389,7 +364,9 @@ export const ServerMsgSchema = z.discriminatedUnion('type', [
 	ExecAnswerMsgSchema,
 	QueuePublishMsgSchema,
 	QueueSummarizeMsgSchema,
-	QueueAskMsgSchema
+	QueueAskMsgSchema,
+	EnvSetMsgSchema,
+	EnvDeleteMsgSchema
 ]);
 
 export type ServerMsg = z.infer<typeof ServerMsgSchema>;

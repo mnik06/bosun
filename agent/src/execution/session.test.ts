@@ -41,12 +41,20 @@ const START = {
 
 function services(
 	startBranch: () => Promise<{ ok: boolean; detail: string }>,
-	scope: { unit: string; memoryMaxBytes: number } | null = null
+	scope: { unit: string; memoryMaxBytes: number } | null = null,
+	applyTo: () => { written: string[]; skipped: string[] } = () => ({ written: [], skipped: [] })
 ) {
 	return {
 		commit: { startBranch, cleanTree: vi.fn() },
 		mcpConfig: { read: vi.fn().mockReturnValue({ servers: {}, serverNames: [], error: null }) },
-		memory: { sessionScope: vi.fn().mockReturnValue(scope) }
+		memory: { sessionScope: vi.fn().mockReturnValue(scope) },
+		projectEnv: {
+			applyTo: vi.fn(applyTo),
+			summary: vi.fn().mockReturnValue([
+				{ path: 'be', keys: ['DATABASE_URL'], updatedAt: '2026-09-14T00:00:00.000Z' },
+				{ path: 'fe', keys: ['NUXT_PUBLIC_API_URL'], updatedAt: '2026-09-14T00:00:00.000Z' }
+			])
+		}
 	} as unknown as Services;
 }
 
@@ -128,6 +136,45 @@ describe('createExecutionSessions', () => {
 			memoryMaxBytes: 3 * GIB
 		});
 		expect(spawnClaudeSession).toHaveBeenCalledWith(expect.objectContaining({ scope }));
+	});
+
+	// A bullet without its connection is how sessions ended up building a database
+	// in /tmp, so a file that cannot be written stops the bullet before one exists.
+	it('fails the bullet before starting anything when the env files cannot be written', async () => {
+		const send = vi.fn();
+		const deps = services(async () => ({ ok: true, detail: 'branched' }), null, () => {
+			throw new Error('could not write be/.env: EACCES');
+		});
+
+		await createExecutionSessions({ services: deps, send }).start(START);
+
+		const { startSessionMcpServer } = await import('../sessions/mcp-server');
+		const { spawnClaudeSession } = await import('../sessions/process');
+
+		expect(startSessionMcpServer).not.toHaveBeenCalled();
+		expect(spawnClaudeSession).not.toHaveBeenCalled();
+		expect(send).toHaveBeenCalledWith({
+			type: 'exec.error',
+			runId: 'sr_1',
+			message: 'could not write the provided env files: could not write be/.env: EACCES'
+		});
+	});
+
+	// Naming a file that was skipped sends the session after a connection that is
+	// not in the worktree, and it reports a blocker nobody can find.
+	it('names only the env files actually written, by key', async () => {
+		const deps = services(async () => ({ ok: true, detail: 'branched' }), null, () => ({
+			written: ['be/.env'],
+			skipped: ['fe/.env']
+		}));
+
+		await createExecutionSessions({ services: deps, send: vi.fn() }).start(START);
+
+		const { spawnClaudeSession } = await import('../sessions/process');
+		const prompt = vi.mocked(spawnClaudeSession).mock.calls[0]![0].prompt;
+
+		expect(prompt).toContain('`be/.env`: DATABASE_URL');
+		expect(prompt).not.toContain('fe/.env');
 	});
 });
 

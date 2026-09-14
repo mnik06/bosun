@@ -166,7 +166,8 @@ export async function applyMachineFrame(opts: {
 				machineRepo,
 				id: opts.machineId,
 				agentVersion: opts.msg.agentVersion,
-				repoPath: opts.msg.repoPath
+				repoPath: opts.msg.repoPath,
+				envSets: opts.msg.envSets
 			})
 			: await saveMachinePreflight({
 				machineRepo,

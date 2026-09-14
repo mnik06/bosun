@@ -86,7 +86,11 @@ function createAnnouncer(deps: ConnectionDeps & { socket: WebSocket }) {
 				// stranded by the kernel killing the agent reads as out of memory rather
 				// than as a restart nobody can explain.
 				memory: deps.services.memory.report(),
-				previousExit: deps.services.memory.previousExit() ?? undefined
+				previousExit: deps.services.memory.previousExit() ?? undefined,
+				// Key names per path, so the browser can show what this machine holds
+				// without a value ever leaving it. Read from disk like everything above:
+				// a store restored or emptied by hand is otherwise invisible.
+				envSets: deps.services.projectEnv.summary()
 			})
 		);
 

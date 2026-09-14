@@ -10,6 +10,7 @@ import {
 	unique,
 	uuid
 } from 'drizzle-orm/pg-core';
+import { type EnvSetSummary } from 'src/types/env-sets';
 import { type MachineStatus, type PreflightCheck } from 'src/types/MachineSchema';
 import { type ProjectProfile } from 'src/types/ProjectProfileSchema';
 import { type ProjectRole } from 'src/types/ProjectSchema';
@@ -85,6 +86,8 @@ export const machines = pgTable(
 		agentVersion: text(),
 		capabilities: jsonb().$type<PreflightCheck[]>(),
 		projectProfile: jsonb().$type<ProjectProfile>(),
+		// Key names only. The values stay on the machine and are never written here.
+		envSets: jsonb().$type<EnvSetSummary[]>(),
 		createdAt: timestamp({ withTimezone: true }).notNull().defaultNow()
 	},
 	(table) => [index('machines_project_id_idx').on(table.projectId)]

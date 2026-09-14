@@ -66,6 +66,12 @@ underneath us — a repo goes dirty, a token expires, someone installs pnpm. Re-
 connect means the reconnect path and the first-connect path are the same code, and the checklist in
 the browser always describes the current machine rather than the machine as it was at enrollment.
 
+`hello.envSets` is the same idea for the operator's project env: paths and key names read from
+`~/.bosun/project-env.json` on every announce, never a value. The `env.set` and `env.delete` frames
+that change it are per-connection request/replies — `env.saved` or `env.error` goes straight back on
+the socket that asked, like `pong`, and never through the sink, because a reply replayed on the next
+connection answers a request nobody is waiting on any more. See `../services/project-env.service.md`.
+
 ## Why execution and planning sessions outlive the connection
 
 Ask sessions are per-connection and are cancelled on close: one is a single question answered over

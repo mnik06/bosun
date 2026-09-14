@@ -11,6 +11,7 @@ import {
 } from '~/entities/machine'
 import { queueRefreshBlock, useMachineQueuesQuery } from '~/entities/queue'
 import { AddMcpServerButton } from '~/features/add-mcp-server'
+import { EnvSetsPanel } from '~/features/edit-env-sets'
 import { ProjectProfileButton } from '~/features/edit-project-profile'
 import { PausedBanner } from '~/features/pause-machine'
 import { RefreshMachineButton, useRefreshMachine } from '~/features/refresh-machine'
@@ -166,7 +167,9 @@ export function MachineDetail ({ machineId }: { machineId: string }) {
 				title="Project setup"
 				description="What a session cannot work out by reading the repository — migrations, the commands to run it, where the test credentials live."
 				action={<ProjectProfileButton machine={data} />}
-			/>
+			>
+				<EnvSetsPanel machine={data} />
+			</SetupCard>
 
 			<QueuesPanel machineId={data.id} />
 		</Stack>

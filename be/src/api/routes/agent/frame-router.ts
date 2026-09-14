@@ -15,6 +15,7 @@ type WorktreeFrame = Extract<AgentMsg, { type: `queue.worktree.${string}` }>;
 type ExecFrame = Extract<AgentMsg, { type: `exec.${string}` }>;
 type PublishFrame = Extract<AgentMsg, { type: 'queue.published' | 'queue.publish.error' }>;
 type AnswerFrame = Extract<AgentMsg, { type: `queue.answer.${string}` }>;
+type EnvReplyFrame = Extract<AgentMsg, { type: 'env.saved' | 'env.error' }>;
 
 export function isPlanFrame(msg: AgentMsg): msg is PlanFrame {
 	return msg.type.startsWith('plan.');
@@ -34,6 +35,25 @@ function isAnswerFrame(msg: AgentMsg): msg is AnswerFrame {
 
 function isPublishFrame(msg: AgentMsg): msg is PublishFrame {
 	return msg.type === 'queue.published' || msg.type === 'queue.publish.error';
+}
+
+function isEnvReplyFrame(msg: AgentMsg): msg is EnvReplyFrame {
+	return msg.type === 'env.saved' || msg.type === 'env.error';
+}
+
+function settleEnvReply(opts: {
+	fastify: FastifyInstance;
+	machineId: string;
+	msg: EnvReplyFrame;
+}): void {
+	opts.fastify.services.pendingEnvRequests.settle({
+		requestId: opts.msg.requestId,
+		machineId: opts.machineId,
+		result:
+			opts.msg.type === 'env.saved'
+				? { ok: true, envSets: opts.msg.envSets }
+				: { ok: false, message: opts.msg.message }
+	});
 }
 
 // The refusal used to reach the machine's own log and stop there, so an operator
@@ -95,6 +115,12 @@ export async function handleAgentFrame(opts: {
 
 	if (msg.type === 'upgrade.declined') {
 		relayDecline({ ...opts, msg });
+
+		return;
+	}
+
+	if (isEnvReplyFrame(msg)) {
+		settleEnvReply({ fastify: opts.fastify, machineId: opts.machineId, msg });
 
 		return;
 	}

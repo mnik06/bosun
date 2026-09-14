@@ -1,4 +1,5 @@
 import { type MachineRepo } from 'src/repos/machines/machine.repo';
+import { type EnvSetSummary } from 'src/types/env-sets';
 import { type Machine } from 'src/types/MachineSchema';
 
 export async function markMachineOnline(opts: {
@@ -6,11 +7,21 @@ export async function markMachineOnline(opts: {
 	id: string;
 	agentVersion: string;
 	repoPath: string;
+	envSets?: EnvSetSummary[];
 }): Promise<Machine | null> {
-	return opts.machineRepo.markOnline({
+	const machine = await opts.machineRepo.markOnline({
 		id: opts.id,
 		agentVersion: opts.agentVersion,
 		repoPath: opts.repoPath,
 		now: new Date()
 	});
+
+	// Absent is an agent older than env sets, which cannot say what the machine
+	// holds. Treating it as an empty list would erase the summary a newer agent
+	// reported, while the values it describes are still on disk.
+	if (!machine || !opts.envSets) {
+		return machine;
+	}
+
+	return opts.machineRepo.saveEnvSets({ id: machine.id, envSets: opts.envSets });
 }

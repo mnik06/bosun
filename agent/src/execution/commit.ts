@@ -10,9 +10,10 @@ export interface CommitResult {
 
 // A verify slice normally changes nothing, and a build slice can legitimately
 // end with the work already present. Neither is a failure, so "nothing to
-// commit" returns a null sha rather than an error.
+// commit" returns a null sha rather than an error. "Nothing added to commit" is
+// git's wording when all that is left is untracked — an env file kept out of it.
 export function isNothingToCommit(output: string): boolean {
-	return /nothing to commit|no changes added to commit/i.test(output);
+	return /nothing (?:added )?to commit|no changes added to commit/i.test(output);
 }
 
 export function commitMessageFor(opts: {
@@ -199,11 +200,31 @@ export function getCommitService(deps: { exec: ExecService }) {
 				: synced;
 		},
 
-		async commitAll(opts: { worktreePath: string; message: string }): Promise<CommitResult> {
+		// `keepOut` is what bosun itself wrote into the worktree: the operator's `.env`
+		// files. Unstaged after `add -A` rather than trusted to `.gitignore`, because a
+		// repository that does not ignore `.env` would otherwise commit the values and
+		// push them with the pull request. The files stay in the tree, uncommitted.
+		async commitAll(opts: {
+			worktreePath: string;
+			message: string;
+			keepOut?: string[];
+		}): Promise<CommitResult> {
 			const added = await git(opts.worktreePath, ['add', '-A']);
 
 			if (!added.ok) {
 				return { ok: false, commitSha: null, detail: added.reason };
+			}
+
+			if (opts.keepOut !== undefined && opts.keepOut.length > 0) {
+				const unstaged = await git(opts.worktreePath, ['reset', '-q', '--', ...opts.keepOut]);
+
+				if (!unstaged.ok) {
+					return {
+						ok: false,
+						commitSha: null,
+						detail: `could not keep the provided env files out of the commit: ${unstaged.reason}`
+					};
+				}
 			}
 
 			const committed = await git(opts.worktreePath, ['commit', '-m', opts.message]);

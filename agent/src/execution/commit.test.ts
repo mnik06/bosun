@@ -21,6 +21,7 @@ describe('isNothingToCommit', () => {
 	it.each([
 		['nothing to commit, working tree clean', true],
 		['no changes added to commit', true],
+		['nothing added to commit but untracked files present', true],
 		['error: pathspec did not match', false]
 	])('%j -> %s', (output, expected) => {
 		expect(isNothingToCommit(output)).toBe(expected);
@@ -114,6 +115,54 @@ describe('cleanTree', () => {
 
 		expect(cleaned.ok).toBe(false);
 		expect(cleaned.detail).toContain('no-such');
+	});
+});
+
+describe('commitAll', () => {
+	let worktree: string;
+
+	beforeEach(async () => {
+		worktree = fs.mkdtempSync(path.join(os.tmpdir(), 'bosun-commit-'));
+		await git(worktree, ['init', '-b', 'main']);
+		await git(worktree, ['config', 'user.email', 'a@b.c']);
+		await git(worktree, ['config', 'user.name', 'Test']);
+		fs.writeFileSync(path.join(worktree, 'kept.txt'), 'committed\n');
+		fs.mkdirSync(path.join(worktree, 'be'));
+		await git(worktree, ['add', '-A']);
+		await git(worktree, ['commit', '-m', 'first']);
+		fs.writeFileSync(path.join(worktree, 'be', '.env'), 'DATABASE_URL=postgres://hunter2\n');
+	});
+
+	afterEach(() => {
+		fs.rmSync(worktree, { recursive: true, force: true });
+	});
+
+	// A repository that does not ignore `.env` would otherwise put the operator's
+	// connection string into the plan branch and push it with the pull request.
+	it('keeps the env files bosun wrote out of the commit, and in the tree', async () => {
+		fs.writeFileSync(path.join(worktree, 'feature.txt'), 'work\n');
+
+		const committed = await getCommitService({ exec }).commitAll({
+			worktreePath: worktree,
+			message: 'bullet',
+			keepOut: ['be/.env']
+		});
+
+		expect(committed.ok).toBe(true);
+		expect((await git(worktree, ['show', '--name-only', '--format=', 'HEAD'])).trim()).toBe('feature.txt');
+		expect(fs.existsSync(path.join(worktree, 'be', '.env'))).toBe(true);
+	});
+
+	// A verify bullet usually changes nothing, and the env file left untracked must
+	// not turn that into a failed commit.
+	it('reports nothing to commit when the env file is all that changed', async () => {
+		const committed = await getCommitService({ exec }).commitAll({
+			worktreePath: worktree,
+			message: 'bullet',
+			keepOut: ['be/.env']
+		});
+
+		expect(committed).toEqual({ ok: true, commitSha: null, detail: 'nothing to commit' });
 	});
 });
 

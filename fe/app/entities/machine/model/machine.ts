@@ -32,6 +32,14 @@ export const PreflightCheckSchema = z.object({
 
 export type PreflightCheck = z.infer<typeof PreflightCheckSchema>
 
+export const EnvSetSummarySchema = z.object({
+	path: z.string(),
+	keys: z.array(z.string()),
+	updatedAt: z.iso.datetime()
+})
+
+export type EnvSetSummary = z.infer<typeof EnvSetSummarySchema>
+
 export const MachineSchema = z.object({
 	id: z.string(),
 	name: z.string(),
@@ -41,6 +49,9 @@ export const MachineSchema = z.object({
 	agentVersion: z.string().nullable(),
 	projectProfile: ProjectProfileSchema.nullable(),
 	capabilities: z.array(PreflightCheckSchema).nullable(),
+	// Nullish, not nullable: a backend that predates env sets omits the field,
+	// and failing the whole machine parse over it would blank the page.
+	envSets: z.array(EnvSetSummarySchema).nullish(),
 	createdAt: z.iso.datetime()
 })
 

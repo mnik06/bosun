@@ -3,8 +3,9 @@ import { type AskSessions } from '../ask/session';
 import { type ExecutionSessions } from '../execution/session';
 import { type PlanningSessions } from '../planning/session';
 import { type SummarySessions } from '../summary/session';
-import { ServerMsgSchema, type ServerMsg } from '../protocol';
+import { ServerMsgSchema, type AgentMsg, type ServerMsg } from '../protocol';
 import { type Services } from '../services/index';
+import { describeApplied } from '../services/project-env.service';
 
 export interface AgentState {
 	paused: boolean;
@@ -80,6 +81,35 @@ export async function routeServerFrame(deps: RouterDeps, msg: ServerMsg): Promis
 			console.log('resumed by bosun');
 
 			return;
+
+		// Answered straight back on this socket, like `pong`: it is a reply to a
+		// request somebody is waiting on. Accepted while paused — storing a set is not
+		// work — and nothing is written into a worktree here; every bullet does that.
+		case 'env.set':
+		case 'env.delete': {
+			let reply: AgentMsg;
+
+			try {
+				const envSets =
+					msg.type === 'env.set'
+						? deps.services.projectEnv.set({ path: msg.path, vars: msg.vars })
+						: deps.services.projectEnv.delete(msg.path);
+				const change =
+					msg.type === 'env.set' ? `saved ${msg.vars.map((entry) => entry.key).join(', ')}` : 'removed';
+
+				console.log(`env ${msg.path}: ${change}`);
+				reply = { type: 'env.saved', requestId: msg.requestId, envSets };
+			} catch (error) {
+				const message = error instanceof Error ? error.message : 'could not change the env set';
+
+				console.error(`env ${msg.path}: ${message}`);
+				reply = { type: 'env.error', requestId: msg.requestId, message };
+			}
+
+			deps.socket.send(JSON.stringify(reply));
+
+			return;
+		}
 
 		case 'plan.start':
 			if (deps.state.paused) {
@@ -207,6 +237,23 @@ export async function routeServerFrame(deps: RouterDeps, msg: ServerMsg): Promis
 
 		case 'queue.worktree.ensure': {
 			const result = await deps.services.worktree.ensure({ slug: msg.slug });
+
+			// Before the setup command, so a setup that migrates or generates a client
+			// runs against the real service. Logged rather than fatal: every bullet
+			// writes the files again and fails there, with the reason, where it is seen.
+			if (result.ok) {
+				try {
+					const applied = describeApplied(deps.services.projectEnv.applyTo(result.worktreePath));
+
+					if (applied !== null) {
+						console.log(`worktree ${msg.slug}: ${applied}`);
+					}
+				} catch (error) {
+					console.error(
+						`worktree ${msg.slug}: ${error instanceof Error ? error.message : 'could not write the provided env files'}`
+					);
+				}
+			}
 
 			if (result.ok && msg.setupCommand) {
 				const setup = await deps.services.worktree.setup({

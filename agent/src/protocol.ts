@@ -23,6 +23,27 @@ export const MachineMemorySchema = z.object({
 
 export type MachineMemory = z.infer<typeof MachineMemorySchema>;
 
+// Everything about an env set except its values, which never leave the machine.
+export const EnvSetSummarySchema = z.object({
+	path: z.string(),
+	keys: z.array(z.string()),
+	updatedAt: z.string()
+});
+
+export type EnvSetSummary = z.infer<typeof EnvSetSummarySchema>;
+
+export const EnvVarInputSchema = z.object({
+	key: z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/),
+	// Null keeps the stored value: the browser never holds one to send back.
+	value: z
+		.string()
+		.max(10_000)
+		.refine((value) => !/[\r\n]/.test(value), 'must be a single line')
+		.nullable()
+});
+
+export type EnvVarInput = z.infer<typeof EnvVarInputSchema>;
+
 export const HelloMsgSchema = z.object({
 	type: z.literal('hello'),
 	agentVersion: z.string(),
@@ -47,7 +68,10 @@ export const HelloMsgSchema = z.object({
 	// How the previous agent process ended, as systemd recorded it — `oom-kill`
 	// when the kernel killed it for memory. Only meaningful beside an uptime that
 	// says this process is newer than the bullet it failed to hold.
-	previousExit: z.string().optional()
+	previousExit: z.string().optional(),
+	// The project env this machine holds, by path and key name. Optional for agents
+	// older than env sets; the values are never on any frame.
+	envSets: z.array(EnvSetSummarySchema).optional()
 });
 
 export const PreflightMsgSchema = z.object({
@@ -203,6 +227,20 @@ export const UpgradeDeclinedMsgSchema = z.object({
 	queued: z.boolean().default(false)
 });
 
+// The whole summary after the change, so the browser never has to merge one.
+export const EnvSavedMsgSchema = z.object({
+	type: z.literal('env.saved'),
+	requestId: z.string(),
+	envSets: z.array(EnvSetSummarySchema)
+});
+
+export const EnvErrorMsgSchema = z.object({
+	type: z.literal('env.error'),
+	requestId: z.string(),
+	// Paths and key names only — never a value.
+	message: z.string()
+});
+
 export const AgentMsgSchema = z.discriminatedUnion('type', [
 	HelloMsgSchema,
 	PreflightMsgSchema,
@@ -224,7 +262,9 @@ export const AgentMsgSchema = z.discriminatedUnion('type', [
 	QueuePublishErrorMsgSchema,
 	QueueAnswerTextMsgSchema,
 	QueueAnswerDoneMsgSchema,
-	QueueAnswerErrorMsgSchema
+	QueueAnswerErrorMsgSchema,
+	EnvSavedMsgSchema,
+	EnvErrorMsgSchema
 ]);
 
 export type AgentMsg = z.infer<typeof AgentMsgSchema>;
@@ -456,6 +496,23 @@ export const QueueWorktreeRemoveMsgSchema = z.object({
 	slug: z.string()
 });
 
+// Both are answered on the socket that asked, never through the sink: somebody
+// in the browser is waiting on this request, and a reply replayed on another
+// connection answers nobody. `vars` replaces the stored set for the path whole.
+export const EnvSetMsgSchema = z.object({
+	type: z.literal('env.set'),
+	requestId: z.string(),
+	path: z.string(),
+	vars: z.array(EnvVarInputSchema).min(1)
+});
+
+// The stored set only. `.env` files already written into worktrees stay.
+export const EnvDeleteMsgSchema = z.object({
+	type: z.literal('env.delete'),
+	requestId: z.string(),
+	path: z.string()
+});
+
 export const ServerMsgSchema = z.discriminatedUnion('type', [
 	PingMsgSchema,
 	RefreshMsgSchema,
@@ -475,7 +532,9 @@ export const ServerMsgSchema = z.discriminatedUnion('type', [
 	ExecAnswerMsgSchema,
 	QueuePublishMsgSchema,
 	QueueSummarizeMsgSchema,
-	QueueAskMsgSchema
+	QueueAskMsgSchema,
+	EnvSetMsgSchema,
+	EnvDeleteMsgSchema
 ]);
 
 export type ServerMsg = z.infer<typeof ServerMsgSchema>;

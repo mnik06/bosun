@@ -7,6 +7,8 @@ export {
 } from './api/machine.queries'
 export {
 	DEFAULT_PROJECT_PROFILE,
+	EnvSetSummarySchema,
+	type EnvSetSummary,
 	MachineListSchema,
 	MachineSchema,
 	MachineStatusSchema,

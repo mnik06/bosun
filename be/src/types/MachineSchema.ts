@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { EnvSetSummarySchema } from 'src/types/env-sets';
 import { ProjectProfileSchema } from 'src/types/ProjectProfileSchema';
 
 export const MachineStatusSchema = z.enum(['pending', 'online', 'offline', 'paused']);
@@ -23,6 +24,7 @@ export const MachineSchema = z.object({
 	agentVersion: z.string().nullable(),
 	projectProfile: ProjectProfileSchema.nullable(),
 	capabilities: z.array(PreflightCheckSchema).nullable(),
+	envSets: z.array(EnvSetSummarySchema).nullable(),
 	createdAt: z.date()
 });
 

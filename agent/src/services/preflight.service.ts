@@ -5,6 +5,7 @@ import { type ClaudeAuthService } from './claude-auth.service';
 import { type ExecService } from './exec.service';
 import { type McpConfigService } from './mcp-config.service';
 import { formatGib, type MemoryService } from './memory.service';
+import { describeEnvSets, type ProjectEnvService } from './project-env.service';
 import { type PreflightCheck } from '../protocol';
 
 const MIN_CLAUDE_MAJOR = 2;
@@ -64,6 +65,7 @@ export function getPreflightService(deps: {
 	claudeAuth: ClaudeAuthService;
 	mcpConfig: McpConfigService;
 	memory: MemoryService;
+	projectEnv: ProjectEnvService;
 	repoPath: string;
 }) {
 	// One check, two probes. A missing binary and a missing login are different
@@ -279,11 +281,17 @@ export function getPreflightService(deps: {
 			};
 	}
 
+	// Never red: plenty of projects need no connection at all. It is here so that an
+	// operator can see before a verify bullet runs that it will have no database.
+	function checkEnv(): PreflightCheck {
+		return { name: 'env', ok: true, detail: describeEnvSets(deps.projectEnv.summary()) };
+	}
+
 	return {
 		async collect(): Promise<PreflightCheck[]> {
 			const [claude, git, gh] = await Promise.all([checkClaude(), checkGit(), checkGh()]);
 
-			return [claude, git, gh, checkCustomMcp(), checkBrowser(), checkMemory()];
+			return [claude, git, gh, checkCustomMcp(), checkBrowser(), checkMemory(), checkEnv()];
 		}
 	};
 }

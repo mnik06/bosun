@@ -5,6 +5,7 @@ import { verifyPrompt } from '../prompts/verify';
 import { type AgentMsg, type ExecStart, type PlanAnswer } from '../protocol';
 import { type Services } from '../services/index';
 import { formatGib } from '../services/memory.service';
+import { describeApplied, envFileFor } from '../services/project-env.service';
 import { startSessionMcpServer, type SessionMcpServer } from '../sessions/mcp-server';
 import { spawnClaudeSession, type ClaudeSession, type SessionExit } from '../sessions/process';
 import { commitMessageFor } from './commit';
@@ -22,7 +23,7 @@ const EXECUTION_BUILTIN_TOOLS = ['Read', 'Grep', 'Glob', 'Task', 'Skill', 'Edit'
 // and it drives a browser through whatever MCP servers the machine has.
 const VERIFY_BUILTIN_TOOLS = [...EXECUTION_BUILTIN_TOOLS, 'ToolSearch'];
 
-function promptFor(msg: ExecStart): string {
+function promptFor(msg: ExecStart, providedEnv: { path: string; keys: string[] }[]): string {
 	const shared = {
 		planNumber: msg.planNumber,
 		planTitle: msg.planTitle,
@@ -38,7 +39,8 @@ function promptFor(msg: ExecStart): string {
 		sliceOrdinal: msg.slice.ordinal,
 		sliceTitle: msg.slice.title,
 		sliceBodyMd: msg.slice.bodyMd,
-		doneSlices: msg.doneSlices
+		doneSlices: msg.doneSlices,
+		providedEnv
 	};
 
 	return msg.slice.kind === 'verify'
@@ -82,6 +84,8 @@ interface Run {
 	cancelled: boolean;
 	settled: boolean;
 	report: string;
+	// The `.env` files written before the session started, kept out of the commit.
+	envFiles: string[];
 }
 
 export interface ExecutionSessions {
@@ -137,6 +141,7 @@ export function createExecutionSessions(opts: {
 
 		const committed = await opts.services.commit.commitAll({
 			worktreePath: msg.worktreePath,
+			keepOut: run.envFiles,
 			message: commitMessageFor({
 				planTitle: msg.planTitle,
 				sliceOrdinal: msg.slice.ordinal,
@@ -191,6 +196,34 @@ export function createExecutionSessions(opts: {
 		if (run.cancelled) {
 			return;
 		}
+
+		// After the branch step, whose `git clean -fd` takes an untracked `.env` with
+		// it, and before anything reads the worktree. A bullet that starts without its
+		// connection is a bullet that builds a database of its own in /tmp.
+		let applied: { written: string[]; skipped: string[] };
+
+		try {
+			applied = opts.services.projectEnv.applyTo(msg.worktreePath);
+		} catch (error) {
+			throw new Error(
+				`could not write the provided env files: ${error instanceof Error ? error.message : 'unknown error'}`
+			);
+		}
+
+		const envLine = describeApplied(applied);
+
+		if (envLine !== null) {
+			console.log(`[${msg.runId}] ${envLine}`);
+		}
+
+		run.envFiles = applied.written;
+
+		// Only what was written. A set skipped for a directory this branch lacks,
+		// named in the prompt, sends the session after a connection that is not there.
+		const providedEnv = opts.services.projectEnv
+			.summary()
+			.filter((set) => applied.written.includes(envFileFor(set.path)))
+			.map((set) => ({ path: set.path, keys: set.keys }));
 
 		const userMcp = opts.services.mcpConfig.read();
 
@@ -258,7 +291,7 @@ export function createExecutionSessions(opts: {
 
 		run.process = spawnClaudeSession({
 			cwd: msg.worktreePath,
-			prompt: promptFor(msg),
+			prompt: promptFor(msg, providedEnv),
 			mcpConfigPath: mcp.configPath,
 			userServerNames: userMcp.serverNames,
 			tools: {
@@ -320,7 +353,8 @@ export function createExecutionSessions(opts: {
 				process: null,
 				cancelled: false,
 				settled: false,
-				report: ''
+				report: '',
+				envFiles: []
 			};
 
 			runs.set(msg.runId, run);
