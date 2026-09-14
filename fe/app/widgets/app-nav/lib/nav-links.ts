@@ -1,4 +1,4 @@
-import { Layers, ListTodo, Server, Users, type LucideIcon } from 'lucide-react'
+import { GitBranch, Layers, ListTodo, Server, Users, type LucideIcon } from 'lucide-react'
 
 interface NavLinkSpec {
 	to: string
@@ -12,6 +12,13 @@ interface NavLinkSpec {
 // matching on the href would drop the highlight the moment you open a machine.
 export const NAV_LINKS: NavLinkSpec[] = [
 	{ to: '/', label: 'Machines', icon: Server, prefixes: ['/machines'], leaderOnly: true },
+	{
+		to: '/repositories',
+		label: 'Repositories',
+		icon: GitBranch,
+		prefixes: ['/repositories', '/github'],
+		leaderOnly: true
+	},
 	{ to: '/plans', label: 'Plans', icon: ListTodo, prefixes: ['/plans'], leaderOnly: false },
 	{ to: '/queues', label: 'Queues', icon: Layers, prefixes: ['/queues'], leaderOnly: false },
 	{ to: '/members', label: 'Members', icon: Users, prefixes: ['/members'], leaderOnly: true }

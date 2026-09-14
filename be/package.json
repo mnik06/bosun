@@ -2,7 +2,7 @@
   "name": "bosun-be",
   "version": "1.0.0",
   "private": true,
-  "description": "Bosun backend \u2014 Fastify REST API that drives AI coding agents on a remote VPS",
+  "description": "Bosun backend — Fastify REST API that drives AI coding agents on a remote VPS",
   "main": "index.js",
   "scripts": {
     "local": "nodemon -r tsconfig-paths/register src/api/api.ts",
@@ -39,6 +39,7 @@
     "nanoid": "^3.3.18",
     "postgres": "^3.4.9",
     "tsconfig-paths": "^4.2.0",
+    "yaml": "^2.9.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {

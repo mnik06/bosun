@@ -20,8 +20,9 @@ const routes: FastifyPluginAsync = async function (f) {
 				machineRepo: fastify.repos.machineRepo,
 				keyService: fastify.services.keyService,
 				token: req.body.token,
-				repoPath: req.body.repoPath,
-				serverUrl: fastify.env.PUBLIC_SERVER_URL
+				repoPath: req.body.repoPath ?? null,
+				serverUrl: fastify.env.PUBLIC_SERVER_URL,
+				appUrl: fastify.env.PUBLIC_APP_URL
 			});
 		}
 	);

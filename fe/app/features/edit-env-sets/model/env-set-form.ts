@@ -1,5 +1,7 @@
 import { z } from 'zod'
 
+import type { PlainVar } from '~/entities/machine'
+
 const ENV_KEY = /^[A-Za-z_][A-Za-z0-9_]*$/
 const SINGLE_LINE = /^[^\r\n]*$/
 
@@ -35,7 +37,8 @@ export const EnvSetFormSchema = z
 
 export type EnvSetForm = z.infer<typeof EnvSetFormSchema>
 
+// Plaintext, and never sent as it is: the save seals every value first.
 export interface EnvSetPayload {
 	path: string
-	vars: { key: string, value: string | null }[]
+	vars: PlainVar[]
 }

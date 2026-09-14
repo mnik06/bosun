@@ -1,6 +1,8 @@
 import { type EnvSetSummary } from 'src/types/env-sets';
 
-export type EnvReply = { ok: true; envSets: EnvSetSummary[] } | { ok: false; message: string };
+export type EnvReply =
+	| { ok: true; envSets: EnvSetSummary[]; sessionSecrets?: string[] }
+	| { ok: false; message: string };
 
 type Pending = {
 	machineId: string;

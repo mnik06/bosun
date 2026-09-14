@@ -1,3 +1,4 @@
+import { notifications } from '@mantine/notifications'
 import { useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 
@@ -5,6 +6,7 @@ import { machineKeys } from '~/entities/machine/api/machine.queries'
 import type { Machine } from '~/entities/machine/model/machine'
 import { UiMsgSchema, type UiMsg } from '~/entities/machine/model/ui-message'
 import { queueKeys, type Queue, type QueueDetail } from '~/entities/queue'
+import { repositoryKeys, type Repository } from '~/entities/repository'
 import { subscribeToUiSocket } from '~/shared/api'
 
 export interface PongResult {
@@ -65,11 +67,28 @@ function dropMachine (queryClient: QueryClient, machineId: string): void {
 	)
 }
 
+// The onboarding report derives what is still missing from what the machine
+// holds, so a machine that changed is a report that may have too.
 function patchMachine (queryClient: QueryClient, machine: Machine): void {
 	queryClient.setQueryData(machineKeys.detail(machine.id), machine)
 	queryClient.setQueryData<Machine[]>(machineKeys.list(), (previous) =>
 		previous?.map((entry) => (entry.id === machine.id ? machine : entry))
 	)
+	refetch(queryClient, repositoryKeys.machineOnboarding(machine.id))
+}
+
+function patchRepository (queryClient: QueryClient, repository: Repository): void {
+	queryClient.setQueryData<Repository[]>(repositoryKeys.list(), (previous) =>
+		previous?.some((entry) => entry.id === repository.id)
+			? previous.map((entry) => (entry.id === repository.id ? repository : entry))
+			: previous && [...previous, repository]
+	)
+}
+
+function refetch (queryClient: QueryClient, queryKey: readonly unknown[]): void {
+	queryClient.invalidateQueries({ queryKey }).catch(() => {
+		// A refetch that fails leaves the panel as it was; the next one recovers.
+	})
 }
 
 function without <T> (previous: Record<string, T>, machineId: string): Record<string, T> {
@@ -107,6 +126,34 @@ function dropQueue (queryClient: QueryClient, queueId: string): void {
 	)
 }
 
+type RepositoryMsg = Extract<UiMsg, { type: 'repository.updated' | 'onboarding.updated' | 'machine.repository.error' }>
+
+const REPOSITORY_MSG_TYPES = new Set<UiMsg['type']>(['repository.updated', 'onboarding.updated', 'machine.repository.error'])
+
+function isRepositoryMsg (msg: UiMsg): msg is RepositoryMsg {
+	return REPOSITORY_MSG_TYPES.has(msg.type)
+}
+
+// Repository and onboarding frames change caches only, so they are handled apart
+// from the machine frames that also drive this provider's own state.
+function handleRepositoryMsg (queryClient: QueryClient, msg: RepositoryMsg): void {
+	switch (msg.type) {
+		case 'repository.updated':
+			patchRepository(queryClient, msg.repository)
+
+			return
+		case 'onboarding.updated':
+			refetch(queryClient, repositoryKeys.onboarding())
+
+			return
+		case 'machine.repository.error':
+			// The attach was a 202 long before the clone failed, so this is the only
+			// place the reason can reach whoever pressed the button.
+			notifications.show({ color: 'red', title: 'Could not attach the repository', message: msg.message })
+			refetch(queryClient, machineKeys.detail(msg.machineId))
+	}
+}
+
 export function MachinesSocketProvider ({ children }: { children: ReactNode }) {
 	const queryClient = useQueryClient()
 	const [pongs, setPongs] = useState<Record<string, PongResult>>({})
@@ -134,6 +181,12 @@ export function MachinesSocketProvider ({ children }: { children: ReactNode }) {
 		}
 
 		const handle = (msg: UiMsg) => {
+			if (isRepositoryMsg(msg)) {
+				handleRepositoryMsg(queryClient, msg)
+
+				return
+			}
+
 			if (msg.type === 'machine.upgrade.declined') {
 				// The offer is settled, so the banner stops claiming otherwise rather
 				// than being left to expire on a timeout.
@@ -171,19 +224,13 @@ export function MachinesSocketProvider ({ children }: { children: ReactNode }) {
 
 			if (msg.type === 'queue.message') {
 				setAnswers((previous) => without(previous, msg.message.queueId))
-				queryClient
-					.invalidateQueries({ queryKey: queueKeys.detail(msg.message.queueId) })
-					.catch(() => {
-						// A refetch that fails leaves the panel as it was; the next one recovers.
-					})
+				refetch(queryClient, queueKeys.detail(msg.message.queueId))
 
 				return
 			}
 
 			if (msg.type === 'plan.decision') {
-				queryClient.invalidateQueries({ queryKey: ['plans', 'detail', msg.planId] }).catch(() => {
-					// A refetch that fails leaves the page as it was; the next one recovers.
-				})
+				refetch(queryClient, ['plans', 'detail', msg.planId])
 
 				return
 			}
@@ -203,9 +250,7 @@ export function MachinesSocketProvider ({ children }: { children: ReactNode }) {
 			// The question is persisted on its run, so the frame is a nudge to refetch
 			// rather than the only copy of it.
 			if (msg.type === 'run.question') {
-				queryClient.invalidateQueries({ queryKey: queueKeys.all() }).catch(() => {
-					// A refetch that fails leaves the panel as it was; the next one recovers.
-				})
+				refetch(queryClient, queueKeys.all())
 
 				return
 			}

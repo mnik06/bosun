@@ -6,7 +6,13 @@ import { findDuplicate } from 'src/utils/general';
 
 export async function saveEnvSet(
 	deps: EnvRelayDeps,
-	opts: { id: string; projectId: string; path: string; vars: EnvVarInput[] }
+	opts: {
+		id: string;
+		projectId: string;
+		path: string;
+		vars: EnvVarInput[];
+		onSaved?: (machine: Machine) => Promise<void>;
+	}
 ): Promise<Machine> {
 	const duplicate = findDuplicate(opts.vars.map((envVar) => envVar.key));
 
@@ -17,7 +23,7 @@ export async function saveEnvSet(
 	return relayEnvFrame(deps, {
 		id: opts.id,
 		projectId: opts.projectId,
-		path: opts.path,
-		frame: { type: 'env.set', vars: opts.vars }
+		onSaved: opts.onSaved,
+		frame: { type: 'env.set', path: opts.path, vars: opts.vars }
 	});
 }

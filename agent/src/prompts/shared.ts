@@ -1,5 +1,7 @@
+import { PROJECT_CONFIG_PATH, type ProjectConfig } from '../project-config';
 import { type ProjectProfile } from '../project-profile';
 import { envFileFor } from '../services/project-env.service';
+import { appPorts, renderTemplate } from '../services/stack.service';
 import { type ReadTree } from '../services/repo.service';
 
 export interface RunContext {
@@ -10,6 +12,13 @@ export interface RunContext {
 	baseRef: string;
 	worktreePath: string;
 	profile: ProjectProfile;
+	// A repository machine's config, from the worktree's own file or the draft. Null
+	// on a machine with no repository, which runs on `profile` as before.
+	config: ProjectConfig | null;
+	// Policy, not a fact about the code: whether this machine may migrate.
+	applyMigrations: boolean;
+	// Session-secret names in the session's environment. Never the values.
+	sessionSecrets: string[];
 	portBase: number;
 	afk: boolean;
 	decisions: { fork: string; chose: string }[];
@@ -73,18 +82,67 @@ command's output you repeat, not in a brief, not in your report. If one of them 
 is a blocker: report it with the error it gave.`;
 }
 
-// The heart of the user's requirement: the session works out how this repository
-// proves itself before it changes anything. A loop discovered after the work is
-// a loop that gets skipped when the work runs long.
-export function feedbackLoops(context: RunContext): string {
-	const profile = context.profile;
-	const configured = [
+function commandList(entries: { label: string; cwd?: string; run: string }[]): string {
+	return entries.map((entry) => `  - ${entry.label}: \`${entry.run}\`${entry.cwd === undefined ? '' : ` in \`${entry.cwd}\``}`).join('\n');
+}
+
+// Everything a session used to rediscover an hour into a bullet, written down once
+// and proven by onboarding. It is the starting point, not the ceiling: a check the
+// config does not name is still worth running when the session finds one.
+export function configuredProject(context: RunContext): string[] {
+	const config = context.config;
+
+	if (config === null) {
+		return [];
+	}
+
+	const ports = appPorts(config, context.portBase);
+	const apps = Object.entries(config.apps);
+	const toolchain = config.toolchain;
+
+	return [
+		toolchain === undefined
+			? ''
+			: `- Toolchain: node ${toolchain.node}${toolchain.packageManager === undefined ? '' : `, ${toolchain.packageManager}`} — provisioned by bosun and already first on your PATH. Never install or switch another.`,
+		config.setup.length === 0
+			? ''
+			: `- Setup, already run in this worktree and re-run by bosun whenever its watched files change:\n${commandList(config.setup.map((step) => ({ label: step.name, cwd: step.cwd, run: step.run })))}`,
+		apps.length === 0
+			? ''
+			: `- Apps, started only with the \`stack_up\` tool — never by running their start command yourself:\n${apps.map(([name, app]) => `  - \`${name}\` on port ${ports[name]} (http://127.0.0.1:${ports[name]})${app.cwd === undefined ? '' : ` in \`${app.cwd}\``}${app.dependsOn === undefined ? '' : `, after ${app.dependsOn.join(', ')}`}`).join('\n')}`,
+		apps.some(([, app]) => app.codegen !== undefined)
+			? `- Code generation:\n${commandList(apps.filter(([, app]) => app.codegen !== undefined).map(([name, app]) => ({ label: name, cwd: app.cwd, run: app.codegen! })))}`
+			: '',
+		apps.some(([, app]) => app.migrate !== undefined)
+			? `- Migrations:\n${commandList(apps.filter(([, app]) => app.migrate !== undefined).map(([name, app]) => ({ label: name, cwd: app.cwd, run: app.migrate! })))}`
+			: '',
+		config.checks.length === 0
+			? ''
+			: `- The project's checks — the core of your loop:\n${commandList(config.checks.map((check, index) => ({ label: check.name ?? `check ${index + 1}`, cwd: check.cwd, run: check.run })))}`,
+		config.testAccounts.length === 0
+			? ''
+			: `- Test accounts: ${config.testAccounts.map((account) => `${account.role} signs in at ${renderTemplate(account.signIn, { app: null, ports })} with ${account.secrets.map((key) => `\`$${key}\``).join(' and ')} from your environment`).join('; ')}. Read them with \`printenv\` when you need them and never print, quote or write down their values.`,
+		config.notes === undefined ? '' : `- Notes: ${config.notes.trim()}`,
+		`- \`${PROJECT_CONFIG_PATH}\` describes this code and travels with the branch. If your work changes how the project installs, generates, migrates, starts or proves itself, update it in this bullet — it is validated before the bullet is committed, and a file you leave invalid fails the bullet.`
+	].filter(Boolean);
+}
+
+function configuredProfile(profile: ProjectProfile): string[] {
+	return [
 		profile.setupCommand === null ? '' : `- Setup for a fresh checkout: \`${profile.setupCommand}\` (already run when this worktree was created).`,
 		profile.migrationCommand === null ? '' : `- Migrations: \`${profile.migrationCommand}\`.`,
 		profile.startCommand === null ? '' : `- Dev stack: \`${profile.startCommand}\`.`,
 		profile.testCredentialsPath === null ? '' : `- Test-user credentials: \`${profile.testCredentialsPath}\`.`,
 		profile.notes === null ? '' : `- Operator notes: ${profile.notes}`
 	].filter(Boolean);
+}
+
+// The heart of the user's requirement: the session works out how this repository
+// proves itself before it changes anything. A loop discovered after the work is
+// a loop that gets skipped when the work runs long.
+export function feedbackLoops(context: RunContext): string {
+	const configured = context.config === null ? configuredProfile(context.profile) : configuredProject(context);
+	const source = context.config === null ? 'What the operator has already told bosun about this project' : `What \`${PROJECT_CONFIG_PATH}\` says about this project`;
 
 	return `# Step 1 — find this repository's feedback loops, before you change anything
 
@@ -105,14 +163,14 @@ Find, for each package or workspace you will touch:
 **Write the commands down; do not run them yet.** When and how they run is set out at the end of
 this step, and it is the same for every session bosun starts on this machine.
 
-${configured.length === 0 ? '_The operator configured nothing — everything above is yours to discover._' : `What the operator has already told bosun about this project:\n\n${configured.join('\n')}`}${providedEnv(context)}
+${configured.length === 0 ? '_The operator configured nothing — everything above is yours to discover._' : `${source}:\n\n${configured.join('\n')}`}${providedEnv(context)}
 
 **Ports are yours: ${context.portBase}–${context.portBase + 9}.** Other queues on this machine are
 running their own copies of this project at the same time, from their own worktrees. Any listener you
 start must be inside that range — take a port outside it and you take one another queue is using, and
 both stacks break in ways neither session can explain.
 
-Migrations: ${profile.applyMigrations ? 'apply them yourself when your work needs them, and never hand-write the SQL — change the schema and regenerate. Once applied, the new schema is live and you can exercise your work for real in this session, so an unapplied migration is never a blocker and never a reason to skip a check.' : '**do not apply them.** This machine points at a database bosun must not migrate. Generate the migration and commit it, then say in your report that it is pending.'}
+Migrations: ${context.applyMigrations ? 'apply them yourself when your work needs them, and never hand-write the SQL — change the schema and regenerate. Once applied, the new schema is live and you can exercise your work for real in this session, so an unapplied migration is never a blocker and never a reason to skip a check.' : '**do not apply them.** This machine points at a database bosun must not migrate. Generate the migration and commit it, then say in your report that it is pending.'}
 
 ## How the loop runs — once per iteration, by you, one command at a time
 

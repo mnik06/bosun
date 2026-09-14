@@ -1,5 +1,7 @@
 import { HttpError } from 'src/api/errors/HttpError';
 import { announceQueue } from 'src/controllers/queues/announce-queue';
+import { awaitingRepository, configDraftFor } from 'src/controllers/repositories/shared/config-draft';
+import { type RepositoryRepo } from 'src/repos/github/repository.repo';
 import { type MachineRepo } from 'src/repos/machines/machine.repo';
 import { type QueueRepo } from 'src/repos/queues/queue.repo';
 import { type IdService } from 'src/services/ids/id.service';
@@ -10,6 +12,7 @@ import { toQueueSlug, type Queue } from 'src/types/QueueSchema';
 export async function createQueue(opts: {
 	queueRepo: QueueRepo;
 	machineRepo: MachineRepo;
+	repositoryRepo: RepositoryRepo;
 	idService: IdService;
 	socketRegistry: SocketRegistry;
 	projectId: string;
@@ -24,6 +27,10 @@ export async function createQueue(opts: {
 
 	if (!machine) {
 		throw new HttpError(404, 'Machine not found');
+	}
+
+	if (awaitingRepository(machine)) {
+		throw new HttpError(409, 'This machine has no repository attached yet');
 	}
 
 	const slug = toQueueSlug(opts.name);
@@ -52,7 +59,8 @@ export async function createQueue(opts: {
 			type: 'queue.worktree.ensure',
 			queueId: queue.id,
 			slug,
-			setupCommand: profile.setupCommand
+			setupCommand: machine.repositoryId === null ? profile.setupCommand : null,
+			configDraft: await configDraftFor({ repositoryRepo: opts.repositoryRepo, machine })
 		}
 	});
 	announceQueue({ socketRegistry: opts.socketRegistry, queue });

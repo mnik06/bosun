@@ -134,6 +134,13 @@
       "when": 1789385443017,
       "tag": "0018_wealthy_luckman",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1789390039289,
+      "tag": "0019_material_living_tribunal",
+      "breakpoints": true
     }
   ]
 }

@@ -23,6 +23,7 @@ const routes: FastifyPluginAsync = async function (f) {
 			const queue = await createQueue({
 				queueRepo: fastify.repos.queueRepo,
 				machineRepo: fastify.repos.machineRepo,
+				repositoryRepo: fastify.repos.repositoryRepo,
 				idService: fastify.services.idService,
 				socketRegistry: fastify.services.socketRegistry,
 				projectId: req.membership!.projectId,

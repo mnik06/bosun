@@ -1,16 +1,18 @@
 #!/bin/sh
-# Bosun agent installer. Downloads the agent binary, enrolls this machine, and
-# supervises it with a user-level systemd unit.
+# bosun-agent installer
+#
+# Installs the agent, enrolls this machine and supervises it with a user-level
+# systemd unit. Run it from any directory, as root or as the user the agent will
+# run as. As root it creates that user and installs what only root can; the agent
+# itself never runs as root.
 set -eu
 
 SERVER_URL="${BOSUN_SERVER:-__BOSUN_SERVER_URL__}"
 DOWNLOAD_BASE="${BOSUN_DOWNLOAD_BASE:-__BOSUN_DOWNLOAD_BASE__}"
 TOKEN="${BOSUN_TOKEN:-}"
-INSTALL_DIR="${BOSUN_INSTALL_DIR:-$HOME/.local/bin}"
-REPO_PATH="${BOSUN_REPO_PATH:-$PWD}"
-BIN="$INSTALL_DIR/bosun-agent"
-NODE_DIR="$HOME/.bosun/node"
 NODE_DIST="${BOSUN_NODE_DIST:-https://nodejs.org/dist}"
+AGENT_USER="${BOSUN_USER:-bosun}"
+MARKER='# bosun-agent installer'
 
 die() { echo "bosun: $1" >&2; exit 1; }
 note() { echo "bosun: $1"; }
@@ -27,11 +29,6 @@ sha256_of() {
 
 [ -n "$TOKEN" ] || die "no enrollment code. Rerun as: curl -fsSL $SERVER_URL/install.sh | BOSUN_TOKEN=<code> sh"
 
-# The agent runs the user's own tooling (git, gh, claude) against the user's own
-# repos and credentials. As root it would both be more dangerous and see the
-# wrong home directory.
-[ "$(id -u)" != "0" ] || die "refusing to install as root — run as the user that owns the repos"
-
 [ "$(uname -s)" = "Linux" ] || die "only Linux is supported (found $(uname -s))"
 
 case "$(uname -m)" in
@@ -40,289 +37,365 @@ case "$(uname -m)" in
 	*) die "unsupported architecture $(uname -m)" ;;
 esac
 
-ASSET="bosun-agent-linux-$ARCH"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
-note "downloading $ASSET"
-curl -fsSL "$DOWNLOAD_BASE/$ASSET" -o "$TMP/$ASSET" || die "could not download $DOWNLOAD_BASE/$ASSET"
-curl -fsSL "$DOWNLOAD_BASE/SHA256SUMS" -o "$TMP/SHA256SUMS" || die "could not download the checksum list"
-
-EXPECTED="$(awk -v a="$ASSET" '$2 == a || $2 == "*"a {print $1}' "$TMP/SHA256SUMS")"
-[ -n "$EXPECTED" ] || die "no checksum published for $ASSET"
-
-ACTUAL="$(sha256_of "$TMP/$ASSET")"
-[ "$EXPECTED" = "$ACTUAL" ] || die "checksum mismatch for $ASSET — refusing to install"
-
-mkdir -p "$INSTALL_DIR"
-mv "$TMP/$ASSET" "$BIN"
-chmod 755 "$BIN"
-note "installed $BIN"
-
-BOSUN_TOKEN="$TOKEN" "$BIN" enroll --server "$SERVER_URL" --repo "$REPO_PATH"
-
-# ---------------------------------------------------------------------------
-# The toolchain the repository asks for
-#
-# The agent itself needs no runtime — it is a compiled binary — but every session
-# it runs does: the project's install, its typecheck, its tests, its dev server.
-# Which node and which package manager those need is stated by the repository, so
-# it is read from there rather than guessed at or asked about.
-# ---------------------------------------------------------------------------
-
-PKG_JSON="$REPO_PATH/package.json"
-
-# The first of `.nvmrc`, `.node-version`, `engines.node` that exists wins, in that
-# order: the version files are what a developer's own shell obeys, so a machine
-# that disagrees with them is a machine that builds differently to every laptop.
-node_request() {
-	if [ -f "$REPO_PATH/.nvmrc" ]; then
-		head -n1 "$REPO_PATH/.nvmrc"
-	elif [ -f "$REPO_PATH/.node-version" ]; then
-		head -n1 "$REPO_PATH/.node-version"
-	elif [ -f "$PKG_JSON" ]; then
-		tr -d ' \t\n' < "$PKG_JSON" | sed -n 's/.*"engines":{[^}]*"node":"\([^"]*\)".*/\1/p'
-	fi
+# nodejs.org publishes its index newest-first, so the first LTS entry is the
+# current LTS. Nothing here reads a repository: there is none yet, and the node a
+# project needs is provisioned later by the agent from `.bosun/project.yaml`.
+resolve_lts_version() {
+	curl -fsSL "$NODE_DIST/index.json" 2>/dev/null | tr '{' '\n' | grep '"lts":"' |
+		sed -n 's/.*"version":"v\([0-9.]*\)".*/\1/p' | head -n1
 }
 
-# `>=24.15`, `^24`, `v24.15.0`, `24` and `lts/*` all reduce to the digits, plus a
-# note of whether newer is acceptable. `lts/*` and anything unparseable leave it
-# empty, which means "the current LTS".
-NODE_REQ="$(node_request | tr -d ' \r')"
-case "$NODE_REQ" in
-	'>='*) NODE_MIN=1 ;;
-	*) NODE_MIN=0 ;;
-esac
-NODE_WANT="$(printf '%s' "$NODE_REQ" | sed -n 's/^[^0-9]*\([0-9][0-9.]*\).*/\1/p' | sed 's/\.$//')"
-NODE_MAJOR="${NODE_WANT%%.*}"
+# Returns non-zero with a note instead of dying: neither phase is worthless
+# without node, and a failed download is not a reason to leave a machine
+# unenrolled. The tarball is checksummed for the reason the agent binary is: an
+# unverified `curl | tar` is arbitrary code execution.
+fetch_node() {
+	version="$1"
+	dest="$2"
+	tarball="node-v$version-linux-$ARCH.tar.gz"
 
-node_major_of() { printf '%s' "$1" | sed 's/^v//' | cut -d. -f1; }
+	curl -fsSL "$NODE_DIST/v$version/$tarball" -o "$TMP/$tarball" ||
+		{ note "could not download $NODE_DIST/v$version/$tarball"; return 1; }
+	curl -fsSL "$NODE_DIST/v$version/SHASUMS256.txt" -o "$TMP/NODESUMS" ||
+		{ note "could not download node's checksum list"; return 1; }
 
-# Satisfied is not the same as identical. A pinned `24.15.0` wants that build; a
-# `>=24.15` wants anything from 24 up, and reinstalling under it would replace a
-# working newer node with an older one.
-node_satisfies() {
-	have="$(printf '%s' "$1" | sed 's/^v//')"
+	expected="$(awk -v a="$tarball" '$2 == a {print $1}' "$TMP/NODESUMS")"
+	[ -n "$expected" ] || { note "no checksum published for $tarball"; return 1; }
+	[ "$expected" = "$(sha256_of "$TMP/$tarball")" ] ||
+		{ note "checksum mismatch for $tarball — refusing to install it"; return 1; }
 
-	[ -n "$NODE_WANT" ] || return 0
+	rm -rf "$dest.partial"
+	mkdir -p "$dest.partial"
 
-	if [ "$NODE_MIN" = "1" ]; then
-		[ "$(node_major_of "$have")" -ge "$NODE_MAJOR" ] 2>/dev/null && return 0
+	if ! tar -xzf "$TMP/$tarball" -C "$dest.partial" --strip-components=1; then
+		rm -rf "$dest.partial"
+		note "could not unpack $tarball"
 
 		return 1
 	fi
 
-	case "$have" in
-		"$NODE_WANT" | "$NODE_WANT".*) return 0 ;;
-	esac
-
-	return 1
+	rm -rf "$dest"
+	mv "$dest.partial" "$dest"
+	rm -f "$TMP/$tarball"
 }
 
-# nodejs.org publishes its index newest-first, so the first line that matches is
-# the newest build satisfying the request.
-resolve_node_version() {
-	index="$(curl -fsSL "$NODE_DIST/index.json" 2>/dev/null)" || return 1
+# ---------------------------------------------------------------------------
+# Root phase
+#
+# A fresh VPS usually offers nothing but root. The invariant was never "refuse
+# root", it was "the agent never runs as root", so root does the few things only
+# it can — system packages, the libraries headless Chromium links against, a user
+# for the agent — and hands everything else to that user.
+# ---------------------------------------------------------------------------
 
-	if [ -z "$NODE_WANT" ]; then
-		printf '%s' "$index" | tr '{' '\n' | grep '"lts":"' |
-			sed -n 's/.*"version":"v\([0-9.]*\)".*/\1/p' | head -n1
+apt_install() {
+	if ! command -v apt-get >/dev/null 2>&1; then
+		note "no apt-get here — skipped installing git, curl, ca-certificates and the libraries headless Chromium needs; install them with this system's package manager"
 
 		return 0
 	fi
 
-	esc="$(printf '%s' "$NODE_WANT" | sed 's/\./\\./g')"
+	note "installing git, curl, ca-certificates and xz-utils"
 
-	if [ "$NODE_MIN" = "1" ]; then
-		printf '%s' "$index" | tr '{' '\n' | sed -n 's/.*"version":"v\([0-9.]*\)".*/\1/p' |
-			while read -r candidate; do
-				[ "$(node_major_of "$candidate")" -ge "$NODE_MAJOR" ] 2>/dev/null || continue
-				printf '%s\n' "$candidate"
-				break
-			done
+	if ! { DEBIAN_FRONTEND=noninteractive apt-get update -qq >/dev/null &&
+		DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git curl ca-certificates xz-utils >/dev/null; }; then
+		note "apt-get could not install git, curl, ca-certificates, xz-utils — install them yourself"
+	fi
+}
+
+# The browser build itself is per user and installed later, but the shared
+# libraries it links against are system packages. A fresh Ubuntu has none of
+# them, and without them the build sits in the cache and never launches.
+chromium_libraries() {
+	command -v apt-get >/dev/null 2>&1 || return 0
+
+	version="$(resolve_lts_version || true)"
+
+	if [ -z "$version" ] || ! fetch_node "$version" "$TMP/node-deps"; then
+		note "skipped the libraries headless Chromium needs — install them later as root with: npx playwright install-deps chromium"
 
 		return 0
 	fi
 
-	printf '%s' "$index" | tr '{' '\n' |
-		sed -n "s/.*\"version\":\"v\($esc\|$esc\.[0-9.]*\)\".*/\1/p" | head -n1
-}
+	note "installing the system libraries headless Chromium needs"
 
-install_node() {
-	version="$(resolve_node_version)"
-	[ -n "$version" ] || die "could not work out which node to install for ${NODE_REQ:-this repo}"
-
-	tarball="node-v$version-linux-$ARCH.tar.gz"
-	note "installing node $version into $NODE_DIR"
-
-	curl -fsSL "$NODE_DIST/v$version/$tarball" -o "$TMP/$tarball" ||
-		die "could not download $NODE_DIST/v$version/$tarball"
-	curl -fsSL "$NODE_DIST/v$version/SHASUMS256.txt" -o "$TMP/NODESUMS" ||
-		die "could not download node's checksum list"
-
-	expected="$(awk -v a="$tarball" '$2 == a {print $1}' "$TMP/NODESUMS")"
-	[ -n "$expected" ] || die "no checksum published for $tarball"
-	[ "$expected" = "$(sha256_of "$TMP/$tarball")" ] ||
-		die "checksum mismatch for $tarball — refusing to install"
-
-	rm -rf "$NODE_DIR"
-	mkdir -p "$NODE_DIR"
-	tar -xzf "$TMP/$tarball" -C "$NODE_DIR" --strip-components=1
-}
-
-# `packageManager` is the declaration corepack itself reads, so it is the one that
-# matches what the repository is developed with. The lockfile is the fallback,
-# because a repo with a pnpm lock and no field still cannot be installed with npm.
-package_manager_request() {
-	if [ -f "$PKG_JSON" ]; then
-		spec="$(tr -d ' \t\n' < "$PKG_JSON" | sed -n 's/.*"packageManager":"\([^"]*\)".*/\1/p')"
-
-		if [ -n "$spec" ]; then
-			printf '%s' "$spec"
-
-			return 0
-		fi
-	fi
-
-	if [ -f "$REPO_PATH/pnpm-lock.yaml" ]; then
-		printf 'pnpm'
-	elif [ -f "$REPO_PATH/yarn.lock" ]; then
-		printf 'yarn'
+	if ! PATH="$TMP/node-deps/bin:$PATH" npx -y playwright install-deps chromium >"$TMP/install-deps.log" 2>&1; then
+		tail -n 5 "$TMP/install-deps.log" >&2 || true
+		note "playwright install-deps chromium failed — the browser check will name what is missing"
 	fi
 }
 
-install_package_manager() {
-	spec="$1"
-	name="${spec%%@*}"
+ensure_agent_user() {
+	[ "$AGENT_USER" != "root" ] || die "BOSUN_USER=root — the agent never runs as root; name another user"
 
-	# An unpinned request is satisfied by whatever is already there; a pinned one
-	# is not, because the version is the point of pinning it.
-	if [ "$name" = "$spec" ] && command -v "$name" >/dev/null 2>&1; then
-		return 0
-	fi
-
-	# corepack is what the `packageManager` field is for, and it pins the exact
-	# version. It is unbundled from newer node, so npm is the fallback rather than
-	# the failure.
-	if command -v corepack >/dev/null 2>&1; then
-		corepack enable --install-directory "$NODE_DIR/bin" >/dev/null 2>&1 || true
-
-		if corepack prepare "$spec" --activate >/dev/null 2>&1; then
-			note "activated $spec with corepack"
-
-			return 0
-		fi
-	fi
-
-	if npm install -g "$spec" >/dev/null 2>&1; then
-		note "installed $spec with npm"
-
-		return 0
-	fi
-
-	note "could not install $spec — install it yourself, or sessions will fail at the install step"
-}
-
-provision_toolchain() {
-	if command -v node >/dev/null 2>&1 && node_satisfies "$(node --version)"; then
-		note "node $(node --version | sed 's/^v//') already satisfies ${NODE_REQ:-this repo}"
-	elif [ -x "$NODE_DIR/bin/node" ] && node_satisfies "$("$NODE_DIR/bin/node" --version)"; then
-		note "node $("$NODE_DIR/bin/node" --version | sed 's/^v//') already installed for bosun"
+	if id -u "$AGENT_USER" >/dev/null 2>&1; then
+		note "installing for the existing user $AGENT_USER"
+	elif [ -n "${BOSUN_USER:-}" ]; then
+		die "BOSUN_USER=$BOSUN_USER names no user on this machine"
 	else
-		install_node
+		shell=/bin/sh
+		[ ! -x /bin/bash ] || shell=/bin/bash
+		useradd --create-home --shell "$shell" "$AGENT_USER" || die "could not create the user $AGENT_USER"
+		note "created the user $AGENT_USER"
 	fi
 
-	if [ -x "$NODE_DIR/bin/node" ]; then
-		PATH="$NODE_DIR/bin:$PATH"
-		export PATH
-	fi
-
-	pm="$(package_manager_request)"
-	[ -n "$pm" ] || return 0
-
-	install_package_manager "$pm"
+	[ "$(id -u "$AGENT_USER")" != "0" ] || die "$AGENT_USER has uid 0 — the agent never runs as root"
 }
 
-provision_toolchain
+# Runs a command as the agent user without a login shell, which keeps the
+# exported environment: that is how the enrollment code reaches the user phase
+# without ever being an argument, since argv is world-readable in /proc.
+as_agent_user() {
+	if command -v runuser >/dev/null 2>&1; then
+		runuser -u "$AGENT_USER" -- "$@"
+	else
+		su "$AGENT_USER" -s /bin/sh -c '"$0" "$@"' -- "$@"
+	fi
+}
 
+root_phase() {
+	note "running as root — the agent will be installed for the user $AGENT_USER"
 
-# The agent's Claude credential lives here and never leaves the box. Seeded empty
-# rather than left missing, so there is one documented file to edit rather than a
-# guess about where the service reads its environment from.
-ENV_FILE="$HOME/.bosun/env"
-if [ ! -f "$ENV_FILE" ]; then
+	# Arrived on stdin under `curl | sh`, so there is no file to run a second time
+	# as the agent user. A copy saved by hand is used as it is; otherwise the same
+	# script is fetched again from the server that served it.
+	script="$TMP/install.sh"
+
+	if [ -f "$0" ] && grep -q "^$MARKER" "$0" 2>/dev/null; then
+		cp "$0" "$script"
+	else
+		curl -fsSL "$SERVER_URL/install.sh" -o "$script" || die "could not fetch $SERVER_URL/install.sh again to run it as $AGENT_USER"
+		grep -q "^$MARKER" "$script" || die "$SERVER_URL/install.sh did not return the installer"
+	fi
+
+	# The agent user reads the copy from root's temp directory.
+	chmod 755 "$TMP"
+	chmod 644 "$script"
+
+	apt_install
+	chromium_libraries
+	ensure_agent_user
+
+	uid="$(id -u "$AGENT_USER")"
+	home="$(getent passwd "$AGENT_USER" | cut -d: -f6)"
+	[ -n "$home" ] || die "could not find the home directory of $AGENT_USER"
+
+	# Without linger the user manager exists only while somebody is logged in as
+	# that user — which, for a user nobody logs in as, is never.
+	if loginctl enable-linger "$AGENT_USER" >/dev/null 2>&1; then
+		waited=0
+
+		while [ ! -S "/run/user/$uid/systemd/private" ] && [ "$waited" -lt 15 ]; do
+			sleep 1
+			waited=$((waited + 1))
+		done
+	else
+		note "could not enable linger for $AGENT_USER — the agent will not stay up without a login session"
+	fi
+
+	# `systemctl --user` finds the user manager through these. A non-login
+	# `runuser` does not set them, and the unit install would fail without them.
+	XDG_RUNTIME_DIR="/run/user/$uid"
+	DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus"
+	BOSUN_TOKEN="$TOKEN"
+	BOSUN_SERVER="$SERVER_URL"
+	BOSUN_DOWNLOAD_BASE="$DOWNLOAD_BASE"
+	BOSUN_SKIP_SETUP=1
+	export XDG_RUNTIME_DIR DBUS_SESSION_BUS_ADDRESS BOSUN_TOKEN BOSUN_SERVER BOSUN_DOWNLOAD_BASE BOSUN_SKIP_SETUP
+
+	# Root's own directory is unreadable to the agent user, and node refuses to
+	# start in a working directory it cannot read.
+	cd /
+
+	as_agent_user sh "$script" || die "installing for $AGENT_USER failed — see above"
+
+	unset BOSUN_TOKEN
+	bin="${BOSUN_INSTALL_DIR:-$home/.local/bin}/bosun-agent"
+
+	# Once, from here rather than from the user phase: this shell is the one that
+	# holds the terminal the operator is typing into.
+	if ( : </dev/tty ) 2>/dev/null; then
+		as_agent_user "$bin" setup </dev/tty ||
+			note "setup did not finish — run it again any time: runuser -u $AGENT_USER -- $bin setup"
+	else
+		note "no terminal attached — finish with: runuser -u $AGENT_USER -- $bin setup"
+	fi
+}
+
+# ---------------------------------------------------------------------------
+# User phase
+#
+# Everything that is the agent user's own: the agent, its node, Claude, a browser
+# build, the unit. It reads nothing from any repository — the repository is
+# attached from the browser later, and the agent clones it.
+# ---------------------------------------------------------------------------
+
+INSTALL_DIR="${BOSUN_INSTALL_DIR:-$HOME/.local/bin}"
+BIN="$INSTALL_DIR/bosun-agent"
+TOOLCHAINS="$HOME/.bosun/toolchains"
+NODE_DIR=""
+SERVICE_PATH=""
+
+# Reported by name, never fatal: without root there is no installing them, and
+# an enrolled machine that says what it lacks is better than no machine.
+report_missing_packages() {
+	missing=""
+
+	for tool in git curl; do
+		command -v "$tool" >/dev/null 2>&1 || missing="$missing $tool"
+	done
+
+	[ -z "$missing" ] ||
+		note "missing system packages:$missing — as root: apt-get install -y$missing (a repository cannot be cloned without git)"
+}
+
+install_agent() {
+	asset="bosun-agent-linux-$ARCH"
+
+	note "downloading $asset"
+	curl -fsSL "$DOWNLOAD_BASE/$asset" -o "$TMP/$asset" || die "could not download $DOWNLOAD_BASE/$asset"
+	curl -fsSL "$DOWNLOAD_BASE/SHA256SUMS" -o "$TMP/SHA256SUMS" || die "could not download the checksum list"
+
+	expected="$(awk -v a="$asset" '$2 == a || $2 == "*"a {print $1}' "$TMP/SHA256SUMS")"
+	[ -n "$expected" ] || die "no checksum published for $asset"
+	[ "$expected" = "$(sha256_of "$TMP/$asset")" ] || die "checksum mismatch for $asset — refusing to install"
+
+	mkdir -p "$INSTALL_DIR"
+	mv "$TMP/$asset" "$BIN"
+	chmod 755 "$BIN"
+	note "installed $BIN"
+
+	BOSUN_TOKEN="$TOKEN" "$BIN" enroll --server "$SERVER_URL"
+}
+
+# The agent's own node, not a project's: the default MCP servers are `npx`
+# commands and have to start before any repository exists.
+install_node() {
+	version="$(resolve_lts_version || true)"
+
+	if [ -z "$version" ]; then
+		note "could not find the current LTS node at $NODE_DIST — MCP servers that run through npx will not start"
+
+		return 0
+	fi
+
+	if [ -x "$TOOLCHAINS/node-$version/bin/node" ]; then
+		note "node $version already installed"
+	elif fetch_node "$version" "$TOOLCHAINS/node-$version"; then
+		note "installed node $version into $TOOLCHAINS/node-$version"
+	else
+		return 0
+	fi
+
+	NODE_DIR="$TOOLCHAINS/node-$version"
+}
+
+install_claude() {
+	if command -v claude >/dev/null 2>&1 || [ -x "$HOME/.local/bin/claude" ]; then
+		note "claude already installed"
+
+		return 0
+	fi
+
+	if ! command -v bash >/dev/null 2>&1; then
+		note "no bash here to run the Claude Code installer — install claude yourself"
+
+		return 0
+	fi
+
+	note "installing Claude Code"
+	curl -fsSL https://claude.ai/install.sh | bash ||
+		note "could not install Claude Code — install it with: curl -fsSL https://claude.ai/install.sh | bash"
+}
+
+install_browser() {
+	[ -n "$NODE_DIR" ] || return 0
+
+	note "installing the Chromium build sessions drive"
+
+	if ! PATH="$NODE_DIR/bin:$PATH" npx -y playwright install chromium >"$TMP/playwright.log" 2>&1; then
+		tail -n 3 "$TMP/playwright.log" >&2 || true
+		note "could not install Chromium — \`bosun-agent setup\` offers to try again"
+	fi
+}
+
+seed_files() {
 	mkdir -p "$HOME/.bosun"
-	cat > "$ENV_FILE" <<'ENVFILE'
+
+	# The agent's Claude credential lives here and never leaves the box. Seeded
+	# empty rather than left missing, so there is one documented file to edit rather
+	# than a guess about where the service reads its environment from.
+	env_file="$HOME/.bosun/env"
+
+	if [ ! -f "$env_file" ]; then
+		cat > "$env_file" <<'ENVFILE'
 # Bosun agent environment, read by the systemd unit.
 #
-# Written by `bosun-agent auth set` and `bosun-agent mcp add`. Editing by hand
-# works too; the agent re-reads this file on every Refresh.
+# Written by `bosun-agent setup`, `bosun-agent auth set` and `bosun-agent mcp add`.
+# Editing by hand works too; the agent notices a change within a few seconds.
 ENVFILE
-	note "seeded $ENV_FILE"
-fi
-# Custom MCP servers, merged into every planning session alongside bosun's own.
-# Kept here rather than in the repo's .mcp.json: this file holds credentials and
-# the repo gets committed.
-MCP_FILE="$HOME/.bosun/mcp.json"
-if [ ! -f "$MCP_FILE" ]; then
-	mkdir -p "$HOME/.bosun"
-	cat > "$MCP_FILE" <<'MCPFILE'
+		note "seeded $env_file"
+	fi
+
+	# Custom MCP servers, merged into every session alongside bosun's own. Kept
+	# here rather than in a repository's .mcp.json: this file holds credentials and
+	# a repository gets committed.
+	mcp_file="$HOME/.bosun/mcp.json"
+
+	if [ ! -f "$mcp_file" ]; then
+		cat > "$mcp_file" <<'MCPFILE'
 {
   "mcpServers": {}
 }
 MCPFILE
-	note "seeded $MCP_FILE — add MCP servers there; put their tokens in $ENV_FILE and reference them as \${VAR}, then hit Refresh in bosun"
-fi
+		note "seeded $mcp_file"
+	fi
 
-chmod 700 "$HOME/.bosun"
-chmod 600 "$ENV_FILE"
-chmod 600 "$MCP_FILE"
+	chmod 700 "$HOME/.bosun"
+	chmod 600 "$env_file" "$mcp_file"
+}
 
-case ":$PATH:" in
-	*":$INSTALL_DIR:"*) ;;
-	*) note "add $INSTALL_DIR to your PATH to run bosun-agent directly" ;;
-esac
+# `systemctl --user` sources no shell rc, so the unit sees a minimal PATH. It is
+# resolved here, with bosun's own node and ~/.local/bin — where Claude Code
+# installs itself — first, so the service finds what this install put down even
+# though this shell has not picked it up.
+resolve_service_path() {
+	SERVICE_PATH="$INSTALL_DIR:$HOME/.local/bin"
+	[ -z "$NODE_DIR" ] || SERVICE_PATH="$NODE_DIR/bin:$SERVICE_PATH"
 
-if [ "${BOSUN_SKIP_SERVICE:-0}" = "1" ]; then
-	note "skipping service install (BOSUN_SKIP_SERVICE=1)"
-	exit 0
-fi
+	for tool in git gh claude; do
+		tool_path="$(command -v "$tool" 2>/dev/null || true)"
+		[ -n "$tool_path" ] || continue
+		tool_dir="$(dirname "$tool_path")"
 
-if ! command -v systemctl >/dev/null 2>&1; then
-	note "no systemd here — start the agent yourself with: $BIN run"
-	exit 0
-fi
+		case ":$SERVICE_PATH:" in
+			*":$tool_dir:"*) ;;
+			*) SERVICE_PATH="$SERVICE_PATH:$tool_dir" ;;
+		esac
+	done
 
-# Guard against installing a unit for a build that predates the run command.
-if ! "$BIN" --help 2>/dev/null | grep -qE '^[[:space:]]+run'; then
-	note "this agent build has no 'run' command yet — skipping the service"
-	exit 0
-fi
+	SERVICE_PATH="$SERVICE_PATH:/usr/local/bin:/usr/bin:/bin"
+}
 
-# `systemctl --user` sources no shell rc, so the unit sees a minimal PATH and
-# none of the tooling the agent shells out to. Resolving the tools here, in the
-# shell that is doing the install, is what makes a machine that passes preflight
-# by hand also pass it under the service.
-SERVICE_PATH="$INSTALL_DIR"
-if [ -x "$NODE_DIR/bin/node" ]; then
-	SERVICE_PATH="$NODE_DIR/bin:$SERVICE_PATH"
-fi
-for tool in node pnpm git gh claude; do
-	tool_path="$(command -v "$tool" 2>/dev/null || true)"
-	[ -n "$tool_path" ] || continue
-	tool_dir="$(dirname "$tool_path")"
-	case ":$SERVICE_PATH:" in
-		*":$tool_dir:"*) ;;
-		*) SERVICE_PATH="$SERVICE_PATH:$tool_dir" ;;
-	esac
-done
-SERVICE_PATH="$SERVICE_PATH:/usr/local/bin:/usr/bin:/bin"
+install_service() {
+	if [ "${BOSUN_SKIP_SERVICE:-0}" = "1" ]; then
+		note "skipping service install (BOSUN_SKIP_SERVICE=1)"
 
-command -v claude >/dev/null 2>&1 || note "claude is not on this shell's PATH — planning sessions will fail preflight"
+		return 0
+	fi
 
-UNIT_DIR="$HOME/.config/systemd/user"
-mkdir -p "$UNIT_DIR"
-cat > "$UNIT_DIR/bosun-agent.service" <<UNIT
+	if ! command -v systemctl >/dev/null 2>&1; then
+		note "no systemd here — start the agent yourself with: $BIN run"
+
+		return 0
+	fi
+
+	unit_dir="$HOME/.config/systemd/user"
+	mkdir -p "$unit_dir"
+	cat > "$unit_dir/bosun-agent.service" <<UNIT
 [Unit]
 Description=Bosun agent
 After=network-online.target
@@ -347,14 +420,61 @@ OOMPolicy=continue
 WantedBy=default.target
 UNIT
 
-# Without linger the user manager is torn down on logout, taking the agent with it.
-loginctl enable-linger "$(id -un)" >/dev/null 2>&1 || note "could not enable linger — the agent will stop when you log out"
+	# Without linger the user manager is torn down on logout, taking the agent with
+	# it. Under the root phase it is already enabled, and this is a no-op.
+	loginctl enable-linger "$(id -un)" >/dev/null 2>&1 ||
+		note "could not enable linger — the agent will stop when you log out"
 
-systemctl --user daemon-reload
-systemctl --user enable --now bosun-agent.service
+	if ! systemctl --user daemon-reload; then
+		note "systemctl --user is not reachable from this shell — start the agent with: systemctl --user enable --now bosun-agent.service"
 
-note "agent running. Follow it with: journalctl --user -u bosun-agent -f"
-note ""
-note "Next: give this machine a Claude credential."
-note "  1. on your own machine (it needs a browser):  claude setup-token"
-note "  2. here:                                      $BIN auth set"
+		return 0
+	fi
+
+	# restart, not only enable --now: a re-run replaces the binary and the unit, and
+	# an agent left running is still the old build with the old config.
+	systemctl --user enable bosun-agent.service >/dev/null 2>&1 || true
+
+	if ! systemctl --user restart bosun-agent.service; then
+		note "the agent did not start — see: journalctl --user -u bosun-agent"
+
+		return 0
+	fi
+
+	note "agent running. Follow it with: journalctl --user -u bosun-agent -f"
+}
+
+user_phase() {
+	cd "$HOME" 2>/dev/null || cd /
+
+	report_missing_packages
+	install_agent
+	install_node
+	install_claude
+	install_browser
+	seed_files
+	resolve_service_path
+	install_service
+
+	case ":$PATH:" in
+		*":$INSTALL_DIR:"*) ;;
+		*) note "add $INSTALL_DIR to your PATH to run bosun-agent directly" ;;
+	esac
+
+	[ "${BOSUN_SKIP_SETUP:-0}" != "1" ] || return 0
+
+	# Stdin is the `curl` pipe, so the wizard's prompts read from the terminal
+	# itself. Without one there is nobody to answer them, and that is not a failure.
+	if ( : </dev/tty ) 2>/dev/null; then
+		PATH="$SERVICE_PATH" "$BIN" setup </dev/tty ||
+			note "setup did not finish — run it again any time: $BIN setup"
+	else
+		note "no terminal attached — finish with: $BIN setup"
+	fi
+}
+
+if [ "$(id -u)" = "0" ]; then
+	root_phase
+else
+	user_phase
+fi

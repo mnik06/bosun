@@ -3,6 +3,12 @@ import { ProjectProfileSchema } from 'src/types/ProjectProfileSchema';
 import { PreflightCheckSchema } from 'src/types/MachineSchema';
 import { PlanAnswerSchema, PlanQuestionSchema } from 'src/types/PlanSchema';
 import {
+	PlanAnswerMsgSchema,
+	PlanCancelMsgSchema,
+	PlanSayMsgSchema,
+	PlanStartMsgSchema
+} from 'src/types/plan-frames';
+import {
 	PlanActivityMsgSchema,
 	PlanDoneMsgSchema,
 	PlanErrorMsgSchema,
@@ -16,8 +22,20 @@ import {
 	EnvErrorMsgSchema,
 	EnvSavedMsgSchema,
 	EnvSetMsgSchema,
-	EnvSetSummarySchema
+	EnvSetSummarySchema,
+	SecretsSetMsgSchema
 } from 'src/types/env-sets';
+import {
+	OnboardingCancelMsgSchema,
+	OnboardingDoneMsgSchema,
+	OnboardingErrorMsgSchema,
+	OnboardingStartMsgSchema,
+	QueuePushedMsgSchema,
+	RepoAttachedMsgSchema,
+	RepoAttachMsgSchema,
+	RepoErrorMsgSchema,
+	RunPolicySchema
+} from 'src/types/onboarding-frames';
 import {
 	QueueAnswerDoneMsgSchema,
 	QueueAnswerErrorMsgSchema,
@@ -42,16 +60,21 @@ export const HelloMsgSchema = z.object({
 	type: z.literal('hello'),
 	agentVersion: z.string(),
 	hostname: z.string(),
-	repoPath: z.string(),
+	// Absent from an agent enrolled under plan 008 that has no repository yet: it
+	// has no checkout, and an empty string would read as one.
+	repoPath: z.string().optional(),
 	// Absent from agents older than self-update, which is why it is optional and
-	// why anything but an explicit refresh is never offered an upgrade.
-	reason: z.enum(['connect', 'refresh']).optional(),
+	// why anything but an explicit refresh is never offered an upgrade. `change` is
+	// a file under ~/.bosun changing, which is not a request for an upgrade either.
+	reason: z.enum(['connect', 'refresh', 'change']).optional(),
 	// The bullets still running on that machine. Optional for the same reason: an
 	// agent that predates surviving reconnects holds nothing across one, and
 	// absent has to keep meaning exactly that rather than "unknown".
 	runIds: z.array(z.string()).optional(),
 	// The planning sessions still held, on the same terms.
 	planIds: z.array(z.string()).optional(),
+	// The onboarding runs still held, on the same terms.
+	onboardingRunIds: z.array(z.string()).optional(),
 	// How long that agent process has been alive. A dropped socket and a restarted
 	// agent are indistinguishable here otherwise, and only one of them means every
 	// session on the machine is gone — which is the difference between a queue
@@ -66,7 +89,15 @@ export const HelloMsgSchema = z.object({
 	previousExit: z.string().optional(),
 	// Absent from agents older than env sets, and absent must leave the stored
 	// summary alone rather than read as a machine holding none.
-	envSets: z.array(EnvSetSummarySchema).optional()
+	envSets: z.array(EnvSetSummarySchema).optional(),
+	sessionSecrets: z.array(z.string()).optional(),
+	// Base64 SPKI of the key browser input is sealed to. Absent from an agent too
+	// old to decrypt, which is what refuses browser input for that machine.
+	publicKey: z.string().max(2000).optional(),
+	// The repository the agent believes it is attached to, and whether the default
+	// branch carries `.bosun/project.yaml` as of its last fetch.
+	repositoryId: z.string().nullable().optional(),
+	configOnDefault: z.boolean().optional()
 });
 
 export const PreflightMsgSchema = z.object({
@@ -146,11 +177,16 @@ export const AgentMsgSchema = z.discriminatedUnion('type', [
 	ExecErrorMsgSchema,
 	QueuePublishedMsgSchema,
 	QueuePublishErrorMsgSchema,
+	QueuePushedMsgSchema,
 	QueueAnswerTextMsgSchema,
 	QueueAnswerDoneMsgSchema,
 	QueueAnswerErrorMsgSchema,
 	EnvSavedMsgSchema,
-	EnvErrorMsgSchema
+	EnvErrorMsgSchema,
+	RepoAttachedMsgSchema,
+	RepoErrorMsgSchema,
+	OnboardingDoneMsgSchema,
+	OnboardingErrorMsgSchema
 ]);
 
 export type AgentMsg = z.infer<typeof AgentMsgSchema>;
@@ -180,67 +216,6 @@ export const ShutdownMsgSchema = z.object({
 	reason: z.string()
 });
 
-export const PlanStartMsgSchema = z.object({
-	type: z.literal('plan.start'),
-	planId: z.string(),
-	input: z.string(),
-	verifyInUi: z.boolean().default(true),
-	auto: z.boolean().default(false),
-	// The operator's notes from the machine's project setup. Planning gets them
-	// for the same reason execution does: a convention nobody can read off the
-	// code — a skill this repository expects a session to invoke, a rule the team
-	// keeps in its head — is exactly what a session cannot discover for itself.
-	notes: z.string().nullable().default(null)
-});
-
-// The published plan as it stands, carried on the frame rather than fetched:
-// the agent keeps no plan state, so a revision session that starts an hour after
-// the grill ended needs the artifact handed to it.
-export const PlanSnapshotSchema = z.object({
-	verifyInUi: z.boolean(),
-	auto: z.boolean(),
-	title: z.string().nullable(),
-	bodyMd: z.string().nullable(),
-	acs: z.array(
-		z.object({
-			code: z.string(),
-			text: z.string(),
-			sliceOrdinal: z.number().int().nullable()
-		})
-	),
-	slices: z.array(
-		z.object({
-			ordinal: z.number().int(),
-			kind: z.enum(['build', 'verify']),
-			title: z.string(),
-			bodyMd: z.string().nullable()
-		})
-	)
-});
-
-// A line the person typed into the plan's chat. It reaches a live session as
-// another turn on its stdin; when the session is already over it starts a
-// revision session with the published plan in front of it.
-export const PlanSayMsgSchema = z.object({
-	type: z.literal('plan.say'),
-	planId: z.string(),
-	text: z.string(),
-	notes: z.string().nullable().default(null),
-	plan: PlanSnapshotSchema
-});
-
-export const PlanAnswerMsgSchema = z.object({
-	type: z.literal('plan.answer'),
-	planId: z.string(),
-	questionId: z.string(),
-	answers: z.array(PlanAnswerSchema).min(1)
-});
-
-export const PlanCancelMsgSchema = z.object({
-	type: z.literal('plan.cancel'),
-	planId: z.string()
-});
-
 // The slug rather than a path: where a worktree lives is the agent's decision,
 // because only it knows the home directory it is running under.
 export const ExecSliceSchema = z.object({
@@ -268,10 +243,13 @@ export const ExecStartMsgSchema = z.object({
 	planNumber: z.number().int(),
 	planTitle: z.string(),
 	planBodyMd: z.string(),
-	// Everything a session cannot work out by reading the repository, plus the
-	// port range this queue owns. Sent per run rather than read from disk so a
-	// profile edited in the browser takes effect on the next bullet.
+	// A machine with no repository still runs on the profile edited in the
+	// browser. A repository machine reads `.bosun/project.yaml` from the worktree
+	// and falls back to `configDraft` only when the file does not exist; `policy`
+	// is the one environment fact the file never holds.
 	profile: ProjectProfileSchema,
+	configDraft: z.string().nullable(),
+	policy: RunPolicySchema.nullable(),
 	portBase: z.number().int(),
 	slice: ExecSliceSchema,
 	acs: z.array(z.object({ code: z.string(), text: z.string() })),
@@ -336,7 +314,10 @@ export const QueueWorktreeEnsureMsgSchema = z.object({
 	type: z.literal('queue.worktree.ensure'),
 	queueId: z.string(),
 	slug: z.string(),
-	setupCommand: z.string().nullable().default(null)
+	// A machine with no repository runs this; a repository machine runs the setup
+	// steps of the config it finds in the new worktree, or of this draft.
+	setupCommand: z.string().nullable().default(null),
+	configDraft: z.string().nullable().default(null)
 });
 
 export const QueueWorktreeRemoveMsgSchema = z.object({
@@ -366,7 +347,11 @@ export const ServerMsgSchema = z.discriminatedUnion('type', [
 	QueueSummarizeMsgSchema,
 	QueueAskMsgSchema,
 	EnvSetMsgSchema,
-	EnvDeleteMsgSchema
+	EnvDeleteMsgSchema,
+	SecretsSetMsgSchema,
+	RepoAttachMsgSchema,
+	OnboardingStartMsgSchema,
+	OnboardingCancelMsgSchema
 ]);
 
 export type ServerMsg = z.infer<typeof ServerMsgSchema>;

@@ -134,7 +134,8 @@ function build(opts: {
 			listByPlan: vi.fn().mockResolvedValue([])
 		},
 		planDecisionRepo: { listByPlan: vi.fn().mockResolvedValue([]) },
-		machineRepo: { getById: vi.fn().mockResolvedValue({ id: 'm_1', projectProfile: null }) },
+		machineRepo: { getById: vi.fn().mockResolvedValue({ id: 'm_1', projectProfile: null, repositoryId: null }) },
+		onboardingRunRepo: { listActiveForMachine: vi.fn().mockResolvedValue([]) },
 		planBlockerRepo: { listEdges: vi.fn().mockResolvedValue(opts.edges ?? []) },
 		runActivity: { record: vi.fn(), forget: vi.fn(), label: vi.fn() },
 		appUrl: 'https://bosun.test',

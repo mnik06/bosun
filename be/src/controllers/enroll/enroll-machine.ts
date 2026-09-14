@@ -23,8 +23,9 @@ export async function enrollMachine(opts: {
 	machineRepo: MachineRepo;
 	keyService: KeyService;
 	token: string;
-	repoPath: string;
+	repoPath: string | null;
 	serverUrl: string;
+	appUrl: string;
 }) {
 	const now = new Date();
 	const machineKey = opts.keyService.generateMachineKey();
@@ -39,5 +40,5 @@ export async function enrollMachine(opts: {
 		throw await enrollmentRejection({ machineRepo: opts.machineRepo, token: opts.token });
 	}
 
-	return { machineId: machine.id, machineKey, serverUrl: opts.serverUrl };
+	return { machineId: machine.id, machineKey, serverUrl: opts.serverUrl, appUrl: opts.appUrl };
 }

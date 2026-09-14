@@ -20,7 +20,13 @@ person. `fastify.requireMembership` reads `X-Project-Id`, resolves the caller's 
 `request.membership = { projectId, role }` on the request; `fastify.requireLeader` refuses a
 `developer` on every `/machines` route but the list, and on the member routes. A `users.is_app_owner` row resolves as `leader` of every
 project without holding a membership. A project the caller is not in answers **404**; a role they do
-not hold answers **403**. See `plans/006-projects-and-roles.md`.
+not hold answers **403**. See `plans/006-projects-and-roles.md`. Every `/github` route is leader-only
+(its `autohooks.ts`); `/repositories` lists to any member — the plan and queue pickers name machines
+by repository — and refuses everything else to a developer. See `plans/008-machine-onboarding.md`.
+
+**The GitHub App's private key is read in one place**, `src/services/github/github-app.service.ts`,
+the same containment `SUPABASE_SECRET_KEY` gets. No GitHub token is written to the database: see
+`github-app.service.md`.
 
 `/enroll`, `/agent/ws`, `/install.sh`, `/mcp-presets` and `/health` stay unauthenticated by design —
 they are the agent's and the installer's surface.

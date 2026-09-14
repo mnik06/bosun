@@ -54,7 +54,7 @@ export function EnvSetsPanel ({ machine }: { machine: Machine }) {
 				))
 			)}
 
-			<EnvSetModal machineId={machine.id} envSet={editing} opened={opened} onClose={close} />
+			<EnvSetModal machine={machine} envSet={editing} opened={opened} onClose={close} />
 		</Stack>
 	)
 }

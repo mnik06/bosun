@@ -40,6 +40,14 @@ A worktree of its own costs one directory and is always exactly right.
 already own `bosun/worktree/<slug>` and `bosun/plan/<slug>`. Detached claims nothing, collides with
 nothing, and leaves no branch behind when the directory is removed.
 
+## Which checkout
+
+On a machine attached to a repository (plan 008), the "machine's checkout" is the agent's own clone
+in `~/.bosun/repos/<slug>` — see `workspace.service.md`. On a machine enrolled before, it is the
+operator's checkout, as below. Every service reads the path through a getter at the moment it needs
+it, because an attach moves the machine onto the clone while the agent keeps running. A machine with
+no repository yet has no path, and `readTree` refuses rather than reading an arbitrary directory.
+
 ## Invariants
 
 - **The machine's checkout is never written to.** Only `fetch` and read-only plumbing run against

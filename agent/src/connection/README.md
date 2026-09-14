@@ -72,7 +72,39 @@ that change it are per-connection request/replies — `env.saved` or `env.error`
 the socket that asked, like `pong`, and never through the sink, because a reply replayed on the next
 connection answers a request nobody is waiting on any more. See `../services/project-env.service.md`.
 
+### What `hello` says about a repository machine
+
+Plan 008 adds: `repositoryId` and `configOnDefault` (what the last look at the default branch found —
+cached, because `hello` must go out before anything is awaited), `publicKey` (what the browser seals
+values to; absent means the backend refuses browser input), `sessionSecrets` (names only), and
+`onboardingRunIds` (the onboarding runs still held, on the same terms as `runIds`). `repoPath` is
+absent until a machine enrolled under 008 has a repository.
+
+### Preflight follows the files
+
+`file-watch.ts` watches `~/.bosun` and, when `env`, `mcp.json` or `project-env.json` changes, re-runs
+the same announce with `reason: 'change'`, debounced by a second. `bosun-agent setup`, `mcp add` and a
+hand edit all write those files, so the browser's checklist ticks as they land. `change` is not
+`refresh`: it is never offered an upgrade. Refresh stays for upgrades and re-reading the repository.
+
+### `repo.attach`
+
+Answered on the socket that asked, like the env frames, with `repo.attached` or `repo.error`. The clone
+can take minutes; once it is in place the agent re-announces, so the new repository reaches `hello` and
+the `git` check turns green with nothing run on the box.
+
+### Publishing on a repository machine
+
+`queue.publish` pushes and stops, answering `queue.pushed`; the backend opens or updates the pull
+request through the GitHub App. A machine with no repository still opens it with `gh`.
+
 ## Why execution and planning sessions outlive the connection
+
+Onboarding runs (`../onboarding/session.ts`) are built in `holdConnection` for the same reasons, and
+`onboarding.done` / `onboarding.error` are settling frames the sink buffers. The sink reports buffered
+run ids by frame type, not by field: an onboarding outcome carries a `runId` too, and naming it in
+`hello.runIds` would read to the backend as a bullet still held.
+
 
 Ask sessions are per-connection and are cancelled on close: one is a single question answered over
 *that* socket by a queue that is waiting on the reply, so a session whose socket has gone has nobody

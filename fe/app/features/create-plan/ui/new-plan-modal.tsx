@@ -3,7 +3,8 @@ import { useForm } from '@mantine/form'
 import { zod4Resolver } from 'mantine-form-zod-resolver'
 import { useNavigate } from 'react-router'
 
-import { useMachinesQuery } from '~/entities/machine'
+import { machineKind, useMachinesQuery } from '~/entities/machine'
+import { machinePickerLabel, useRepositoriesQuery } from '~/entities/repository'
 import { useCreatePlan } from '~/features/create-plan/api/use-create-plan'
 import {
 	CreatePlanFormSchema,
@@ -14,6 +15,7 @@ import { AppModal } from '~/shared/ui'
 export function NewPlanModal ({ opened, onClose }: { opened: boolean, onClose: () => void }) {
 	const navigate = useNavigate()
 	const machines = useMachinesQuery()
+	const repositories = useRepositoriesQuery()
 	const createPlan = useCreatePlan()
 
 	const form = useForm<CreatePlanForm>({
@@ -22,11 +24,14 @@ export function NewPlanModal ({ opened, onClose }: { opened: boolean, onClose: (
 		validate: zod4Resolver(CreatePlanFormSchema)
 	})
 
-	// Only online machines: a session runs in that machine's checkout, so an
-	// offline one has nothing to run the grill on and the backend refuses it.
+	// Only online machines with something to read: a session runs in that
+	// machine's checkout, and one enrolled with no repository attached has none.
 	const options = (machines.data ?? [])
-		.filter((machine) => machine.status === 'online')
-		.map((machine) => ({ value: machine.id, label: machine.name }))
+		.filter((machine) => machine.status === 'online' && machineKind(machine) !== 'unattached')
+		.map((machine) => ({
+			value: machine.id,
+			label: machinePickerLabel({ machine, repositories: repositories.data })
+		}))
 
 	const close = () => {
 		form.reset()

@@ -15,7 +15,9 @@ const SETTLING = new Set([
 	'exec.question',
 	'plan.done',
 	'plan.error',
-	'plan.question'
+	'plan.question',
+	'onboarding.done',
+	'onboarding.error'
 ]);
 
 export interface FrameSink {
@@ -24,6 +26,7 @@ export interface FrameSink {
 	send(message: AgentMsg): void;
 	pendingRunIds(): string[];
 	pendingPlanIds(): string[];
+	pendingOnboardingRunIds(): string[];
 }
 
 // An execution session outlives the socket it was dispatched over: `claude` keeps
@@ -74,8 +77,18 @@ export function createFrameSink(): FrameSink {
 		// result is parked right here — and a backend that settled it as stranded
 		// would pause the queue over a plan that in fact landed, and hand the same
 		// bullet out again on resume.
+		// By type, not by field: an onboarding outcome carries a `runId` too, and a
+		// bullet id the backend has never heard of would be read as a run still held.
 		pendingRunIds(): string[] {
-			return pending.flatMap((message) => ('runId' in message ? [message.runId] : []));
+			return pending.flatMap((message) =>
+				message.type.startsWith('exec.') && 'runId' in message ? [message.runId] : []
+			);
+		},
+
+		pendingOnboardingRunIds(): string[] {
+			return pending.flatMap((message) =>
+				message.type.startsWith('onboarding.') && 'runId' in message ? [message.runId] : []
+			);
 		},
 
 		// The same argument for a grill: a session that published and settled while

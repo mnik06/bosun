@@ -19,12 +19,16 @@ export function findPrUrl(output: string): string | null {
 
 export function getPublishService(deps: { exec: ExecService }) {
 	return {
+		// `pushOnly` is a machine attached to a repository: it pushes through the App
+		// credential and stops, and the backend opens the pull request. Such a machine
+		// needs no `gh`, and holds nothing that could open one itself.
 		async publish(opts: {
 			worktreePath: string;
 			branch: string;
 			baseRef: string;
 			title: string;
 			body: string;
+			pushOnly?: boolean;
 		}): Promise<PublishResult> {
 			// The last bullet can run for an hour, and the remote branch can gain a
 			// commit in that time just as well as before it started.
@@ -46,6 +50,10 @@ export function getPublishService(deps: { exec: ExecService }) {
 
 			if (!pushed.ok) {
 				return { ok: false, prUrl: null, detail: `could not push ${opts.branch}: ${pushed.reason}` };
+			}
+
+			if (opts.pushOnly) {
+				return { ok: true, prUrl: null, detail: 'pushed' };
 			}
 
 			// The base is stripped of its remote: `gh` wants a branch name, and

@@ -1,4 +1,5 @@
 import os from 'os';
+import path from 'path';
 import WebSocket, { type RawData } from 'ws';
 import { backoffDelay, nextAttempt } from './backoff';
 import { createFrameSink, type FrameSink } from './frame-sink';
@@ -10,6 +11,8 @@ import { parseServerFrame, routeServerFrame, type AgentState } from './router';
 import { type AgentConfig } from '../config/config';
 import { createAskSessions } from '../ask/session';
 import { createExecutionSessions, type ExecutionSessions } from '../execution/session';
+import { createOnboardingSessions, type OnboardingSessions } from '../onboarding/session';
+import { watchBosunFiles } from './file-watch';
 import { createPlanningSessions, type PlanningSessions } from '../planning/session';
 import { planningPrompt, revisionPrompt } from '../prompts/planning';
 import { preparationPrompt } from '../prompts/preparation';
@@ -47,6 +50,23 @@ interface ConnectionDeps {
 	sink: FrameSink;
 	executions: ExecutionSessions;
 	sessions: PlanningSessions;
+	onboarding: OnboardingSessions;
+	// The current connection's announce, so a file changing under ~/.bosun reaches
+	// whichever socket is open, and nothing at all while none is.
+	announcer: { current: ((reason: 'change') => Promise<void>) | null };
+}
+
+// Sealed browser input is only possible once there is a key to seal to. A key file
+// that cannot be read leaves the key out, which the backend reads as a machine that
+// cannot take browser input — the honest answer — rather than failing the announce.
+function publicKeyOf(services: Services): string | undefined {
+	try {
+		return services.inputsKey.ensure().publicKey;
+	} catch (error) {
+		console.error(`inputs key: ${error instanceof Error ? error.message : 'unreadable'}`);
+
+		return undefined;
+	}
 }
 
 // What `refresh` runs is deliberately the same thing `open` runs. Everything the
@@ -54,7 +74,7 @@ interface ConnectionDeps {
 // the skills directories — so a token pasted in after the agent started, or a
 // server added since, takes effect without a restart.
 function createAnnouncer(deps: ConnectionDeps & { socket: WebSocket }) {
-	return async function announce(reason: 'connect' | 'refresh'): Promise<void> {
+	return async function announce(reason: 'connect' | 'refresh' | 'change'): Promise<void> {
 		if (deps.socket.readyState !== WebSocket.OPEN) {
 			return;
 		}
@@ -66,7 +86,7 @@ function createAnnouncer(deps: ConnectionDeps & { socket: WebSocket }) {
 				type: 'hello',
 				agentVersion: AGENT_VERSION,
 				hostname: os.hostname(),
-				repoPath: deps.config.repoPath,
+				repoPath: deps.services.workspace.repoPath() ?? undefined,
 				reason,
 				// Every run whose outcome this agent is still going to report: the ones
 				// it is building, and the ones that settled while the connection was
@@ -80,6 +100,9 @@ function createAnnouncer(deps: ConnectionDeps & { socket: WebSocket }) {
 				// that failed every `planning` plan on a reconnect would kill the grill
 				// the person is in the middle of answering.
 				planIds: [...new Set([...deps.sessions.held(), ...deps.sink.pendingPlanIds()])],
+				onboardingRunIds: [
+					...new Set([...deps.onboarding.held(), ...deps.sink.pendingOnboardingRunIds()])
+				],
 				uptimeMs: Math.round(process.uptime() * 1000),
 				// What the scheduler budgets this machine's bullets against, and how the
 				// agent process before this one ended. Together they are how a bullet
@@ -90,7 +113,11 @@ function createAnnouncer(deps: ConnectionDeps & { socket: WebSocket }) {
 				// Key names per path, so the browser can show what this machine holds
 				// without a value ever leaving it. Read from disk like everything above:
 				// a store restored or emptied by hand is otherwise invisible.
-				envSets: deps.services.projectEnv.summary()
+				envSets: deps.services.projectEnv.summary(),
+				sessionSecrets: deps.services.projectEnv.secretNames(),
+				publicKey: publicKeyOf(deps.services),
+				repositoryId: deps.services.workspace.repositoryId(),
+				configOnDefault: deps.services.workspace.knownConfigOnDefault()
 			})
 		);
 
@@ -146,7 +173,8 @@ async function connectOnce(deps: ConnectionDeps): Promise<void> {
 		let pendingUpgrade: { version: string; downloadBaseUrl: string; force: boolean } | null =
 			null;
 
-		const sessionsRunning = (): number => sessions.running() + deps.executions.running();
+		const sessionsRunning = (): number =>
+			sessions.running() + deps.executions.running() + deps.onboarding.running();
 
 		const install = async (target: {
 			version: string;
@@ -258,6 +286,7 @@ async function connectOnce(deps: ConnectionDeps): Promise<void> {
 			// Announced before the sink is attached, and `announce` sends `hello`
 			// before its first await, so the backend learns which runs survived
 			// before any frame buffered during the outage arrives to describe one.
+			deps.announcer.current = announce;
 			void announce('connect');
 			deps.sink.attach((message: AgentMsg) => {
 				socket.send(JSON.stringify(message));
@@ -279,6 +308,7 @@ async function connectOnce(deps: ConnectionDeps): Promise<void> {
 					state: deps.state,
 					sessions,
 					executions: deps.executions,
+					onboarding: deps.onboarding,
 					summaries,
 					asks,
 					announce,
@@ -302,6 +332,7 @@ async function connectOnce(deps: ConnectionDeps): Promise<void> {
 		// throwing the session away.
 		socket.on('error', (error) => {
 			clearInterval(upgradeSweep);
+			deps.announcer.current = null;
 			deps.sink.detach();
 			summaries.cancelAll();
 			asks.cancelAll();
@@ -309,6 +340,7 @@ async function connectOnce(deps: ConnectionDeps): Promise<void> {
 		});
 
 		socket.on('close', () => {
+			deps.announcer.current = null;
 			deps.sink.detach();
 			summaries.cancelAll();
 			asks.cancelAll();
@@ -349,17 +381,34 @@ export async function holdConnection(opts: {
 	// tolerable while a grill died with its socket; a session that now survives
 	// reconnects would otherwise leave a `claude` holding a port, a worktree and a
 	// credential behind every `systemctl restart`.
+	const onboarding = createOnboardingSessions({ services: opts.services, send: sink.send });
+	const announcer: ConnectionDeps['announcer'] = { current: null };
+
+	// Stacks are reaped here too: an app a session started runs in a process group
+	// of its own, so nothing else stops it when the agent does.
 	for (const signal of ['SIGTERM', 'SIGINT'] as const) {
 		process.once(signal, () => {
 			sessions.cancelAll();
 			executions.cancelAll();
-			process.exit(0);
+			onboarding.cancelAll();
+			void opts.services.stack.downAll().finally(() => {
+				process.exit(0);
+			});
 		});
 	}
 
+	// The wizard, `mcp add` and a hand edit all write these files. Watching them is
+	// what turns the browser's checklist green as they land, with no Refresh.
+	watchBosunFiles({
+		dir: path.dirname(opts.services.projectEnv.storePath),
+		onChange: () => {
+			void announcer.current?.('change');
+		}
+	});
+
 	for (;;) {
 		try {
-			await connectOnce({ ...opts, state, sink, executions, sessions });
+			await connectOnce({ ...opts, state, sink, executions, sessions, onboarding, announcer });
 			console.log('connection closed');
 			attempt = 0;
 		} catch (error) {

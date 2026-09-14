@@ -40,6 +40,13 @@ export const EnvSetSummarySchema = z.object({
 
 export type EnvSetSummary = z.infer<typeof EnvSetSummarySchema>
 
+export const MachinePolicySchema = z.object({
+	applyMigrations: z.boolean(),
+	confirmed: z.boolean().default(false)
+})
+
+export type MachinePolicy = z.infer<typeof MachinePolicySchema>
+
 export const MachineSchema = z.object({
 	id: z.string(),
 	name: z.string(),
@@ -52,6 +59,12 @@ export const MachineSchema = z.object({
 	// Nullish, not nullable: a backend that predates env sets omits the field,
 	// and failing the whole machine parse over it would blank the page.
 	envSets: z.array(EnvSetSummarySchema).nullish(),
+	// Nullish for the same reason: a backend older than repositories and sealed
+	// inputs omits all four.
+	repositoryId: z.string().nullish(),
+	publicKey: z.string().nullish(),
+	policy: MachinePolicySchema.nullish(),
+	sessionSecrets: z.array(z.string()).nullish(),
 	createdAt: z.iso.datetime()
 })
 

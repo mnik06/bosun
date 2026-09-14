@@ -11,5 +11,5 @@ export function errorHandler(error: FastifyError, req: FastifyRequest, reply: Fa
 	// request was wrong".
 	const message = deliberate || statusCode < 500 ? error.message : 'Internal server error';
 
-	return reply.status(statusCode).send({ message });
+	return reply.status(statusCode).send(deliberate ? { ...error.details, message } : { message });
 }

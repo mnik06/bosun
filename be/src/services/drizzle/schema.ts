@@ -1,4 +1,5 @@
 import {
+	bigint,
 	boolean,
 	index,
 	integer,
@@ -12,6 +13,14 @@ import {
 } from 'drizzle-orm/pg-core';
 import { type EnvSetSummary } from 'src/types/env-sets';
 import { type MachineStatus, type PreflightCheck } from 'src/types/MachineSchema';
+import {
+	type MachinePolicy,
+	type OnboardingAssumption,
+	type OnboardingPhase,
+	type OnboardingRequirement,
+	type OnboardingStatus,
+	type OnboardingStep
+} from 'src/types/OnboardingSchema';
 import { type ProjectProfile } from 'src/types/ProjectProfileSchema';
 import { type ProjectRole } from 'src/types/ProjectSchema';
 import { type PlanSummary } from 'src/types/PlanSummarySchema';
@@ -68,6 +77,46 @@ export const projectMembers = pgTable(
 	]
 );
 
+// The only GitHub state bosun keeps. No token is stored anywhere: installation
+// tokens are minted on demand, and the installing user's token is discarded the
+// moment it has proved they can reach this installation.
+export const githubInstallations = pgTable(
+	'github_installations',
+	{
+		id: text().primaryKey(),
+		projectId: text()
+			.notNull()
+			.references(() => projects.id, { onDelete: 'cascade' }),
+		installationId: bigint({ mode: 'number' }).notNull(),
+		accountLogin: text().notNull(),
+		createdByUserId: text().references(() => users.id, { onDelete: 'set null' }),
+		createdAt: timestamp({ withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [unique('github_installations_project_installation_key').on(table.projectId, table.installationId)]
+);
+
+export const repositories = pgTable(
+	'repositories',
+	{
+		id: text().primaryKey(),
+		projectId: text()
+			.notNull()
+			.references(() => projects.id, { onDelete: 'cascade' }),
+		installationId: text()
+			.notNull()
+			.references(() => githubInstallations.id, { onDelete: 'cascade' }),
+		githubRepoId: bigint({ mode: 'number' }).notNull(),
+		fullName: text().notNull(),
+		defaultBranch: text().notNull(),
+		// Held only until `.bosun/project.yaml` exists on a branch. Validated on write,
+		// so a draft that reaches a machine is one the schema accepts.
+		configDraft: text(),
+		configOnDefault: boolean().notNull().default(false),
+		createdAt: timestamp({ withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [unique('repositories_project_github_repo_key').on(table.projectId, table.githubRepoId)]
+);
+
 export const machines = pgTable(
 	'machines',
 	{
@@ -88,9 +137,47 @@ export const machines = pgTable(
 		projectProfile: jsonb().$type<ProjectProfile>(),
 		// Key names only. The values stay on the machine and are never written here.
 		envSets: jsonb().$type<EnvSetSummary[]>(),
+		// A column rather than a join table: one repository per machine is the design.
+		// Set when an attach is asked for, so the credential route answers the clone.
+		repositoryId: text().references(() => repositories.id, { onDelete: 'set null' }),
+		// The agent's own key, reported in `hello`. What the browser seals values to.
+		publicKey: text(),
+		policy: jsonb().$type<MachinePolicy>().notNull().default({ applyMigrations: true, confirmed: false }),
+		// Names only, for the same reason as `envSets`.
+		sessionSecrets: jsonb().$type<string[]>(),
 		createdAt: timestamp({ withTimezone: true }).notNull().defaultNow()
 	},
 	(table) => [index('machines_project_id_idx').on(table.projectId)]
+);
+
+// Discovery belongs to a repository and happens once; verify belongs to a
+// machine. A run started as one phase keeps its phase and moves through the
+// statuses — a discovery that is satisfied becomes that machine's verify.
+export const onboardingRuns = pgTable(
+	'onboarding_runs',
+	{
+		id: text().primaryKey(),
+		repositoryId: text()
+			.notNull()
+			.references(() => repositories.id, { onDelete: 'cascade' }),
+		machineId: text()
+			.notNull()
+			.references(() => machines.id, { onDelete: 'cascade' }),
+		phase: text().$type<OnboardingPhase>().notNull(),
+		status: text().$type<OnboardingStatus>().notNull(),
+		portBase: integer(),
+		steps: jsonb().$type<OnboardingStep[]>().notNull().default([]),
+		requirements: jsonb().$type<OnboardingRequirement[]>().notNull().default([]),
+		assumptions: jsonb().$type<OnboardingAssumption[]>().notNull().default([]),
+		config: text(),
+		failureReason: text(),
+		startedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+		finishedAt: timestamp({ withTimezone: true })
+	},
+	(table) => [
+		index('onboarding_runs_repository_id_idx').on(table.repositoryId),
+		index('onboarding_runs_machine_id_idx').on(table.machineId)
+	]
 );
 
 export const plans = pgTable(

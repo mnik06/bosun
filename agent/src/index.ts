@@ -3,8 +3,10 @@ import path from 'path';
 import { Command } from 'commander';
 import { setClaudeToken, showClaudeAuth } from './commands/auth';
 import { enroll } from './commands/enroll';
+import { gitCredential } from './commands/git-credential';
 import { addMcpPreset, checkMcpServers, listMcpServers, removeMcpServer } from './commands/mcp';
 import { run } from './commands/run';
+import { runSetup } from './commands/setup';
 import { defaultConfigPath, readConfig } from './config/config';
 import { AGENT_VERSION } from './version';
 
@@ -17,9 +19,9 @@ program
 	.description('Exchange a one-time enrollment code for a machine key')
 	.option('--server <url>', 'bosun backend base URL', process.env.BOSUN_SERVER)
 	.option('--token <token>', 'one-time enrollment code (prefer the BOSUN_TOKEN env var)')
-	.option('--repo <path>', 'repository this machine works in', process.cwd())
+	.option('--repo <path>', 'an existing checkout to work in — leave it out and bosun attaches a repository')
 	.option('--config <path>', 'where to write the agent config', defaultConfigPath())
-	.action(async (opts: { server?: string; token?: string; repo: string; config: string }) => {
+	.action(async (opts: { server?: string; token?: string; repo?: string; config: string }) => {
 		// The token is read from the environment first: argv is world-readable
 		// through /proc/<pid>/cmdline, while /proc/<pid>/environ is owner-only.
 		const token = process.env.BOSUN_TOKEN ?? opts.token;
@@ -37,12 +39,30 @@ program
 		const config = await enroll({
 			serverUrl,
 			token,
-			repoPath: path.resolve(opts.repo),
+			repoPath: opts.repo === undefined ? null : path.resolve(opts.repo),
 			configPath
 		});
 
 		console.log(`Enrolled as ${config.machineId}`);
 		console.log(`Config written to ${configPath}`);
+	});
+
+program
+	.command('setup')
+	.description('Walk through what only this machine can be given: the Claude token, MCP servers and the browser')
+	.option('--config <path>', 'path to the agent config', defaultConfigPath())
+	.action(async (opts: { config: string }) => {
+		await runSetup({ configPath: path.resolve(opts.config) });
+	});
+
+// Invoked by git as a credential helper, with `get`, `store` or `erase`. Hidden
+// from help: nobody runs it by hand.
+program
+	.command('git-credential', { hidden: true })
+	.argument('<operation>', 'get, store or erase')
+	.option('--config <path>', 'path to the agent config', defaultConfigPath())
+	.action(async (operation: string, opts: { config: string }) => {
+		await gitCredential({ configPath: path.resolve(opts.config), operation });
 	});
 
 const auth = program.command('auth').description('Manage this machine\'s Claude credential');

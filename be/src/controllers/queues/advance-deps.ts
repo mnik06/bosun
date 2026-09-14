@@ -1,4 +1,7 @@
+import { type GithubInstallationRepo } from 'src/repos/github/github-installation.repo';
+import { type RepositoryRepo } from 'src/repos/github/repository.repo';
 import { type MachineRepo } from 'src/repos/machines/machine.repo';
+import { type OnboardingRunRepo } from 'src/repos/onboarding/onboarding-run.repo';
 import { type AcRepo } from 'src/repos/plans/ac.repo';
 import { type PlanBlockerRepo } from 'src/repos/plans/plan-blocker.repo';
 import { type PlanDecisionRepo } from 'src/repos/plans/plan-decision.repo';
@@ -7,6 +10,7 @@ import { type SliceRepo } from 'src/repos/plans/slice.repo';
 import { type QueueItemRepo } from 'src/repos/queues/queue-item.repo';
 import { type QueueRepo } from 'src/repos/queues/queue.repo';
 import { type SliceRunRepo } from 'src/repos/queues/slice-run.repo';
+import { type GithubAppService } from 'src/services/github/github-app.service';
 import { type RunActivityService } from 'src/services/runs/run-activity.service';
 import { type MachineMemoryService } from 'src/services/sockets/machine-memory.service';
 import { type SocketRegistry } from 'src/services/sockets/registry.service';
@@ -25,6 +29,12 @@ export interface AdvanceDeps {
 	planBlockerRepo: PlanBlockerRepo;
 	planDecisionRepo: PlanDecisionRepo;
 	machineRepo: MachineRepo;
+	// A repository machine's bullets carry its draft, share its memory with any
+	// onboarding run, and have their pull requests opened through the App.
+	repositoryRepo: RepositoryRepo;
+	githubInstallationRepo: GithubInstallationRepo;
+	onboardingRunRepo: OnboardingRunRepo;
+	githubApp: GithubAppService;
 	socketRegistry: SocketRegistry;
 	runActivity: RunActivityService;
 	machineMemory: MachineMemoryService;

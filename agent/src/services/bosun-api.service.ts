@@ -4,10 +4,13 @@ import { z } from 'zod';
 const EnrollRespSchema = z.object({
 	machineId: z.string(),
 	machineKey: z.string(),
-	serverUrl: z.url()
+	serverUrl: z.url(),
+	appUrl: z.url().optional()
 });
 
 const ErrorRespSchema = z.object({ message: z.string() });
+
+const GitCredentialRespSchema = z.object({ token: z.string(), expiresAt: z.string() });
 
 const McpRequirementSchema = z.object({
 	env: z.string(),
@@ -85,11 +88,15 @@ export function getBosunApiService(deps: { serverUrl: string; machineKey?: strin
 			return McpPresetSchema.parse(await get(`/mcp-presets/${encodeURIComponent(id)}`));
 		},
 
-		async enroll(opts: { token: string; repoPath: string }) {
+		async enroll(opts: { token: string; repoPath: string | null }) {
 			const payload = await post({
 				path: '/enroll',
 				authorized: false,
-				body: { token: opts.token, hostname: os.hostname(), repoPath: opts.repoPath }
+				body: {
+					token: opts.token,
+					hostname: os.hostname(),
+					...(opts.repoPath === null ? {} : { repoPath: opts.repoPath })
+				}
 			});
 
 			return EnrollRespSchema.parse(payload);
@@ -158,6 +165,50 @@ export function getBosunApiService(deps: { serverUrl: string; machineKey?: strin
 			const { planId, ...body } = opts;
 
 			return post({ path: `/agent/plans/${planId}/decisions`, body, authorized: true });
+		},
+
+		async gitCredential(): Promise<{ token: string; expiresAt: string }> {
+			return GitCredentialRespSchema.parse(await post({ path: '/agent/git-credential', body: {}, authorized: true }));
+		},
+
+		async reportOnboardingStep(opts: {
+			runId: string;
+			label: string;
+			status: 'info' | 'running' | 'passed' | 'failed';
+			detail: string | null;
+		}): Promise<unknown> {
+			const { runId, ...body } = opts;
+
+			return post({ path: `/agent/onboarding/${encodeURIComponent(runId)}/steps`, body, authorized: true });
+		},
+
+		// Validation issues come back as an answer rather than a refusal, so the
+		// session reads which fields to fix.
+		async publishOnboardingConfig(opts: { runId: string; yaml: string }): Promise<unknown> {
+			return post({
+				path: `/agent/onboarding/${encodeURIComponent(opts.runId)}/config`,
+				body: { yaml: opts.yaml },
+				authorized: true
+			});
+		},
+
+		async reportOnboardingRequirement(opts: {
+			runId: string;
+			kind: 'env' | 'secret' | 'policy';
+			path: string | null;
+			key: string;
+			why: string;
+			evidence: string;
+		}): Promise<unknown> {
+			const { runId, ...body } = opts;
+
+			return post({ path: `/agent/onboarding/${encodeURIComponent(runId)}/requirements`, body, authorized: true });
+		},
+
+		async recordOnboardingAssumption(opts: { runId: string; text: string; evidence: string }): Promise<unknown> {
+			const { runId, ...body } = opts;
+
+			return post({ path: `/agent/onboarding/${encodeURIComponent(runId)}/assumptions`, body, authorized: true });
 		},
 
 		async setPlanBlockers(opts: { planId: string; blockedByNumbers: number[] }): Promise<unknown> {

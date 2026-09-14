@@ -1,4 +1,7 @@
+export { base64ToBytes, bytesToBase64 } from './base64'
 export { formatDuration } from './format-duration'
 export { formatRelativeTime } from './format-relative-time'
+export { keyFingerprint } from './key-fingerprint'
 export { notifyError } from './notify-error'
+export { seal, type SealedValue } from './seal'
 export { toErrorMessage } from './to-error-message'

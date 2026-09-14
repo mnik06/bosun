@@ -1,8 +1,9 @@
 import { type AdvanceDeps } from 'src/controllers/queues/advance-deps';
+import { configDraftFor } from 'src/controllers/repositories/shared/config-draft';
 import { announceQueue } from 'src/controllers/queues/announce-queue';
-import { pullRequestBody } from 'src/controllers/queues/pull-request-body';
 import { blockerHolds } from 'src/controllers/queues/shared/blockers';
 import { admitBullet } from 'src/controllers/queues/shared/memory-budget';
+import { publishablePlan, pullRequestText } from 'src/controllers/queues/shared/pull-request';
 import { reclaimRun } from 'src/controllers/queues/shared/stranded';
 import { type Plan } from 'src/types/PlanSchema';
 import { toQueueSlug, type Queue, type QueueItem } from 'src/types/QueueSchema';
@@ -77,11 +78,15 @@ async function memoryLimitFor(
 		return null;
 	}
 
-	const [runs, slices, inFlight] = await Promise.all([
+	// An onboarding run installs and starts the whole stack, so it holds what a
+	// verify bullet holds.
+	const [runs, slices, bullets, onboarding] = await Promise.all([
 		deps.sliceRunRepo.listForItem(opts.item.id),
 		deps.sliceRepo.listByPlan(opts.item.planId),
-		deps.sliceRunRepo.listRunningKindsForMachine(opts.queue.machineId)
+		deps.sliceRunRepo.listRunningKindsForMachine(opts.queue.machineId),
+		deps.onboardingRunRepo.listActiveForMachine(opts.queue.machineId)
 	]);
+	const inFlight = [...bullets, ...onboarding.map(() => 'verify' as const)];
 	const next = runs.find((entry) => entry.status === 'pending');
 	const kind = slices.find((entry) => entry.id === next?.sliceId)?.kind;
 
@@ -159,6 +164,8 @@ async function startBullet(
 			planTitle: plan.title ?? 'Untitled plan',
 			planBodyMd: plan.bodyMd ?? '',
 			profile: machine?.projectProfile ?? DEFAULT_PROJECT_PROFILE,
+			configDraft: await configDraftFor({ repositoryRepo: deps.repositoryRepo, machine }),
+			policy: machine?.repositoryId ? { applyMigrations: machine.policy.applyMigrations } : null,
 			portBase: opts.queue.portBase,
 			slice: {
 				ordinal: slice.ordinal,
@@ -238,10 +245,6 @@ async function blockedPlanIds(deps: AdvanceDeps, items: QueueItem[]): Promise<st
 		.map((item) => item.planId);
 }
 
-// Assembled from what bosun already holds rather than from anything the session
-// writes at the end. A decision recorded while executing is on the plan whether
-// or not the last bullet remembered to mention it, and the reviewer reads this
-// before the diff.
 // `bosun/plan/...` rather than `bosun/<queue>/...`: the worktree already holds a
 // branch named for the queue, and git cannot have a ref that is both a leaf and
 // a directory. Two queues can run the same plan, so the queue slug stays in the
@@ -252,66 +255,31 @@ function planBranch(opts: { queueSlug: string; plan: Plan }): string {
 	return `bosun/plan/${opts.queueSlug}/${opts.plan.number}${title === '' ? '' : `-${title}`}`;
 }
 
-// Asked for only when every bullet landed. A plan that failed keeps its branch
-// and its partial commits for somebody to look at, but opening a pull request
-// for work that did not finish would put it in front of reviewers as though it
-// had.
-// The verify bullet's own words, found through its slice rather than by position:
-// a plan does not have to end with one, and the last run is not reliably it.
-async function verifyReportFor(
-	deps: AdvanceDeps,
-	opts: { planId: string; runs: { sliceId: string; report: string | null }[] }
-): Promise<string | null> {
-	const slices = await deps.sliceRepo.listByPlan(opts.planId);
-	const verify = slices.find((slice) => slice.kind === 'verify');
-
-	if (!verify) {
-		return null;
-	}
-
-	return opts.runs.find((run) => run.sliceId === verify.id)?.report ?? null;
-}
-
+// The title and body travel either way: a machine with no repository opens the
+// pull request with them itself, and a repository machine only pushes — the
+// backend opens it through the App when `queue.pushed` comes back.
 async function requestPublish(
 	deps: AdvanceDeps,
 	opts: { queue: Queue; item: QueueItem }
 ): Promise<void> {
-	const runs = await deps.sliceRunRepo.listForItem(opts.item.id);
+	const publishable = await publishablePlan(deps, opts);
 
-	if (runs.length === 0 || runs.some((run) => run.status !== 'done')) {
+	if (!publishable) {
 		return;
 	}
 
-	// Nothing was committed, so there is no branch to push and nothing to review.
-	if (runs.every((run) => run.commitSha === null)) {
-		return;
-	}
-
-	const plan = await deps.planRepo.getByIdForMachine({
-		id: opts.item.planId,
-		machineId: opts.queue.machineId
-	});
-
-	if (!plan || opts.item.branch === null || opts.queue.baseRef === null) {
-		return;
-	}
-
+	const { plan, branch, baseRef } = publishable;
+	const text = await pullRequestText(deps, publishable);
 	const published = deps.socketRegistry.sendToAgent({
 		machineId: opts.queue.machineId,
 		message: {
 			type: 'queue.publish',
 			itemId: opts.item.id,
 			worktreePath: opts.queue.worktreePath!,
-			branch: opts.item.branch,
-			baseRef: opts.queue.baseRef,
-			title: `#${plan.number} ${plan.title ?? 'Untitled plan'}`,
-			body: pullRequestBody({
-				plan,
-				acs: await deps.acRepo.listByPlan(plan.id),
-				decisions: await deps.planDecisionRepo.listByPlan(plan.id),
-				verifyReport: await verifyReportFor(deps, { planId: plan.id, runs }),
-				planUrl: `${deps.appUrl}/plans/${plan.id}?tab=execution`
-			})
+			branch,
+			baseRef,
+			title: text.title,
+			body: text.body
 		}
 	});
 
@@ -325,8 +293,8 @@ async function requestPublish(
 				type: 'queue.summarize',
 				planId: plan.id,
 				worktreePath: opts.queue.worktreePath!,
-				branch: opts.item.branch,
-				baseRef: opts.queue.baseRef,
+				branch,
+				baseRef,
 				planTitle: plan.title ?? 'Untitled plan',
 				planBodyMd: plan.bodyMd
 			}

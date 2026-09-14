@@ -1,4 +1,4 @@
-import { Button, Group, Stack, Text, TextInput } from '@mantine/core'
+import { Alert, Button, Group, Stack, Text, TextInput } from '@mantine/core'
 import { useForm } from '@mantine/form'
 import { randomId } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
@@ -6,7 +6,7 @@ import { ClipboardPaste, Plus } from 'lucide-react'
 import { zod4Resolver } from 'mantine-form-zod-resolver'
 import { useState } from 'react'
 
-import type { EnvSetSummary } from '~/entities/machine'
+import { AGENT_TOO_OLD_FOR_INPUTS, type EnvSetSummary, type Machine } from '~/entities/machine'
 import { useSaveEnvSet } from '~/features/edit-env-sets/api/use-save-env-set'
 import { mergePastedPairs } from '~/features/edit-env-sets/lib/merge-pasted-pairs'
 import { parseEnvText } from '~/features/edit-env-sets/lib/parse-env-text'
@@ -19,6 +19,8 @@ import {
 import { EnvPairRow } from '~/features/edit-env-sets/ui/env-pair-row'
 import { PasteEnvPanel } from '~/features/edit-env-sets/ui/paste-env-panel'
 import { AppModal } from '~/shared/ui'
+
+type MachineKey = Pick<Machine, 'id' | 'publicKey'>
 
 function emptyPair (): EnvPair {
 	return { id: randomId(), key: '', value: '', stored: false }
@@ -44,15 +46,15 @@ function skippedMessage (skippedLines: number[]): string | null {
 }
 
 function EnvSetFormBody ({
-	machineId,
+	machine,
 	envSet,
 	onDone
 }: {
-	machineId: string,
+	machine: MachineKey,
 	envSet: EnvSetSummary | null,
 	onDone: () => void
 }) {
-	const save = useSaveEnvSet(machineId)
+	const save = useSaveEnvSet(machine)
 	const [pasting, setPasting] = useState(false)
 	const form = useForm<EnvSetForm>({
 		mode: 'uncontrolled',
@@ -60,6 +62,7 @@ function EnvSetFormBody ({
 		validate: zod4Resolver(EnvSetFormSchema)
 	})
 	const pairs = form.getValues().pairs
+	const keyless = machine.publicKey == null
 
 	const addPasted = (text: string): boolean => {
 		const { vars, skippedLines } = parseEnvText(text)
@@ -96,6 +99,12 @@ function EnvSetFormBody ({
 	return (
 		<form onSubmit={form.onSubmit(submit)}>
 			<Stack gap="md">
+				{keyless ? (
+					<Alert color="yellow" variant="light" title="Values cannot be sent to this machine">
+						{AGENT_TOO_OLD_FOR_INPUTS}
+					</Alert>
+				) : null}
+
 				<TextInput
 					label="Path"
 					description="A folder inside the repository. The variables are written into <path>/.env in every queue worktree before each bullet — the machine must be online to receive them."
@@ -159,8 +168,8 @@ function EnvSetFormBody ({
 
 				<Text size="xs" c="dimmed">
 					Paste a whole .env file with Paste .env, or straight into any Key field — every KEY=value
-					line becomes a pair. Values are write-only: they go to the machine once and bosun keeps only
-					the key names, so a value is never shown again.
+					line becomes a pair. Values are sealed in this browser to the machine&apos;s key before they
+					are sent: bosun relays them and keeps only the key names, so a value is never shown again.
 					{envSet === null
 						? ''
 						: ' Leave a stored value empty to keep it; remove its pair to delete the key.'}
@@ -170,7 +179,7 @@ function EnvSetFormBody ({
 					<Button variant="default" onClick={onDone}>
 						Cancel
 					</Button>
-					<Button type="submit" loading={save.isPending}>
+					<Button type="submit" loading={save.isPending} disabled={keyless}>
 						Save
 					</Button>
 				</Group>
@@ -180,12 +189,12 @@ function EnvSetFormBody ({
 }
 
 export function EnvSetModal ({
-	machineId,
+	machine,
 	envSet,
 	opened,
 	onClose
 }: {
-	machineId: string,
+	machine: MachineKey,
 	envSet: EnvSetSummary | null,
 	opened: boolean,
 	onClose: () => void
@@ -204,7 +213,7 @@ export function EnvSetModal ({
 		<AppModal opened={opened} onClose={close} title="Env variables" size="lg">
 			<EnvSetFormBody
 				key={`${closings}:${envSet?.path ?? ''}:${envSet?.updatedAt ?? ''}`}
-				machineId={machineId}
+				machine={machine}
 				envSet={envSet}
 				onDone={close}
 			/>

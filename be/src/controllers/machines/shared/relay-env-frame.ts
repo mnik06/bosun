@@ -10,6 +10,9 @@ import { normalizeEnvPath } from 'src/utils/env-path';
 
 const REPLY_TIMEOUT_MS = 15_000;
 
+export const KEYLESS_AGENT =
+	"This machine's agent is too old to receive values from the browser — upgrade it with Refresh";
+
 export type EnvRelayDeps = {
 	machineRepo: MachineRepo;
 	socketRegistry: SocketRegistry;
@@ -17,35 +20,43 @@ export type EnvRelayDeps = {
 	pendingEnvRequests: PendingEnvRequestsService;
 };
 
-type EnvFrame = { type: 'env.set'; vars: EnvVarInput[] } | { type: 'env.delete' };
+type EnvFrame =
+	| { type: 'env.set'; path: string; vars: EnvVarInput[] }
+	| { type: 'env.delete'; path: string }
+	| { type: 'secrets.set'; vars: EnvVarInput[] };
 
-// The values travel on the frame and nowhere else: only the key list the machine
-// answers with is written, which is what keeps them out of this database.
-export async function relayEnvFrame(
-	deps: EnvRelayDeps,
-	opts: { id: string; projectId: string; path: string; frame: EnvFrame }
-): Promise<Machine> {
-	const { id: machineId } = await getMachine({
-		machineRepo: deps.machineRepo,
-		id: opts.id,
-		projectId: opts.projectId
-	});
-	const path = normalizeEnvPath(opts.path);
+function withNormalizedPath(frame: EnvFrame): EnvFrame {
+	if (frame.type === 'secrets.set') {
+		return frame;
+	}
+
+	const path = normalizeEnvPath(frame.path);
 
 	if (path === null) {
 		throw new HttpError(400, 'invalid path');
 	}
 
+	return { ...frame, path };
+}
+
+// Only sealed values travel, and only to a machine that published the key they
+// were sealed to: a keyless agent is refused outright rather than sent a value it
+// could only have received in the clear. The values ride the frame and nothing
+// else — the key names the machine answers with are all this database keeps.
+export async function relayEnvFrame(
+	deps: EnvRelayDeps,
+	opts: { id: string; projectId: string; frame: EnvFrame; onSaved?: (machine: Machine) => Promise<void> }
+): Promise<Machine> {
+	const target = await getMachine({ machineRepo: deps.machineRepo, id: opts.id, projectId: opts.projectId });
+
+	if (opts.frame.type !== 'env.delete' && target.publicKey === null) {
+		throw new HttpError(409, KEYLESS_AGENT);
+	}
+
+	const frame = withNormalizedPath(opts.frame);
 	const requestId = deps.idService.createCommandId();
-	const reply = deps.pendingEnvRequests.wait({
-		requestId,
-		machineId,
-		timeoutMs: REPLY_TIMEOUT_MS
-	});
-	const sent = deps.socketRegistry.sendToAgent({
-		machineId,
-		message: { ...opts.frame, path, requestId }
-	});
+	const reply = deps.pendingEnvRequests.wait({ requestId, machineId: target.id, timeoutMs: REPLY_TIMEOUT_MS });
+	const sent = deps.socketRegistry.sendToAgent({ machineId: target.id, message: { ...frame, requestId } });
 
 	if (!sent) {
 		deps.pendingEnvRequests.cancel(requestId);
@@ -63,7 +74,11 @@ export async function relayEnvFrame(
 		throw new HttpError(422, result.message);
 	}
 
-	const machine = await deps.machineRepo.saveEnvSets({ id: machineId, envSets: result.envSets });
+	const saved = await deps.machineRepo.saveEnvSets({ id: target.id, envSets: result.envSets });
+	const machine =
+		result.sessionSecrets === undefined
+			? saved
+			: await deps.machineRepo.saveSessionSecrets({ id: target.id, sessionSecrets: result.sessionSecrets });
 
 	if (!machine) {
 		throw new HttpError(404, 'Machine not found');
@@ -73,6 +88,8 @@ export async function relayEnvFrame(
 		projectId: machine.projectId,
 		message: { type: 'machine.updated', machine }
 	});
+
+	await opts.onSaved?.(machine);
 
 	return machine;
 }

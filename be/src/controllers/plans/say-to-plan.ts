@@ -1,6 +1,8 @@
 import { HttpError } from 'src/api/errors/HttpError';
 import { getOwnedPlan } from 'src/controllers/plans/shared/plan-access';
 import { announcePlan, announcePlanMessage } from 'src/controllers/plans/shared/plan-broadcast';
+import { configDraftFor } from 'src/controllers/repositories/shared/config-draft';
+import { type RepositoryRepo } from 'src/repos/github/repository.repo';
 import { type MachineRepo } from 'src/repos/machines/machine.repo';
 import { type AcRepo } from 'src/repos/plans/ac.repo';
 import { type PlanMessageRepo } from 'src/repos/plans/plan-message.repo';
@@ -19,6 +21,7 @@ export async function sayToPlan(opts: {
 	acRepo: AcRepo;
 	sliceRepo: SliceRepo;
 	machineRepo: MachineRepo;
+	repositoryRepo: RepositoryRepo;
 	idService: IdService;
 	socketRegistry: SocketRegistry;
 	id: string;
@@ -69,6 +72,7 @@ export async function sayToPlan(opts: {
 		opts.machineRepo.getById(plan.machineId)
 	]);
 	const ordinalOf = new Map(slices.map((slice) => [slice.id, slice.ordinal]));
+	const configDraft = await configDraftFor({ repositoryRepo: opts.repositoryRepo, machine });
 
 	opts.socketRegistry.sendToAgent({
 		machineId: plan.machineId,
@@ -77,6 +81,7 @@ export async function sayToPlan(opts: {
 			planId: plan.id,
 			text: opts.text,
 			notes: machine?.projectProfile?.notes ?? null,
+			configDraft,
 			plan: {
 				verifyInUi: plan.verifyInUi,
 				auto: plan.auto,

@@ -1,10 +1,11 @@
 import { Alert, Center, Loader, Stack, Text } from '@mantine/core'
+import type { ReactNode } from 'react'
 
-import { useMachinesQuery } from '~/entities/machine'
+import { useMachinesQuery, type Machine } from '~/entities/machine'
 import { toErrorMessage } from '~/shared/lib'
 import { MachineCard } from '~/widgets/machines-list/ui/machine-card'
 
-export function MachinesList () {
+export function MachinesList ({ renderBadge }: { renderBadge?: (machine: Machine) => ReactNode }) {
 	const { data, isPending, error } = useMachinesQuery()
 
 	if (isPending) {
@@ -34,7 +35,7 @@ export function MachinesList () {
 	return (
 		<Stack gap="sm">
 			{data.map((machine) => (
-				<MachineCard key={machine.id} machine={machine} />
+				<MachineCard key={machine.id} machine={machine} badge={renderBadge?.(machine)} />
 			))}
 		</Stack>
 	)

@@ -45,11 +45,15 @@ export function mergeSkills(opts: { project: string[]; user: string[] }): Discov
 	return [...project, ...user];
 }
 
-export function getSkillsService(deps: { repoPath: string; homeDir?: string }) {
+export function getSkillsService(deps: { repoPath: string | (() => string | null); homeDir?: string }) {
+	const repoPath = typeof deps.repoPath === 'string' ? () => deps.repoPath as string : deps.repoPath;
+
 	return {
 		list(): DiscoveredSkill[] {
+			const current = repoPath();
+
 			return mergeSkills({
-				project: listSkillsIn(deps.repoPath),
+				project: current === null ? [] : listSkillsIn(current),
 				user: listSkillsIn(deps.homeDir ?? os.homedir())
 			});
 		}

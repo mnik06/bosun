@@ -22,7 +22,10 @@ const StoreSchema = z.object({
 	sets: z.record(
 		z.string(),
 		z.object({ vars: z.record(z.string(), z.string()), updatedAt: z.string() })
-	)
+	),
+	// Put into a session's environment, never written into a worktree: a
+	// test-account password in a `.env` is one `git add -A` from a pull request.
+	secrets: z.record(z.string(), z.string()).default({})
 });
 
 type Store = z.infer<typeof StoreSchema>;
@@ -153,8 +156,9 @@ export function describeApplied(result: { written: string[]; skipped: string[] }
 function checkedVars(opts: {
 	vars: EnvVarInput[];
 	stored: Record<string, string>;
+	allowEmpty?: boolean;
 }): Record<string, string> {
-	if (opts.vars.length === 0) {
+	if (opts.vars.length === 0 && !opts.allowEmpty) {
 		throw new Error('at least one variable is required');
 	}
 
@@ -239,7 +243,7 @@ export function getProjectEnvService(deps: { homeDir?: string }) {
 				warn('it could not be read');
 			}
 
-			return { sets: {} };
+			return { sets: {}, secrets: {} };
 		}
 
 		let json: unknown;
@@ -251,7 +255,7 @@ export function getProjectEnvService(deps: { homeDir?: string }) {
 		} catch {
 			warn('it is not valid JSON');
 
-			return { sets: {} };
+			return { sets: {}, secrets: {} };
 		}
 
 		const parsed = StoreSchema.safeParse(json);
@@ -259,20 +263,26 @@ export function getProjectEnvService(deps: { homeDir?: string }) {
 		if (!parsed.success) {
 			warn('it is not a valid env store');
 
-			return { sets: {} };
+			return { sets: {}, secrets: {} };
 		}
 
 		const sets = Object.fromEntries(
 			Object.entries(parsed.data.sets).filter(([envPath, set]) => storedSetIsValid(envPath, set))
 		);
+		const secrets = Object.fromEntries(
+			Object.entries(parsed.data.secrets).filter(([key, value]) => KEY_PATTERN.test(key) && !/[\r\n]/.test(value))
+		);
+		const skipped =
+			Object.keys(sets).length !== Object.keys(parsed.data.sets).length ||
+			Object.keys(secrets).length !== Object.keys(parsed.data.secrets).length;
 
-		if (Object.keys(sets).length !== Object.keys(parsed.data.sets).length) {
+		if (skipped) {
 			warn('some of its entries are invalid and were skipped');
 		} else {
 			warned = false;
 		}
 
-		return { sets };
+		return { sets, secrets };
 	}
 
 	// Written beside the target and renamed over it, so a crash mid-write leaves
@@ -332,6 +342,27 @@ export function getProjectEnvService(deps: { homeDir?: string }) {
 			save(store);
 
 			return summarize(store);
+		},
+
+		secretNames(): string[] {
+			return Object.keys(load().secrets).sort();
+		},
+
+		// Values, for a session's environment and nowhere else — never a file, a log
+		// line or a frame.
+		secretValues(): Record<string, string> {
+			return load().secrets;
+		},
+
+		// Replaces the whole set, like `set` replaces a path's. `null` keeps a stored
+		// value, and an empty list removes them all.
+		setSecrets(vars: EnvVarInput[]): { envSets: EnvSetSummary[]; sessionSecrets: string[] } {
+			const store = load();
+
+			store.secrets = checkedVars({ vars, stored: store.secrets, allowEmpty: true });
+			save(store);
+
+			return { envSets: summarize(store), sessionSecrets: Object.keys(store.secrets).sort() };
 		},
 
 		// Only the stored set. A `.env` already written into a worktree stays: it may

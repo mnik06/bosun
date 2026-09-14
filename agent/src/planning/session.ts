@@ -6,6 +6,7 @@ import {
 	type PlanSnapshot,
 	type PreparePlan
 } from '../protocol';
+import { resolveProjectConfig } from '../services/config-resolution';
 import { type ReadTree } from '../services/repo.service';
 import { type Services } from '../services/index';
 import { createActivityTracker } from './activity-labels';
@@ -129,6 +130,7 @@ export interface PlanningSessions {
 		verifyInUi: boolean;
 		auto: boolean;
 		notes: string | null;
+		configDraft: string | null;
 	}): Promise<void>;
 	held(): string[];
 	prepare(opts: {
@@ -137,11 +139,13 @@ export interface PlanningSessions {
 		auto: boolean;
 		plans: PreparePlan[];
 		notes: string | null;
+		configDraft: string | null;
 	}): Promise<void>;
 	say(opts: {
 		planId: string;
 		text: string;
 		notes: string | null;
+		configDraft: string | null;
 		plan: PlanSnapshot;
 	}): Promise<void>;
 	answer(opts: { planId: string; questionId: string; answers: PlanAnswer[] }): void;
@@ -300,10 +304,26 @@ export function createPlanningSessions(opts: {
 	// Fetched and resolved per session rather than once at connect: a machine can
 	// hold a socket for days, and what `origin/HEAD` pointed at when it connected
 	// is exactly the staleness this exists to remove.
-	const readTree = async (planId: string): Promise<ReadTree> => {
+	//
+	// A repository machine's notes come from the config in the tree it reads — the
+	// file when the default branch has one, the draft otherwise. A file that does
+	// not validate stops the session here, before it plans against a config nobody
+	// can run. Null means the session was refused and the plan already failed.
+	const readTree = async (
+		planId: string,
+		project: { notes: string | null; configDraft: string | null }
+	): Promise<{ tree: ReadTree; notes: string | null } | null> => {
 		opts.send({ type: 'plan.activity', planId, label: 'Fetching the latest changes' });
 
-		const tree = await opts.services.repo.readTree();
+		let tree: ReadTree;
+
+		try {
+			tree = await opts.services.repo.readTree();
+		} catch (error) {
+			opts.send({ type: 'plan.error', planId, message: error instanceof Error ? error.message : 'could not read the repository' });
+
+			return null;
+		}
 
 		console.log(`[${planId}] reading ${tree.path}: ${tree.detail}`);
 
@@ -315,7 +335,19 @@ export function createPlanningSessions(opts: {
 			});
 		}
 
-		return tree;
+		if (opts.services.workspace.repositoryId() === null) {
+			return { tree, notes: project.notes };
+		}
+
+		const resolved = resolveProjectConfig({ treePath: tree.path, draft: project.configDraft });
+
+		if (resolved.source === 'invalid') {
+			opts.send({ type: 'plan.error', planId, message: resolved.detail });
+
+			return null;
+		}
+
+		return { tree, notes: resolved.source === 'none' ? project.notes : resolved.config.notes ?? project.notes };
 	};
 
 	const startProcess = async (opts2: {
@@ -465,7 +497,13 @@ export function createPlanningSessions(opts: {
 				return;
 			}
 
-			const tree = await readTree(payload.planId);
+			const read = await readTree(payload.planId, payload);
+
+			if (read === null) {
+				return;
+			}
+
+			const { tree, notes } = read;
 
 			await spawnFor({
 				planId: payload.planId,
@@ -473,7 +511,7 @@ export function createPlanningSessions(opts: {
 					input: payload.input,
 					verifyInUi: payload.verifyInUi,
 					auto: payload.auto,
-					notes: payload.notes,
+					notes,
 					tree
 				}),
 				cwd: tree.path,
@@ -511,7 +549,13 @@ export function createPlanningSessions(opts: {
 				return;
 			}
 
-			const tree = await readTree(payload.planId);
+			const read = await readTree(payload.planId, payload);
+
+			if (read === null) {
+				return;
+			}
+
+			const { tree, notes } = read;
 
 			await spawnFor({
 				planId: payload.planId,
@@ -519,7 +563,7 @@ export function createPlanningSessions(opts: {
 					planNumber: payload.planNumber,
 					auto: payload.auto,
 					plans: payload.plans,
-					notes: payload.notes,
+					notes,
 					tree
 				}),
 				cwd: tree.path,
@@ -553,14 +597,20 @@ export function createPlanningSessions(opts: {
 				return;
 			}
 
-			const tree = await readTree(payload.planId);
+			const read = await readTree(payload.planId, payload);
+
+			if (read === null) {
+				return;
+			}
+
+			const { tree, notes } = read;
 
 			await spawnFor({
 				planId: payload.planId,
 				prompt: opts.revisionPrompt({
 					plan: payload.plan,
 					request: payload.text,
-					notes: payload.notes,
+					notes,
 					tree
 				}),
 				cwd: tree.path,

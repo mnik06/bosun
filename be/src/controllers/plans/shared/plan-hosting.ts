@@ -1,4 +1,5 @@
 import { HttpError } from 'src/api/errors/HttpError';
+import { awaitingRepository } from 'src/controllers/repositories/shared/config-draft';
 import { type MachineRepo } from 'src/repos/machines/machine.repo';
 import { type SocketRegistry } from 'src/services/sockets/registry.service';
 import { type Machine } from 'src/types/MachineSchema';
@@ -12,6 +13,10 @@ function hostingRefusal(machine: Machine): string | null {
 
 	if (machine.status !== 'online') {
 		return 'this machine is offline';
+	}
+
+	if (awaitingRepository(machine)) {
+		return 'this machine has no repository attached yet';
 	}
 
 	if (!machine.capabilities) {

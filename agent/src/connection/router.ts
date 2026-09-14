@@ -1,11 +1,18 @@
 import WebSocket from 'ws';
 import { type AskSessions } from '../ask/session';
 import { type ExecutionSessions } from '../execution/session';
+import { type OnboardingSessions } from '../onboarding/session';
 import { type PlanningSessions } from '../planning/session';
 import { type SummarySessions } from '../summary/session';
-import { ServerMsgSchema, type AgentMsg, type ServerMsg } from '../protocol';
+import {
+	ServerMsgSchema,
+	type AgentMsg,
+	type EnvVarInput,
+	type SealedEnvVarInput,
+	type ServerMsg
+} from '../protocol';
 import { type Services } from '../services/index';
-import { describeApplied } from '../services/project-env.service';
+import { ensureWorktree } from './worktree-ensure';
 
 export interface AgentState {
 	paused: boolean;
@@ -40,11 +47,125 @@ export interface RouterDeps {
 	state: AgentState;
 	sessions: PlanningSessions;
 	executions: ExecutionSessions;
+	onboarding: OnboardingSessions;
 	summaries: SummarySessions;
 	asks: AskSessions;
-	announce: (reason: 'connect' | 'refresh') => Promise<void>;
+	announce: (reason: 'connect' | 'refresh' | 'change') => Promise<void>;
 	onUpgrade: (opts: { version: string; downloadBaseUrl: string; force: boolean }) => Promise<void>;
 }
+
+// Opened here, at the last moment before the store: the value exists in plaintext
+// only on this machine and only for as long as it takes to write it.
+function openVars(services: Services, vars: SealedEnvVarInput[]): EnvVarInput[] {
+	return vars.map((entry) => ({
+		key: entry.key,
+		value: entry.value === null ? null : services.inputsKey.open(entry.value)
+	}));
+}
+
+// Answered straight back on this socket, like `pong`: each is a reply to a request
+// somebody is waiting on. Accepted while paused — storing a set is not work — and
+// nothing is written into a worktree here; every bullet does that.
+function changeEnv(deps: RouterDeps, msg: Extract<ServerMsg, { type: 'env.set' | 'env.delete' | 'secrets.set' }>): void {
+	let reply: AgentMsg;
+	const scope = msg.type === 'secrets.set' ? 'session secrets' : `env ${msg.path}`;
+
+	try {
+		if (msg.type === 'secrets.set') {
+			const saved = deps.services.projectEnv.setSecrets(openVars(deps.services, msg.vars));
+
+			reply = { type: 'env.saved', requestId: msg.requestId, ...saved };
+		} else {
+			const envSets =
+				msg.type === 'env.set'
+					? deps.services.projectEnv.set({ path: msg.path, vars: openVars(deps.services, msg.vars) })
+					: deps.services.projectEnv.delete(msg.path);
+
+			reply = {
+				type: 'env.saved',
+				requestId: msg.requestId,
+				envSets,
+				sessionSecrets: deps.services.projectEnv.secretNames()
+			};
+		}
+
+		console.log(`${scope}: ${msg.type === 'env.delete' ? 'removed' : `saved ${msg.vars.map((entry) => entry.key).join(', ') || 'nothing'}`}`);
+	} catch (error) {
+		const message = error instanceof Error ? error.message : 'could not change the stored values';
+
+		console.error(`${scope}: ${message}`);
+		reply = { type: 'env.error', requestId: msg.requestId, message };
+	}
+
+	deps.socket.send(JSON.stringify(reply));
+}
+
+// The clone can take minutes, and the answer settles what the browser shows about
+// the machine. Re-announced after, so the new repository reaches `hello` and the
+// git check turns green without anybody pressing Refresh.
+async function attachRepository(deps: RouterDeps, msg: Extract<ServerMsg, { type: 'repo.attach' }>): Promise<void> {
+	console.log(`repository ${msg.slug}: attaching`);
+
+	const result = await deps.services.workspace.attach(msg);
+
+	if (!result.ok) {
+		console.error(`repository ${msg.slug}: ${result.detail}`);
+		deps.socket.send(JSON.stringify({ type: 'repo.error', repositoryId: msg.repositoryId, message: result.detail }));
+
+		return;
+	}
+
+	console.log(`repository ${msg.slug}: attached at ${result.repoPath}`);
+	deps.socket.send(
+		JSON.stringify({
+			type: 'repo.attached',
+			repositoryId: msg.repositoryId,
+			repoPath: result.repoPath,
+			configOnDefault: result.configOnDefault
+		})
+	);
+	await deps.announce('change');
+}
+
+async function publish(deps: RouterDeps, msg: Extract<ServerMsg, { type: 'queue.publish' }>): Promise<void> {
+	const pushOnly = deps.services.workspace.repositoryId() !== null;
+	const result = await deps.services.publish.publish({
+		worktreePath: msg.worktreePath,
+		branch: msg.branch,
+		baseRef: msg.baseRef,
+		title: msg.title,
+		body: msg.body,
+		pushOnly
+	});
+
+	console.log(`publish ${msg.branch}: ${result.detail}`);
+
+	let reply: AgentMsg;
+
+	if (!result.ok) {
+		reply = { type: 'queue.publish.error', itemId: msg.itemId, message: result.detail };
+	} else if (pushOnly) {
+		reply = { type: 'queue.pushed', itemId: msg.itemId, branch: msg.branch };
+	} else {
+		reply = result.prUrl
+			? { type: 'queue.published', itemId: msg.itemId, prUrl: result.prUrl }
+			: { type: 'queue.publish.error', itemId: msg.itemId, message: result.detail };
+	}
+
+	deps.socket.send(JSON.stringify(reply));
+}
+
+function refusePaused(deps: RouterDeps, reply: AgentMsg): boolean {
+	if (!deps.state.paused) {
+		return false;
+	}
+
+	deps.socket.send(JSON.stringify(reply));
+
+	return true;
+}
+
+const PAUSED = 'this machine is paused';
 
 // A switch rather than a chain with a fallthrough: the chain's last branch was
 // `shutdown`, so every frame type added to the union terminated the agent until
@@ -82,45 +203,34 @@ export async function routeServerFrame(deps: RouterDeps, msg: ServerMsg): Promis
 
 			return;
 
-		// Answered straight back on this socket, like `pong`: it is a reply to a
-		// request somebody is waiting on. Accepted while paused — storing a set is not
-		// work — and nothing is written into a worktree here; every bullet does that.
 		case 'env.set':
-		case 'env.delete': {
-			let reply: AgentMsg;
-
-			try {
-				const envSets =
-					msg.type === 'env.set'
-						? deps.services.projectEnv.set({ path: msg.path, vars: msg.vars })
-						: deps.services.projectEnv.delete(msg.path);
-				const change =
-					msg.type === 'env.set' ? `saved ${msg.vars.map((entry) => entry.key).join(', ')}` : 'removed';
-
-				console.log(`env ${msg.path}: ${change}`);
-				reply = { type: 'env.saved', requestId: msg.requestId, envSets };
-			} catch (error) {
-				const message = error instanceof Error ? error.message : 'could not change the env set';
-
-				console.error(`env ${msg.path}: ${message}`);
-				reply = { type: 'env.error', requestId: msg.requestId, message };
-			}
-
-			deps.socket.send(JSON.stringify(reply));
+		case 'env.delete':
+		case 'secrets.set':
+			changeEnv(deps, msg);
 
 			return;
-		}
+
+		case 'repo.attach':
+			await attachRepository(deps, msg);
+
+			return;
+
+		case 'onboarding.start':
+			if (refusePaused(deps, { type: 'onboarding.error', runId: msg.runId, message: PAUSED })) {
+				return;
+			}
+
+			await deps.onboarding.start(msg);
+
+			return;
+
+		case 'onboarding.cancel':
+			deps.onboarding.cancel(msg.runId);
+
+			return;
 
 		case 'plan.start':
-			if (deps.state.paused) {
-				deps.socket.send(
-					JSON.stringify({
-						type: 'plan.error',
-						planId: msg.planId,
-						message: 'this machine is paused'
-					})
-				);
-
+			if (refusePaused(deps, { type: 'plan.error', planId: msg.planId, message: PAUSED })) {
 				return;
 			}
 
@@ -129,21 +239,14 @@ export async function routeServerFrame(deps: RouterDeps, msg: ServerMsg): Promis
 				input: msg.input,
 				verifyInUi: msg.verifyInUi,
 				auto: msg.auto,
-				notes: msg.notes
+				notes: msg.notes,
+				configDraft: msg.configDraft
 			});
 
 			return;
 
 		case 'plan.prepare':
-			if (deps.state.paused) {
-				deps.socket.send(
-					JSON.stringify({
-						type: 'plan.error',
-						planId: msg.planId,
-						message: 'this machine is paused'
-					})
-				);
-
+			if (refusePaused(deps, { type: 'plan.error', planId: msg.planId, message: PAUSED })) {
 				return;
 			}
 
@@ -152,7 +255,8 @@ export async function routeServerFrame(deps: RouterDeps, msg: ServerMsg): Promis
 				planNumber: msg.planNumber,
 				auto: msg.auto,
 				plans: msg.plans,
-				notes: msg.notes
+				notes: msg.notes,
+				configDraft: msg.configDraft
 			});
 
 			return;
@@ -162,6 +266,7 @@ export async function routeServerFrame(deps: RouterDeps, msg: ServerMsg): Promis
 				planId: msg.planId,
 				text: msg.text,
 				notes: msg.notes,
+				configDraft: msg.configDraft,
 				plan: msg.plan
 			});
 
@@ -178,15 +283,7 @@ export async function routeServerFrame(deps: RouterDeps, msg: ServerMsg): Promis
 			return;
 
 		case 'exec.start':
-			if (deps.state.paused) {
-				deps.socket.send(
-					JSON.stringify({
-						type: 'exec.error',
-						runId: msg.runId,
-						message: 'this machine is paused'
-					})
-				);
-
+			if (refusePaused(deps, { type: 'exec.error', runId: msg.runId, message: PAUSED })) {
 				return;
 			}
 
@@ -214,75 +311,25 @@ export async function routeServerFrame(deps: RouterDeps, msg: ServerMsg): Promis
 
 			return;
 
-		case 'queue.publish': {
-			const result = await deps.services.publish.publish({
-				worktreePath: msg.worktreePath,
-				branch: msg.branch,
-				baseRef: msg.baseRef,
-				title: msg.title,
-				body: msg.body
+		case 'queue.publish':
+			await publish(deps, msg);
+
+			return;
+
+		case 'queue.worktree.ensure':
+			await ensureWorktree({
+				services: deps.services,
+				msg,
+				send: (message) => {
+					deps.socket.send(JSON.stringify(message));
+				}
 			});
 
-			console.log(`publish ${msg.branch}: ${result.detail}`);
-			deps.socket.send(
-				JSON.stringify(
-					result.ok && result.prUrl
-						? { type: 'queue.published', itemId: msg.itemId, prUrl: result.prUrl }
-						: { type: 'queue.publish.error', itemId: msg.itemId, message: result.detail }
-				)
-			);
-
 			return;
-		}
-
-		case 'queue.worktree.ensure': {
-			const result = await deps.services.worktree.ensure({ slug: msg.slug });
-
-			// Before the setup command, so a setup that migrates or generates a client
-			// runs against the real service. Logged rather than fatal: every bullet
-			// writes the files again and fails there, with the reason, where it is seen.
-			if (result.ok) {
-				try {
-					const applied = describeApplied(deps.services.projectEnv.applyTo(result.worktreePath));
-
-					if (applied !== null) {
-						console.log(`worktree ${msg.slug}: ${applied}`);
-					}
-				} catch (error) {
-					console.error(
-						`worktree ${msg.slug}: ${error instanceof Error ? error.message : 'could not write the provided env files'}`
-					);
-				}
-			}
-
-			if (result.ok && msg.setupCommand) {
-				const setup = await deps.services.worktree.setup({
-					slug: msg.slug,
-					command: msg.setupCommand
-				});
-
-				console.log(`worktree ${msg.slug}: ${setup.detail}`);
-			}
-
-			console.log(`worktree ${msg.slug}: ${result.detail}`);
-			deps.socket.send(
-				JSON.stringify(
-					result.ok
-						? {
-							type: 'queue.worktree.ready',
-							queueId: msg.queueId,
-							worktreePath: result.worktreePath,
-							baseRef: result.baseRef
-						}
-						: { type: 'queue.worktree.error', queueId: msg.queueId, message: result.detail }
-				)
-			);
-
-			return;
-		}
 
 		case 'queue.worktree.remove':
 			await deps.services.worktree.remove(msg.slug);
+			deps.services.setupSteps.forget(msg.slug);
 			console.log(`worktree ${msg.slug}: removed`);
 
 			return;
@@ -290,7 +337,9 @@ export async function routeServerFrame(deps: RouterDeps, msg: ServerMsg): Promis
 		case 'shutdown':
 			deps.sessions.cancelAll();
 			deps.executions.cancelAll();
+			deps.onboarding.cancelAll();
 			deps.asks.cancelAll();
+			await deps.services.stack.downAll();
 			await deps.services.teardown.terminateSelf({
 				configPath: deps.configPath,
 				reason: msg.reason

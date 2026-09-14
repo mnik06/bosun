@@ -4,7 +4,12 @@ import { FastifyBaseLogger, FastifyInstance, FastifyPluginAsync } from 'fastify'
 import { type MachineRepo } from 'src/repos/machines/machine.repo';
 import { markMachineOffline } from 'src/controllers/machines/mark-machine-offline';
 import { markMachineOnline } from 'src/controllers/machines/mark-machine-online';
+import { reconcileRepository } from 'src/controllers/machines/reconcile-repository';
 import { saveMachinePreflight } from 'src/controllers/machines/save-machine-preflight';
+import { onboardingDeps } from 'src/controllers/onboarding/onboarding-deps';
+import { stallMachineOnboarding } from 'src/controllers/onboarding/stall-machine-onboarding';
+import { configDraftFor } from 'src/controllers/repositories/shared/config-draft';
+import { saveConfigOnDefault } from 'src/controllers/repositories/save-config-on-default';
 import { stallMachinePlans } from 'src/controllers/plans/stall-machine-plans';
 import { pauseMachineQueues } from 'src/controllers/queues/pause-machine-queues';
 import { stallMachineRuns } from 'src/controllers/queues/stall-machine-runs';
@@ -147,6 +152,82 @@ async function offerUpgrade(opts: {
 	});
 }
 
+async function settleHello(opts: {
+	fastify: FastifyInstance;
+	machine: Machine;
+	connectedAt: Date;
+	msg: Extract<AgentMsg, { type: 'hello' }>;
+}): Promise<void> {
+	const { fastify, machine, msg } = opts;
+	const socketRegistry = fastify.services.socketRegistry;
+
+	fastify.services.disconnectGrace.cancel(machine.id);
+	// Recorded before anything this connection carries next can settle a run and
+	// schedule the machine's next bullet against it.
+	fastify.services.machineMemory.set(machine.id, msg.memory);
+	await stallMachineRuns(schedulerDeps(fastify), {
+		machineId: machine.id,
+		connectedAt: opts.connectedAt,
+		heldRunIds: msg.runIds,
+		uptimeMs: msg.uptimeMs,
+		previousExit: msg.previousExit
+	});
+	await stallMachinePlans({
+		planRepo: fastify.repos.planRepo,
+		planTextService: fastify.services.planTextService,
+		socketRegistry,
+		machineId: machine.id,
+		connectedAt: opts.connectedAt,
+		heldPlanIds: msg.planIds
+	});
+	await saveConfigOnDefault({
+		repositoryRepo: fastify.repos.repositoryRepo,
+		socketRegistry,
+		machine,
+		reportedRepositoryId: msg.repositoryId,
+		configOnDefault: msg.configOnDefault
+	});
+	await reconcileRepository({
+		repositoryRepo: fastify.repos.repositoryRepo,
+		githubInstallationRepo: fastify.repos.githubInstallationRepo,
+		githubApp: fastify.services.githubApp,
+		socketRegistry,
+		machine,
+		reportedRepositoryId: msg.repositoryId
+	});
+	await stallMachineOnboarding(onboardingDeps(fastify), {
+		machineId: machine.id,
+		projectId: machine.projectId,
+		connectedAt: opts.connectedAt,
+		heldRunIds: msg.onboardingRunIds
+	});
+}
+
+// A queue created while its machine was offline has a row and no directory.
+// The ensure is idempotent, so re-sending it on every announce is what makes a
+// frame the machine never received self-correcting rather than a queue stuck
+// in `provisioning` with nothing left to retry it.
+async function resendProvisioning(opts: { fastify: FastifyInstance; machine: Machine }): Promise<void> {
+	const { fastify, machine } = opts;
+	const pending = await fastify.repos.queueRepo.listProvisioningForMachine(machine.id);
+	const configDraft =
+		pending.length === 0 ? null : await configDraftFor({ repositoryRepo: fastify.repos.repositoryRepo, machine });
+	const profile = machine.projectProfile ?? DEFAULT_PROJECT_PROFILE;
+
+	for (const queue of pending) {
+		fastify.services.socketRegistry.sendToAgent({
+			machineId: machine.id,
+			message: {
+				type: 'queue.worktree.ensure',
+				queueId: queue.id,
+				slug: queue.slug,
+				setupCommand: machine.repositoryId === null ? profile.setupCommand : null,
+				configDraft
+			}
+		});
+	}
+}
+
 export async function applyMachineFrame(opts: {
 	fastify: FastifyInstance;
 	machineId: string;
@@ -167,7 +248,9 @@ export async function applyMachineFrame(opts: {
 				id: opts.machineId,
 				agentVersion: opts.msg.agentVersion,
 				repoPath: opts.msg.repoPath,
-				envSets: opts.msg.envSets
+				publicKey: opts.msg.publicKey,
+				envSets: opts.msg.envSets,
+				sessionSecrets: opts.msg.sessionSecrets
 			})
 			: await saveMachinePreflight({
 				machineRepo,
@@ -193,25 +276,7 @@ export async function applyMachineFrame(opts: {
 	// to keep the registry slot means `handleClose` bailed and nobody settled
 	// anything.
 	if (opts.msg.type === 'hello') {
-		opts.fastify.services.disconnectGrace.cancel(machine.id);
-		// Recorded before anything this connection carries next can settle a run and
-		// schedule the machine's next bullet against it.
-		opts.fastify.services.machineMemory.set(machine.id, opts.msg.memory);
-		await stallMachineRuns(schedulerDeps(opts.fastify), {
-			machineId: machine.id,
-			connectedAt: opts.connectedAt,
-			heldRunIds: opts.msg.runIds,
-			uptimeMs: opts.msg.uptimeMs,
-			previousExit: opts.msg.previousExit
-		});
-		await stallMachinePlans({
-			planRepo: opts.fastify.repos.planRepo,
-			planTextService: opts.fastify.services.planTextService,
-			socketRegistry,
-			machineId: machine.id,
-			connectedAt: opts.connectedAt,
-			heldPlanIds: opts.msg.planIds
-		});
+		await settleHello({ fastify: opts.fastify, machine, connectedAt: opts.connectedAt, msg: opts.msg });
 	}
 
 	// Offered only when the operator asked for it. A connect-triggered upgrade
@@ -226,26 +291,11 @@ export async function applyMachineFrame(opts: {
 		});
 	}
 
-	// A queue created while its machine was offline has a row and no directory.
-	// The ensure is idempotent, so re-sending it on every announce is what makes a
-	// frame the machine never received self-correcting rather than a queue stuck
-	// in `provisioning` with nothing left to retry it.
-	if (opts.msg.type === 'hello') {
-		const pending = await opts.fastify.repos.queueRepo.listProvisioningForMachine(machine.id);
-
-		for (const queue of pending) {
-			const profile = machine.projectProfile ?? DEFAULT_PROJECT_PROFILE;
-
-			socketRegistry.sendToAgent({
-				machineId: machine.id,
-				message: {
-					type: 'queue.worktree.ensure',
-					queueId: queue.id,
-					slug: queue.slug,
-					setupCommand: profile.setupCommand
-				}
-			});
-		}
+	// Not on `change`: those follow a file under ~/.bosun being written, arrive in
+	// bursts, and re-sending an ensure for a worktree still installing is how a
+	// second setup ends up racing the first.
+	if (opts.msg.type === 'hello' && opts.msg.reason !== 'change') {
+		await resendProvisioning({ fastify: opts.fastify, machine });
 	}
 
 	// A paused machine that reconnects is still paused — the row outranks the

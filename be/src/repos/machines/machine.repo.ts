@@ -10,6 +10,7 @@ import {
 	type PreflightCheck
 } from 'src/types/MachineSchema';
 import { type EnvSetSummary } from 'src/types/env-sets';
+import { type MachinePolicy } from 'src/types/OnboardingSchema';
 import { type ProjectProfile } from 'src/types/ProjectProfileSchema';
 
 type Db = ReturnType<typeof getDb>;
@@ -25,6 +26,10 @@ const publicColumns = {
 	capabilities: machines.capabilities,
 	projectProfile: machines.projectProfile,
 	envSets: machines.envSets,
+	repositoryId: machines.repositoryId,
+	publicKey: machines.publicKey,
+	policy: machines.policy,
+	sessionSecrets: machines.sessionSecrets,
 	createdAt: machines.createdAt
 };
 
@@ -95,7 +100,7 @@ export function getMachineRepo(db: Db) {
 		async consumeEnrollmentToken(opts: {
 			token: string;
 			machineKeyHash: string;
-			repoPath: string;
+			repoPath: string | null;
 			now: Date;
 		}): Promise<Machine | null> {
 			const [row] = await db
@@ -135,10 +140,14 @@ export function getMachineRepo(db: Db) {
 				: null;
 		},
 
+		// `repoPath` and `publicKey` are written only when the agent sent them: an
+		// agent with no repository yet, or one older than the key, must not erase what
+		// the row already says.
 		async markOnline(opts: {
 			id: string;
 			agentVersion: string;
-			repoPath: string;
+			repoPath?: string;
+			publicKey?: string;
 			now: Date;
 		}): Promise<Machine | null> {
 			const [row] = await db
@@ -146,7 +155,8 @@ export function getMachineRepo(db: Db) {
 				.set({
 					status: reachabilityStatus('online'),
 					agentVersion: opts.agentVersion,
-					repoPath: opts.repoPath,
+					...(opts.repoPath === undefined ? {} : { repoPath: opts.repoPath }),
+					...(opts.publicKey === undefined ? {} : { publicKey: opts.publicKey }),
 					lastSeenAt: opts.now
 				})
 				.where(eq(machines.id, opts.id))
@@ -221,6 +231,55 @@ export function getMachineRepo(db: Db) {
 				.returning(publicColumns);
 
 			return row ? MachineSchema.parse(row) : null;
+		},
+
+		async saveSessionSecrets(opts: { id: string; sessionSecrets: string[] }): Promise<Machine | null> {
+			const [row] = await db
+				.update(machines)
+				.set({ sessionSecrets: opts.sessionSecrets })
+				.where(eq(machines.id, opts.id))
+				.returning(publicColumns);
+
+			return row ? MachineSchema.parse(row) : null;
+		},
+
+		// Unscoped: the controller has already resolved the machine in the project.
+		async setRepository(opts: { id: string; repositoryId: string | null }): Promise<Machine | null> {
+			const [row] = await db
+				.update(machines)
+				.set({ repositoryId: opts.repositoryId })
+				.where(eq(machines.id, opts.id))
+				.returning(publicColumns);
+
+			return row ? MachineSchema.parse(row) : null;
+		},
+
+		// Only undoes the attach it names. A second attach asked for while the first
+		// was still cloning must not be cleared by the first one failing.
+		async clearRepositoryIf(opts: { id: string; repositoryId: string }): Promise<Machine | null> {
+			const [row] = await db
+				.update(machines)
+				.set({ repositoryId: null })
+				.where(and(eq(machines.id, opts.id), eq(machines.repositoryId, opts.repositoryId)))
+				.returning(publicColumns);
+
+			return row ? MachineSchema.parse(row) : null;
+		},
+
+		async savePolicy(opts: { id: string; projectId: string; policy: MachinePolicy }): Promise<Machine | null> {
+			const [row] = await db
+				.update(machines)
+				.set({ policy: opts.policy })
+				.where(and(eq(machines.id, opts.id), eq(machines.projectId, opts.projectId)))
+				.returning(publicColumns);
+
+			return row ? MachineSchema.parse(row) : null;
+		},
+
+		async listByRepository(repositoryId: string): Promise<Machine[]> {
+			const rows = await db.select(publicColumns).from(machines).where(eq(machines.repositoryId, repositoryId));
+
+			return rows.map((row) => MachineSchema.parse(row));
 		},
 
 		async saveCapabilities(opts: {

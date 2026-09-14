@@ -1,24 +1,26 @@
 import { Alert, Button, Card, Center, Group, Loader, Stack, Text, Title } from '@mantine/core'
 import { Download } from 'lucide-react'
+import type { ReactNode } from 'react'
 
 import {
+	machineKind,
 	MachineStatusDot,
 	PreflightChecklist,
 	useMachineQuery,
 	useUpgradeDecline,
 	useUpgradingTo,
+	type Machine,
 	type UpgradeDecline
 } from '~/entities/machine'
 import { queueRefreshBlock, useMachineQueuesQuery } from '~/entities/queue'
 import { AddMcpServerButton } from '~/features/add-mcp-server'
-import { EnvSetsPanel } from '~/features/edit-env-sets'
-import { ProjectProfileButton } from '~/features/edit-project-profile'
 import { PausedBanner } from '~/features/pause-machine'
 import { RefreshMachineButton, useRefreshMachine } from '~/features/refresh-machine'
 import { SetupClaudeButton } from '~/features/setup-claude'
 import { formatRelativeTime, toErrorMessage } from '~/shared/lib'
 import { GitCard } from '~/widgets/machine-detail/ui/git-card'
 import { MachineActions } from '~/widgets/machine-detail/ui/machine-actions'
+import { ProjectSetupCard } from '~/widgets/machine-detail/ui/project-setup-card'
 import { SetupCard } from '~/widgets/machine-detail/ui/setup-card'
 import { QueuesPanel } from '~/widgets/queues-panel'
 
@@ -32,7 +34,15 @@ function declineTone (decline: UpgradeDecline): string {
 	return decline.retryable ? 'yellow' : 'gray'
 }
 
-export function MachineDetail ({ machineId }: { machineId: string }) {
+export function MachineDetail ({
+	machineId,
+	renderSetup
+}: {
+	machineId: string,
+	// The setup checklist and the onboarding report are widgets of their own, so
+	// the page hands them in rather than this widget importing a sibling.
+	renderSetup?: (machine: Machine) => ReactNode
+}) {
 	const { data, isPending, error } = useMachineQuery(machineId)
 	const upgradingTo = useUpgradingTo(machineId)
 	const decline = useUpgradeDecline(machineId)
@@ -57,6 +67,8 @@ export function MachineDetail ({ machineId }: { machineId: string }) {
 			</Alert>
 		)
 	}
+
+	const kind = machineKind(data)
 
 	return (
 		<Stack gap="lg">
@@ -132,6 +144,8 @@ export function MachineDetail ({ machineId }: { machineId: string }) {
 				</Alert>
 			)}
 
+			{kind === 'unattached' || kind === 'repository' ? renderSetup?.(data) : null}
+
 			<Card withBorder padding="md" radius="md">
 				<Stack gap="sm">
 					<Group gap="xs">
@@ -155,7 +169,7 @@ export function MachineDetail ({ machineId }: { machineId: string }) {
 				action={<SetupClaudeButton machineName={data.name} />}
 			/>
 
-			<GitCard machineName={data.name} />
+			<GitCard machine={data} />
 
 			<SetupCard
 				title="MCP servers"
@@ -163,13 +177,7 @@ export function MachineDetail ({ machineId }: { machineId: string }) {
 				action={<AddMcpServerButton machineName={data.name} />}
 			/>
 
-			<SetupCard
-				title="Project setup"
-				description="What a session cannot work out by reading the repository — migrations, the commands to run it, where the test credentials live."
-				action={<ProjectProfileButton machine={data} />}
-			>
-				<EnvSetsPanel machine={data} />
-			</SetupCard>
+			<ProjectSetupCard machine={data} />
 
 			<QueuesPanel machineId={data.id} />
 		</Stack>

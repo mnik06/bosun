@@ -5,11 +5,21 @@ export {
 	useMachineQuery,
 	useMachinesQuery
 } from './api/machine.queries'
+export { putEnvSet, putMachinePolicy, putSessionSecrets } from './api/machine.writes'
+export { machineKind, type MachineKind } from './lib/machine-kind'
+export {
+	AGENT_TOO_OLD_FOR_INPUTS,
+	sealVars,
+	type PlainVar,
+	type SealedVar
+} from './lib/seal-vars'
 export {
 	DEFAULT_PROJECT_PROFILE,
 	EnvSetSummarySchema,
 	type EnvSetSummary,
 	MachineListSchema,
+	MachinePolicySchema,
+	type MachinePolicy,
 	MachineSchema,
 	MachineStatusSchema,
 	PreflightCheckSchema,

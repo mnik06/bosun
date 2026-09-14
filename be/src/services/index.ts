@@ -1,6 +1,7 @@
 import { getAgentReleaseService } from 'src/services/agent-release/agent-release.service';
 import { getSupabaseAdmin } from 'src/services/auth/supabase-admin.service';
 import { getSupabaseAuth } from 'src/services/auth/supabase-auth.service';
+import { getGithubAppService } from 'src/services/github/github-app.service';
 import { getIdService } from 'src/services/ids/id.service';
 import { getInstallerService } from 'src/services/installer/installer.service';
 import { getKeyService } from 'src/services/keys/key.service';
@@ -26,6 +27,13 @@ export function getServices(opts: { env: Env }) {
 			downloadBaseUrl: opts.env.AGENT_DOWNLOAD_BASE_URL
 		}),
 		disconnectGrace: getDisconnectGraceService(),
+		githubApp: getGithubAppService({
+			appId: opts.env.GITHUB_APP_ID,
+			slug: opts.env.GITHUB_APP_SLUG,
+			clientId: opts.env.GITHUB_APP_CLIENT_ID,
+			clientSecret: opts.env.GITHUB_APP_CLIENT_SECRET,
+			privateKey: opts.env.GITHUB_APP_PRIVATE_KEY
+		}),
 		idService: getIdService(),
 		installerService: getInstallerService(),
 		keyService,

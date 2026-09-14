@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { MachineSchema } from '~/entities/machine/model/machine'
 import { PlanDecisionSchema } from '~/entities/plan'
 import { QueueMessageSchema, QueueSchema } from '~/entities/queue'
+import { RepositorySchema } from '~/entities/repository'
 
 export const MachineUpdatedMsgSchema = z.object({
 	type: z.literal('machine.updated'),
@@ -35,6 +36,25 @@ export const MachineUpgradeDeclinedMsgSchema = z.object({
 	reason: z.string(),
 	retryable: z.boolean(),
 	queued: z.boolean().nullish().default(false)
+})
+
+export const MachineRepositoryErrorMsgSchema = z.object({
+	type: z.literal('machine.repository.error'),
+	machineId: z.string(),
+	repositoryId: z.string(),
+	message: z.string()
+})
+
+export const RepositoryUpdatedMsgSchema = z.object({
+	type: z.literal('repository.updated'),
+	repository: RepositorySchema
+})
+
+export const OnboardingUpdatedMsgSchema = z.object({
+	type: z.literal('onboarding.updated'),
+	machineId: z.string(),
+	repositoryId: z.string(),
+	runId: z.string()
 })
 
 export const QueueUpdatedMsgSchema = z.object({
@@ -104,6 +124,9 @@ export const UiMsgSchema = z.discriminatedUnion('type', [
 	MachineDeletedMsgSchema,
 	MachineUpgradingMsgSchema,
 	MachineUpgradeDeclinedMsgSchema,
+	MachineRepositoryErrorMsgSchema,
+	RepositoryUpdatedMsgSchema,
+	OnboardingUpdatedMsgSchema,
 	QueueUpdatedMsgSchema,
 	QueueDeletedMsgSchema,
 	RunTextMsgSchema,

@@ -91,6 +91,9 @@ export function spawnClaudeSession(opts: {
 	userServerNames: string[];
 	tools: SessionTools;
 	claudeAuth: ClaudeAuthService;
+	// Laid over the credential environment: the toolchain's PATH, a repository's
+	// session secrets, and git settings that keep a session from pushing.
+	env?: NodeJS.ProcessEnv;
 	// A systemd scope of its own, under its own memory limit. Without one the
 	// session runs inside the agent's unit, where the kernel killing anything for
 	// memory can stop the agent and every other session with it.
@@ -114,6 +117,7 @@ export function spawnClaudeSession(opts: {
 		cwd: opts.cwd,
 		env: {
 			...opts.claudeAuth.sessionEnv(),
+			...opts.env,
 			MCP_TOOL_TIMEOUT: String(TOOL_TIMEOUT_MS),
 			MCP_TIMEOUT: String(STARTUP_TIMEOUT_MS)
 		},

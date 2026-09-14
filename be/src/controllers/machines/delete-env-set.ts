@@ -5,5 +5,5 @@ export async function deleteEnvSet(
 	deps: EnvRelayDeps,
 	opts: { id: string; projectId: string; path: string }
 ): Promise<Machine> {
-	return relayEnvFrame(deps, { ...opts, frame: { type: 'env.delete' } });
+	return relayEnvFrame(deps, { id: opts.id, projectId: opts.projectId, frame: { type: 'env.delete', path: opts.path } });
 }

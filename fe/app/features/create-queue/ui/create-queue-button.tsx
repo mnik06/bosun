@@ -3,7 +3,8 @@ import { useDisclosure } from '@mantine/hooks'
 import { Plus } from 'lucide-react'
 import { useState } from 'react'
 
-import { useMachinesQuery } from '~/entities/machine'
+import { machineKind, useMachinesQuery } from '~/entities/machine'
+import { machinePickerLabel, useRepositoriesQuery } from '~/entities/repository'
 import { useCreateQueue } from '~/features/create-queue/api/use-create-queue'
 import { AppModal } from '~/shared/ui'
 
@@ -15,6 +16,7 @@ function CreateQueueForm ({
 	onDone: () => void
 }) {
 	const machines = useMachinesQuery()
+	const repositories = useRepositoriesQuery()
 	const [target, setTarget] = useState(machineId ?? '')
 	const [name, setName] = useState('')
 	const [afk, setAfk] = useState(false)
@@ -31,10 +33,12 @@ function CreateQueueForm ({
 					label="Machine"
 					placeholder="Pick a machine"
 					description="The queue's worktree is made on it, out of the checkout it already has."
-					data={(machines.data ?? []).map((machine) => ({
-						value: machine.id,
-						label: machine.name
-					}))}
+					data={(machines.data ?? [])
+						.filter((machine) => machineKind(machine) !== 'unattached')
+						.map((machine) => ({
+							value: machine.id,
+							label: machinePickerLabel({ machine, repositories: repositories.data })
+						}))}
 					value={target === '' ? null : target}
 					onChange={(value) => { setTarget(value ?? '') }}
 				/>

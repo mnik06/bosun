@@ -1,6 +1,10 @@
 import { FastifyBaseLogger, FastifyInstance } from 'fastify';
 import { type WebSocket } from '@fastify/websocket';
+import { recordRepoFrame } from 'src/controllers/machines/record-repo-frame';
+import { onboardingDeps } from 'src/controllers/onboarding/onboarding-deps';
+import { recordOnboardingFrame } from 'src/controllers/onboarding/record-onboarding-frame';
 import { recordPlanFrame } from 'src/controllers/plans/record-plan-frame';
+import { advanceMachine } from 'src/controllers/queues/advance-queue';
 import { recordExecFrame } from 'src/controllers/queues/record-exec-frame';
 import { askDeps } from 'src/controllers/queues/ask-deps';
 import { recordAnswerFrame } from 'src/controllers/queues/record-answer-frame';
@@ -13,9 +17,19 @@ import { type AgentMsg } from 'src/types/protocol';
 type PlanFrame = Extract<AgentMsg, { type: `plan.${string}` }>;
 type WorktreeFrame = Extract<AgentMsg, { type: `queue.worktree.${string}` }>;
 type ExecFrame = Extract<AgentMsg, { type: `exec.${string}` }>;
-type PublishFrame = Extract<AgentMsg, { type: 'queue.published' | 'queue.publish.error' }>;
+type PublishFrame = Extract<AgentMsg, { type: 'queue.published' | 'queue.publish.error' | 'queue.pushed' }>;
 type AnswerFrame = Extract<AgentMsg, { type: `queue.answer.${string}` }>;
 type EnvReplyFrame = Extract<AgentMsg, { type: 'env.saved' | 'env.error' }>;
+type RepoFrame = Extract<AgentMsg, { type: `repo.${string}` }>;
+type OnboardingFrame = Extract<AgentMsg, { type: `onboarding.${string}` }>;
+
+function isRepoFrame(msg: AgentMsg): msg is RepoFrame {
+	return msg.type.startsWith('repo.');
+}
+
+function isOnboardingFrame(msg: AgentMsg): msg is OnboardingFrame {
+	return msg.type.startsWith('onboarding.');
+}
 
 export function isPlanFrame(msg: AgentMsg): msg is PlanFrame {
 	return msg.type.startsWith('plan.');
@@ -34,7 +48,7 @@ function isAnswerFrame(msg: AgentMsg): msg is AnswerFrame {
 }
 
 function isPublishFrame(msg: AgentMsg): msg is PublishFrame {
-	return msg.type === 'queue.published' || msg.type === 'queue.publish.error';
+	return msg.type === 'queue.published' || msg.type === 'queue.publish.error' || msg.type === 'queue.pushed';
 }
 
 function isEnvReplyFrame(msg: AgentMsg): msg is EnvReplyFrame {
@@ -51,9 +65,76 @@ function settleEnvReply(opts: {
 		machineId: opts.machineId,
 		result:
 			opts.msg.type === 'env.saved'
-				? { ok: true, envSets: opts.msg.envSets }
+				? { ok: true, envSets: opts.msg.envSets, sessionSecrets: opts.msg.sessionSecrets }
 				: { ok: false, message: opts.msg.message }
 	});
+}
+
+// Answers to something the backend asked this socket, none of which settles work.
+function settleReply(opts: {
+	fastify: FastifyInstance;
+	machineId: string;
+	projectId: string;
+	msg: Extract<AgentMsg, { type: 'pong' | 'upgrade.declined' }> | EnvReplyFrame;
+	log: FastifyBaseLogger;
+}): void {
+	const { msg } = opts;
+
+	if (msg.type === 'upgrade.declined') {
+		relayDecline({ ...opts, msg });
+
+		return;
+	}
+
+	if (isEnvReplyFrame(msg)) {
+		settleEnvReply({ fastify: opts.fastify, machineId: opts.machineId, msg });
+
+		return;
+	}
+
+	const rttMs = opts.fastify.services.pendingPings.resolve({
+		commandId: msg.id,
+		machineId: opts.machineId,
+		at: Date.now()
+	});
+
+	if (rttMs !== null) {
+		opts.fastify.services.socketRegistry.broadcastToUi({
+			projectId: opts.projectId,
+			message: { type: 'machine.pong', machineId: opts.machineId, id: msg.id, rttMs }
+		});
+	}
+}
+
+async function handleRepositoryFrame(opts: {
+	fastify: FastifyInstance;
+	machineId: string;
+	projectId: string;
+	msg: RepoFrame | OnboardingFrame;
+}): Promise<void> {
+	const { msg } = opts;
+
+	if (isRepoFrame(msg)) {
+		await recordRepoFrame({
+			machineRepo: opts.fastify.repos.machineRepo,
+			repositoryRepo: opts.fastify.repos.repositoryRepo,
+			socketRegistry: opts.fastify.services.socketRegistry,
+			machineId: opts.machineId,
+			projectId: opts.projectId,
+			frame: msg
+		});
+
+		return;
+	}
+
+	await recordOnboardingFrame(onboardingDeps(opts.fastify), {
+		machineId: opts.machineId,
+		projectId: opts.projectId,
+		frame: msg
+	});
+	// A settled run hands its memory back, so anything on the machine held behind
+	// it gets to start now rather than on the next nudge.
+	await advanceMachine(schedulerDeps(opts.fastify), { machineId: opts.machineId });
 }
 
 // The refusal used to reach the machine's own log and stop there, so an operator
@@ -94,33 +175,16 @@ export async function handleAgentFrame(opts: {
 	log: FastifyBaseLogger;
 }): Promise<void> {
 	const { msg } = opts;
-	const { pendingPings, socketRegistry, idService, planTextService } = opts.fastify.services;
+	const { socketRegistry, idService, planTextService } = opts.fastify.services;
 
-	if (msg.type === 'pong') {
-		const rttMs = pendingPings.resolve({
-			commandId: msg.id,
-			machineId: opts.machineId,
-			at: Date.now()
-		});
-
-		if (rttMs !== null) {
-			socketRegistry.broadcastToUi({
-				projectId: opts.projectId,
-				message: { type: 'machine.pong', machineId: opts.machineId, id: msg.id, rttMs }
-			});
-		}
+	if (msg.type === 'pong' || msg.type === 'upgrade.declined' || isEnvReplyFrame(msg)) {
+		settleReply({ ...opts, msg });
 
 		return;
 	}
 
-	if (msg.type === 'upgrade.declined') {
-		relayDecline({ ...opts, msg });
-
-		return;
-	}
-
-	if (isEnvReplyFrame(msg)) {
-		settleEnvReply({ fastify: opts.fastify, machineId: opts.machineId, msg });
+	if (isRepoFrame(msg) || isOnboardingFrame(msg)) {
+		await handleRepositoryFrame({ fastify: opts.fastify, machineId: opts.machineId, projectId: opts.projectId, msg });
 
 		return;
 	}

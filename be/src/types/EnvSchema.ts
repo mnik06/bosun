@@ -39,7 +39,18 @@ export const EnvSchema = z.object({
 	AGENT_EXPECTED_VERSION: z.string().min(1).optional(),
 	SUPABASE_URL: z.url(),
 	SUPABASE_PUBLISHABLE_KEY: PublishableKeySchema,
-	SUPABASE_SECRET_KEY: SecretKeySchema
+	SUPABASE_SECRET_KEY: SecretKeySchema,
+	// The GitHub App. The private key can mint `contents: write` for every
+	// repository of every installation bosun holds, so it is read in exactly one
+	// place — `github-app.service.ts` — and, like the Supabase secret, is a Fly
+	// secret and never a fly.toml entry.
+	GITHUB_APP_ID: z.string().regex(/^\d+$/, 'must be the numeric App ID'),
+	GITHUB_APP_SLUG: z.string().min(1),
+	GITHUB_APP_CLIENT_ID: z.string().min(1),
+	GITHUB_APP_CLIENT_SECRET: z.string().min(1),
+	GITHUB_APP_PRIVATE_KEY: z
+		.string()
+		.refine((key) => key.includes('PRIVATE KEY'), 'must be the PEM private key the App generated')
 });
 
 export type Env = z.infer<typeof EnvSchema>;

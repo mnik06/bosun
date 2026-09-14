@@ -1,6 +1,8 @@
 import { HttpError } from 'src/api/errors/HttpError';
 import { announcePlan } from 'src/controllers/plans/shared/plan-broadcast';
 import { requireHost } from 'src/controllers/plans/shared/plan-hosting';
+import { planFrameContext } from 'src/controllers/repositories/shared/config-draft';
+import { type RepositoryRepo } from 'src/repos/github/repository.repo';
 import { type MachineRepo } from 'src/repos/machines/machine.repo';
 import { type AcRepo } from 'src/repos/plans/ac.repo';
 import { type PlanBlockerRepo } from 'src/repos/plans/plan-blocker.repo';
@@ -107,6 +109,7 @@ export async function preparePlans(opts: {
 	acRepo: AcRepo;
 	sliceRepo: SliceRepo;
 	machineRepo: MachineRepo;
+	repositoryRepo: RepositoryRepo;
 	idService: IdService;
 	socketRegistry: SocketRegistry;
 	projectId: string;
@@ -176,7 +179,7 @@ export async function preparePlans(opts: {
 			planNumber: plan.number,
 			auto: plan.auto,
 			plans,
-			notes: machine.projectProfile?.notes ?? null
+			...(await planFrameContext({ repositoryRepo: opts.repositoryRepo, machine }))
 		}
 	});
 

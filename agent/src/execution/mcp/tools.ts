@@ -3,6 +3,7 @@ import { ASK_DEFINITION } from '../../sessions/ask';
 import { createAskTool, textToolResult, type PendingQuestion } from '../../sessions/mcp-server';
 import { type PlanQuestion } from '../../protocol';
 import { type BosunApiService } from '../../services/bosun-api.service';
+import { type StackUpResult } from '../../services/stack.service';
 
 // The same view planning had. A bullet is executed with only its own plan in
 // front of it, so when it hits something a sibling plan owns, this is how it
@@ -67,26 +68,72 @@ const MARK_VERIFIED_DEFINITION = {
 	inputSchema: z.toJSONSchema(MarkAcArgsSchema, { target: 'draft-7' })
 };
 
-export function executionDefinitions(opts: { afk: boolean; verify: boolean }): unknown[] {
+export const StackUpArgsSchema = z.object({ apps: z.array(z.string()).optional() });
+
+// The agent starts the processes so that starting the stack means the same thing
+// in every bullet and on every machine; the session only decides when. That split
+// is what the memory rules rely on: up for the browser pass, down before the loop.
+const STACK_UP_DEFINITION = {
+	name: 'stack_up',
+	description:
+		'Start this project\'s apps from .bosun/project.yaml — all of them, or the named ones with their dependencies — in dependency order, each on its own port in your range, with the other apps\' URLs wired into its environment. Returns only once every app answers its readiness check, with each app\'s URL and log file. On a failure it returns the app, the reason and the tail of its log, and stops what it started. Never start an app any other way. Call stack_down the moment you no longer need it.',
+	inputSchema: z.toJSONSchema(StackUpArgsSchema, { target: 'draft-7' })
+};
+
+const STACK_DOWN_DEFINITION = {
+	name: 'stack_down',
+	description: 'Stop every app stack_up started in this session. Call it before running typecheck, lint or tests: a running stack holds memory the loop needs.',
+	inputSchema: z.toJSONSchema(z.object({}), { target: 'draft-7' })
+};
+
+interface ToolSet {
+	afk: boolean;
+	verify: boolean;
+	// Only a repository machine whose config declares apps can start a stack.
+	stack: boolean;
+}
+
+export function executionDefinitions(opts: ToolSet): unknown[] {
 	const always = [
 		LIST_PLANS_DEFINITION,
 		RECORD_DECISION_DEFINITION,
-		...(opts.verify ? [MARK_VERIFIED_DEFINITION, BLOCK_AC_DEFINITION] : [MARK_IMPLEMENTED_DEFINITION])
+		...(opts.verify ? [MARK_VERIFIED_DEFINITION, BLOCK_AC_DEFINITION] : [MARK_IMPLEMENTED_DEFINITION]),
+		...(opts.stack ? [STACK_UP_DEFINITION, STACK_DOWN_DEFINITION] : [])
 	];
 
 	return opts.afk ? always : [ASK_DEFINITION, ...always];
 }
 
-export function executionMcpTools(opts: { afk: boolean; verify: boolean }): string[] {
+export function executionMcpTools(opts: ToolSet): string[] {
 	const always = [
 		'mcp__bosun__list_plans',
 		'mcp__bosun__record_decision',
 		...(opts.verify
 			? ['mcp__bosun__mark_ac_verified', 'mcp__bosun__mark_ac_blocked']
-			: ['mcp__bosun__mark_ac_implemented'])
+			: ['mcp__bosun__mark_ac_implemented']),
+		...(opts.stack ? ['mcp__bosun__stack_up', 'mcp__bosun__stack_down'] : [])
 	];
 
 	return opts.afk ? always : ['mcp__bosun__bosun_ask', ...always];
+}
+
+export interface SessionStack {
+	up(apps?: string[]): Promise<StackUpResult>;
+	down(): Promise<void>;
+}
+
+async function stackTool(opts: { name: string; args: unknown; stack: SessionStack }) {
+	if (opts.name === 'stack_down') {
+		await opts.stack.down();
+
+		return textToolResult('stack stopped');
+	}
+
+	const result = await opts.stack.up(StackUpArgsSchema.parse(opts.args).apps);
+
+	return result.ok
+		? textToolResult(JSON.stringify(result.apps))
+		: textToolResult(`${result.app} did not come up: ${result.reason}\n--- last lines of its log ---\n${result.logTail}`, true);
 }
 
 export function createExecutionDispatch(opts: {
@@ -94,6 +141,7 @@ export function createExecutionDispatch(opts: {
 	planId: string;
 	sliceId: string;
 	bosunApi: BosunApiService;
+	stack: SessionStack | null;
 	onQuestion: (payload: { questionId: string; questions: PlanQuestion[] }) => void;
 }) {
 	return function build(pending: Map<string, PendingQuestion>) {
@@ -106,6 +154,10 @@ export function createExecutionDispatch(opts: {
 
 			if (name === 'list_plans') {
 				return textToolResult(JSON.stringify(await opts.bosunApi.listMachinePlans()));
+			}
+
+			if ((name === 'stack_up' || name === 'stack_down') && opts.stack !== null) {
+				return stackTool({ name, args, stack: opts.stack });
 			}
 
 			if (name === 'mark_ac_implemented' || name === 'mark_ac_verified') {

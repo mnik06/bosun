@@ -1,5 +1,7 @@
 import { announcePlan } from 'src/controllers/plans/shared/plan-broadcast';
 import { requireHost } from 'src/controllers/plans/shared/plan-hosting';
+import { configDraftFor } from 'src/controllers/repositories/shared/config-draft';
+import { type RepositoryRepo } from 'src/repos/github/repository.repo';
 import { type MachineRepo } from 'src/repos/machines/machine.repo';
 import { type PlanMessageRepo } from 'src/repos/plans/plan-message.repo';
 import { type PlanRepo } from 'src/repos/plans/plan.repo';
@@ -11,6 +13,7 @@ export async function startPlan(opts: {
 	planRepo: PlanRepo;
 	planMessageRepo: PlanMessageRepo;
 	machineRepo: MachineRepo;
+	repositoryRepo: RepositoryRepo;
 	idService: IdService;
 	socketRegistry: SocketRegistry;
 	projectId: string;
@@ -52,7 +55,8 @@ export async function startPlan(opts: {
 			input: opts.input,
 			verifyInUi: opts.verifyInUi,
 			auto: opts.auto,
-			notes: machine.projectProfile?.notes ?? null
+			notes: machine.projectProfile?.notes ?? null,
+			configDraft: await configDraftFor({ repositoryRepo: opts.repositoryRepo, machine })
 		}
 	});
 

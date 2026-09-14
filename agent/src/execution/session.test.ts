@@ -42,9 +42,15 @@ const START = {
 function services(
 	startBranch: () => Promise<{ ok: boolean; detail: string }>,
 	scope: { unit: string; memoryMaxBytes: number } | null = null,
-	applyTo: () => { written: string[]; skipped: string[] } = () => ({ written: [], skipped: [] })
+	applyTo: () => { written: string[]; skipped: string[] } = () => ({ written: [], skipped: [] }),
+	repositoryId: string | null = null
 ) {
 	return {
+		claudeAuth: { sessionEnv: vi.fn().mockReturnValue({}) },
+		stack: { down: vi.fn().mockResolvedValue(undefined) },
+		workspace: { repositoryId: vi.fn().mockReturnValue(repositoryId) },
+		setupSteps: { runLegacy: vi.fn(), rerunChanged: vi.fn().mockResolvedValue({ ok: true, ran: [] }) },
+		toolchain: { ensure: vi.fn() },
 		commit: { startBranch, cleanTree: vi.fn() },
 		mcpConfig: { read: vi.fn().mockReturnValue({ servers: {}, serverNames: [], error: null }) },
 		memory: { sessionScope: vi.fn().mockReturnValue(scope) },
@@ -53,7 +59,9 @@ function services(
 			summary: vi.fn().mockReturnValue([
 				{ path: 'be', keys: ['DATABASE_URL'], updatedAt: '2026-09-14T00:00:00.000Z' },
 				{ path: 'fe', keys: ['NUXT_PUBLIC_API_URL'], updatedAt: '2026-09-14T00:00:00.000Z' }
-			])
+			]),
+			secretNames: vi.fn().mockReturnValue([]),
+			secretValues: vi.fn().mockReturnValue({})
 		}
 	} as unknown as Services;
 }
@@ -157,6 +165,29 @@ describe('createExecutionSessions', () => {
 			type: 'exec.error',
 			runId: 'sr_1',
 			message: 'could not write the provided env files: could not write be/.env: EACCES'
+		});
+	});
+
+	// A repository bullet runs on the config of the tree it is in, or the draft when
+	// that tree has none. One that does not validate stops here, naming the field,
+	// rather than a session discovering it an hour in.
+	it('stops a repository bullet whose config does not validate, before any session starts', async () => {
+		const send = vi.fn();
+		const deps = services(async () => ({ ok: true, detail: 'branched' }), null, undefined, 'repo_1');
+
+		await createExecutionSessions({ services: deps, send }).start({
+			...START,
+			worktreePath: '/nonexistent-worktree',
+			configDraft: 'version: 1\napps:\n  be:\n    cwd: be\n'
+		});
+
+		const { spawnClaudeSession } = await import('../sessions/process');
+
+		expect(spawnClaudeSession).not.toHaveBeenCalled();
+		expect(send).toHaveBeenCalledWith({
+			type: 'exec.error',
+			runId: 'sr_1',
+			message: expect.stringContaining("the repository's draft config is invalid — apps.be.start:")
 		});
 	});
 

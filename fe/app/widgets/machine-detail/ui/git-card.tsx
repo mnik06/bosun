@@ -1,5 +1,9 @@
-import { Card, Divider, Group, Stack, Text } from '@mantine/core'
+import { Anchor, Card, Divider, Group, Stack, Text } from '@mantine/core'
+import { Link } from 'react-router'
 
+import { machineKind, type Machine } from '~/entities/machine'
+import { useRepositoriesQuery } from '~/entities/repository'
+import { AttachRepositoryButton } from '~/features/attach-repository'
 import { SetupGithubButton } from '~/features/setup-github'
 
 // One provider today. The card is a list because the second one — GitLab,
@@ -13,34 +17,75 @@ const PROVIDERS = [
 	}
 ]
 
-export function GitCard ({ machineName }: { machineName: string }) {
+function LegacyProviders ({ machineName }: { machineName: string }) {
+	return (
+		<>
+			{PROVIDERS.map((provider) => (
+				<Group key={provider.id} justify="space-between" align="center" gap="sm">
+					<Stack gap={2}>
+						<Text size="sm" fw={500}>
+							{provider.name}
+						</Text>
+						<Text size="xs" c="dimmed">
+							{provider.description}
+						</Text>
+					</Stack>
+
+					<provider.Action machineName={machineName} />
+				</Group>
+			))}
+		</>
+	)
+}
+
+function AttachedRepository ({ machine }: { machine: Machine }) {
+	const repositories = useRepositoriesQuery()
+
+	if (machine.repositoryId == null) {
+		return (
+			<Group justify="space-between" align="center" gap="sm">
+				<Text size="sm" c="dimmed">
+					No repository attached. Until one is, this machine is not offered for plans or queues.
+				</Text>
+				<AttachRepositoryButton machine={machine} />
+			</Group>
+		)
+	}
+
+	const repository = repositories.data?.find((entry) => entry.id === machine.repositoryId)
+
+	return (
+		<Stack gap={2}>
+			<Anchor component={Link} to="/repositories" size="sm" fw={500} className="break-all">
+				{repository?.fullName ?? 'Attached repository'}
+			</Anchor>
+			<Text size="xs" c="dimmed">
+				Cloned into ~/.bosun/repos on the machine. Fetches and pushes use an hour-long token for this
+				one repository, and pull requests are opened through the GitHub App — nothing to set up on the
+				box.
+			</Text>
+		</Stack>
+	)
+}
+
+export function GitCard ({ machine }: { machine: Machine }) {
+	const legacy = machineKind(machine) === 'legacy'
+
 	return (
 		<Card withBorder padding="md" radius="md">
 			<Stack gap="sm">
 				<Stack gap={2}>
 					<Text fw={600}>Git</Text>
 					<Text size="sm" c="dimmed">
-						Where a queue pushes its branches and opens pull requests. Without one, queues still
-						run and the commits stay on the machine.
+						{legacy
+							? 'Where a queue pushes its branches and opens pull requests. Without one, queues still run and the commits stay on the machine.'
+							: 'The repository this machine works on. One per machine.'}
 					</Text>
 				</Stack>
 
 				<Divider />
 
-				{PROVIDERS.map((provider) => (
-					<Group key={provider.id} justify="space-between" align="center" gap="sm">
-						<Stack gap={2}>
-							<Text size="sm" fw={500}>
-								{provider.name}
-							</Text>
-							<Text size="xs" c="dimmed">
-								{provider.description}
-							</Text>
-						</Stack>
-
-						<provider.Action machineName={machineName} />
-					</Group>
-				))}
+				{legacy ? <LegacyProviders machineName={machine.name} /> : <AttachedRepository machine={machine} />}
 			</Stack>
 		</Card>
 	)

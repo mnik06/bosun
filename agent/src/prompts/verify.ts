@@ -6,6 +6,7 @@ import {
 	unattended,
 	type RunContext
 } from './shared';
+import { appPorts, renderTemplate } from '../services/stack.service';
 
 export interface VerifyContext extends RunContext {
 	sliceOrdinal: number;
@@ -13,7 +14,26 @@ export interface VerifyContext extends RunContext {
 	doneSlices: { ordinal: number; title: string }[];
 }
 
+function stackStart(context: VerifyContext): string {
+	const ports = appPorts(context.config!, context.portBase);
+	const accounts = context.config!.testAccounts;
+	const creds =
+		accounts.length === 0
+			? 'The config names no test account. If the app needs a login, that is a blocker to report, not a criterion to mark passed.'
+			: `Sign in as ${accounts.map((account) => `**${account.role}** at ${renderTemplate(account.signIn, { app: null, ports })} with the values of ${account.secrets.map((key) => `\`$${key}\``).join(' and ')}`).join('; ')}. Agent A reads them with \`printenv\` and never quotes them.`;
+
+	return `Start the stack with the \`stack_up\` tool. It starts every app from \`.bosun/project.yaml\` in order, each on its own port in ${context.portBase}–${context.portBase + 9}, and answers with their URLs once each one is ready — or with the app that failed and the tail of its log. Never start an app any other way. ${creds}
+
+Confirm the entry screen renders before you test anything. If the stack will not come up, stop and report it as blocked with what \`stack_up\` said; never claim a criterion verified without opening it.
+
+**The stack exists for Agent A and nothing else.** Call \`stack_down\` the moment Agent A has reported. Nothing after the browser pass drives the app, and a running stack holds memory the loop in step 4 needs. The session ending stops it too, however it ends.`;
+}
+
 function reachTheApp(context: VerifyContext): string {
+	if (context.config !== null && Object.keys(context.config.apps).length > 0) {
+		return stackStart(context);
+	}
+
 	const start =
 		context.profile.startCommand === null
 			? `The operator did not configure a start command, so work out how this project runs from its scripts and start it **on a port in ${context.portBase}–${context.portBase + 9}**.`

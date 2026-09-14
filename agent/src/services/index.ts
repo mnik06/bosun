@@ -4,27 +4,39 @@ import { getEnvService } from './env.service';
 import { getExecService } from './exec.service';
 import { getCommitService } from '../execution/commit';
 import { getPublishService } from '../execution/publish';
+import { getInputsKeyService } from './inputs-key.service';
 import { getMcpConfigService } from './mcp-config.service';
 import { getMcpProbeService } from './mcp-probe.service';
 import { getMemoryService } from './memory.service';
 import { getPreflightService } from './preflight.service';
 import { getProjectEnvService } from './project-env.service';
 import { getRepoService } from './repo.service';
+import { getSetupStepsService } from './setup-steps.service';
 import { getSkillsService } from './skills.service';
+import { getStackService } from './stack.service';
+import { getToolchainService } from './toolchain.service';
 import { getUpgradeService } from './upgrade.service';
 import { getTeardownService } from './teardown.service';
+import { getWorkspaceService } from './workspace.service';
 import { getWorktreeService } from './worktree.service';
-import { type AgentConfig } from '../config/config';
+import { defaultConfigPath, type AgentConfig } from '../config/config';
 
-export function getServices(opts: { config: AgentConfig; env: NodeJS.ProcessEnv }) {
+export function getServices(opts: { config: AgentConfig; configPath: string; env: NodeJS.ProcessEnv }) {
 	const exec = getExecService();
 	const env = getEnvService({ baseEnv: opts.env });
 	const claudeAuth = getClaudeAuthService({ exec, env });
 	const mcpConfig = getMcpConfigService({ env });
 	const memory = getMemoryService({ exec, env: opts.env });
 	const projectEnv = getProjectEnvService({});
-	const skills = getSkillsService({ repoPath: opts.config.repoPath });
-	const repo = getRepoService({ exec, repoPath: opts.config.repoPath });
+	const workspace = getWorkspaceService({
+		exec,
+		configPath: opts.configPath,
+		defaultConfigPath: defaultConfigPath()
+	});
+	// Read through the workspace on every call, so a repository attached while the
+	// agent runs is the one every service works in from that moment.
+	const repoPath = () => workspace.repoPath();
+	const repo = getRepoService({ exec, repoPath });
 
 	return {
 		bosunApi: getBosunApiService({
@@ -35,6 +47,7 @@ export function getServices(opts: { config: AgentConfig; env: NodeJS.ProcessEnv 
 		commit: getCommitService({ exec }),
 		env,
 		exec,
+		inputsKey: getInputsKeyService({}),
 		mcpConfig,
 		mcpProbe: getMcpProbeService(),
 		memory,
@@ -45,14 +58,19 @@ export function getServices(opts: { config: AgentConfig; env: NodeJS.ProcessEnv 
 			mcpConfig,
 			memory,
 			projectEnv,
-			repoPath: opts.config.repoPath
+			workspace,
+			repoPath
 		}),
 		projectEnv,
 		repo,
-		skills,
+		setupSteps: getSetupStepsService({ exec }),
+		skills: getSkillsService({ repoPath }),
+		stack: getStackService({ memory }),
 		teardown: getTeardownService({}),
+		toolchain: getToolchainService({ exec }),
 		upgrade: getUpgradeService({ exec }),
-		worktree: getWorktreeService({ exec, repo, repoPath: opts.config.repoPath })
+		workspace,
+		worktree: getWorktreeService({ exec, repo, repoPath })
 	};
 }
 

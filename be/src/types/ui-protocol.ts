@@ -9,6 +9,7 @@ import {
 	SliceSchema
 } from 'src/types/PlanSchema';
 import { QueueMessageSchema, QueueSchema } from 'src/types/QueueSchema';
+import { RepositorySchema } from 'src/types/RepositorySchema';
 import {
 	PlanActivityMsgSchema,
 	PlanDoneMsgSchema,
@@ -56,6 +57,27 @@ export const MachineUpgradeDeclinedMsgSchema = z.object({
 	retryable: z.boolean(),
 	// The machine is busy and holding this version, not refusing it.
 	queued: z.boolean().default(false)
+});
+
+export const RepositoryUpdatedMsgSchema = z.object({
+	type: z.literal('repository.updated'),
+	repository: RepositorySchema
+});
+
+// A nudge rather than the run: the browser refetches, so the missing-inputs list
+// it shows is computed by the one place that also decides whether verify starts.
+export const OnboardingUpdatedMsgSchema = z.object({
+	type: z.literal('onboarding.updated'),
+	machineId: z.string(),
+	repositoryId: z.string(),
+	runId: z.string()
+});
+
+export const MachineRepositoryErrorMsgSchema = z.object({
+	type: z.literal('machine.repository.error'),
+	machineId: z.string(),
+	repositoryId: z.string(),
+	message: z.string()
 });
 
 export const PlanUpdatedMsgSchema = z.object({
@@ -134,6 +156,9 @@ export const UiMsgSchema = z.discriminatedUnion('type', [
 	MachineDeletedMsgSchema,
 	MachineUpgradingMsgSchema,
 	MachineUpgradeDeclinedMsgSchema,
+	MachineRepositoryErrorMsgSchema,
+	RepositoryUpdatedMsgSchema,
+	OnboardingUpdatedMsgSchema,
 	PlanTextMsgSchema,
 	PlanActivityMsgSchema,
 	PlanQuestionMsgSchema,

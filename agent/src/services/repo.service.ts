@@ -89,11 +89,33 @@ export function copyUntracked(opts: { from: string; to: string; files: string[] 
 	return copied;
 }
 
-export function getRepoService(deps: { exec: ExecService; repoPath: string; homeDir?: string }) {
+// A getter rather than a string: attaching a repository moves the machine onto a
+// new clone while the agent keeps running, and every service reads the path at
+// the moment it needs one. Null is a machine with no repository yet.
+export type RepoPathSource = string | (() => string | null);
+
+export function repoPathGetter(source: RepoPathSource): () => string | null {
+	return typeof source === 'string' ? () => source : source;
+}
+
+export const NO_REPOSITORY = 'this machine has no repository attached — attach one on its page in bosun';
+
+export function getRepoService(deps: { exec: ExecService; repoPath: RepoPathSource; homeDir?: string }) {
 	const treePath = path.join(deps.homeDir ?? os.homedir(), '.bosun', READ_TREE_DIRNAME);
+	const current = repoPathGetter(deps.repoPath);
+
+	function repoPath(): string {
+		const found = current();
+
+		if (found === null) {
+			throw new Error(NO_REPOSITORY);
+		}
+
+		return found;
+	}
 
 	async function git(args: string[], opts?: { cwd?: string; timeoutMs?: number }) {
-		return deps.exec.run('git', ['-C', opts?.cwd ?? deps.repoPath, ...args], {
+		return deps.exec.run('git', ['-C', opts?.cwd ?? repoPath(), ...args], {
 			timeoutMs: opts?.timeoutMs
 		});
 	}
@@ -140,14 +162,14 @@ export function getRepoService(deps: { exec: ExecService; repoPath: string; home
 	}
 
 	function fallback(detail: string): ReadTree {
-		return { path: deps.repoPath, ref: 'the machine checkout', sha: null, fresh: false, detail };
+		return { path: repoPath(), ref: 'the machine checkout', sha: null, fresh: false, detail };
 	}
 
 	return {
 		treePath,
 		fetch,
 		async baseRef(): Promise<string | null> {
-			return resolveBaseRef({ exec: deps.exec, repoPath: deps.repoPath });
+			return resolveBaseRef({ exec: deps.exec, repoPath: repoPath() });
 		},
 
 		// A checkout of the current default branch that nothing else writes to.
@@ -161,11 +183,15 @@ export function getRepoService(deps: { exec: ExecService; repoPath: string; home
 		// Detached rather than on a branch, so it claims no name under `bosun/` that
 		// a queue slug could collide with, and there is no branch to leave behind.
 		async readTree(): Promise<ReadTree> {
+			if (current() === null) {
+				throw new Error(NO_REPOSITORY);
+			}
+
 			const fetched = await fetch();
-			const ref = await resolveBaseRef({ exec: deps.exec, repoPath: deps.repoPath });
+			const ref = await resolveBaseRef({ exec: deps.exec, repoPath: repoPath() });
 
 			if (ref === null) {
-				return fallback(`${deps.repoPath} is not a git repository, or has no branch to read`);
+				return fallback(`${repoPath()} is not a git repository, or has no branch to read`);
 			}
 
 			const target = await git(['rev-parse', ref]);
@@ -204,9 +230,9 @@ export function getRepoService(deps: { exec: ExecService; repoPath: string; home
 			// session reading the repository to learn its conventions cannot find them
 			// anywhere else.
 			copyUntracked({
-				from: deps.repoPath,
+				from: repoPath(),
 				to: treePath,
-				files: await untrackedPaths({ exec: deps.exec, repoPath: deps.repoPath })
+				files: await untrackedPaths({ exec: deps.exec, repoPath: repoPath() })
 			});
 
 			return {

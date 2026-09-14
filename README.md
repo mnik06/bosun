@@ -92,13 +92,54 @@ termination paths and what is deliberately spared.
 Agents installed before this carry `Restart=always` and need `install.sh` re-run before they can be
 deleted cleanly.
 
-`enroll` writes `~/.bosun/config.json` at mode `0600` — server URL, machine id, machine key, repo
-path. `--repo` defaults to the current directory, `--config` overrides the path.
+`enroll` writes `~/.bosun/config.json` at mode `0600` — server URL, machine id, machine key and the
+web app's origin. It enrolls no repository: one is attached from the browser, and the agent clones it
+into a directory of its own. `--config` overrides the path.
+
+### Installing on a machine
+
+**Add machine** in the browser prints one command. Run it on the box, from any directory:
+
+```bash
+curl -fsSL <server>/install.sh | BOSUN_TOKEN=<code> sh
+```
+
+- **As root** — the usual state of a fresh VPS — it installs git, curl and the system libraries
+  headless Chromium needs, creates a `bosun` user (or uses the one `BOSUN_USER` names), enables
+  linger for it, and installs everything else as that user. No agent process ever runs as root.
+- **As any other user** it installs for that user. A system package it cannot install without root is
+  named rather than failing the install.
+
+Either way it installs the agent, a checksummed LTS node for the agent's own tooling under
+`~/.bosun/toolchains`, Claude Code when it is missing, a Chromium build and the systemd unit — and
+reads nothing from any repository. It ends by running the setup wizard in the same terminal; with no
+terminal attached it prints the command and exits 0.
+
+### `bosun-agent setup`
+
+The only things that have to be typed on the box, in order:
+
+| Step | Skipped when | Otherwise |
+| ---- | ------------ | --------- |
+| Claude | `claude auth status` has a credential and one API call accepts it | the `auth set` flow below |
+| MCP servers | every preset bosun offers is configured | offers each preset; `mcp add` for each one you accept |
+| Browser | the installed Chromium launches headless | offers to install the build; names a missing system library and the root command that installs it |
+| Machine key | — | prints the machine's key fingerprint |
+
+Every step checks before it acts, so running it again is always safe — it is the answer whenever the
+machine's page says something is missing on the box. It ends by printing that page's address. The
+command carries no secret and sends none: credentials go into `~/.bosun` on the machine and nowhere
+else.
+
+The fingerprint is how values typed in the browser — env variables, test-account secrets — are kept
+honest: the browser encrypts them to this machine's key and shows the same fingerprint on the
+machine's page. If the two differ, do not type anything in.
 
 ### The machine's Claude credential
 
 Planning sessions run the `claude` CLI on the machine, so the box needs the binary on its PATH and a
-working login. There is exactly one supported way to give it one:
+working login. The installer puts the binary there, and `bosun-agent setup` asks for the token as its
+first step. That step is `auth set`, which also works on its own:
 
 ```bash
 # 1. on your own machine, which has a browser:
@@ -108,6 +149,9 @@ claude setup-token
 bosun-agent auth set
 bosun-agent auth status   # whether this machine has a working credential
 ```
+
+The token is never typed into the browser, encrypted or not: it is an account credential, and the
+terminal is the one path to the machine that no page served by bosun can read.
 
 The token is typed at a prompt, never passed as an argument, so it stays out of
 `/proc/<pid>/cmdline` and the shell's history. `auth set` makes one real API call before writing:
@@ -161,18 +205,56 @@ repo-controlled text that instructs the model rather than data it looks at. On y
 the point — a repo carrying its own planning conventions is the use case. Treat it as a reason to
 review skills in a pull request like any other code.
 
+### Repositories, the config and onboarding
+
+**GitHub is an integration, not a CLI on the box.** A leader connects bosun's GitHub App on the
+Repositories page and adds a repository; attaching it to a machine clones its default branch into
+`~/.bosun/repos/<slug>` with a token that lasts an hour and reaches that one repository. No GitHub
+token is stored in the database or on the machine's disk: git asks `bosun-agent git-credential` on
+every fetch and push, and the backend mints one. A finished plan's pull request is opened by the
+backend through the App, so a repository machine needs no `gh`. See
+`be/src/services/github/github-app.service.md` and `agent/src/services/workspace.service.md`.
+
+**The config is a file in the repository**, `.bosun/project.yaml` — the toolchain, setup steps, apps
+and how they find each other on a queue's ports, checks and test accounts. Facts about the code, so it
+travels with the branch that changes it. It never holds a secret or anything about one machine.
+Bosun keeps a draft only until the file exists, and a session uses the file in the tree it runs in
+whenever there is one; a file that does not validate stops the session rather than falling back.
+Whether migrations are applied is set per machine in bosun.
+
+**Onboarding writes the config.** *Start onboarding* sends a session to read the repository and run
+what it can; it asks nothing, and comes back with a draft, the inputs it still needs — env keys per
+path, test-account secrets, the migration policy — and the assumptions it made. Filling the one form
+starts verify on its own: the agent installs, generates, migrates where allowed, starts every app with
+`stack_up` and signs in as each test account. A ready run offers *Open pull request*, which adds
+`.bosun/project.yaml` and nothing else. A second machine on the same repository needs only its own
+inputs and a verify. See `be/src/controllers/onboarding/README.md` and `agent/src/onboarding/README.md`.
+
+Values typed in the browser — env sets and session secrets — are encrypted there to the machine's key
+and opened only on the machine. Claude and MCP credentials are never typed in the browser at all.
+
+A machine enrolled before all this, onto an existing checkout, keeps working exactly as it did: its
+checkout, its project profile and `gh`.
+
 ### Refreshing a machine
 
 Refresh in the browser re-runs exactly what the agent runs when it connects: it re-sends `hello` and
 re-collects every preflight check, reading each source from disk at that moment. So all of this
-takes effect without restarting the agent or re-enrolling:
+takes effect without restarting the agent or re-enrolling.
 
-| changed | picked up by Refresh |
-| ------- | -------------------- |
-| `~/.bosun/env` — a Claude token, an MCP server's credential | yes |
-| `~/.bosun/mcp.json` — a server added or edited | yes |
-| `.claude/skills/` in the repo, or `~/.claude/skills/` | yes |
-| the repo's contents, branch, working tree | yes |
+Most of it needs no Refresh at all. The agent watches `~/.bosun`, and a change to `env`, `mcp.json`
+or the env store sends a fresh `hello` and preflight within a few seconds — so the machine's checklist
+ticks while `bosun-agent setup` runs, with nobody pressing anything:
+
+| changed | picked up |
+| ------- | --------- |
+| `~/.bosun/env` — a Claude token, an MCP server's credential | automatically |
+| `~/.bosun/mcp.json` — a server added or edited | automatically |
+| `~/.bosun/project-env.json` — env sets and session secrets | automatically |
+| `.claude/skills/` in the repo, or `~/.claude/skills/` | by Refresh |
+| the repo's contents, branch, working tree | by Refresh |
+
+Refresh stays for what it is actually for: upgrades, and re-reading the repository.
 
 `systemd` reads `EnvironmentFile=` only when the unit starts, so the agent re-reads `~/.bosun/env`
 itself rather than trusting the environment it was launched with. `PATH` is the one key the file
@@ -329,3 +411,17 @@ fly secrets set --app bosun-be SUPABASE_URL=... SUPABASE_PUBLISHABLE_KEY=...
 `PUBLIC_APP_URL` is one of those, and it is the web app's origin rather than the backend's: a pull
 request bosun opens links back to the plan that produced it, and the backend cannot derive where the
 browser reaches the app from where it reaches itself.
+
+**The GitHub App is registered once per deployment**, and the deploy refuses until its five variables
+exist. Create it with repository permissions `contents: write`, `pull_requests: write` and
+`metadata: read`; switch on *Request user authorization (OAuth) during installation*; set the
+**Callback URL** to `PUBLIC_APP_URL/github/callback` (with that option on, GitHub disables the setup URL
+and sends the installer to the callback URL instead); leave webhooks off. Then:
+
+```bash
+fly secrets set --app bosun-be GITHUB_APP_ID=... GITHUB_APP_SLUG=... GITHUB_APP_CLIENT_ID=... \
+  GITHUB_APP_CLIENT_SECRET=... GITHUB_APP_PRIVATE_KEY="$(cat bosun.private-key.pem)"
+```
+
+A local backend needs the same five in `be/.env` to boot — a second App registered for local use keeps
+production's key off developer machines.

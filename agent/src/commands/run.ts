@@ -5,7 +5,7 @@ import { PROBATION_DEADLINE_MS, UPGRADE_EXIT_CODE } from '../services/upgrade.se
 import { AGENT_VERSION } from '../version';
 
 export async function run(opts: { config: AgentConfig; configPath: string }): Promise<never> {
-	const services = getServices({ config: opts.config, env: process.env });
+	const services = getServices({ config: opts.config, configPath: opts.configPath, env: process.env });
 
 	// Before anything dials out. A machine has no inbound port, so a build that
 	// cannot connect cannot be fixed from the browser — the only way back is for

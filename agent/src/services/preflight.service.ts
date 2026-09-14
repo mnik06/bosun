@@ -1,12 +1,16 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { launchBrowser } from './browser.service';
 import { type ClaudeAuthService } from './claude-auth.service';
 import { type ExecService } from './exec.service';
 import { type McpConfigService } from './mcp-config.service';
 import { formatGib, type MemoryService } from './memory.service';
 import { describeEnvSets, type ProjectEnvService } from './project-env.service';
+import { NO_REPOSITORY, repoPathGetter, type RepoPathSource } from './repo.service';
+import { type WorkspaceService } from './workspace.service';
 import { type PreflightCheck } from '../protocol';
+import { PROJECT_CONFIG_PATH } from '../project-config';
 
 const MIN_CLAUDE_MAJOR = 2;
 
@@ -66,8 +70,11 @@ export function getPreflightService(deps: {
 	mcpConfig: McpConfigService;
 	memory: MemoryService;
 	projectEnv: ProjectEnvService;
-	repoPath: string;
+	workspace: Pick<WorkspaceService, 'repositoryId' | 'configOnDefault'>;
+	repoPath: RepoPathSource;
 }) {
+	const currentRepoPath = repoPathGetter(deps.repoPath);
+
 	// One check, two probes. A missing binary and a missing login are different
 	// fixes, so the detail says which one failed rather than collapsing to
 	// "claude: failed" and sending the operator to look at the wrong thing.
@@ -135,22 +142,28 @@ export function getPreflightService(deps: {
 			return { name: 'git', ok: false, detail: `git: ${version.reason}` };
 		}
 
+		const repoPath = currentRepoPath();
+
+		if (repoPath === null) {
+			return { name: 'git', ok: false, detail: `${version.stdout} · ${NO_REPOSITORY}` };
+		}
+
 		const inside = await deps.exec.run(
 			'git',
-			['-C', deps.repoPath, 'rev-parse', '--is-inside-work-tree'],
+			['-C', repoPath, 'rev-parse', '--is-inside-work-tree'],
 			{}
 		);
 
 		if (!inside.ok || inside.stdout.trim() !== 'true') {
-			return { name: 'git', ok: false, detail: `${deps.repoPath} is not a git repository` };
+			return { name: 'git', ok: false, detail: `${repoPath} is not a git repository` };
 		}
 
-		const reach = await checkRemote();
+		const reach = await checkRemote(repoPath);
 
 		return {
 			name: 'git',
 			ok: reach.ok,
-			detail: `${version.stdout} · ${deps.repoPath} · ${reach.detail}`
+			detail: `${version.stdout} · ${repoPath} · ${reach.detail}`
 		};
 	}
 
@@ -162,9 +175,10 @@ export function getPreflightService(deps: {
 	// `ls-remote` rather than `fetch`: it transfers no objects, and the question is
 	// only whether the credentials in the service environment reach the remote at
 	// all. Prompts are disabled on both transports, because a check that blocks on
-	// a passphrase never returns.
-	async function checkRemote(): Promise<{ ok: boolean; detail: string }> {
-		const remotes = await deps.exec.run('git', ['-C', deps.repoPath, 'remote'], {});
+	// a passphrase never returns. On a repository machine this is also the proof
+	// that the credential helper gets a token from bosun.
+	async function checkRemote(repoPath: string): Promise<{ ok: boolean; detail: string }> {
+		const remotes = await deps.exec.run('git', ['-C', repoPath, 'remote'], {});
 
 		if (!remotes.ok || remotes.stdout.trim() === '') {
 			return { ok: true, detail: 'no remote — nothing to fetch' };
@@ -172,7 +186,7 @@ export function getPreflightService(deps: {
 
 		const reachable = await deps.exec.run(
 			'git',
-			['-C', deps.repoPath, 'ls-remote', '--quiet', '--exit-code', 'origin', 'HEAD'],
+			['-C', repoPath, 'ls-remote', '--quiet', '--exit-code', 'origin', 'HEAD'],
 			{
 				env: {
 					...process.env,
@@ -191,11 +205,15 @@ export function getPreflightService(deps: {
 			};
 	}
 
-	// `gh auth status` is the whole check: bosun holds no GitHub credential of its
-	// own, so what matters is whether the CLI on this box has one. Never red —
-	// queues run fine without it, they simply cannot open a pull request, and a
-	// machine used only for building should not look broken for that.
+	// Never red — queues run fine without it, they simply cannot open a pull
+	// request, and a machine used only for building should not look broken for
+	// that. A repository machine has no use for it at all: its pull requests are
+	// opened by bosun through the GitHub App.
 	async function checkGh(): Promise<PreflightCheck> {
+		if (deps.workspace.repositoryId() !== null) {
+			return { name: 'gh', ok: true, detail: 'not needed — pull requests are opened through the GitHub App' };
+		}
+
 		const version = await deps.exec.run('gh', ['--version'], {});
 
 		if (!version.ok) {
@@ -217,11 +235,11 @@ export function getPreflightService(deps: {
 		};
 	}
 
-	// Red rather than quiet, unlike `gh`. A machine with no browser build still
-	// starts the Playwright server and still plans a UI pass — the tools only fail
-	// when a bullet calls one, an hour in, and the plan comes back with every
-	// criterion it was meant to drive marked unverified.
-	function checkBrowser(): PreflightCheck {
+	// Red rather than quiet, unlike `gh`, and launched rather than looked for. A
+	// build in the cache that cannot start — a fresh Ubuntu lacks the libraries it
+	// links against — still starts the Playwright server, and its tools only fail
+	// when a bullet calls one, an hour in.
+	async function checkBrowser(): Promise<PreflightCheck> {
 		const config = deps.mcpConfig.read();
 
 		// `read()` merges bosun's defaults, so a machine that has not configured
@@ -231,27 +249,16 @@ export function getPreflightService(deps: {
 			return { name: 'browser', ok: true, detail: 'playwright is switched off here' };
 		}
 
-		const cachePath = browserCachePath({
-			platform: process.platform,
-			home: os.homedir(),
-			configured: process.env.PLAYWRIGHT_BROWSERS_PATH
+		const launched = await launchBrowser({
+			exec: deps.exec,
+			cachePath: browserCachePath({
+				platform: process.platform,
+				home: os.homedir(),
+				configured: process.env.PLAYWRIGHT_BROWSERS_PATH
+			})
 		});
 
-		if (cachePath === null) {
-			return {
-				name: 'browser',
-				ok: true,
-				detail: 'PLAYWRIGHT_BROWSERS_PATH=0 — browsers live beside the package'
-			};
-		}
-
-		return hasBrowserBuild(cachePath)
-			? { name: 'browser', ok: true, detail: `chromium in ${cachePath}` }
-			: {
-				name: 'browser',
-				ok: false,
-				detail: `no chromium build in ${cachePath} — run \`npx playwright install chromium\`, or no session can drive a browser`
-			};
+		return { name: 'browser', ok: launched.ok, detail: launched.detail };
 	}
 
 	// Red only where the limits are missing on Linux, the one case that changes what
@@ -284,14 +291,51 @@ export function getPreflightService(deps: {
 	// Never red: plenty of projects need no connection at all. It is here so that an
 	// operator can see before a verify bullet runs that it will have no database.
 	function checkEnv(): PreflightCheck {
-		return { name: 'env', ok: true, detail: describeEnvSets(deps.projectEnv.summary()) };
+		const secrets = deps.projectEnv.secretNames();
+		const secretLine = secrets.length === 0 ? '' : ` · session secrets: ${secrets.join(', ')}`;
+
+		return { name: 'env', ok: true, detail: `${describeEnvSets(deps.projectEnv.summary())}${secretLine}` };
+	}
+
+	// Which of the two configs a repository machine's sessions run on. Only the
+	// default branch is looked at: a queue's branch may carry its own file, and a
+	// session always uses the one in the tree it runs in.
+	async function checkConfig(): Promise<PreflightCheck | null> {
+		if (deps.workspace.repositoryId() === null) {
+			return null;
+		}
+
+		const onDefault = await deps.workspace.configOnDefault();
+
+		return {
+			name: 'config',
+			ok: true,
+			detail: onDefault
+				? `${PROJECT_CONFIG_PATH} is on the default branch — sessions use it`
+				: `no ${PROJECT_CONFIG_PATH} on the default branch yet — sessions use the draft in bosun`
+		};
 	}
 
 	return {
 		async collect(): Promise<PreflightCheck[]> {
-			const [claude, git, gh] = await Promise.all([checkClaude(), checkGit(), checkGh()]);
+			const [claude, git, gh, browser, config] = await Promise.all([
+				checkClaude(),
+				checkGit(),
+				checkGh(),
+				checkBrowser(),
+				checkConfig()
+			]);
 
-			return [claude, git, gh, checkCustomMcp(), checkBrowser(), checkMemory(), checkEnv()];
+			return [
+				claude,
+				git,
+				gh,
+				checkCustomMcp(),
+				browser,
+				checkMemory(),
+				checkEnv(),
+				...(config === null ? [] : [config])
+			];
 		}
 	};
 }

@@ -34,6 +34,7 @@ export const PlanPrepareMsgSchema = z.object({
 	// say the dependency map read off their plans is the one they meant.
 	auto: z.boolean().default(false),
 	plans: z.array(PreparePlanSchema).min(2),
-	notes: z.string().nullable().default(null)
+	notes: z.string().nullable().default(null),
+	configDraft: z.string().nullable().default(null)
 });
 

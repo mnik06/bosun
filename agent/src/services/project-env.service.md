@@ -20,6 +20,27 @@ and it is the only place the value is needed. Keeping it in bosun too would make
 copy of every project's production secrets for no reader that needs them. Deleting the machine in the
 browser removes `~/.bosun` with everything else in it.
 
+## Sealed in the browser
+
+Since plan 008 the value on the frame is not the value. The browser encrypts each one to this
+machine's public key (`~/.bosun/inputs.key`, reported in `hello`): AES-256-GCM under a fresh key, that
+key wrapped with RSA-OAEP-SHA256. The backend relays the envelope and can read none of it; the router
+opens it immediately before the store, so plaintext exists only on this box. A machine whose agent
+has no key is refused browser input by the backend rather than sent a plaintext value.
+
+What that protects against is request logs, the database, log drains and anyone reading the backend's
+traffic. It does not protect against a compromised frontend reading the form before it is sealed —
+which is why Claude and MCP credentials stay in the terminal.
+
+## Session secrets
+
+`secrets` sits beside `sets` in the same store: values put into a session's environment and never
+written into a worktree — test-account passwords, above all, where a `.env` is one `git add -A` from a
+pull request. `secrets.set` replaces the whole set (an empty list removes them all; `null` keeps a
+stored value). Names travel in `hello.sessionSecrets` and `env.saved`; values reach only the
+environment of a repository machine's sessions, onboarding's verify and its apps — never setup steps,
+a file, a frame or a log line.
+
 ## Merge semantics
 
 **The store:** `env.set` replaces the set for that path with exactly the keys it names — a key missing
