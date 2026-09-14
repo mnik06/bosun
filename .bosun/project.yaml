@@ -1,0 +1,69 @@
+version: 1
+
+toolchain:
+  node: "24.15.0"
+  packageManager: "pnpm@11.8.0"
+
+setup:
+  - name: install be
+    cwd: be
+    run: pnpm install --frozen-lockfile
+    rerunWhen: [be/pnpm-lock.yaml]
+  - name: install fe
+    cwd: fe
+    run: pnpm install --frozen-lockfile
+    rerunWhen: [fe/pnpm-lock.yaml]
+  - name: install agent
+    cwd: agent
+    run: pnpm install --frozen-lockfile
+    rerunWhen: [agent/pnpm-lock.yaml]
+
+apps:
+  be:
+    cwd: be
+    start: pnpm local
+    env:
+      PORT: "{port}"
+      PUBLIC_SERVER_URL: "{url.be}"
+      PUBLIC_APP_URL: "{url.fe}"
+    ready: "{url.be}/health"
+    migrate: pnpm db:migration:run
+  fe:
+    cwd: fe
+    start: pnpm dev --port {port} --strictPort
+    dependsOn: [be]
+    env:
+      VITE_API_URL: "{url.be}"
+    ready: "{url.fe}"
+
+checks:
+  - cwd: be
+    run: pnpm preflight
+  - cwd: fe
+    run: pnpm preflight
+  - cwd: agent
+    run: pnpm preflight
+
+testAccounts:
+  - role: leader
+    signIn: "{url.fe}/login"
+    secrets: [TEST_LEADER_EMAIL, TEST_LEADER_PASSWORD]
+
+notes: |
+  agent/ is a CLI daemon (built with tsc, run by hand on a remote machine to enroll
+  and hold the outbound WebSocket) — not a server, so it has no entry under apps:.
+  Its dependencies are installed and its preflight still runs under checks:.
+
+  be's PUBLIC_SERVER_URL and PUBLIC_APP_URL are wired to {url.be}/{url.fe} rather
+  than left as plain env vars, since bosun already knows both URLs at runtime and
+  the checked-in be/.env.example default for PUBLIC_APP_URL (127.0.0.1:5173) does
+  not match fe's actual dev port (5373, set in fe/vite.config.ts).
+
+  be needs a real Postgres reachable via DATABASE_URL — the session pooler
+  (port 5432), not the transaction-mode pooler (6543), which breaks
+  `drizzle-kit migrate`. Migrations are committed under be/drizzle-out/ and
+  applied with `pnpm db:migration:run`.
+
+  There is no self-signup: accounts are created by a project leader, so the test
+  leader account's credentials cannot be discovered in the repo and must be
+  created in the Supabase project by the operator.
