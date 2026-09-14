@@ -1,6 +1,5 @@
 import crypto from 'crypto';
 import { z } from 'zod';
-import { sleep } from 'src/utils/general';
 
 const API = 'https://api.github.com';
 const OAUTH_TOKEN_URL = 'https://github.com/login/oauth/access_token';
@@ -59,8 +58,6 @@ const GithubErrorBodySchema = z.object({
 		.optional()
 });
 
-const PULL_RETRY_DELAYS_MS = [1_000, 2_000, 4_000];
-
 type GithubErrorEntry = NonNullable<z.infer<typeof GithubErrorBodySchema>['errors']>[number];
 
 function describeGithubError(entry: GithubErrorEntry): string {
@@ -72,8 +69,7 @@ function describeGithubError(entry: GithubErrorEntry): string {
 }
 
 // "Validation Failed" alone names nothing to fix; the reason GitHub gives —
-// "No commits between main and bosun/onboarding", a field that is invalid — is
-// in `errors`.
+// "not all refs are readable", a field that is invalid — is in `errors`.
 function githubReasons(json: unknown): { message: string; reasons: string[] } | null {
 	const said = GithubErrorBodySchema.safeParse(json);
 
@@ -82,10 +78,6 @@ function githubReasons(json: unknown): { message: string; reasons: string[] } | 
 	}
 
 	return { message: said.data.message, reasons: (said.data.errors ?? []).map(describeGithubError).filter((reason) => reason !== '') };
-}
-
-function noCommitsYet(result: { status: number; json: unknown }): boolean {
-	return result.status === 422 && (githubReasons(result.json)?.reasons.some((reason) => /no commits between/i.test(reason)) ?? false);
 }
 
 const PullStateSchema = PullSchema.extend({
@@ -191,11 +183,9 @@ export function getGithubAppService(deps: {
 	privateKey: string;
 	fetchImpl?: typeof fetch;
 	now?: () => number;
-	sleep?: (ms: number) => Promise<void>;
 }) {
 	const fetchImpl = deps.fetchImpl ?? fetch;
 	const now = deps.now ?? Date.now;
-	const wait = deps.sleep ?? sleep;
 	const privateKey = normalizePrivateKey(deps.privateKey);
 	const tokens = new Map<string, { token: string; expiresAt: number }>();
 
@@ -321,31 +311,20 @@ export function getGithubAppService(deps: {
 		body: string;
 	}): Promise<{ url: string; number: number; updated: boolean }> {
 		const repo = await repository(opts);
+		// Contents read as well: GitHub resolves the head and base branches with the
+		// token's own access, and a pull-requests-only token is refused with "not
+		// all refs are readable".
 		const { token } = await mint({
 			installationId: opts.installationId,
 			githubRepoIds: [opts.githubRepoId],
-			permissions: { pull_requests: 'write' }
+			permissions: { pull_requests: 'write', contents: 'read' }
 		});
-		const create = async () =>
-			call({
-				method: 'POST',
-				url: `${API}/repos/${repo.full_name}/pulls`,
-				token,
-				body: { title: opts.title, head: opts.head, base: opts.base, body: opts.body }
-			});
-		let created = await create();
-
-		// A commit pushed a moment ago can still read as "no commits between" the
-		// branch and its base, so a pull request opened straight after writing the
-		// file is refused for a state GitHub settles within seconds.
-		for (const delay of PULL_RETRY_DELAYS_MS) {
-			if (!noCommitsYet(created)) {
-				break;
-			}
-
-			await wait(delay);
-			created = await create();
-		}
+		const created = await call({
+			method: 'POST',
+			url: `${API}/repos/${repo.full_name}/pulls`,
+			token,
+			body: { title: opts.title, head: opts.head, base: opts.base, body: opts.body }
+		});
 
 		if (created.status === 201) {
 			const pull = PullSchema.parse(created.json);

@@ -82,17 +82,20 @@ describe('verifyWebhookSignature', () => {
 });
 
 describe('openOrUpdatePullRequest', () => {
-	const NO_COMMITS = { message: 'Validation Failed', errors: [{ resource: 'PullRequest', code: 'custom', message: 'No commits between main and bosun/onboarding' }] };
+	const UNREADABLE = { message: 'Validation Failed', errors: [{ resource: 'PullRequest', code: 'custom', message: 'not all refs are readable' }] };
 	const request = { installationId: 1, githubRepoId: 7, head: 'bosun/onboarding', base: 'main', title: 't', body: 'b' };
 
-	function github(opts: { refusals: number }) {
-		const posts: string[] = [];
+	// Behaves as GitHub does: a token minted without contents access cannot resolve
+	// the branches a pull request names.
+	function github(opts: { refuse: boolean }) {
 		const reply = (status: number, json: unknown) => new Response(JSON.stringify(json), { status });
 		const fetchImpl = (async (input: string | URL | Request, init?: RequestInit) => {
 			const url = String(input);
 
 			if (url.endsWith('/access_tokens')) {
-				return reply(201, { token: 't', expires_at: new Date(NOW + 3_600_000).toISOString() });
+				const { permissions } = JSON.parse(String(init?.body)) as { permissions: Record<string, string> };
+
+				return reply(201, { token: permissions.contents ? 'reads-refs' : 'pulls-only', expires_at: new Date(NOW + 3_600_000).toISOString() });
 			}
 
 			if (url.endsWith('/repositories/7')) {
@@ -100,46 +103,28 @@ describe('openOrUpdatePullRequest', () => {
 			}
 
 			if (url.endsWith('/repos/acme/app/pulls') && init?.method === 'POST') {
-				posts.push(url);
+				const readsRefs = (init.headers as Record<string, string>).authorization === 'Bearer reads-refs';
 
-				return posts.length <= opts.refusals ? reply(422, NO_COMMITS) : reply(201, { number: 12, html_url: 'https://github.com/acme/app/pull/12' });
+				return opts.refuse || !readsRefs ? reply(422, UNREADABLE) : reply(201, { number: 12, html_url: 'https://github.com/acme/app/pull/12' });
 			}
 
 			return url.includes('/pulls?state=open') ? reply(200, []) : reply(404, { message: 'Not Found' });
 		}) as typeof fetch;
-		const service = getGithubAppService({
-			appId: '1',
-			slug: 'bosun',
-			clientId: 'client',
-			clientSecret: 'secret',
-			privateKey: pem,
-			fetchImpl,
-			now: () => NOW,
-			sleep: async () => {}
-		});
 
-		return { service, posts };
+		return getGithubAppService({ appId: '1', slug: 'bosun', clientId: 'client', clientSecret: 'secret', privateKey: pem, fetchImpl, now: () => NOW });
 	}
 
-	// The branch was committed to a moment before; GitHub can still count no
-	// commits on it, and a refusal then is a state that settles, not a failure.
-	it('asks again while GitHub still sees no commits on a branch just written', async () => {
-		const { service, posts } = github({ refusals: 2 });
-
-		await expect(service.openOrUpdatePullRequest(request)).resolves.toEqual({
+	it('opens it with a token that can read the branches it names', async () => {
+		await expect(github({ refuse: false }).openOrUpdatePullRequest(request)).resolves.toEqual({
 			url: 'https://github.com/acme/app/pull/12',
 			number: 12,
 			updated: false
 		});
-		expect(posts).toHaveLength(3);
 	});
 
-	it('gives up with the reason GitHub gave, not only "Validation Failed"', async () => {
-		const { service, posts } = github({ refusals: 10 });
-
-		await expect(service.openOrUpdatePullRequest(request)).rejects.toThrow(
-			'could not open the pull request: GitHub answered 422 — Validation Failed (No commits between main and bosun/onboarding)'
+	it('fails with the reason GitHub gave, not only "Validation Failed"', async () => {
+		await expect(github({ refuse: true }).openOrUpdatePullRequest(request)).rejects.toThrow(
+			'could not open the pull request: GitHub answered 422 — Validation Failed (not all refs are readable)'
 		);
-		expect(posts).toHaveLength(4);
 	});
 });
