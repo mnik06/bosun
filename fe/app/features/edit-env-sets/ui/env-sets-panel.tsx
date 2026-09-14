@@ -39,7 +39,7 @@ export function EnvSetsPanel ({ machine }: { machine: Machine }) {
 			{envSets.length === 0 ? (
 				<Text size="sm" c="dimmed">
 					Secrets a run needs but the repository does not hold — a .env for a folder, written into
-					every queue worktree before each bullet.
+					every build worktree before each bullet.
 				</Text>
 			) : (
 				envSets.map((envSet) => (

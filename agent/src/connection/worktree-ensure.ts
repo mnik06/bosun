@@ -1,41 +1,27 @@
 import { prepareRunEnvironment } from '../execution/run-environment';
-import { type AgentMsg, type ServerMsg } from '../protocol';
+import { type AgentMsg, type BuildWorktreeEnsure } from '../protocol';
 import { resolveProjectConfig } from '../services/config-resolution';
 import { type Services } from '../services/index';
 import { describeApplied } from '../services/project-env.service';
 
-type Ensure = Extract<ServerMsg, { type: 'queue.worktree.ensure' }>;
-
 type Setup = { ok: true; detail: string } | { ok: false; detail: string };
 
-// The backend re-sends an ensure for every queue still provisioning whenever the
-// agent announces, and an install can outlast several announces. A second setup
-// started in the same worktree would race the first over `node_modules`, and its
-// `ready` would release the queue while both were still writing.
+// The backend sends an ensure every time a build takes a slot, and an install can
+// outlast a reconnect that re-sends it. A second setup started in the same
+// worktree would race the first over `node_modules`, and its `ready` would release
+// the build while both were still writing.
 const ensuring = new Set<string>();
 
-// A repository machine runs the setup steps of the config it finds in the new
-// worktree, in order, with the toolchain that config names. A machine with no
-// repository runs its one setup command. Either way a failing step fails the
-// queue with the step's name and the tail of its output: a worktree reported
-// ready after its install failed is a queue whose every bullet fails an hour in.
-async function runSetup(opts: { services: Services; msg: Ensure; worktreePath: string }): Promise<Setup> {
+// The setup steps of the config the build's own branch carries, in order, with the
+// toolchain that config names. Run after the branch is cut, so a provider that
+// added a dependency is installed before the first bullet rather than found
+// missing an hour into it. A failing step fails the build with the step's name and
+// the tail of its output.
+async function runSetup(opts: { services: Services; msg: BuildWorktreeEnsure; worktreePath: string }): Promise<Setup> {
 	const { services, msg, worktreePath } = opts;
 
 	if (services.workspace.repositoryId() === null) {
-		if (!msg.setupCommand) {
-			return { ok: true, detail: 'no setup command' };
-		}
-
-		const legacy = await services.setupSteps.runLegacy({
-			key: msg.slug,
-			worktreePath,
-			command: msg.setupCommand,
-			env: services.claudeAuth.sessionEnv(),
-			onlyChanged: false
-		});
-
-		return legacy.ok ? { ok: true, detail: 'setup done' } : { ok: false, detail: legacy.message };
+		return { ok: true, detail: 'no repository attached — nothing to set up' };
 	}
 
 	const resolved = resolveProjectConfig({ treePath: worktreePath, draft: msg.configDraft });
@@ -54,7 +40,7 @@ async function runSetup(opts: { services: Services; msg: Ensure; worktreePath: s
 		return environment;
 	}
 
-	const ran = await services.setupSteps.runAll({
+	const ran = await (msg.fresh ? services.setupSteps.runAll : services.setupSteps.rerunChanged)({
 		key: msg.slug,
 		worktreePath,
 		config: resolved.config,
@@ -70,9 +56,9 @@ async function runSetup(opts: { services: Services; msg: Ensure; worktreePath: s
 export async function ensureWorktree(opts: {
 	services: Services;
 	send: (message: AgentMsg) => void;
-	msg: Ensure;
+	msg: BuildWorktreeEnsure;
 }): Promise<void> {
-	const { services, msg } = opts;
+	const { msg } = opts;
 
 	if (ensuring.has(msg.slug)) {
 		console.log(`worktree ${msg.slug}: already being set up — that run answers for this request`);
@@ -83,7 +69,7 @@ export async function ensureWorktree(opts: {
 	ensuring.add(msg.slug);
 
 	try {
-		await ensureOnce({ ...opts, services, msg });
+		await ensureOnce(opts);
 	} finally {
 		ensuring.delete(msg.slug);
 	}
@@ -92,14 +78,32 @@ export async function ensureWorktree(opts: {
 async function ensureOnce(opts: {
 	services: Services;
 	send: (message: AgentMsg) => void;
-	msg: Ensure;
+	msg: BuildWorktreeEnsure;
 }): Promise<void> {
 	const { services, msg } = opts;
+	const fail = (message: string) => {
+		console.log(`worktree ${msg.slug}: ${message}`);
+		opts.send({ type: 'build.worktree.error', buildId: msg.buildId, message });
+	};
 	const result = await services.worktree.ensure({ slug: msg.slug });
 
 	if (!result.ok) {
-		console.log(`worktree ${msg.slug}: ${result.detail}`);
-		opts.send({ type: 'queue.worktree.error', queueId: msg.queueId, message: result.detail });
+		fail(result.detail);
+
+		return;
+	}
+
+	const branched = await services.commit.startBuildBranch({
+		worktreePath: result.worktreePath,
+		branch: msg.branch,
+		baseRef: result.baseRef,
+		fresh: msg.fresh,
+		startFrom: msg.startFrom,
+		mergeIn: msg.mergeIn
+	});
+
+	if (!branched.ok) {
+		fail(branched.detail);
 
 		return;
 	}
@@ -121,15 +125,20 @@ async function ensureOnce(opts: {
 
 	const setup = await runSetup({ services, msg, worktreePath: result.worktreePath });
 
-	console.log(`worktree ${msg.slug}: ${result.detail}; ${setup.ok ? setup.detail : 'setup failed'}`);
-	opts.send(
-		setup.ok
-			? {
-				type: 'queue.worktree.ready',
-				queueId: msg.queueId,
-				worktreePath: result.worktreePath,
-				baseRef: result.baseRef
-			}
-			: { type: 'queue.worktree.error', queueId: msg.queueId, message: setup.detail }
-	);
+	if (!setup.ok) {
+		fail(setup.detail);
+
+		return;
+	}
+
+	const head = await services.exec.run('git', ['-C', result.worktreePath, 'rev-parse', 'HEAD'], { timeoutMs: 30_000 });
+
+	console.log(`worktree ${msg.slug}: ${result.detail}; ${branched.detail}; ${setup.detail}`);
+	opts.send({
+		type: 'build.worktree.ready',
+		buildId: msg.buildId,
+		worktreePath: result.worktreePath,
+		baseRef: result.baseRef,
+		headSha: head.ok && head.stdout !== '' ? head.stdout : null
+	});
 }

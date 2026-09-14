@@ -50,7 +50,11 @@ export const EnvSchema = z.object({
 	GITHUB_APP_CLIENT_SECRET: z.string().min(1),
 	GITHUB_APP_PRIVATE_KEY: z
 		.string()
-		.refine((key) => key.includes('PRIVATE KEY'), 'must be the PEM private key the App generated')
+		.refine((key) => key.includes('PRIVATE KEY'), 'must be the PEM private key the App generated'),
+	// Signs the App's `push` and `pull_request` deliveries. A delivery that does not
+	// verify is refused: an unsigned merge event would mark a plan merged and start
+	// every plan stacked on it.
+	GITHUB_WEBHOOK_SECRET: z.string().min(16, 'must be the webhook secret set on the GitHub App')
 });
 
 export type Env = z.infer<typeof EnvSchema>;

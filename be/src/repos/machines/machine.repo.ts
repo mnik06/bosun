@@ -30,6 +30,8 @@ const publicColumns = {
 	publicKey: machines.publicKey,
 	policy: machines.policy,
 	sessionSecrets: machines.sessionSecrets,
+	verifyLanes: machines.verifyLanes,
+	buildCap: machines.buildCap,
 	createdAt: machines.createdAt
 };
 
@@ -271,6 +273,22 @@ export function getMachineRepo(db: Db) {
 				.update(machines)
 				.set({ policy: opts.policy })
 				.where(and(eq(machines.id, opts.id), eq(machines.projectId, opts.projectId)))
+				.returning(publicColumns);
+
+			return row ? MachineSchema.parse(row) : null;
+		},
+
+		async saveCapacity(opts: {
+			id: string;
+			projectId: string;
+			verifyLanes?: number;
+			buildCap?: number | null;
+		}): Promise<Machine | null> {
+			const { id, projectId, ...values } = opts;
+			const [row] = await db
+				.update(machines)
+				.set(values)
+				.where(and(eq(machines.id, id), eq(machines.projectId, projectId)))
 				.returning(publicColumns);
 
 			return row ? MachineSchema.parse(row) : null;

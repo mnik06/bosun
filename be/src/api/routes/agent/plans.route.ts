@@ -11,6 +11,7 @@ import {
 	AgentAcRespSchema,
 	AgentPlanRespSchema
 } from 'src/api/routes/schemas/plans/PlanRespSchemas';
+import { lineDeps } from 'src/controllers/line/line-deps';
 import { markPlanAc } from 'src/controllers/plans/agent/mark-plan-ac';
 import { publishPlan } from 'src/controllers/plans/agent/publish-plan';
 import { savePlanName } from 'src/controllers/plans/agent/save-plan-name';
@@ -50,13 +51,7 @@ const routes: FastifyPluginAsync = async function (f) {
 			}
 		},
 		async (req) => {
-			const plan = await publishPlan({
-				db: fastify.db,
-				planRepo: fastify.repos.planRepo,
-				acRepo: fastify.repos.acRepo,
-				sliceRepo: fastify.repos.sliceRepo,
-				idService: fastify.services.idService,
-				socketRegistry: fastify.services.socketRegistry,
+			const plan = await publishPlan(lineDeps(fastify), {
 				id: req.params.id,
 				machineId: req.agent!.machineId,
 				...req.body

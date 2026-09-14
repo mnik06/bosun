@@ -3,8 +3,8 @@
 A verify bullet on an 8 GB machine used to take the agent down with it. The kernel's out-of-memory
 killer acted inside `bosun-agent.service`, the unit's default `OOMPolicy=stop` then stopped the whole
 unit — the agent and every `claude` beside it — and systemd restarted it five seconds later. The
-backend saw a fresh process with none of its bullets and paused every queue on the machine as
-"the agent restarted". Nothing had crashed; the box had simply run out.
+backend saw a fresh process with none of its bullets and stopped every one of them as "the agent
+restarted". Nothing had crashed; the box had simply run out.
 
 ## What changed
 
@@ -28,13 +28,14 @@ seconds and once more on exit. A session that ends with `SIGKILL` and a non-zero
 137 means memory, not a failing check.
 
 **The machine says what it has.** `hello` carries `memory` — total, available, swap, and whether scopes
-work here — which the backend budgets bullets against (`be/src/controllers/queues/shared/memory-budget.ts`).
-It also carries `previousExit`, the result systemd logged for the process before this one, so a queue
-stranded by the kernel killing the agent is paused as out of memory rather than as a restart.
+work here — which the backend's scheduler admits builds, drives, fix sessions and integrations against.
+It also carries `previousExit`, the result systemd logged for the process before this one, so a bullet
+stranded by the kernel killing the agent is reported as out of memory rather than as a restart.
 
 ## Where it does not apply
 
 - **Off Linux, or without a user manager** (a container, an agent run by hand over `ssh` without
   linger), `systemd-run --user` fails its startup probe. Sessions run unscoped exactly as before, and
   the `memory` preflight check goes red to say so.
-- **Planning, ask and summary sessions** stay unscoped. They read; they do not run a project's loop.
+- **Planning, ask and summary sessions** stay unscoped. Integration sessions are scoped like bullets:
+  they run a project's checks. They read; they do not run a project's loop.

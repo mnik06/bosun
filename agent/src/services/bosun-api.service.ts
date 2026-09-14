@@ -12,6 +12,14 @@ const ErrorRespSchema = z.object({ message: z.string() });
 
 const GitCredentialRespSchema = z.object({ token: z.string(), expiresAt: z.string() });
 
+const PlanCriteriaRespSchema = z.array(
+	z.object({
+		planNumber: z.number().int(),
+		title: z.string(),
+		acs: z.array(z.object({ code: z.string(), text: z.string() }))
+	})
+);
+
 const McpRequirementSchema = z.object({
 	env: z.string(),
 	label: z.string(),
@@ -113,10 +121,6 @@ export function getBosunApiService(deps: { serverUrl: string; machineKey?: strin
 		// The whole artifact in one call. Publishing it piece by piece put a plan
 		// with two of its four bullets in front of the person, and made a revision
 		// a diff against whatever the last session happened to write.
-		//
-		// A preparation session rewrites plans other than its own by carrying
-		// `preparedBy` in the artifact; the backend checks that plan's recorded
-		// scope rather than believing the claim.
 		async publishPlan(opts: { planId: string; artifact: unknown }): Promise<unknown> {
 			return post({
 				path: `/agent/plans/${opts.planId}/publish`,
@@ -219,6 +223,35 @@ export function getBosunApiService(deps: { serverUrl: string; machineKey?: strin
 				body: { blockedByNumbers: opts.blockedByNumbers },
 				authorized: true
 			});
+		},
+
+		// The criteria of other plans, by number: what a conflict session needs to
+		// resolve a conflict with both plans' intent, not only its own.
+		async planCriteria(numbers: number[]): Promise<z.infer<typeof PlanCriteriaRespSchema>> {
+			if (numbers.length === 0) {
+				return [];
+			}
+
+			return PlanCriteriaRespSchema.parse(await get(`/agent/plans/criteria?numbers=${numbers.join(',')}`, true));
+		},
+
+		async reportFinding(opts: {
+			buildId: string;
+			runId: string;
+			acCode: string | null;
+			kind: 'criterion' | 'console' | 'network' | 'visual';
+			reproduction: string;
+			severity: 'high' | 'medium' | 'low';
+		}): Promise<unknown> {
+			const { buildId, ...body } = opts;
+
+			return post({ path: `/agent/builds/${encodeURIComponent(buildId)}/findings`, body, authorized: true });
+		},
+
+		async resolveFinding(opts: { findingId: string; status: 'fixed' | 'left'; note: string }): Promise<unknown> {
+			const { findingId, ...body } = opts;
+
+			return post({ path: `/agent/findings/${encodeURIComponent(findingId)}/resolve`, body, authorized: true });
 		}
 	};
 }

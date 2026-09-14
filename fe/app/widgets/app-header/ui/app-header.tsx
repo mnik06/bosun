@@ -5,7 +5,15 @@ import { Link } from 'react-router'
 
 import { useSignOut } from '~/features/auth'
 
-export function AppHeader ({ email, projectSwitcher }: { email: string, projectSwitcher?: ReactNode }) {
+export function AppHeader ({
+	email,
+	projectSwitcher,
+	needsYou
+}: {
+	email: string,
+	projectSwitcher?: ReactNode,
+	needsYou?: ReactNode
+}) {
 	const signOut = useSignOut()
 
 	return (
@@ -19,33 +27,37 @@ export function AppHeader ({ email, projectSwitcher }: { email: string, projectS
 					{projectSwitcher}
 				</Group>
 
-				<Menu position="bottom-end" width={240} withArrow>
-					<Menu.Target>
-						<UnstyledButton aria-label="Account">
-							<Avatar radius="xl" size={32} color="blue">
-								{email.slice(0, 1).toUpperCase()}
-							</Avatar>
-						</UnstyledButton>
-					</Menu.Target>
+				<Group gap="xs" wrap="nowrap">
+					{needsYou}
 
-					<Menu.Dropdown>
-						<Menu.Label>
-							<Text size="xs" truncate>
-								{email}
-							</Text>
-						</Menu.Label>
-						<Menu.Divider />
-						<Menu.Item
-							leftSection={<LogOut size={14} />}
-							disabled={signOut.isPending}
-							onClick={() => {
-								signOut.mutate()
-							}}
-						>
+					<Menu position="bottom-end" width={240} withArrow>
+						<Menu.Target>
+							<UnstyledButton aria-label="Account">
+								<Avatar radius="xl" size={32} color="blue">
+									{email.slice(0, 1).toUpperCase()}
+								</Avatar>
+							</UnstyledButton>
+						</Menu.Target>
+
+						<Menu.Dropdown>
+							<Menu.Label>
+								<Text size="xs" truncate>
+									{email}
+								</Text>
+							</Menu.Label>
+							<Menu.Divider />
+							<Menu.Item
+								leftSection={<LogOut size={14} />}
+								disabled={signOut.isPending}
+								onClick={() => {
+									signOut.mutate()
+								}}
+							>
 							Log out
-						</Menu.Item>
-					</Menu.Dropdown>
-				</Menu>
+							</Menu.Item>
+						</Menu.Dropdown>
+					</Menu>
+				</Group>
 			</Group>
 		</AppShell.Header>
 	)

@@ -59,7 +59,7 @@ function EnvSetFormBody ({
 
 				<TextInput
 					label="Path"
-					description="A folder inside the repository. The variables are written into <path>/.env in every queue worktree before each bullet — the machine must be online to receive them."
+					description="A folder inside the repository. The variables are written into <path>/.env in every build worktree before each bullet — the machine must be online to receive them."
 					placeholder="be"
 					readOnly={envSet !== null}
 					data-autofocus={envSet === null ? true : undefined}

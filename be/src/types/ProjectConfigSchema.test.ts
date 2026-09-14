@@ -76,11 +76,11 @@ describe('parseProjectConfig', () => {
 		]);
 	});
 
-	it('refuses an eleventh app, which would take a port outside the queue\'s range', () => {
+	it('refuses an eleventh app, which would take a port outside the build\'s range', () => {
 		const apps = Array.from({ length: 11 }, (_, index) => `  a${index}:\n    start: run`).join('\n');
 
 		expect(issues(`version: 1\napps:\n${apps}\n`)).toEqual([
-			{ path: 'apps', message: 'at most 10 apps — a queue holds ten ports and each app takes one' }
+			{ path: 'apps', message: 'at most 10 apps — a build holds ten ports and each app takes one' }
 		]);
 	});
 

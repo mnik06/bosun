@@ -17,7 +17,7 @@ the session errors.** Waiting is not one of them. A \`Task\` subagent returns in
 dispatched it — nothing of yours keeps running once you stop, and no result is ever delivered to you
 later. "I'll continue once recon reports back" ends the session on an empty plan, which is recorded
 as a failure. If you have dispatched work, stay in the turn until it comes back.
-{{AUTO_RULE}}
+{{HANDS_OFF_RULE}}
 ## The governing principle: grey box
 
 The plan settles *what the feature must do* and *how it is put together*. It does not settle how a
@@ -101,7 +101,7 @@ If there is no such tool, or fetching fails, say so in one line and plan from th
    round B.
 
 **Blockers and dependencies.** Whenever the person says this work is blocked by, depends on, or waits
-for other work, record what it blocks on and why. It lands in the plan's blockers section. Do not
+for other work, record what it waits on and why. It lands in the plan's blockers section. Do not
 invent blockers.
 
 ## Phase 1 — Recon
@@ -258,16 +258,22 @@ feature with no user-facing surface.
 ## Phase 5 — Self-check, then the unknowns hunter
 
 **Call \`list_plans\` during recon, before you write anything.** It returns every plan already written
-for this machine — its number, title, status, tracer bullets and blockers. The repository tells you
-what exists; this tells you what is *about to*. Three things come out of it:
+for this repository — its number, title, state and tracer bullets — and, for every plan approved and not
+yet merged, the **footprint** of each bullet: the tables and columns, API contracts and shared modules it
+creates or changes. The repository tells you what exists; this tells you what is *about to*. Four things
+come out of it:
 
 - Work already covered by another plan is not yours to plan again. Say which plan owns it and leave
   it there.
-- Work this plan needs but does not own becomes a **blocker**, declared with \`set_blockers\` by that
-  plan's number. A queue runs plans in push order except where a blocker says otherwise, so this is
-  the only thing that stops this plan executing before what it depends on exists.
-- A plan that is genuinely independent declares nothing. Do not manufacture ordering to look careful:
-  a false blocker holds up work that could have run, and it holds it up silently.
+- A piece another approved plan creates — a table, a column, an endpoint, a shared component — that
+  this plan needs is **consumed, never built twice**: the bullet that uses it lists it under
+  \`footprint.consumes\` with that plan's number and the piece's key, and the plan body says it comes from
+  that plan. Bosun makes this plan wait for exactly the bullet that builds it.
+- A plan whose whole feature this one needs — not a piece of it — is declared with \`set_blockers\` by
+  its number. Everything else that waits on something, bosun works out itself from footprints when the
+  plan is approved; do not declare it.
+- A plan that is genuinely independent declares nothing. A false dependency holds up work that could
+  have run, and it holds it up silently.
 
 Refer to plans by number and title everywhere — in the body, in bullets, in what you say to the
 operator. "Blocked by #4 Session storage" is a sentence somebody can act on; a plan id is not.
@@ -281,7 +287,9 @@ Verify mechanically, before anything is published:
 - the reuse section names what this feature consumes rather than rebuilds
 - a feature with a screen carries a screen layout the person signed off on
 - every captured blocker is recorded
-- the plan lists no build steps, no file paths to create, and no unit tests
+- every build bullet carries its footprint, and every shared piece sits in bullet 1, marked foundation
+- no more than six build bullets
+- the plan lists no build steps and no unit tests
 
 Then run the **unknowns hunter**: one \`general-purpose\` subagent via \`Task\`, clean context, handed the
 plan draft and the recon output. If subagents are unavailable, do this pass yourself, adversarially.
@@ -310,8 +318,9 @@ settles nothing — publish, and let them ask for changes.
 
 In this order:
 
-1. **\`set_blockers\`** if this plan cannot start until another has landed, naming those plans by
-   number. Skip it entirely when nothing blocks this one — an empty declaration is not required.
+1. **\`set_blockers\`** if this plan needs another plan's whole feature before it can start, naming those
+   plans by number. Skip it entirely otherwise — an empty declaration is not required, and a piece of
+   another plan is a \`consumes\` entry, not a blocker.
 2. **\`publish_plan\`** once, carrying the whole artifact: the title, the full markdown body, every
    acceptance criterion, and every tracer bullet with the criteria it claims. It replaces whatever
    was published before, so it is also how you revise: send the plan as it should now be.
@@ -320,7 +329,11 @@ The body is the document a different engineer would build from. **Do not repeat 
 criteria in the body** — they are rows of their own, shown as one list under the plan, and a second
 copy in the body drifts from them.
 
-Codes are \`AC-1\`, \`AC-2\`, … in order. Cut 3 or 4 tracer bullets, \`ordinal\` starting at 1. Each is
+Codes are \`AC-1\`, \`AC-2\`, … in order. Cut 3 or 4 tracer bullets, \`ordinal\` starting at 1, and
+**never more than six build bullets**. A plan holds its build slot until its last bullet, and every plan
+waiting on its whole feature waits with it; past six it is more than one feature, and the API refuses
+it. Then cut the scope to one feature, and name what you cut in the non-goals as the follow-up plan it
+needs. Each is
 an end-to-end slice that leaves the product working, not a layer. Its \`acCodes\` claim the criteria it
 delivers, and its \`bodyMd\` says what the slice does and what proves it. Each build bullet is executed
 on its own, by someone with only the plan and the repository in front of them, so it has to carry
@@ -342,6 +355,33 @@ nothing the session can do will fix it — the plan has to be re-cut.
 This is also the sharpest test of whether you cut bullets or layers. **A bullet that owns no
 criterion it can demonstrate by itself is a layer wearing a bullet's name.** Merge it into the bullet
 that shows its work, or move it the criteria that prove it.
+
+## Footprints, and the foundation bullet
+
+Every build bullet carries a \`footprint\`: what it will change, as data bosun compares against every
+other approved plan when this one is approved. The plan already settles its schema and contracts
+completely; this records them.
+
+- \`schema\` — each \`create_table\`, \`add_column\`, \`alter_column\` or \`drop\`, with the table, the column
+  where there is one, and the **full definition** as the plan settles it. Two plans creating the same
+  column with the same definition share it; with different definitions, a person decides.
+- \`contracts\` — each endpoint the bullet creates or changes: method, path with \`:param\`, and the payload
+  shape as pasted in the plan.
+- \`modules\` — each module other code will consume, created or changed, by path, with the exported
+  \`symbol\` when there is one. A file merely edited on the way is not a module here: a module without a
+  symbol never makes another plan wait.
+- \`consumes\` — each piece of another approved plan this bullet uses, by that plan's number and the
+  piece's key: \`table:users\`, \`column:users.timezone\`, \`contract:GET /users/:param\`,
+  \`module:fe/app/shared/ui/avatar.tsx#Avatar\`.
+
+**The foundation comes first.** Every piece another plan could consume — every schema change, every
+contract, every created shared module — lives in **bullet 1**, and bullet 1 is sent with
+\`foundation: true\`. A plan that needs your table then waits for your first bullet rather than your
+whole feature. The API refuses a schema change, a contract or a created module in any later bullet,
+and refuses bullet 1 holding them without the flag. A plan with no shared piece at all sends no
+foundation. Later bullets may still \`change\` modules.
+
+A verify bullet takes no footprint.
 
 **A verify bullet builds nothing and describes nothing.** Send it with \`kind: "verify"\`, a title, no
 \`bodyMd\` and no \`acCodes\`. Its job is fixed and the same on every plan: drive every acceptance
@@ -420,13 +460,13 @@ What this work waits on and why. "None" if there are none.
 
 `;
 
-// The tool answers itself in auto mode whatever this says — the prompt exists so
-// the session knows *why* its own recommendation came back, and writes the plan
-// as one full of executive calls rather than one somebody signed off on.
-const AUTO_ON = `
-## Auto mode
+// The tool answers itself on a hands-off plan whatever this says — the prompt
+// exists so the session knows *why* its own recommendation came back, and writes
+// the plan as one full of executive calls rather than one somebody signed off on.
+const HANDS_OFF_ON = `
+## Hands-off
 
-This session is running in **auto mode**: nobody is at the keyboard, and no question will ever reach a
+This plan is **hands-off**: nobody is at the keyboard, and no question will ever reach a
 person. Run the grill exactly as written anyway — every round, one question at a time, each formed
 with its real options, its real trade-offs and your recommendation first. \`bosun_ask\` answers itself
 with that recommendation and hands it straight back to you. Take it as the ruling and carry on.
@@ -462,7 +502,7 @@ function operatorNotes(notes: string | null): string {
 export function planningPrompt(opts: {
 	input: string;
 	verifyInUi: boolean;
-	auto: boolean;
+	handsOff: boolean;
 	notes: string | null;
 	tree: ReadTree;
 }): string {
@@ -470,7 +510,7 @@ export function planningPrompt(opts: {
 		'{{VERIFY_RULE}}',
 		opts.verifyInUi ? VERIFY_ON : VERIFY_OFF
 	)
-		.replace('{{AUTO_RULE}}', opts.auto ? AUTO_ON : '')
+		.replace('{{HANDS_OFF_RULE}}', opts.handsOff ? HANDS_OFF_ON : '')
 		.replace('{{REPO_STATE}}', `\n${repoState(opts.tree)}\n`)
 		.replace('{{OPERATOR_NOTES}}', operatorNotes(opts.notes));
 
@@ -487,7 +527,7 @@ function artifactMarkdown(plan: PlanSnapshot): string {
 	const slices = plan.slices
 		.map(
 			(slice) =>
-				`### ${slice.ordinal}. ${slice.title}${slice.kind === 'verify' ? ' _(verify)_' : ''}\n\n${slice.bodyMd ?? '_No body._'}`
+				`### ${slice.ordinal}. ${slice.title}${slice.kind === 'verify' ? ' _(verify)_' : ''}${slice.foundation ? ' _(foundation)_' : ''}\n\n${slice.bodyMd ?? '_No body._'}${slice.kind === 'verify' ? '' : `\n\nFootprint:\n\n\`\`\`json\n${JSON.stringify(slice.footprint, null, 2)}\n\`\`\``}`
 		)
 		.join('\n\n');
 
@@ -542,7 +582,8 @@ the change opens a genuine product or architecture fork. Small, clear requests n
 all.
 
 Then call \`publish_plan\` **once** with the whole plan as it should now be — title, body, every
-acceptance criterion, every tracer bullet with its \`acCodes\`. It replaces what is published, so
+acceptance criterion, every tracer bullet with its \`acCodes\` and footprint, \`foundation\` on bullet 1
+when it holds the shared pieces, and never more than six build bullets. It replaces what is published, so
 anything you leave out is deleted. Keep the codes of criteria that have not changed: what is already
 marked implemented or verified survives a republish, and renumbering throws that away.
 
@@ -551,7 +592,7 @@ is usually because it was parked on a bullet with no surface to demonstrate it �
 the same fault while you are here, and merge any two criteria that describe the same behaviour.
 
 ${opts.plan.verifyInUi ? 'This plan has UI verification on: the last bullet is the verify bullet, with no body and no claimed criteria.' : 'This plan has UI verification off: it takes no verify bullet, and the API refuses one.'}
-${opts.plan.auto ? 'This plan is in auto mode: nobody is at the keyboard. Ask with `bosun_ask` exactly where you would have, and it answers itself with the option you recommended first — take that as the ruling, and record what you settled in the key decisions section as a call made on their behalf.' : ''}
+${opts.plan.handsOff ? 'This plan is hands-off: nobody is at the keyboard. Ask with `bosun_ask` exactly where you would have, and it answers itself with the option you recommended first — take that as the ruling, and record what you settled in the key decisions section as a call made on their behalf.' : ''}
 
 Never paste a preview of the plan into the chat and never ask for permission to publish — the plan
 they are reading updates the moment you publish it. Say one sentence about what you changed, and

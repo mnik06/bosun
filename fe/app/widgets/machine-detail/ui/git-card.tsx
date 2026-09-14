@@ -43,7 +43,7 @@ function AttachedRepository ({ machine }: { machine: Machine }) {
 		return (
 			<Text size="sm" c="dimmed">
 				No repository attached — pick one in the Repository row above. Until one is, this machine is not
-				offered for plans or queues.
+				offered for plans.
 			</Text>
 		)
 	}
@@ -87,7 +87,7 @@ export function GitCard ({ machine }: { machine: Machine }) {
 					<Text fw={600}>Git</Text>
 					<Text size="sm" c="dimmed">
 						{legacy
-							? 'Where a queue pushes its branches and opens pull requests. Without one, queues still run and the commits stay on the machine.'
+							? 'Where this machine pushes branches. Plans are built only on a machine with a repository attached, so this one can plan but not build.'
 							: 'The repository this machine works on. One per machine.'}
 					</Text>
 				</Stack>

@@ -9,6 +9,7 @@ import {
 } from '~/entities/repository'
 import { ConfigDraftEditor } from '~/features/edit-config-draft'
 import { OpenPullRequestButton } from '~/features/open-onboarding-pr'
+import { AutoResolveSwitch } from '~/features/toggle-auto-resolve'
 import { toErrorMessage } from '~/shared/lib'
 
 function ConfigHeader ({ config, fullName }: { config: Config, fullName: string }) {
@@ -50,7 +51,8 @@ function ConfigPane ({ machineId, repositoryId }: { machineId: string, repositor
 	const config = useRepositoryConfigQuery(repositoryId)
 	const repositories = useRepositoriesQuery()
 	const onboarding = useMachineOnboardingQuery({ machineId, enabled: true })
-	const fullName = repositories.data?.find((entry) => entry.id === repositoryId)?.fullName ?? 'this repository'
+	const repository = repositories.data?.find((entry) => entry.id === repositoryId)
+	const fullName = repository?.fullName ?? 'this repository'
 
 	if (config.isPending) {
 		return (
@@ -74,6 +76,8 @@ function ConfigPane ({ machineId, repositoryId }: { machineId: string, repositor
 		<Card withBorder padding="md" radius="md">
 			<Stack gap="md">
 				<ConfigHeader config={config.data} fullName={fullName} />
+
+				{repository === undefined ? null : <AutoResolveSwitch repository={repository} />}
 
 				<ConfigDraftEditor
 					key={initialYaml}

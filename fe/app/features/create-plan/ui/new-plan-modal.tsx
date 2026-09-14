@@ -20,7 +20,7 @@ export function NewPlanModal ({ opened, onClose }: { opened: boolean, onClose: (
 
 	const form = useForm<CreatePlanForm>({
 		mode: 'uncontrolled',
-		initialValues: { machineId: '', input: '', verifyInUi: true, auto: false },
+		initialValues: { machineId: '', input: '', verifyInUi: true, handsOff: false },
 		validate: zod4Resolver(CreatePlanFormSchema)
 	})
 
@@ -85,10 +85,10 @@ export function NewPlanModal ({ opened, onClose }: { opened: boolean, onClose: (
 					/>
 
 					<Switch
-						label="Auto"
-						description="On, the grill runs exactly as it does now but nothing stops for you: the session answers each of its own questions with the option it recommended, and every question and answer still lands in the transcript."
-						key={form.key('auto')}
-						{...form.getInputProps('auto', { type: 'checkbox' })}
+						label="Hands-off"
+						description="On, nothing stops for you: the grill answers each of its own questions with the option it recommended, its bullets cannot ask, and the re-check after verify's fixes is skipped. Every question and answer still lands in the transcript."
+						key={form.key('handsOff')}
+						{...form.getInputProps('handsOff', { type: 'checkbox' })}
 					/>
 
 					<Button type="submit" loading={createPlan.isPending} disabled={options.length === 0}>

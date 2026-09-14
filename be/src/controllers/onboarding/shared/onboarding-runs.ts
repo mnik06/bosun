@@ -1,13 +1,14 @@
 import { HttpError } from 'src/api/errors/HttpError';
 import { type OnboardingDeps } from 'src/controllers/onboarding/onboarding-deps';
-import { admitBullet } from 'src/controllers/queues/shared/memory-budget';
+import { admitOnboarding } from 'src/controllers/line/shared/memory-budget';
+import { BUILD_SLOT_STATUSES, LANE_STATUSES } from 'src/controllers/line/shared/next-job';
 import { ACTIVE_ONBOARDING_STATUSES } from 'src/repos/onboarding/onboarding-run.repo';
 import { type SocketRegistry } from 'src/services/sockets/registry.service';
 import { type OnboardingRun } from 'src/types/OnboardingSchema';
 
-// Below the first queue's range, which starts at 4100. One run is active on a
+// Below the first build's range, which starts at 4100. One run is active on a
 // machine at a time, so a fixed range cannot collide with another run, and no
-// queue is ever handed a port under 4100.
+// build is ever handed a port under 4100.
 export const ONBOARDING_PORT_BASE = 3900;
 
 export function announceOnboarding(opts: {
@@ -30,25 +31,23 @@ export function isActiveRun(run: OnboardingRun): boolean {
 	return ACTIVE_ONBOARDING_STATUSES.includes(run.status);
 }
 
-// A run installs, starts and drives the whole stack, so it is admitted as a
-// verify bullet would be — against everything the machine's queues are running
-// and any other run — and held to the same limit.
+// A run installs, starts and drives the whole stack, so it is admitted as a drive
+// would be — against every slot and lane the machine's builds hold and any other
+// run — and held to the same limit.
 export async function onboardingAdmission(
 	deps: OnboardingDeps,
 	opts: { machineId: string }
 ): Promise<{ admitted: true; limitBytes: number | null } | { admitted: false }> {
-	const memory = deps.machineMemory.get(opts.machineId);
-
-	if (memory === null) {
-		return { admitted: true, limitBytes: null };
-	}
-
-	const [bullets, runs] = await Promise.all([
-		deps.sliceRunRepo.listRunningKindsForMachine(opts.machineId),
+	const [slots, lanes, runs] = await Promise.all([
+		deps.buildRepo.listForMachine({ machineId: opts.machineId, statuses: BUILD_SLOT_STATUSES }),
+		deps.buildRepo.listForMachine({ machineId: opts.machineId, statuses: LANE_STATUSES }),
 		deps.onboardingRunRepo.listActiveForMachine(opts.machineId)
 	]);
 
-	return admitBullet({ memory, kind: 'verify', inFlight: [...bullets, ...runs.map(() => 'verify' as const)] });
+	return admitOnboarding({
+		memory: deps.machineMemory.get(opts.machineId),
+		load: { build: slots.length, lane: lanes.length, onboarding: runs.length }
+	});
 }
 
 // Reached from the session's own tool calls. Only a run still in flight takes a

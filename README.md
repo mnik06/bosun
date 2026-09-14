@@ -15,7 +15,13 @@ bullets as rows in bosun, all editable afterwards. See `plans/005-planning.md` a
 
 The session lives on the machine, not in the connection: closing the tab, losing the network or
 deploying the backend does not end it, and a question can sit unanswered for as long as you like. It
-ends when you confirm the plan, or after 24 hours, whichever comes first.
+ends when you approve the plan, or after 24 hours, whichever comes first.
+
+**Approving** is the last thing a person does before review. The plan joins its repository's line,
+and bosun schedules it on whatever machine has the memory, stacks it on the plan it depends on,
+keeps its branch mergeable as other plans land, drives its criteria in a verify lane, and opens a
+pull request. There are no queues to create. See `plans/009-the-line.md` and
+`be/src/controllers/line/README.md`.
 
 Accounts are email and password, with **Supabase Auth** as the identity provider. Bosun never sees a
 password and never mints a session: the browser authenticates against Supabase and presents the
@@ -217,7 +223,7 @@ backend through the App, so a repository machine needs no `gh`. See
 `be/src/services/github/github-app.service.md` and `agent/src/services/workspace.service.md`.
 
 **The config is a file in the repository**, `.bosun/project.yaml` — the toolchain, setup steps, apps
-and how they find each other on a queue's ports, checks and test accounts. Facts about the code, so it
+and how they find each other on a build's ports, checks and test accounts. Facts about the code, so it
 travels with the branch that changes it. It never holds a secret or anything about one machine.
 Bosun keeps a draft only until the file exists, and a session uses the file in the tree it runs in
 whenever there is one; a file that does not validate stops the session rather than falling back.

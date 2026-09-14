@@ -6,19 +6,18 @@ import { markMachineOffline } from 'src/controllers/machines/mark-machine-offlin
 import { markMachineOnline } from 'src/controllers/machines/mark-machine-online';
 import { reconcileRepository } from 'src/controllers/machines/reconcile-repository';
 import { saveMachinePreflight } from 'src/controllers/machines/save-machine-preflight';
+import { lineDeps } from 'src/controllers/line/line-deps';
+import { scheduleMachine } from 'src/controllers/line/schedule';
+import { resendWorktrees } from 'src/controllers/line/shared/dispatch';
+import { pauseMachineBuilds, stallMachineBuilds } from 'src/controllers/line/stall-machine-builds';
 import { onboardingDeps } from 'src/controllers/onboarding/onboarding-deps';
 import { stallMachineOnboarding } from 'src/controllers/onboarding/stall-machine-onboarding';
-import { configDraftFor } from 'src/controllers/repositories/shared/config-draft';
 import { saveConfigOnDefault } from 'src/controllers/repositories/save-config-on-default';
 import { stallMachinePlans } from 'src/controllers/plans/stall-machine-plans';
-import { pauseMachineQueues } from 'src/controllers/queues/pause-machine-queues';
-import { stallMachineRuns } from 'src/controllers/queues/stall-machine-runs';
-import { schedulerDeps } from 'src/controllers/queues/scheduler-deps';
 import { type SocketRegistry } from 'src/services/sockets/registry.service';
 import { type Machine } from 'src/types/MachineSchema';
-import { DEFAULT_PROJECT_PROFILE } from 'src/types/ProjectProfileSchema';
 import { AgentMsgSchema, type AgentMsg } from 'src/types/protocol';
-import { handleAgentFrame, isExecFrame, isPlanFrame } from 'src/api/routes/agent/frame-router';
+import { handleAgentFrame, isOrderedFrame } from 'src/api/routes/agent/frame-router';
 
 const HEARTBEAT_MS = 15_000;
 const MAX_MISSED = 2;
@@ -165,10 +164,11 @@ async function settleHello(opts: {
 	// Recorded before anything this connection carries next can settle a run and
 	// schedule the machine's next bullet against it.
 	fastify.services.machineMemory.set(machine.id, msg.memory);
-	await stallMachineRuns(schedulerDeps(fastify), {
+	await stallMachineBuilds(lineDeps(fastify), {
 		machineId: machine.id,
 		connectedAt: opts.connectedAt,
 		heldRunIds: msg.runIds,
+		heldIntegrationIds: msg.integrationIds,
 		uptimeMs: msg.uptimeMs,
 		previousExit: msg.previousExit
 	});
@@ -201,31 +201,6 @@ async function settleHello(opts: {
 		connectedAt: opts.connectedAt,
 		heldRunIds: msg.onboardingRunIds
 	});
-}
-
-// A queue created while its machine was offline has a row and no directory.
-// The ensure is idempotent, so re-sending it on every announce is what makes a
-// frame the machine never received self-correcting rather than a queue stuck
-// in `provisioning` with nothing left to retry it.
-async function resendProvisioning(opts: { fastify: FastifyInstance; machine: Machine }): Promise<void> {
-	const { fastify, machine } = opts;
-	const pending = await fastify.repos.queueRepo.listProvisioningForMachine(machine.id);
-	const configDraft =
-		pending.length === 0 ? null : await configDraftFor({ repositoryRepo: fastify.repos.repositoryRepo, machine });
-	const profile = machine.projectProfile ?? DEFAULT_PROJECT_PROFILE;
-
-	for (const queue of pending) {
-		fastify.services.socketRegistry.sendToAgent({
-			machineId: machine.id,
-			message: {
-				type: 'queue.worktree.ensure',
-				queueId: queue.id,
-				slug: queue.slug,
-				setupCommand: machine.repositoryId === null ? profile.setupCommand : null,
-				configDraft
-			}
-		});
-	}
 }
 
 export async function applyMachineFrame(opts: {
@@ -293,9 +268,11 @@ export async function applyMachineFrame(opts: {
 
 	// Not on `change`: those follow a file under ~/.bosun being written, arrive in
 	// bursts, and re-sending an ensure for a worktree still installing is how a
-	// second setup ends up racing the first.
+	// second setup ends up racing the first. A machine back online also picks up
+	// whatever its line has been waiting to give it.
 	if (opts.msg.type === 'hello' && opts.msg.reason !== 'change') {
-		await resendProvisioning({ fastify: opts.fastify, machine });
+		await resendWorktrees(lineDeps(opts.fastify), { machine });
+		await scheduleMachine(lineDeps(opts.fastify), { machineId: machine.id });
 	}
 
 	// A paused machine that reconnects is still paused — the row outranks the
@@ -352,7 +329,7 @@ function handleClose(opts: {
 	// settles the same work against the runs the agent says it still holds.
 	opts.fastify.services.disconnectGrace.schedule({
 		machineId: opts.machineId,
-		settle: () => pauseMachineQueues(schedulerDeps(opts.fastify), { machineId: opts.machineId })
+		settle: () => pauseMachineBuilds(lineDeps(opts.fastify), { machineId: opts.machineId })
 	});
 }
 
@@ -391,7 +368,7 @@ const routes: FastifyPluginAsync = async function (fastify) {
 					log: request.log
 				});
 
-			if (isPlanFrame(msg) || isExecFrame(msg)) {
+			if (isOrderedFrame(msg)) {
 				enqueue(handle);
 
 				return;

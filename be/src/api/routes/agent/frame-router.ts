@@ -1,24 +1,22 @@
 import { FastifyBaseLogger, FastifyInstance } from 'fastify';
 import { type WebSocket } from '@fastify/websocket';
+import { recordLineAnswer } from 'src/controllers/line/ask-line';
+import { lineDeps } from 'src/controllers/line/line-deps';
+import { recordIntegrateFrame, recordWorktreeFrame } from 'src/controllers/line/record-build-frame';
+import { recordExecFrame } from 'src/controllers/line/record-exec-frame';
+import { scheduleMachine } from 'src/controllers/line/schedule';
 import { recordRepoFrame } from 'src/controllers/machines/record-repo-frame';
 import { onboardingDeps } from 'src/controllers/onboarding/onboarding-deps';
 import { recordOnboardingFrame } from 'src/controllers/onboarding/record-onboarding-frame';
 import { recordPlanFrame } from 'src/controllers/plans/record-plan-frame';
-import { advanceMachine } from 'src/controllers/queues/advance-queue';
-import { recordExecFrame } from 'src/controllers/queues/record-exec-frame';
-import { askDeps } from 'src/controllers/queues/ask-deps';
-import { recordAnswerFrame } from 'src/controllers/queues/record-answer-frame';
-import { recordPublishFrame } from 'src/controllers/queues/record-publish-frame';
-import { saveQueueWorktree } from 'src/controllers/queues/save-queue-worktree';
-import { schedulerDeps } from 'src/controllers/queues/scheduler-deps';
 import { applyMachineFrame } from 'src/api/routes/agent/ws.route';
 import { type AgentMsg } from 'src/types/protocol';
 
 type PlanFrame = Extract<AgentMsg, { type: `plan.${string}` }>;
-type WorktreeFrame = Extract<AgentMsg, { type: `queue.worktree.${string}` }>;
+type WorktreeFrame = Extract<AgentMsg, { type: `build.worktree.${string}` }>;
 type ExecFrame = Extract<AgentMsg, { type: `exec.${string}` }>;
-type PublishFrame = Extract<AgentMsg, { type: 'queue.published' | 'queue.publish.error' | 'queue.pushed' }>;
-type AnswerFrame = Extract<AgentMsg, { type: `queue.answer.${string}` }>;
+type IntegrateFrame = Extract<AgentMsg, { type: `integrate.${string}` }>;
+type AnswerFrame = Extract<AgentMsg, { type: `line.answer.${string}` }>;
 type EnvReplyFrame = Extract<AgentMsg, { type: 'env.saved' | 'env.error' }>;
 type RepoFrame = Extract<AgentMsg, { type: `repo.${string}` }>;
 type OnboardingFrame = Extract<AgentMsg, { type: `onboarding.${string}` }>;
@@ -31,28 +29,35 @@ function isOnboardingFrame(msg: AgentMsg): msg is OnboardingFrame {
 	return msg.type.startsWith('onboarding.');
 }
 
-export function isPlanFrame(msg: AgentMsg): msg is PlanFrame {
+function isPlanFrame(msg: AgentMsg): msg is PlanFrame {
 	return msg.type.startsWith('plan.');
 }
 
 function isWorktreeFrame(msg: AgentMsg): msg is WorktreeFrame {
-	return msg.type.startsWith('queue.worktree.');
+	return msg.type.startsWith('build.worktree.');
 }
 
-export function isExecFrame(msg: AgentMsg): msg is ExecFrame {
+function isExecFrame(msg: AgentMsg): msg is ExecFrame {
 	return msg.type.startsWith('exec.');
 }
 
-function isAnswerFrame(msg: AgentMsg): msg is AnswerFrame {
-	return msg.type.startsWith('queue.answer.');
+function isIntegrateFrame(msg: AgentMsg): msg is IntegrateFrame {
+	return msg.type.startsWith('integrate.');
 }
 
-function isPublishFrame(msg: AgentMsg): msg is PublishFrame {
-	return msg.type === 'queue.published' || msg.type === 'queue.publish.error' || msg.type === 'queue.pushed';
+function isAnswerFrame(msg: AgentMsg): msg is AnswerFrame {
+	return msg.type.startsWith('line.answer.');
 }
 
 function isEnvReplyFrame(msg: AgentMsg): msg is EnvReplyFrame {
 	return msg.type === 'env.saved' || msg.type === 'env.error';
+}
+
+// Frames that settle work are handled one at a time, in arrival order: a run's
+// `exec.done` and the integration the build starts next both move one build, and a
+// transcript's appends collide when they overlap.
+export function isOrderedFrame(msg: AgentMsg): boolean {
+	return isPlanFrame(msg) || isExecFrame(msg) || isWorktreeFrame(msg) || isIntegrateFrame(msg);
 }
 
 function settleEnvReply(opts: {
@@ -134,7 +139,7 @@ async function handleRepositoryFrame(opts: {
 	});
 	// A settled run hands its memory back, so anything on the machine held behind
 	// it gets to start now rather than on the next nudge.
-	await advanceMachine(schedulerDeps(opts.fastify), { machineId: opts.machineId });
+	await scheduleMachine(lineDeps(opts.fastify), { machineId: opts.machineId });
 }
 
 // The refusal used to reach the machine's own log and stop there, so an operator
@@ -163,6 +168,26 @@ function relayDecline(opts: {
 	});
 }
 
+async function handleLineFrame(opts: {
+	fastify: FastifyInstance;
+	machineId: string;
+	projectId: string;
+	msg: ExecFrame | WorktreeFrame | IntegrateFrame | AnswerFrame;
+}): Promise<void> {
+	const deps = lineDeps(opts.fastify);
+	const { msg } = opts;
+
+	if (isExecFrame(msg)) {
+		await recordExecFrame(deps, { machineId: opts.machineId, projectId: opts.projectId, frame: msg });
+	} else if (isWorktreeFrame(msg)) {
+		await recordWorktreeFrame(deps, { machineId: opts.machineId, frame: msg });
+	} else if (isIntegrateFrame(msg)) {
+		await recordIntegrateFrame(deps, { machineId: opts.machineId, projectId: opts.projectId, frame: msg });
+	} else {
+		await recordLineAnswer(deps, { machineId: opts.machineId, projectId: opts.projectId, frame: msg });
+	}
+}
+
 export async function handleAgentFrame(opts: {
 	fastify: FastifyInstance;
 	machineId: string;
@@ -175,7 +200,6 @@ export async function handleAgentFrame(opts: {
 	log: FastifyBaseLogger;
 }): Promise<void> {
 	const { msg } = opts;
-	const { socketRegistry, idService, planTextService } = opts.fastify.services;
 
 	if (msg.type === 'pong' || msg.type === 'upgrade.declined' || isEnvReplyFrame(msg)) {
 		settleReply({ ...opts, msg });
@@ -189,47 +213,15 @@ export async function handleAgentFrame(opts: {
 		return;
 	}
 
-	if (isAnswerFrame(msg)) {
-		await recordAnswerFrame(askDeps(opts.fastify), {
-			machineId: opts.machineId,
-			projectId: opts.projectId,
-			frame: msg
-		});
-
-		return;
-	}
-
-	if (isPublishFrame(msg)) {
-		await recordPublishFrame(schedulerDeps(opts.fastify), {
-			machineId: opts.machineId,
-			frame: msg
-		});
-
-		return;
-	}
-
-	if (isExecFrame(msg)) {
-		await recordExecFrame(schedulerDeps(opts.fastify), {
-			machineId: opts.machineId,
-			projectId: opts.projectId,
-			frame: msg
-		});
-
-		return;
-	}
-
-	if (isWorktreeFrame(msg)) {
-		await saveQueueWorktree({
-			queueRepo: opts.fastify.repos.queueRepo,
-			socketRegistry,
-			machineId: opts.machineId,
-			frame: msg
-		});
+	if (isExecFrame(msg) || isWorktreeFrame(msg) || isIntegrateFrame(msg) || isAnswerFrame(msg)) {
+		await handleLineFrame({ fastify: opts.fastify, machineId: opts.machineId, projectId: opts.projectId, msg });
 
 		return;
 	}
 
 	if (isPlanFrame(msg)) {
+		const { socketRegistry, idService, planTextService } = opts.fastify.services;
+
 		await recordPlanFrame({
 			planRepo: opts.fastify.repos.planRepo,
 			planMessageRepo: opts.fastify.repos.planMessageRepo,

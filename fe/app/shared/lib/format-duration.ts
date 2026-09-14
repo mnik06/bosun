@@ -3,7 +3,7 @@ const MINUTE = 60 * SECOND
 const HOUR = 60 * MINUTE
 
 // Two units at most, largest first: a bullet that took 78 minutes reads as
-// "1h 18m", and nobody watching a queue needs the seconds once it is past a
+// "1h 18m", and nobody watching a build needs the seconds once it is past a
 // minute. Sub-minute keeps them, because that is the whole of what it says.
 export function formatDuration (ms: number): string {
 	if (ms < SECOND) {

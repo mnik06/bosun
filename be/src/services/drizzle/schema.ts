@@ -9,8 +9,10 @@ import {
 	text,
 	timestamp,
 	unique,
+	uniqueIndex,
 	uuid
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import { type EnvSetSummary } from 'src/types/env-sets';
 import { type MachineStatus, type PreflightCheck } from 'src/types/MachineSchema';
 import {
@@ -32,11 +34,22 @@ import {
 	type SliceKind
 } from 'src/types/PlanSchema';
 import {
-	type QueueItemStatus,
-	type QueueMessageRole,
-	type QueueStatus,
+	type BuildStatus,
+	type DependencySource,
+	type FindingStatus,
+	type IntegrationStatus,
+	type IntegrationTrigger,
+	type NeedsYouReason,
+	type OverlapChoice,
+	type OverlapItem,
+	type Regenerated,
+	type RepositoryMessageRole,
+	type ResolvedConflict,
+	type RunAnswer,
+	type RunPhase,
 	type SliceRunStatus
-} from 'src/types/QueueSchema';
+} from 'src/types/BuildSchema';
+import { type Footprint } from 'src/types/FootprintSchema';
 
 export const users = pgTable('users', {
 	id: text().primaryKey(),
@@ -112,6 +125,7 @@ export const repositories = pgTable(
 		// so a draft that reaches a machine is one the schema accepts.
 		configDraft: text(),
 		configOnDefault: boolean().notNull().default(false),
+		autoResolveConflicts: boolean().notNull().default(true),
 		createdAt: timestamp({ withTimezone: true }).notNull().defaultNow()
 	},
 	(table) => [unique('repositories_project_github_repo_key').on(table.projectId, table.githubRepoId)]
@@ -145,6 +159,8 @@ export const machines = pgTable(
 		policy: jsonb().$type<MachinePolicy>().notNull().default({ applyMigrations: true, confirmed: false }),
 		// Names only, for the same reason as `envSets`.
 		sessionSecrets: jsonb().$type<string[]>(),
+		verifyLanes: integer().notNull().default(1),
+		buildCap: integer(),
 		createdAt: timestamp({ withTimezone: true }).notNull().defaultNow()
 	},
 	(table) => [index('machines_project_id_idx').on(table.projectId)]
@@ -203,14 +219,16 @@ export const plans = pgTable(
 		// Settled when the ticket is pasted, not by the session: whether this plan
 		// ends in a verify bullet that drives the feature through its interface.
 		verifyInUi: boolean().notNull().default(true),
-		// Also settled when the ticket is pasted: the grill runs unchanged, but the
-		// session answers its own questions with the option it recommended instead
-		// of stopping for a person who is not there.
-		auto: boolean().notNull().default(false),
-		// The person's own sign-off. A session can publish a plan it is pleased
-		// with; only this says somebody read it and is willing to have it built.
-		// Cleared by a republish, because what was signed off no longer exists.
-		confirmedAt: timestamp({ withTimezone: true }),
+		// Also settled when the ticket is pasted: the grill answers itself, the
+		// bullets cannot ask, and nothing a fix repaired is driven again before review.
+		handsOff: boolean().notNull().default(false),
+		// The person's own sign-off, and the last thing a person does before review.
+		// Cleared by a revision from a person or a session, because what was signed
+		// off no longer exists — never by a change bosun makes to fit other plans.
+		approvedAt: timestamp({ withTimezone: true }),
+		// The line the plan joins. Null only for a plan written on a machine with no
+		// repository, which can be planned and never approved.
+		repositoryId: text().references(() => repositories.id, { onDelete: 'set null' }),
 		failureReason: text(),
 		input: text().notNull(),
 		// Written after the branch lands, by a session that read the diff rather
@@ -218,16 +236,12 @@ export const plans = pgTable(
 		// that exists, not the plan that asked for it.
 		summary: jsonb().$type<PlanSummary>(),
 		summarisedAt: timestamp({ withTimezone: true }),
-		// Set only on a preparation plan, and only by the endpoint that creates one:
-		// the plans its session was asked to rewrite. It is the authorization scope
-		// for republishing somebody else's plan, so it is never written from a
-		// session — a session that could name its own scope has no scope at all.
-		preparesPlanIds: jsonb().$type<string[]>(),
 		createdAt: timestamp({ withTimezone: true }).notNull().defaultNow()
 	},
 	(table) => [
 		index('plans_project_id_idx').on(table.projectId),
 		index('plans_machine_id_idx').on(table.machineId),
+		index('plans_repository_id_idx').on(table.repositoryId),
 		// Unique so two concurrent creates cannot both take max+1 — one loses and
 		// retries rather than two plans quietly sharing a number.
 		unique('plans_project_number_key').on(table.projectId, table.number)
@@ -262,7 +276,10 @@ export const slices = pgTable(
 		ordinal: integer().notNull(),
 		kind: text().$type<SliceKind>().notNull().default('build'),
 		title: text().notNull(),
-		bodyMd: text()
+		bodyMd: text(),
+		foundation: boolean().notNull().default(false),
+		footprint: jsonb().$type<Footprint>().notNull().default({ schema: [], contracts: [], modules: [], consumes: [] }),
+		changedFiles: jsonb().$type<string[]>()
 	},
 	(table) => [index('slices_plan_id_idx').on(table.planId)]
 );
@@ -299,63 +316,45 @@ export const acs = pgTable(
 	]
 );
 
-// A queue is a git worktree on one machine. Two queues on the same machine run
-// side by side without sharing a working tree, which is the whole reason the
-// worktree rather than the repository is the unit.
-export const queues = pgTable(
-	'queues',
+export const builds = pgTable(
+	'builds',
 	{
 		id: text().primaryKey(),
-		projectId: text()
-			.notNull()
-			.references(() => projects.id, { onDelete: 'cascade' }),
-		machineId: text()
-			.notNull()
-			.references(() => machines.id, { onDelete: 'cascade' }),
-		name: text().notNull(),
-		slug: text().notNull(),
-		worktreePath: text(),
-		baseRef: text(),
-		afk: boolean().notNull().default(false),
-		// Every running queue on a machine may start a dev stack of its own, so each
-		// gets a range nobody else is listening on. Without it the second queue's
-		// server dies on a port the first one holds.
-		portBase: integer().notNull(),
-		status: text().$type<QueueStatus>().notNull().default('provisioning'),
-		failureReason: text(),
-		createdAt: timestamp({ withTimezone: true }).notNull().defaultNow()
-	},
-	// The slug names a directory and a branch on the machine, so two queues on one
-	// machine cannot share it without one of them writing over the other's tree.
-	(table) => [
-		index('queues_project_id_idx').on(table.projectId),
-		unique('queues_machine_slug_key').on(table.machineId, table.slug)
-	]
-);
-
-export const queueItems = pgTable(
-	'queue_items',
-	{
-		id: text().primaryKey(),
-		queueId: text()
-			.notNull()
-			.references(() => queues.id, { onDelete: 'cascade' }),
 		planId: text()
 			.notNull()
 			.references(() => plans.id, { onDelete: 'cascade' }),
-		ordinal: integer().notNull(),
-		// Cut fresh from baseRef per plan: a plan that fails leaves its partial work
-		// on its own branch instead of underneath the next plan's pull request.
+		repositoryId: text()
+			.notNull()
+			.references(() => repositories.id, { onDelete: 'cascade' }),
+		// Null until the build takes its first slot: the line belongs to the
+		// repository, and any machine attached to it may pick the build up.
+		machineId: text().references(() => machines.id, { onDelete: 'set null' }),
+		position: integer().notNull(),
+		status: text().$type<BuildStatus>().notNull().default('scheduled'),
+		needsYouReason: text().$type<NeedsYouReason>(),
 		branch: text(),
-		status: text().$type<QueueItemStatus>().notNull().default('queued'),
+		baseBranch: text(),
+		worktreePath: text(),
+		portBase: integer(),
+		prNumber: integer(),
 		prUrl: text(),
 		failureReason: text(),
+		createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
 		startedAt: timestamp({ withTimezone: true }),
-		finishedAt: timestamp({ withTimezone: true })
+		builtAt: timestamp({ withTimezone: true }),
+		verifiedAt: timestamp({ withTimezone: true }),
+		finishedAt: timestamp({ withTimezone: true }),
+		mergedAt: timestamp({ withTimezone: true })
 	},
 	(table) => [
-		index('queue_items_queue_id_idx').on(table.queueId),
-		unique('queue_items_queue_plan_key').on(table.queueId, table.planId)
+		index('builds_plan_id_idx').on(table.planId),
+		index('builds_repository_id_idx').on(table.repositoryId),
+		index('builds_machine_id_idx').on(table.machineId),
+		// One build a plan is going somewhere with. Two would be two branches, two
+		// worktrees and two pull requests for one piece of work.
+		uniqueIndex('builds_live_plan_key')
+			.on(table.planId)
+			.where(sql`status not in ('merged', 'cancelled')`)
 	]
 );
 
@@ -363,19 +362,30 @@ export const sliceRuns = pgTable(
 	'slice_runs',
 	{
 		id: text().primaryKey(),
-		queueItemId: text()
+		buildId: text()
 			.notNull()
-			.references(() => queueItems.id, { onDelete: 'cascade' }),
+			.references(() => builds.id, { onDelete: 'cascade' }),
 		sliceId: text()
 			.notNull()
 			.references(() => slices.id, { onDelete: 'cascade' }),
 		ordinal: integer().notNull(),
+		// Null on a build bullet. A verify slice runs as a drive, a fix, and a
+		// re-check of what the fix repaired — each its own run and session.
+		phase: text().$type<RunPhase>(),
 		status: text().$type<SliceRunStatus>().notNull().default('pending'),
 		// The question this run is blocked on, if any. Persisted rather than left in
 		// the browser's socket state: a reload used to lose the only control that
-		// could answer it, leaving a queue blocked on a session nobody could reach.
+		// could answer it, leaving a plan blocked on a session nobody could reach.
 		questionId: text(),
 		question: jsonb().$type<PlanQuestion[]>(),
+		// When it was asked. A question holds its build slot for a while and then
+		// gives it up, and this is the clock that decides when.
+		questionAskedAt: timestamp({ withTimezone: true }),
+		// Written when a question is answered after its session was released: the
+		// restarted bullet reads it in its prompt.
+		answer: jsonb().$type<RunAnswer>(),
+		// The criteria a re-check drives, or a fix-again session is limited to.
+		acCodes: jsonb().$type<string[]>(),
 		commitSha: text(),
 		// What the session said when it finished. The verify bullet is ordered to
 		// report a verdict per criterion and it is the only account of what was
@@ -383,29 +393,137 @@ export const sliceRuns = pgTable(
 		// quotes it and a failed gate is unreadable without it.
 		report: text(),
 		failureReason: text(),
+		createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
 		startedAt: timestamp({ withTimezone: true }),
 		finishedAt: timestamp({ withTimezone: true })
 	},
-	(table) => [index('slice_runs_queue_item_id_idx').on(table.queueItemId)]
+	(table) => [index('slice_runs_build_id_idx').on(table.buildId)]
 );
 
-// A plan that cannot start until another one has landed. An edge rather than a
-// column because a plan is routinely waiting on more than one, and because the
-// pair is the fact — neither side owns it.
-export const planBlockers = pgTable(
-	'plan_blockers',
+// What one plan waits on another for. An edge per piece rather than per pair: a
+// plan can use one plan's foundation and a later bullet of it, and each releases
+// on its own.
+export const planDependencies = pgTable(
+	'plan_dependencies',
 	{
+		id: text().primaryKey(),
 		planId: text()
 			.notNull()
 			.references(() => plans.id, { onDelete: 'cascade' }),
-		blockedByPlanId: text()
+		providerPlanId: text()
 			.notNull()
-			.references(() => plans.id, { onDelete: 'cascade' })
+			.references(() => plans.id, { onDelete: 'cascade' }),
+		// Null is the provider's whole feature.
+		providerSliceId: text().references(() => slices.id, { onDelete: 'set null' }),
+		source: text().$type<DependencySource>().notNull(),
+		reason: text().notNull(),
+		overriddenByUserId: text().references(() => users.id, { onDelete: 'set null' }),
+		overriddenAt: timestamp({ withTimezone: true }),
+		createdAt: timestamp({ withTimezone: true }).notNull().defaultNow()
 	},
 	(table) => [
-		primaryKey({ columns: [table.planId, table.blockedByPlanId] }),
-		index('plan_blockers_blocked_by_idx').on(table.blockedByPlanId)
+		index('plan_dependencies_plan_id_idx').on(table.planId),
+		index('plan_dependencies_provider_plan_id_idx').on(table.providerPlanId)
 	]
+);
+
+// What bosun changed about a plan to fit the others. A row rather than an edit of
+// the body: it does not clear approval, because what the plan delivers is the same.
+export const planAmendments = pgTable(
+	'plan_amendments',
+	{
+		id: text().primaryKey(),
+		planId: text()
+			.notNull()
+			.references(() => plans.id, { onDelete: 'cascade' }),
+		sourcePlanId: text().references(() => plans.id, { onDelete: 'set null' }),
+		text: text().notNull(),
+		createdAt: timestamp({ withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [index('plan_amendments_plan_id_idx').on(table.planId)]
+);
+
+export const overlapDecisions = pgTable(
+	'overlap_decisions',
+	{
+		id: text().primaryKey(),
+		planId: text()
+			.notNull()
+			.references(() => plans.id, { onDelete: 'cascade' }),
+		providerPlanId: text()
+			.notNull()
+			.references(() => plans.id, { onDelete: 'cascade' }),
+		item: jsonb().$type<OverlapItem>().notNull(),
+		options: jsonb().$type<OverlapChoice[]>().notNull(),
+		chosen: text().$type<OverlapChoice>(),
+		decidedByUserId: text().references(() => users.id, { onDelete: 'set null' }),
+		decidedAt: timestamp({ withTimezone: true }),
+		createdAt: timestamp({ withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [index('overlap_decisions_plan_id_idx').on(table.planId)]
+);
+
+// What a drive saw go wrong, as rows the fix session resolves one by one. The
+// handoff between the two halves of verify is this table.
+export const verifyFindings = pgTable(
+	'verify_findings',
+	{
+		id: text().primaryKey(),
+		buildId: text()
+			.notNull()
+			.references(() => builds.id, { onDelete: 'cascade' }),
+		runId: text()
+			.notNull()
+			.references(() => sliceRuns.id, { onDelete: 'cascade' }),
+		acCode: text(),
+		kind: text().$type<'criterion' | 'console' | 'network' | 'visual'>().notNull(),
+		reproduction: text().notNull(),
+		severity: text().$type<'high' | 'medium' | 'low'>().notNull().default('medium'),
+		status: text().$type<FindingStatus>().notNull().default('open'),
+		note: text(),
+		acceptedByUserId: text().references(() => users.id, { onDelete: 'set null' }),
+		createdAt: timestamp({ withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [index('verify_findings_build_id_idx').on(table.buildId)]
+);
+
+export const integrations = pgTable(
+	'integrations',
+	{
+		id: text().primaryKey(),
+		buildId: text()
+			.notNull()
+			.references(() => builds.id, { onDelete: 'cascade' }),
+		trigger: text().$type<IntegrationTrigger>().notNull(),
+		onto: text().notNull(),
+		ontoSha: text(),
+		status: text().$type<IntegrationStatus>().notNull().default('pending'),
+		merged: boolean().notNull().default(false),
+		regenerated: jsonb().$type<Regenerated[]>().notNull().default([]),
+		resolved: jsonb().$type<ResolvedConflict[]>().notNull().default([]),
+		checks: text().$type<'passed' | 'failed' | 'skipped'>(),
+		detail: text(),
+		createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+		startedAt: timestamp({ withTimezone: true }),
+		finishedAt: timestamp({ withTimezone: true })
+	},
+	(table) => [index('integrations_build_id_idx').on(table.buildId)]
+);
+
+// A conversation about a repository's line, not a session's transcript. Kept so
+// "what happened overnight" survives the process that answered it.
+export const repositoryMessages = pgTable(
+	'repository_messages',
+	{
+		id: text().primaryKey(),
+		repositoryId: text()
+			.notNull()
+			.references(() => repositories.id, { onDelete: 'cascade' }),
+		role: text().$type<RepositoryMessageRole>().notNull(),
+		content: text().notNull(),
+		createdAt: timestamp({ withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [index('repository_messages_repository_id_idx').on(table.repositoryId)]
 );
 
 // The forks a plan could not settle, resolved while executing it. Kept as rows
@@ -428,21 +546,4 @@ export const planDecisions = pgTable(
 		createdAt: timestamp({ withTimezone: true }).notNull().defaultNow()
 	},
 	(table) => [index('plan_decisions_plan_id_idx').on(table.planId)]
-);
-
-// A conversation about a queue, not a session's transcript. Kept so the answer
-// to "what happened overnight" survives the process that answered it, and so a
-// follow-up question knows what was already asked.
-export const queueMessages = pgTable(
-	'queue_messages',
-	{
-		id: text().primaryKey(),
-		queueId: text()
-			.notNull()
-			.references(() => queues.id, { onDelete: 'cascade' }),
-		role: text().$type<QueueMessageRole>().notNull(),
-		content: text().notNull(),
-		createdAt: timestamp({ withTimezone: true }).notNull().defaultNow()
-	},
-	(table) => [index('queue_messages_queue_id_idx').on(table.queueId)]
 );

@@ -8,7 +8,7 @@ import { z } from 'zod';
 
 export const PROJECT_CONFIG_PATH = '.bosun/project.yaml';
 
-// A queue owns ten ports and an app's port is its position in `apps`.
+// A build owns ten ports and an app's port is its position in `apps`.
 export const MAX_APPS = 10;
 
 export const DEFAULT_READY_TIMEOUT_SECONDS = 90;
@@ -85,6 +85,32 @@ const ToolchainSchema = z
 	})
 	.strict();
 
+// A path glob git understands as `:(glob)<pattern>`: `**` crosses directories,
+// `*` does not.
+const GlobSchema = z
+	.string()
+	.min(1)
+	.max(200)
+	.refine((value) => insideRepository(value.replace(/\*+/g, 'x')), 'must be a relative path glob inside the repository');
+
+// Files that are produced, not written — migrations, lockfiles. An integration
+// takes the target branch's copy of any the branch added or changed and runs the
+// command again, so an ordered artifact is numbered against what it lands on.
+const RegenerateRuleSchema = z
+	.object({
+		name: z.string().trim().min(1).max(80),
+		cwd: RelativePathSchema.optional(),
+		paths: z.array(GlobSchema).min(1).max(20),
+		run: CommandSchema
+	})
+	.strict();
+
+const VerifySchema = z
+	.object({
+		resetDatabase: z.object({ cwd: RelativePathSchema.optional(), run: CommandSchema }).strict().optional()
+	})
+	.strict();
+
 const BaseSchema = z
 	.object({
 		version: z.literal(1),
@@ -92,6 +118,8 @@ const BaseSchema = z
 		setup: z.array(SetupStepSchema).max(30).default([]),
 		apps: z.record(z.string().regex(APP_NAME, 'app names are lowercase letters, digits and dashes'), AppSchema).default({}),
 		checks: z.array(CheckSchema).max(30).default([]),
+		regenerate: z.array(RegenerateRuleSchema).max(10).default([]),
+		verify: VerifySchema.optional(),
 		testAccounts: z.array(TestAccountSchema).max(10).default([]),
 		notes: z.string().max(10_000).optional()
 	})
@@ -166,7 +194,7 @@ function checkApps(config: Base, report: IssueSink): void {
 	const apps = new Set(names);
 
 	if (names.length > MAX_APPS) {
-		report({ path: ['apps'], message: `at most ${MAX_APPS} apps — a queue holds ten ports and each app takes one` });
+		report({ path: ['apps'], message: `at most ${MAX_APPS} apps — a build holds ten ports and each app takes one` });
 	}
 
 	for (const [name, app] of Object.entries(config.apps)) {
@@ -200,6 +228,7 @@ export const ProjectConfigSchema = BaseSchema.superRefine((config, ctx) => {
 	};
 	const apps = new Set(Object.keys(config.apps));
 	const seen = new Set<string>();
+	const rules = new Set<string>();
 
 	config.setup.forEach((step, index) => {
 		if (seen.has(step.name)) {
@@ -207,6 +236,14 @@ export const ProjectConfigSchema = BaseSchema.superRefine((config, ctx) => {
 		}
 
 		seen.add(step.name);
+	});
+
+	config.regenerate.forEach((rule, index) => {
+		if (rules.has(rule.name)) {
+			report({ path: ['regenerate', index, 'name'], message: `${rule.name} is used by another regenerate rule` });
+		}
+
+		rules.add(rule.name);
 	});
 
 	checkApps(config, report);

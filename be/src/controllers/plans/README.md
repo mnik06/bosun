@@ -68,8 +68,22 @@ last session happened to write. Republishing is therefore the revision mechanism
 should now be, and what is missing from the payload is deleted.
 
 Two things survive a republish deliberately. Slices are matched by `ordinal` and ACs by `code`, so a
-plan already queued keeps the rows its runs point at; and `acs.implemented` / `acs.verified` are
-never written by a publish, because resetting them would hand a queue criteria it has already met.
+plan with a build keeps the rows its runs point at; and `acs.implemented` / `acs.verified` are never
+written by a publish, because resetting them would hand a build criteria it has already met.
+
+What does not survive is the approval. A republish is a different plan, so `approvedAt` is cleared
+and a build of the approved version that is not yet in review leaves the line, its branch kept. A
+change bosun makes to fit a plan to the others — an amendment, a merge of its base, a regenerated
+file — never goes through here, which is why it never clears an approval.
+
+## Footprints and the foundation
+
+Every build bullet publishes a footprint: the schema, contracts and modules it creates or changes,
+and what it consumes from other plans. Dependencies are compared over these at approval, so the
+rules are enforced on publish rather than suggested: every piece another plan could consume is in
+bullet 1, marked the foundation — the commit a dependent stacks on — and a plan has at most six
+build bullets, because a plan holds its build slot to its last one. See
+`../line/shared/detect-dependencies.ts`.
 
 ## The every-AC-in-exactly-one-bullet invariant
 
@@ -95,7 +109,8 @@ nobody did.
 
 ## Plan frames are handled one at a time
 
-`agent/ws.route.ts` puts plan frames on a promise chain per socket and leaves everything else off it.
+`agent/ws.route.ts` puts plan frames — and the frames that settle a build's work — on a promise chain
+per socket and leaves everything else off it.
 Two reasons, both real: `plan_messages.seq` comes from `max(seq) + 1` and has a unique index, so
 overlapping appends collide; and an answer recorded before the question it answers is a transcript
 that cannot be replayed in order. Pongs stay off the queue because a round-trip time measured from

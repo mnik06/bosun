@@ -1,0 +1,99 @@
+import { type LineDeps } from 'src/controllers/line/line-deps';
+import { announceBuild } from 'src/controllers/line/shared/announce';
+import { queueIntegration, removeWorktree, stopRunningJobs } from 'src/controllers/line/shared/lifecycle';
+import { GithubError } from 'src/services/github/github-app.service';
+import { UNMERGED_BUILT_STATUSES, type Build } from 'src/types/BuildSchema';
+
+async function dependentBuilds(deps: LineDeps, build: Build): Promise<Build[]> {
+	const dependencies = await deps.planDependencyRepo.listByProviders([build.planId]);
+
+	return deps.buildRepo.listByPlans({
+		planIds: [...new Set(dependencies.map((dependency) => dependency.planId))],
+		statuses: [...UNMERGED_BUILT_STATUSES, 'scheduled', 'held', 'building', 'waiting_answer', 'needs_you']
+	});
+}
+
+// A provider's branch moved — a bullet pushed, an integration pushed. Every plan
+// stacked on it that is past building integrates onto it again; one still building
+// merges it before its next bullet on its own.
+export async function notifyDependents(deps: LineDeps, opts: { build: Build }): Promise<void> {
+	if (opts.build.branch === null) {
+		return;
+	}
+
+	for (const dependent of await dependentBuilds(deps, opts.build)) {
+		const plan = await deps.planRepo.getById(dependent.planId);
+
+		if (plan && dependent.baseBranch === opts.build.branch && UNMERGED_BUILT_STATUSES.includes(dependent.status)) {
+			await queueIntegration(deps, { build: dependent, plan, trigger: 'provider_moved', onto: opts.build.branch });
+		}
+	}
+}
+
+async function retarget(deps: LineDeps, opts: { dependent: Build; defaultBranch: string; githubRepoId: number; installationId: number }): Promise<Build> {
+	let failureReason: string | null = null;
+
+	if (opts.dependent.prNumber !== null) {
+		try {
+			await deps.githubApp.editPullRequest({
+				installationId: opts.installationId,
+				githubRepoId: opts.githubRepoId,
+				number: opts.dependent.prNumber,
+				base: opts.defaultBranch
+			});
+		} catch (error) {
+			if (!(error instanceof GithubError)) {
+				throw error;
+			}
+
+			failureReason = `its provider merged, but the pull request could not be retargeted: ${error.message}`;
+		}
+	}
+
+	return (
+		(await deps.buildRepo.update({
+			id: opts.dependent.id,
+			baseBranch: opts.defaultBranch,
+			...(failureReason === null ? {} : { failureReason })
+		})) ?? opts.dependent
+	);
+}
+
+// The pull request merged. Its worktree goes, and every plan stacked on it is
+// retargeted to the default branch and brought up to date without anybody touching
+// it.
+export async function markMerged(deps: LineDeps, opts: { build: Build }): Promise<void> {
+	const [repository, plan] = await Promise.all([
+		deps.repositoryRepo.getById(opts.build.repositoryId),
+		deps.planRepo.getById(opts.build.planId)
+	]);
+	const installation = repository ? await deps.githubInstallationRepo.getById(repository.installationId) : null;
+
+	if (!repository || !plan || opts.build.status === 'merged') {
+		return;
+	}
+
+	await stopRunningJobs(deps, { build: opts.build });
+
+	const merged = (await deps.buildRepo.update({ id: opts.build.id, status: 'merged', mergedAt: new Date(), finishedAt: new Date() })) ?? opts.build;
+
+	removeWorktree(deps, { build: merged });
+	announceBuild({ socketRegistry: deps.socketRegistry, projectId: plan.projectId, build: merged });
+
+	for (const dependent of await dependentBuilds(deps, opts.build)) {
+		if (dependent.baseBranch !== opts.build.branch || !installation) {
+			continue;
+		}
+
+		const moved = await retarget(deps, { dependent, defaultBranch: repository.defaultBranch, githubRepoId: repository.githubRepoId, installationId: installation.installationId });
+		const dependentPlan = await deps.planRepo.getById(moved.planId);
+
+		if (dependentPlan && UNMERGED_BUILT_STATUSES.includes(moved.status)) {
+			await queueIntegration(deps, { build: moved, plan: dependentPlan, trigger: 'retarget', onto: repository.defaultBranch });
+		}
+
+		if (dependentPlan) {
+			announceBuild({ socketRegistry: deps.socketRegistry, projectId: dependentPlan.projectId, build: moved });
+		}
+	}
+}

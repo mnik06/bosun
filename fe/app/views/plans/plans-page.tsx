@@ -1,87 +1,49 @@
-import { Button, Group } from '@mantine/core'
+import { Button, Group, SegmentedControl } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
-import { GitMerge, ListPlus, Plus } from 'lucide-react'
+import { MessagesSquare, Plus } from 'lucide-react'
 import { useState } from 'react'
 
-import { usePlansQuery } from '~/entities/plan'
 import { NewPlanModal } from '~/features/create-plan'
-import { PrepareParallelModal } from '~/features/prepare-parallel'
-import { PushToQueueModal } from '~/features/push-to-queue'
 import { Page } from '~/shared/ui'
-import { PlansList } from '~/widgets/plans-list'
+import { LineChatDrawer } from '~/widgets/line-chat-drawer'
+import { PlanBoard } from '~/widgets/plan-board'
+import { PlanHistory } from '~/widgets/plan-history'
 
 export default function PlansPage () {
-	const [opened, { open, close }] = useDisclosure(false)
-	const [selected, setSelected] = useState<string[]>([])
-	const [pushing, setPushing] = useState(false)
-	const [preparing, setPreparing] = useState(false)
-	const { data } = usePlansQuery()
-
-	// Filtered against the list rather than trusted: a plan deleted while it was
-	// ticked would otherwise be pushed to a queue as an id with nothing behind it.
-	const chosen = (data ?? []).filter((plan) => selected.includes(plan.id))
+	const [creating, { open: openCreate, close: closeCreate }] = useDisclosure(false)
+	const [chatting, { open: openChat, close: closeChat }] = useDisclosure(false)
+	const [view, setView] = useState<'board' | 'history'>('board')
 
 	return (
 		<Page
 			title="Plans"
+			size="xl"
 			actions={
 				<Group gap="xs">
-					{chosen.length === 0 ? null : (
-						<Button
-							variant="light"
-							size="xs"
-							leftSection={<ListPlus size={14} />}
-							onClick={() => {
-								setPushing(true)
-							}}
-						>
-							Push to queue ({chosen.length})
-						</Button>
-					)}
-
-					{/* Two is the floor: a preparation plan holds what more than one plan
-					    needs, and with one selected there is no second consumer to share
-					    anything with. */}
-					{chosen.length < 2 ? null : (
-						<Button
-							variant="light"
-							size="xs"
-							leftSection={<GitMerge size={14} />}
-							onClick={() => {
-								setPreparing(true)
-							}}
-						>
-							Prepare for parallel work ({chosen.length})
-						</Button>
-					)}
-
-					<Button variant="light" size="xs" leftSection={<Plus size={14} />} onClick={open}>
+					<SegmentedControl
+						size="xs"
+						value={view}
+						data={[
+							{ value: 'board', label: 'Board' },
+							{ value: 'history', label: 'History' }
+						]}
+						onChange={(value) => {
+							setView(value === 'history' ? 'history' : 'board')
+						}}
+					/>
+					<Button variant="subtle" size="xs" leftSection={<MessagesSquare size={14} />} onClick={openChat}>
+						Ask about the line
+					</Button>
+					<Button variant="light" size="xs" leftSection={<Plus size={14} />} onClick={openCreate}>
 						New plan
 					</Button>
 				</Group>
 			}
 		>
-			<PlansList selected={selected} onSelectedChange={setSelected} />
+			{view === 'board' ? <PlanBoard /> : <PlanHistory />}
 
-			<NewPlanModal opened={opened} onClose={close} />
-
-			<PushToQueueModal
-				plans={chosen}
-				opened={pushing}
-				onClose={() => {
-					setPushing(false)
-					setSelected([])
-				}}
-			/>
-
-			<PrepareParallelModal
-				plans={chosen}
-				opened={preparing}
-				onClose={() => {
-					setPreparing(false)
-					setSelected([])
-				}}
-			/>
+			<NewPlanModal opened={creating} onClose={closeCreate} />
+			<LineChatDrawer opened={chatting} onClose={closeChat} />
 		</Page>
 	)
 }

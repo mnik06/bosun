@@ -5,6 +5,7 @@ import { getGithubAppService } from 'src/services/github/github-app.service';
 import { getIdService } from 'src/services/ids/id.service';
 import { getInstallerService } from 'src/services/installer/installer.service';
 import { getKeyService } from 'src/services/keys/key.service';
+import { getLineLockService } from 'src/services/line/line-lock.service';
 import { getMcpPresetService } from 'src/services/mcp-presets/mcp-preset.service';
 import { getPlanTextService } from 'src/services/plans/plan-text.service';
 import { getRunActivityService } from 'src/services/runs/run-activity.service';
@@ -37,6 +38,7 @@ export function getServices(opts: { env: Env }) {
 		idService: getIdService(),
 		installerService: getInstallerService(),
 		keyService,
+		lineLock: getLineLockService(),
 		machineMemory: getMachineMemoryService(),
 		mcpPresets: getMcpPresetService(),
 		pendingEnvRequests: getPendingEnvRequestsService(),

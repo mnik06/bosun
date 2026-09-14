@@ -11,13 +11,10 @@ import { type StackUpResult } from '../../services/stack.service';
 const LIST_PLANS_DEFINITION = {
 	name: 'list_plans',
 	description:
-		'List every plan written for this machine — number, title, status, its tracer bullets and what it is blocked by. Use it when your bullet touches something you suspect another plan owns, so you can leave that work to it rather than duplicating or pre-empting it.',
+		'List every plan written for this repository — number, title, state, its tracer bullets, and for approved plans not yet merged the footprint of each bullet (the schema, contracts and modules it creates or changes). Use it when your work touches something you suspect another plan owns, so you use it rather than duplicating or pre-empting it.',
 	inputSchema: z.toJSONSchema(z.object({}), { target: 'draft-7' })
 };
 
-// An AFK queue is given no way to ask at all, rather than a tool it is told not
-// to call. A model that can see `bosun_ask` in its tool list will eventually
-// reach for it, and on an unattended queue that is a session blocked forever.
 export const RecordDecisionArgsSchema = z.object({
 	fork: z.string().min(1),
 	options: z.string().nullable().optional(),
@@ -42,18 +39,17 @@ export const BlockAcArgsSchema = z.object({
 
 // The escape hatch that keeps the gate honest. Without it a criterion nobody
 // could drive left the session two options — claim it passed, or fail the whole
-// branch — and both are worse than saying so. Recording the reason is what makes
-// "not verified" reviewable instead of a mystery.
+// branch — and both are worse than saying so.
 const BLOCK_AC_DEFINITION = {
 	name: 'mark_ac_blocked',
 	description:
-		'Record that an acceptance criterion could not be driven, and why — the app would not start, the journey needs data that does not exist, the feature is unreachable from the interface. Use it only after trying: it is not a way to skip work, and the reason is carried verbatim into the pull request for a reviewer to judge. Every criterion must end either verified or blocked; one left silent fails this bullet.',
+		'Record that an acceptance criterion could not be driven, and why — the app would not start, the journey needs data that does not exist, the feature is unreachable from the interface. Use it only after trying: it is not a way to skip work, and the reason is carried verbatim into the pull request. A criterion you drove and watched fail is a finding, not a blocker.',
 	inputSchema: z.toJSONSchema(BlockAcArgsSchema, { target: 'draft-7' })
 };
 
 // Two tools rather than one with a flag: which of the two columns a session may
-// tick is decided by the bullet it is running, and a flag is something a model
-// can get wrong. A build bullet cannot reach `mark_ac_verified` at all.
+// tick is decided by the session it is, and a flag is something a model can get
+// wrong. A build bullet cannot reach `mark_ac_verified` at all.
 const MARK_IMPLEMENTED_DEFINITION = {
 	name: 'mark_ac_implemented',
 	description:
@@ -64,15 +60,47 @@ const MARK_IMPLEMENTED_DEFINITION = {
 const MARK_VERIFIED_DEFINITION = {
 	name: 'mark_ac_verified',
 	description:
-		'Tick one acceptance criterion as verified, by its code. Call it only after you have watched it hold in the running product — the journey driven, the state reached, the result seen. No pull request is opened while one is unticked.',
+		'Tick one acceptance criterion as verified, by its code. Call it only after you have watched it hold in the running product — the journey driven, the state reached, the result seen.',
 	inputSchema: z.toJSONSchema(MarkAcArgsSchema, { target: 'draft-7' })
+};
+
+export const ReportFindingArgsSchema = z.object({
+	acCode: z.string().min(1).nullable().optional().describe('the criterion this finding fails, for kind "criterion"'),
+	kind: z.enum(['criterion', 'console', 'network', 'visual']),
+	reproduction: z
+		.string()
+		.min(1)
+		.describe('the starting state, every step, what was expected and what happened — enough for somebody who never saw it to see it'),
+	severity: z.enum(['high', 'medium', 'low']).optional()
+});
+
+// A finding is a row, not a line in a report: the fix session is handed exactly
+// these, the re-check drives exactly the criteria they name, and the pull request
+// lists the ones left.
+const REPORT_FINDING_DEFINITION = {
+	name: 'report_finding',
+	description:
+		'Record something broken you saw in the running product: a criterion that fails (kind "criterion" with its acCode), a console error, a failed request, or a visual defect. Each one is handed to the fix session as written, so the reproduction must stand on its own.',
+	inputSchema: z.toJSONSchema(ReportFindingArgsSchema, { target: 'draft-7' })
+};
+
+export const ResolveFindingArgsSchema = z.object({
+	findingId: z.string().min(1),
+	status: z.enum(['fixed', 'left']),
+	note: z.string().min(1).describe('what changed, or why it was left')
+});
+
+const RESOLVE_FINDING_DEFINITION = {
+	name: 'resolve_finding',
+	description:
+		'Account for one finding the drive reported, by its id: "fixed" with what changed, or "left" with the reason. Every finding must be resolved before this session ends; a left one goes into the pull request as a known gap.',
+	inputSchema: z.toJSONSchema(ResolveFindingArgsSchema, { target: 'draft-7' })
 };
 
 export const StackUpArgsSchema = z.object({ apps: z.array(z.string()).optional() });
 
 // The agent starts the processes so that starting the stack means the same thing
-// in every bullet and on every machine; the session only decides when. That split
-// is what the memory rules rely on: up for the browser pass, down before the loop.
+// in every session and on every machine; the session only decides when.
 const STACK_UP_DEFINITION = {
 	name: 'stack_up',
 	description:
@@ -86,35 +114,41 @@ const STACK_DOWN_DEFINITION = {
 	inputSchema: z.toJSONSchema(z.object({}), { target: 'draft-7' })
 };
 
+export type ExecutionPhase = 'build' | 'drive' | 'recheck' | 'fix';
+
 interface ToolSet {
-	afk: boolean;
-	verify: boolean;
+	phase: ExecutionPhase;
+	handsOff: boolean;
 	// Only a repository machine whose config declares apps can start a stack.
 	stack: boolean;
 }
 
-export function executionDefinitions(opts: ToolSet): unknown[] {
-	const always = [
-		LIST_PLANS_DEFINITION,
-		RECORD_DECISION_DEFINITION,
-		...(opts.verify ? [MARK_VERIFIED_DEFINITION, BLOCK_AC_DEFINITION] : [MARK_IMPLEMENTED_DEFINITION]),
-		...(opts.stack ? [STACK_UP_DEFINITION, STACK_DOWN_DEFINITION] : [])
-	];
+// A hands-off plan's bullets are given no way to ask at all, rather than a tool
+// they are told not to call: a model that can see `bosun_ask` will eventually
+// reach for it. Only a build bullet ever asks — a verify session's questions are
+// findings, and nobody is waiting on one.
+export function executionDefinitions(opts: ToolSet): { name: string }[] {
+	const stack = opts.stack ? [STACK_UP_DEFINITION, STACK_DOWN_DEFINITION] : [];
 
-	return opts.afk ? always : [ASK_DEFINITION, ...always];
+	switch (opts.phase) {
+		case 'build':
+			return [
+				...(opts.handsOff ? [] : [ASK_DEFINITION]),
+				LIST_PLANS_DEFINITION,
+				RECORD_DECISION_DEFINITION,
+				MARK_IMPLEMENTED_DEFINITION,
+				...stack
+			];
+		case 'drive':
+		case 'recheck':
+			return [MARK_VERIFIED_DEFINITION, BLOCK_AC_DEFINITION, REPORT_FINDING_DEFINITION, ...stack];
+		case 'fix':
+			return [LIST_PLANS_DEFINITION, RECORD_DECISION_DEFINITION, RESOLVE_FINDING_DEFINITION];
+	}
 }
 
 export function executionMcpTools(opts: ToolSet): string[] {
-	const always = [
-		'mcp__bosun__list_plans',
-		'mcp__bosun__record_decision',
-		...(opts.verify
-			? ['mcp__bosun__mark_ac_verified', 'mcp__bosun__mark_ac_blocked']
-			: ['mcp__bosun__mark_ac_implemented']),
-		...(opts.stack ? ['mcp__bosun__stack_up', 'mcp__bosun__stack_down'] : [])
-	];
-
-	return opts.afk ? always : ['mcp__bosun__bosun_ask', ...always];
+	return executionDefinitions(opts).map((definition) => `mcp__bosun__${definition.name}`);
 }
 
 export interface SessionStack {
@@ -136,77 +170,96 @@ async function stackTool(opts: { name: string; args: unknown; stack: SessionStac
 		: textToolResult(`${result.app} did not come up: ${result.reason}\n--- last lines of its log ---\n${result.logTail}`, true);
 }
 
+async function markTool(opts: { name: string; args: unknown; planId: string; bosunApi: BosunApiService }) {
+	if (opts.name === 'mark_ac_blocked') {
+		const { code, reason } = BlockAcArgsSchema.parse(opts.args);
+
+		return textToolResult(JSON.stringify(await opts.bosunApi.markPlanAc({ planId: opts.planId, code, blockedReason: reason })));
+	}
+
+	const { code } = MarkAcArgsSchema.parse(opts.args);
+
+	return textToolResult(
+		JSON.stringify(
+			await opts.bosunApi.markPlanAc({
+				planId: opts.planId,
+				code,
+				...(opts.name === 'mark_ac_verified' ? { verified: true } : { implemented: true })
+			})
+		)
+	);
+}
+
 export function createExecutionDispatch(opts: {
-	afk: boolean;
+	toolSet: ToolSet;
 	planId: string;
 	sliceId: string;
+	buildId: string;
+	runId: string;
 	bosunApi: BosunApiService;
 	stack: SessionStack | null;
 	onQuestion: (payload: { questionId: string; questions: PlanQuestion[] }) => void;
 }) {
+	// Refused here as well as left out of the list: the list is what the model is
+	// told, and this is what it can actually do.
+	const allowed = new Set(executionDefinitions(opts.toolSet).map((definition) => definition.name));
+
 	return function build(pending: Map<string, PendingQuestion>) {
 		const ask = createAskTool({ pending, onQuestion: opts.onQuestion });
 
 		return async function dispatch(name: string, args: unknown) {
-			if (name === 'bosun_ask' && !opts.afk) {
-				return ask(args);
+			if (!allowed.has(name)) {
+				throw new Error(`unknown tool ${name}`);
 			}
 
-			if (name === 'list_plans') {
-				return textToolResult(JSON.stringify(await opts.bosunApi.listMachinePlans()));
+			switch (name) {
+				case 'bosun_ask':
+					return ask(args);
+				case 'list_plans':
+					return textToolResult(JSON.stringify(await opts.bosunApi.listMachinePlans()));
+				case 'stack_up':
+				case 'stack_down':
+					return stackTool({ name, args, stack: opts.stack! });
+				case 'mark_ac_implemented':
+				case 'mark_ac_verified':
+				case 'mark_ac_blocked':
+					return markTool({ name, args, planId: opts.planId, bosunApi: opts.bosunApi });
+				case 'report_finding': {
+					const parsed = ReportFindingArgsSchema.parse(args);
+
+					return textToolResult(
+						JSON.stringify(
+							await opts.bosunApi.reportFinding({
+								buildId: opts.buildId,
+								runId: opts.runId,
+								acCode: parsed.acCode ?? null,
+								kind: parsed.kind,
+								reproduction: parsed.reproduction,
+								severity: parsed.severity ?? 'medium'
+							})
+						)
+					);
+				}
+				case 'resolve_finding':
+					return textToolResult(JSON.stringify(await opts.bosunApi.resolveFinding(ResolveFindingArgsSchema.parse(args))));
+				default: {
+					const parsed = RecordDecisionArgsSchema.parse(args);
+
+					return textToolResult(
+						JSON.stringify(
+							await opts.bosunApi.recordPlanDecision({
+								planId: opts.planId,
+								sliceId: opts.sliceId,
+								fork: parsed.fork,
+								options: parsed.options ?? null,
+								chose: parsed.chose,
+								blastRadius: parsed.blastRadius ?? null,
+								reversing: parsed.reversing ?? null
+							})
+						)
+					);
+				}
 			}
-
-			if ((name === 'stack_up' || name === 'stack_down') && opts.stack !== null) {
-				return stackTool({ name, args, stack: opts.stack });
-			}
-
-			if (name === 'mark_ac_implemented' || name === 'mark_ac_verified') {
-				const { code } = MarkAcArgsSchema.parse(args);
-
-				return textToolResult(
-					JSON.stringify(
-						await opts.bosunApi.markPlanAc({
-							planId: opts.planId,
-							code,
-							...(name === 'mark_ac_verified' ? { verified: true } : { implemented: true })
-						})
-					)
-				);
-			}
-
-			if (name === 'mark_ac_blocked') {
-				const { code, reason } = BlockAcArgsSchema.parse(args);
-
-				return textToolResult(
-					JSON.stringify(
-						await opts.bosunApi.markPlanAc({
-							planId: opts.planId,
-							code,
-							blockedReason: reason
-						})
-					)
-				);
-			}
-
-			if (name === 'record_decision') {
-				const parsed = RecordDecisionArgsSchema.parse(args);
-
-				return textToolResult(
-					JSON.stringify(
-						await opts.bosunApi.recordPlanDecision({
-							planId: opts.planId,
-							sliceId: opts.sliceId,
-							fork: parsed.fork,
-							options: parsed.options ?? null,
-							chose: parsed.chose,
-							blastRadius: parsed.blastRadius ?? null,
-							reversing: parsed.reversing ?? null
-						})
-					)
-				);
-			}
-
-			throw new Error(`unknown tool ${name}`);
 		};
 	};
 }

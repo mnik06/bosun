@@ -7,12 +7,14 @@ import {
 	GithubInstallationSchema,
 	MachineOnboardingSchema,
 	RepositoryConfigSchema,
+	RepositoryMessageSchema,
 	RepositorySchema,
 	type AvailableRepository,
 	type GithubInstallation,
 	type MachineOnboarding,
 	type Repository,
-	type RepositoryConfig
+	type RepositoryConfig,
+	type RepositoryMessage
 } from '~/entities/repository/model/repository'
 import { apiClient, getActiveProjectId } from '~/shared/api'
 
@@ -23,7 +25,22 @@ export const repositoryKeys = {
 	available: () => [...repositoryKeys.all(), 'available'] as const,
 	config: (repositoryId: string) => [...repositoryKeys.all(), 'config', repositoryId] as const,
 	onboarding: () => [...repositoryKeys.all(), 'onboarding'] as const,
-	machineOnboarding: (machineId: string) => [...repositoryKeys.onboarding(), 'machine', machineId] as const
+	machineOnboarding: (machineId: string) => [...repositoryKeys.onboarding(), 'machine', machineId] as const,
+	messages: (repositoryId: string) => [...repositoryKeys.all(), 'messages', repositoryId] as const
+}
+
+export async function fetchRepositoryMessages (repositoryId: string): Promise<RepositoryMessage[]> {
+	const { data } = await apiClient.get<unknown>(`/repositories/${repositoryId}/messages`)
+
+	return z.array(RepositoryMessageSchema).parse(data)
+}
+
+export function useRepositoryMessagesQuery (repositoryId: string | null) {
+	return useQuery({
+		queryKey: repositoryKeys.messages(repositoryId ?? ''),
+		queryFn: async () => fetchRepositoryMessages(repositoryId ?? ''),
+		enabled: repositoryId !== null
+	})
 }
 
 export async function fetchRepositories (): Promise<Repository[]> {

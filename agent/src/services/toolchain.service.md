@@ -39,7 +39,7 @@ touches.
 - **Shims name their node.** A shim is rewritten whenever its content differs, because a config that
   moves to a newer node keeps the same package-manager directory.
 - **Failures read as one line.** The detail names the step — the download and its status, the checksum,
-  the extraction — and never carries a stack, because it becomes a queue's failure reason.
+  the extraction — and never carries a stack, because it becomes a build's failure reason.
 
 ## What it does not do
 

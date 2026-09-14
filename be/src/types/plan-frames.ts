@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { FootprintSchema } from 'src/types/FootprintSchema';
 import { PlanAnswerSchema } from 'src/types/PlanSchema';
 
 export const PlanStartMsgSchema = z.object({
@@ -6,7 +7,9 @@ export const PlanStartMsgSchema = z.object({
 	planId: z.string(),
 	input: z.string(),
 	verifyInUi: z.boolean().default(true),
-	auto: z.boolean().default(false),
+	// The grill answers itself: the session takes its own recommendation instead of
+	// stopping for a person who is not there.
+	handsOff: z.boolean().default(false),
 	// The operator's notes from the machine's project setup. Planning gets them
 	// for the same reason execution does: a convention nobody can read off the
 	// code — a skill this repository expects a session to invoke, a rule the team
@@ -21,7 +24,7 @@ export const PlanStartMsgSchema = z.object({
 // the grill ended needs the artifact handed to it.
 export const PlanSnapshotSchema = z.object({
 	verifyInUi: z.boolean(),
-	auto: z.boolean(),
+	handsOff: z.boolean(),
 	title: z.string().nullable(),
 	bodyMd: z.string().nullable(),
 	acs: z.array(
@@ -36,7 +39,9 @@ export const PlanSnapshotSchema = z.object({
 			ordinal: z.number().int(),
 			kind: z.enum(['build', 'verify']),
 			title: z.string(),
-			bodyMd: z.string().nullable()
+			bodyMd: z.string().nullable(),
+			foundation: z.boolean(),
+			footprint: FootprintSchema
 		})
 	)
 });

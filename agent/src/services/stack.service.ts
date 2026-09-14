@@ -38,7 +38,7 @@ function urlFor(port: number): string {
 }
 
 // Position, not allocation: an app's port is its index in `apps`, so every
-// machine, queue and session computes the same number from the same file.
+// machine, build and session computes the same number from the same file.
 export function appPorts(config: ProjectConfig, portBase: number): Record<string, number> {
 	return Object.fromEntries(Object.keys(config.apps).map((name, index) => [name, portBase + index]));
 }

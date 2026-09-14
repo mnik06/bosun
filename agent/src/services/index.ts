@@ -3,7 +3,6 @@ import { getClaudeAuthService } from './claude-auth.service';
 import { getEnvService } from './env.service';
 import { getExecService } from './exec.service';
 import { getCommitService } from '../execution/commit';
-import { getPublishService } from '../execution/publish';
 import { getInputsKeyService } from './inputs-key.service';
 import { getMcpConfigService } from './mcp-config.service';
 import { getMcpProbeService } from './mcp-probe.service';
@@ -51,7 +50,6 @@ export function getServices(opts: { config: AgentConfig; configPath: string; env
 		mcpConfig,
 		mcpProbe: getMcpProbeService(),
 		memory,
-		publish: getPublishService({ exec }),
 		preflight: getPreflightService({
 			exec,
 			claudeAuth,

@@ -3,6 +3,7 @@ import { parseServerFrame, routeServerFrame, type AgentState, type RouterDeps } 
 import { type SummarySessions } from '../summary/session';
 import { type AskSessions } from '../ask/session';
 import { type ExecutionSessions } from '../execution/session';
+import { type IntegrationSessions } from '../integration/session';
 import { type OnboardingSessions } from '../onboarding/session';
 import { type PlanningSessions } from '../planning/session';
 import { type ServerMsg } from '../protocol';
@@ -11,8 +12,11 @@ import { type Services } from '../services/index';
 
 const SEALED = { v: 1 as const, wrappedKey: 'd3JhcHBlZA==', iv: 'aXY=', ciphertext: 'Y2lwaGVy' };
 
+const CONFIG_WITH_SETUP = 'version: 1\nsetup:\n  - name: install\n    run: pnpm i\n';
+
 function build (opts?: { paused?: boolean; repositoryId?: string | null }) {
 	const send = vi.fn();
+	const sink = vi.fn();
 	const announce = vi.fn().mockResolvedValue(undefined);
 	const onUpgrade = vi.fn().mockResolvedValue(undefined);
 	const terminateSelf = vi.fn().mockResolvedValue(undefined);
@@ -29,6 +33,11 @@ function build (opts?: { paused?: boolean; repositoryId?: string | null }) {
 		cancel: vi.fn(),
 		cancelAll: vi.fn(),
 		running: vi.fn().mockReturnValue(0)
+	};
+	const integrations = {
+		start: vi.fn().mockResolvedValue(undefined),
+		cancel: vi.fn(),
+		cancelAll: vi.fn()
 	};
 	const onboarding = {
 		start: vi.fn().mockResolvedValue(undefined),
@@ -50,18 +59,24 @@ function build (opts?: { paused?: boolean; repositoryId?: string | null }) {
 		delete: vi.fn(),
 		setSecrets: vi.fn(),
 		secretNames: vi.fn().mockReturnValue([]),
+		secretValues: vi.fn().mockReturnValue({}),
 		applyTo: vi.fn().mockReturnValue({ written: ['be/.env'], skipped: [] })
 	};
 	const worktree = {
-		ensure: vi.fn().mockResolvedValue({ ok: true, worktreePath: '/w', baseRef: 'main', detail: 'created' })
+		ensure: vi.fn().mockResolvedValue({ ok: true, worktreePath: '/nonexistent-worktree', baseRef: 'origin/main', detail: 'created' }),
+		remove: vi.fn().mockResolvedValue(undefined)
+	};
+	const commit = {
+		startBuildBranch: vi.fn().mockResolvedValue({ ok: true, detail: 'bosun/plan/1-auth from origin/main' })
 	};
 	const setupSteps = {
-		runLegacy: vi.fn().mockResolvedValue({ ok: true, ran: true }),
-		runAll: vi.fn().mockResolvedValue({ ok: true, ran: [] })
+		runAll: vi.fn().mockResolvedValue({ ok: true, ran: ['install'] }),
+		rerunChanged: vi.fn().mockResolvedValue({ ok: true, ran: [] }),
+		forget: vi.fn()
 	};
-	const publish = { publish: vi.fn().mockResolvedValue({ ok: true, prUrl: 'https://github.com/o/r/pull/1', detail: 'opened' }) };
+	const exec = { run: vi.fn().mockResolvedValue({ ok: true, stdout: 'abc123', stderr: '', reason: '' }) };
 	const inputsKey = { open: vi.fn().mockReturnValue('postgres://opened') };
-	const workspace = { repositoryId: vi.fn().mockReturnValue(opts?.repositoryId ?? null) };
+	const workspace = { repositoryId: vi.fn().mockReturnValue(opts?.repositoryId === undefined ? 'repo_1' : opts.repositoryId) };
 	const claudeAuth = { sessionEnv: vi.fn().mockReturnValue({}) };
 
 	const deps = {
@@ -71,8 +86,9 @@ function build (opts?: { paused?: boolean; repositoryId?: string | null }) {
 			stack: { downAll: vi.fn().mockResolvedValue(undefined) },
 			projectEnv,
 			worktree,
+			commit,
 			setupSteps,
-			publish,
+			exec,
 			inputsKey,
 			workspace,
 			claudeAuth
@@ -81,26 +97,31 @@ function build (opts?: { paused?: boolean; repositoryId?: string | null }) {
 		state,
 		sessions: sessions as unknown as PlanningSessions,
 		executions: executions as unknown as ExecutionSessions,
+		integrations: integrations as unknown as IntegrationSessions,
 		onboarding: onboarding as unknown as OnboardingSessions,
 		summaries: summaries as unknown as SummarySessions,
 		asks: asks as unknown as AskSessions,
+		sink,
 		announce,
 		onUpgrade
 	} satisfies RouterDeps;
 
 	return {
 		announce,
-		onUpgrade,
 		asks,
+		commit,
 		executions,
 		inputsKey,
+		integrations,
+		onUpgrade,
 		onboarding,
 		projectEnv,
-		publish,
 		send,
 		sessions,
 		setupSteps,
+		sink,
 		state,
+		summaries,
 		terminateSelf,
 		worktree,
 		route: async (msg: ServerMsg) => routeServerFrame(deps, msg)
@@ -114,8 +135,6 @@ function sent (send: ReturnType<typeof vi.fn>): unknown[] {
 describe('routeServerFrame', () => {
 	// The whole point of refresh: it re-announces, which is what re-reports the
 	// agent version and re-reads the env file, the MCP config and the skills dirs.
-	// An earlier version answered refresh with preflight alone, so a machine's
-	// reported version could never change without a reconnect.
 	it('answers refresh by re-announcing, not by sending preflight alone', async () => {
 		const { announce, route } = build();
 
@@ -159,7 +178,7 @@ describe('routeServerFrame', () => {
 	it('refuses to start a plan while paused, and tells the backend why', async () => {
 		const { send, sessions, route } = build({ paused: true });
 
-		await route({ type: 'plan.start', verifyInUi: true, auto: false, notes: null, configDraft: null, planId: 'p_1', input: 'go' });
+		await route({ type: 'plan.start', verifyInUi: true, handsOff: false, notes: null, configDraft: null, planId: 'p_1', input: 'go' });
 
 		expect(sessions.start).not.toHaveBeenCalled();
 		expect(sent(send)).toEqual([
@@ -170,13 +189,13 @@ describe('routeServerFrame', () => {
 	it('starts a plan when not paused', async () => {
 		const { sessions, route } = build();
 
-		await route({ type: 'plan.start', verifyInUi: true, auto: false, notes: null, configDraft: 'version: 1', planId: 'p_1', input: 'go' });
+		await route({ type: 'plan.start', verifyInUi: true, handsOff: true, notes: null, configDraft: 'version: 1', planId: 'p_1', input: 'go' });
 
 		expect(sessions.start).toHaveBeenCalledWith({
 			planId: 'p_1',
 			input: 'go',
 			verifyInUi: true,
-			auto: false,
+			handsOff: true,
 			notes: null,
 			configDraft: 'version: 1'
 		});
@@ -206,12 +225,15 @@ describe('routeServerFrame', () => {
 	// Terminal, and it has to reap sessions first: the process group outlives the
 	// unit otherwise.
 	it('cancels every session before terminating on shutdown', async () => {
-		const { sessions, onboarding, terminateSelf, route } = build();
+		const { sessions, executions, integrations, onboarding, asks, terminateSelf, route } = build();
 
 		await route({ type: 'shutdown', reason: 'deleted in bosun' });
 
 		expect(sessions.cancelAll).toHaveBeenCalledOnce();
+		expect(executions.cancelAll).toHaveBeenCalledOnce();
+		expect(integrations.cancelAll).toHaveBeenCalledOnce();
 		expect(onboarding.cancelAll).toHaveBeenCalledOnce();
+		expect(asks.cancelAll).toHaveBeenCalledOnce();
 		expect(terminateSelf).toHaveBeenCalledWith({
 			configPath: '/home/u/.bosun/config.json',
 			reason: 'deleted in bosun'
@@ -244,6 +266,7 @@ describe('parseServerFrame', () => {
 		['{"type":"nope"}'],
 		['{"type":"ping"}'],
 		['[]'],
+		['{"type":"queue.worktree.ensure","queueId":"q_1","slug":"auth"}'],
 		// A plaintext value is exactly what sealing exists to keep off the wire.
 		['{"type":"env.set","requestId":"r","path":"be","vars":[{"key":"A","value":"plain"}]}']
 	])('drops %j', (raw) => {
@@ -255,11 +278,11 @@ describe('exec frames', () => {
 	const start = {
 		type: 'exec.start',
 		runId: 'sr_1',
+		buildId: 'bld_1',
 		worktreePath: '/w',
-		branch: 'bosun/q/p_1',
-		baseRef: 'main',
-		freshBranch: true,
-		afk: false,
+		branch: 'bosun/plan/1-auth',
+		baseRef: 'origin/main',
+		handsOff: false,
 		planId: 'p_1',
 		sliceId: 'sl_1',
 		planNumber: 1,
@@ -270,10 +293,17 @@ describe('exec frames', () => {
 		policy: null,
 		portBase: 4100,
 		slice: { ordinal: 1, kind: 'build', title: 'token table', bodyMd: null },
+		phase: null,
 		acs: [],
 		planAcs: [],
 		decisions: [],
 		doneSlices: [],
+		amendments: [],
+		mergeIn: [],
+		push: true,
+		answer: null,
+		findings: [],
+		recheckCodes: [],
 		memoryMaxBytes: null
 	} satisfies ServerMsg;
 
@@ -304,16 +334,6 @@ describe('exec frames', () => {
 		await harness.route({ type: 'exec.cancel', runId: 'sr_1' });
 
 		expect(harness.executions.cancel).toHaveBeenCalledWith('sr_1');
-	});
-
-	// A slice mid-edit is a worktree in an unknown state; reaping only planning
-	// sessions would leave a `claude` process writing to it after teardown.
-	it('reaps execution runs on shutdown too', async () => {
-		const harness = build();
-
-		await harness.route({ type: 'shutdown', reason: 'deleted' });
-
-		expect(harness.executions.cancelAll).toHaveBeenCalled();
 	});
 });
 
@@ -366,91 +386,147 @@ describe('env frames', () => {
 	});
 });
 
-describe('worktree frames', () => {
-	const ensure = { type: 'queue.worktree.ensure', queueId: 'q_1', slug: 'auth', setupCommand: 'pnpm i', configDraft: null } satisfies ServerMsg;
+describe('build worktree frames', () => {
+	const ensure = {
+		type: 'build.worktree.ensure',
+		buildId: 'bld_1',
+		slug: 'bld-1',
+		branch: 'bosun/plan/4-comments',
+		fresh: true,
+		startFrom: 'abc1234',
+		mergeIn: ['bosun/plan/3-avatars'],
+		configDraft: CONFIG_WITH_SETUP
+	} satisfies ServerMsg;
 
-	// A setup command that migrates or generates a client needs the real
-	// connection already in place.
-	it('writes the provided env into a worktree before its setup command runs', async () => {
+	// A dependent is cut from its provider, never from the base: the branch is
+	// decided before anything is installed, so setup runs on the code the first
+	// bullet builds on.
+	it('cuts the build branch from its provider before writing env files and running setup', async () => {
 		const harness = build();
 
 		await harness.route(ensure);
 
-		expect(harness.projectEnv.applyTo).toHaveBeenCalledWith('/w');
-		expect(harness.projectEnv.applyTo.mock.invocationCallOrder[0]).toBeLessThan(
-			harness.setupSteps.runLegacy.mock.invocationCallOrder[0]!
+		expect(harness.commit.startBuildBranch).toHaveBeenCalledWith({
+			worktreePath: '/nonexistent-worktree',
+			branch: 'bosun/plan/4-comments',
+			baseRef: 'origin/main',
+			fresh: true,
+			startFrom: 'abc1234',
+			mergeIn: ['bosun/plan/3-avatars']
+		});
+		expect(harness.commit.startBuildBranch.mock.invocationCallOrder[0]).toBeLessThan(
+			harness.projectEnv.applyTo.mock.invocationCallOrder[0]!
 		);
+		expect(harness.projectEnv.applyTo.mock.invocationCallOrder[0]).toBeLessThan(
+			harness.setupSteps.runAll.mock.invocationCallOrder[0]!
+		);
+		expect(harness.sink).toHaveBeenCalledWith({
+			type: 'build.worktree.ready',
+			buildId: 'bld_1',
+			worktreePath: '/nonexistent-worktree',
+			baseRef: 'origin/main',
+			headSha: 'abc123'
+		});
 	});
 
-	// The bug this replaced: a failed install was logged and the worktree reported
-	// ready anyway, so every bullet after it failed an hour in for a reason nobody saw.
-	it('fails the queue with the setup failure rather than reporting the worktree ready', async () => {
+	// A provider branch that will not merge leaves nothing to set up on, and a build
+	// reported ready over it fails an hour into its first bullet.
+	it('reports a branch that could not be cut without running setup', async () => {
 		const harness = build();
 
-		harness.setupSteps.runLegacy.mockResolvedValue({ ok: false, step: 'setup command', message: 'setup step "setup command" failed (exited with 1):\nERR_PNPM_NO_LOCKFILE' });
+		harness.commit.startBuildBranch.mockResolvedValue({ ok: false, detail: 'merging origin/bosun/plan/3-avatars conflicts with this branch' });
 		await harness.route(ensure);
 
+		expect(harness.setupSteps.runAll).not.toHaveBeenCalled();
+		expect(harness.sink).toHaveBeenCalledWith({
+			type: 'build.worktree.error',
+			buildId: 'bld_1',
+			message: 'merging origin/bosun/plan/3-avatars conflicts with this branch'
+		});
+	});
+
+	it('fails the build with the setup failure rather than reporting the worktree ready', async () => {
+		const harness = build();
+
+		harness.setupSteps.runAll.mockResolvedValue({ ok: false, step: 'install', message: 'setup step "install" failed (exited with 1):\nERR_PNPM_NO_LOCKFILE' });
+		await harness.route(ensure);
+
+		expect(harness.sink).toHaveBeenCalledWith({
+			type: 'build.worktree.error',
+			buildId: 'bld_1',
+			message: 'setup step "install" failed (exited with 1):\nERR_PNPM_NO_LOCKFILE'
+		});
+	});
+
+	// A build taking a slot again only re-runs what changed; running every install
+	// again on each release would spend minutes a resumed bullet does not need.
+	it('re-runs only the changed setup steps when the build is resuming', async () => {
+		const harness = build();
+
+		await harness.route({ ...ensure, fresh: false });
+
+		expect(harness.setupSteps.runAll).not.toHaveBeenCalled();
+		expect(harness.setupSteps.rerunChanged).toHaveBeenCalled();
+	});
+
+	it('removes the worktree and forgets its setup state', async () => {
+		const harness = build();
+
+		await harness.route({ type: 'build.worktree.remove', buildId: 'bld_1', slug: 'bld-1' });
+
+		expect(harness.worktree.remove).toHaveBeenCalledWith('bld-1');
+		expect(harness.setupSteps.forget).toHaveBeenCalledWith('bld-1');
+	});
+});
+
+describe('integration frames', () => {
+	const integrate = {
+		type: 'integrate.start',
+		integrationId: 'int_1',
+		buildId: 'bld_1',
+		worktreePath: '/w',
+		branch: 'bosun/plan/4-comments',
+		onto: 'main',
+		configDraft: null,
+		autoResolve: true,
+		criteria: { planNumber: 4, title: 'Comments', acs: [] },
+		portBase: 4100,
+		memoryMaxBytes: null
+	} satisfies ServerMsg;
+
+	it('starts and cancels an integration', async () => {
+		const harness = build();
+
+		await harness.route(integrate);
+		await harness.route({ type: 'integrate.cancel', integrationId: 'int_1' });
+
+		expect(harness.integrations.start).toHaveBeenCalledWith(expect.objectContaining({ integrationId: 'int_1' }));
+		expect(harness.integrations.cancel).toHaveBeenCalledWith('int_1');
+	});
+
+	// An integration runs checks and possibly a session; a paused machine refusing
+	// it silently would leave the build integrating forever.
+	it('refuses an integration while paused, and says so', async () => {
+		const harness = build({ paused: true });
+
+		await harness.route(integrate);
+
+		expect(harness.integrations.start).not.toHaveBeenCalled();
 		expect(sent(harness.send)).toEqual([
-			{
-				type: 'queue.worktree.error',
-				queueId: 'q_1',
-				message: 'setup step "setup command" failed (exited with 1):\nERR_PNPM_NO_LOCKFILE'
-			}
+			{ type: 'integrate.needs_you', integrationId: 'int_1', reason: 'error', detail: 'this machine is paused' }
 		]);
 	});
 });
 
-describe('publish frames', () => {
-	const publish = {
-		type: 'queue.publish',
-		itemId: 'qi_1',
-		worktreePath: '/w',
-		branch: 'bosun/plan/auth/1',
-		baseRef: 'origin/main',
-		title: '#1 Auth',
-		body: 'body'
-	} satisfies ServerMsg;
-
-	// A repository machine holds no GitHub credential that could open a pull
-	// request, so it pushes and hands the rest to the backend.
-	it('pushes only and reports the branch on a repository machine', async () => {
-		const harness = build({ repositoryId: 'repo_1' });
-
-		harness.publish.publish.mockResolvedValue({ ok: true, prUrl: null, detail: 'pushed' });
-		await harness.route(publish);
-
-		expect(harness.publish.publish).toHaveBeenCalledWith(expect.objectContaining({ pushOnly: true }));
-		expect(sent(harness.send)).toEqual([{ type: 'queue.pushed', itemId: 'qi_1', branch: 'bosun/plan/auth/1' }]);
-	});
-
-	it('opens the pull request itself on a machine with no repository', async () => {
-		const harness = build();
-
-		await harness.route(publish);
-
-		expect(harness.publish.publish).toHaveBeenCalledWith(expect.objectContaining({ pushOnly: false }));
-		expect(sent(harness.send)).toEqual([{ type: 'queue.published', itemId: 'qi_1', prUrl: 'https://github.com/o/r/pull/1' }]);
-	});
-});
-
-describe('queue questions', () => {
+describe('line questions', () => {
 	const ask = {
-		type: 'queue.ask',
-		queueId: 'q_1',
-		askId: 'qm_1',
-		worktreePath: '/w',
-		question: 'where is it up to?',
-		state: 'Queue "Auth" — running',
+		type: 'line.ask',
+		repositoryId: 'repo_1',
+		askId: 'rm_1',
+		question: 'where is #4 up to?',
+		state: '#4 Comments — building',
 		transcript: []
 	} satisfies ServerMsg;
-
-	it('answers one', async () => {
-		const harness = build();
-
-		await harness.route(ask);
-
-		expect(harness.asks.ask).toHaveBeenCalledWith(expect.objectContaining({ askId: 'qm_1' }));
-	});
 
 	// A question is read-only and answers something a person is waiting on, so a
 	// paused machine still takes it. Pausing stops bosun dispatching work, not
@@ -460,16 +536,6 @@ describe('queue questions', () => {
 
 		await harness.route(ask);
 
-		expect(harness.asks.ask).toHaveBeenCalled();
-	});
-
-	// Its answer travels back over the socket that asked, so a question outliving
-	// that socket leaves the browser waiting on one that can never arrive.
-	it('releases outstanding questions on shutdown', async () => {
-		const harness = build();
-
-		await harness.route({ type: 'shutdown', reason: 'deleted' });
-
-		expect(harness.asks.cancelAll).toHaveBeenCalled();
+		expect(harness.asks.ask).toHaveBeenCalledWith(expect.objectContaining({ askId: 'rm_1' }));
 	});
 });

@@ -4,12 +4,14 @@ export {
 	fetchMachineOnboarding,
 	fetchRepositories,
 	fetchRepositoryConfig,
+	fetchRepositoryMessages,
 	repositoryKeys,
 	useAvailableRepositoriesQuery,
 	useGithubInstallationsQuery,
 	useMachineOnboardingQuery,
 	useRepositoriesQuery,
-	useRepositoryConfigQuery
+	useRepositoryConfigQuery,
+	useRepositoryMessagesQuery
 } from './api/repository.queries'
 export { configSource, describeConfigSource, type ConfigSource } from './lib/config-source'
 export { machinePickerLabel } from './lib/machine-label'
@@ -25,6 +27,7 @@ export {
 	OnboardingStatusSchema,
 	OnboardingStepSchema,
 	RepositoryConfigSchema,
+	RepositoryMessageSchema,
 	RepositorySchema,
 	type AvailableRepository,
 	type GithubInstallation,
@@ -36,6 +39,8 @@ export {
 	type OnboardingStatus,
 	type OnboardingStep,
 	type Repository,
-	type RepositoryConfig
+	type RepositoryConfig,
+	type RepositoryMessage
 } from './model/repository'
+export { useRepositoryAnswer } from './model/use-repository-answer'
 export { OnboardingStatusBadge } from './ui/onboarding-status-badge'

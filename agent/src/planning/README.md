@@ -20,7 +20,7 @@ GitHub and Jira halves — became either discovery or a bosun tool.
 
 ## Sessions read a fetched tree, not the machine's checkout
 
-`start`, `say` and `prepare` all resolve `services.repo.readTree()` before spawning, and its path is
+`start` and `say` both resolve `services.repo.readTree()` before spawning, and its path is
 the session's cwd. That is a checkout of the current default branch, fetched a moment earlier — not
 `config.repoPath`, which is the operator's own working copy and was never refreshed by anything.
 
@@ -29,31 +29,25 @@ against the tree it can see, and a tree that is days old answers confidently and
 `services/repo.service.md` for why the operator's checkout is not refreshed in place, and
 `prompts/shared.ts` `repoState` for what the session is told about the tree it got.
 
-## Preparation sessions
+## What a published plan carries for the plans beside it
 
-`prepare()` starts a second kind of session, from a `plan.prepare` frame. It is a planning session in
-every mechanical respect — same process, same MCP transport, same stream parser — and differs in
-three ways that matter.
+`publish_plan` sends a **footprint** for every build bullet — the schema, contracts and shared modules
+it creates or changes, and the pieces of other approved plans it consumes — and marks bullet 1 as the
+**foundation** when it holds every shared piece. The backend compares footprints deterministically when
+a plan is approved and decides from them what waits for what; no session is ever asked. That is why
+`list_plans` returns the footprints of every approved, unmerged plan in the repository: a plan written
+second says `consumes` instead of building a second copy, and waits for one bullet rather than a whole
+feature. `set_blockers` is left for the one dependency a footprint cannot say — needing another plan's
+whole feature.
 
-**Its tools act on plans other than its own.** `republish_plan` and `set_plan_blockers` take a plan
-*number*, resolved by `createPrepareDispatch` against the selection the frame carried. A number
-outside that selection is refused here as well as by the backend, which checks the preparation plan's
-own recorded scope. `set_blockers` is not in the set: it only ever names the session's own plan.
+The shape lives in `footprint.ts`, mirroring the backend's, with a description on every field because
+the model fills it in from the tool schema alone. The rules — every build bullet has one, shared pieces
+only in bullet 1, at most six build bullets — are enforced by the backend and returned as a refusal the
+session reads and republishes against; the prompt states them so the first publish usually passes.
 
-**Publishing nothing is a legitimate outcome.** If nothing is left that two or more selected plans
-both need and nobody builds, the session records whatever ordering it found and calls
-`abandon_preparation`, and the plan fails with the reason it gave. So the unpublished nudge is off
-for these sessions — nudging one that answered the question it was asked would be arguing with the
-answer. `abandon_preparation` records the reason and lets the tool call return; the failure is sent
-when the turn settles, because tearing the process down inside its own tool call kills the call.
-
-**It grills.** `plan.prepare` carries `auto`, and `preparePlans` sets it false: the session reads
-dependencies off plans rather than off implementations, and the person who selected them is the only
-one who can catch a shape it inferred wrongly from a bullet — before five plans are rewritten against
-it. `prompts/preparation.ts` blocks every publish behind that confirmation. The prompt is written
-around **"what has to exist first"** rather than "what do these plans share", because the similarity
-question cannot see a one-way dependency between two selected plans and cannot tell absent from
-present without recon; both failures were observed.
+There used to be a second kind of planning session, which rewrote several confirmed plans around a
+shared foundation plan. It is gone: the foundation is a bullet inside the plan that first needs it, so
+nothing is rewritten, nobody re-reads a plan they already signed off, and no second grill is run.
 
 ## Why the CLI and not the Agent SDK
 
@@ -81,9 +75,9 @@ sets `MCP_TOOL_TIMEOUT` for the session. Changing that constant to something a p
 breaks the entire mechanism, and it breaks it silently — the session keeps running, it just stops
 listening.
 
-## Auto mode answers `bosun_ask` for the person
+## A hands-off plan answers `bosun_ask` for the person
 
-A plan created with `auto` on runs the identical grill — same rounds, same one question at a time,
+A plan created hands-off runs the identical grill — same rounds, same one question at a time,
 same prompt — but `createAskTool` never registers a pending promise. It takes the **first** option of
 each question, which the prompt requires to be the session's own recommendation, and returns it as
 the tool result immediately.
@@ -95,7 +89,7 @@ question does not resolve on its own. Answering in the tool means the wait canno
 whatever the model does.
 
 The question is still emitted as a `plan.question` frame, carrying its answers as `autoAnswers`, and
-the backend writes both rows. So the transcript of an auto plan reads exactly like a manual one, and
+the backend writes both rows. So the transcript of a hands-off plan reads exactly like a manual one, and
 whether the plan is still waiting stays derivable from the transcript alone — a question written with
 no answer beside it is what the browser renders a prompt for.
 
@@ -172,7 +166,7 @@ interleaved.
   names every session still held, and the backend fails whatever it has marked `planning` that the
   agent did not name. That is the only thing stopping a plan sitting in `planning` forever, so an
   agent that stops sending `planIds` reintroduces exactly that bug.
-- **A session ends on sign-off, or after 24 hours.** Confirming the plan sends `plan.cancel`; nothing
+- **A session ends on approval, or after 24 hours.** Approving the plan sends `plan.cancel`; nothing
   else ends a session that is behaving. The 24-hour cap in `session.ts` is the backstop, and it is
   the same number as `MCP_TOOL_TIMEOUT` in `sessions/process.ts` on purpose: the tool call a grill
   blocks in must not be able to time out before the session holding it does. A shorter tool timeout
@@ -184,11 +178,11 @@ interleaved.
   duplicate prompt on the screen; one that repeats a question already answered is handed the answer
   back. A model that re-asks has lost the tool result — a compaction, a restarted turn — and asking
   the person again reads as the grill going in circles.
-- **A non-auto plan cannot be published before it is grilled.** `publish_plan` refuses until one
+- **A plan that is not hands-off cannot be published before it is grilled.** `publish_plan` refuses until one
   `bosun_ask` has been answered by a person, and the nudge for a turn that ended early says to keep
   grilling rather than to publish. The point of a planning session is that the plan is not the
   model's own first draft; a session that loses the thread and writes one anyway produces something
-  that looks reviewed and is not. Auto mode is exempt because its answers are the model's own by
+  that looks reviewed and is not. A hands-off plan is exempt because its answers are the model's own by
   design, and a revision is exempt because the plan it edits was already grilled into existence.
 - **Cancelling reaps the process group.** The child is spawned `detached`, so `SIGTERM` goes to the
   group and takes any subagent with it. A `claude` process outliving its session holds a port and a

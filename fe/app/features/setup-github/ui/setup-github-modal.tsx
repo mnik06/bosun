@@ -40,9 +40,9 @@ export function SetupGithubModal ({
 		<AppModal opened={opened} onClose={onClose} title="Set up GitHub" centered size="lg">
 			<Stack gap="md">
 				<Text size="sm">
-					A queue commits every bullet on a branch of its own. With <strong>gh</strong> signed in on{' '}
-					{machineName} it also pushes that branch and opens a pull request when a plan finishes.
-					Without it, queues still run — the commits simply stay local.
+					With <strong>gh</strong> signed in on {machineName}, a session there can read and push to the
+					checkout it plans in. Plans are built only on a machine with a repository attached, which
+					needs no <strong>gh</strong> at all.
 				</Text>
 
 				<Step

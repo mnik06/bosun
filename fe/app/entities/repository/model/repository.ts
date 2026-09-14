@@ -20,10 +20,21 @@ export const RepositorySchema = z.object({
 	defaultBranch: z.string(),
 	configDraft: z.string().nullable(),
 	configOnDefault: z.boolean(),
+	autoResolveConflicts: z.boolean(),
 	createdAt: z.iso.datetime()
 })
 
 export type Repository = z.infer<typeof RepositorySchema>
+
+export const RepositoryMessageSchema = z.object({
+	id: z.string(),
+	repositoryId: z.string(),
+	role: z.enum(['user', 'assistant']),
+	content: z.string(),
+	createdAt: z.iso.datetime()
+})
+
+export type RepositoryMessage = z.infer<typeof RepositoryMessageSchema>
 
 export const AvailableRepositorySchema = z.object({
 	githubRepoId: z.number(),

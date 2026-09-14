@@ -72,7 +72,7 @@ function ProfileForm ({ machine, onDone }: { machine: Machine, onDone: () => voi
 
 			<TextInput
 				label="Start command"
-				description={`How the dev stack runs. Each queue gets its own ten-port range and is told which. ${AGENT_DECIDES}`}
+				description={`How the dev stack runs. Each build gets its own ten-port range and is told which. ${AGENT_DECIDES}`}
 				placeholder="pnpm dev"
 				value={draft.startCommand ?? ''}
 				onChange={(event) => {

@@ -1,20 +1,40 @@
 import { z } from 'zod'
 
+import {
+	BuildSchema,
+	BuildSummarySchema,
+	DependencyViewSchema,
+	IntegrationSchema,
+	OverlapDecisionViewSchema,
+	PendingRunQuestionSchema,
+	PlanAmendmentSchema,
+	PlanRefSchema,
+	SliceRunSchema,
+	VerifyFindingSchema
+} from '~/entities/plan/model/build'
+import { FootprintSchema } from '~/entities/plan/model/footprint'
+import { PlanAnswerSchema, PlanQuestionSchema } from '~/entities/plan/model/question'
+
 export const PlanStatusSchema = z.enum(['planning', 'ready', 'failed'])
 
 export type PlanStatus = z.infer<typeof PlanStatusSchema>
 
 // What the plan is doing, derived by the backend from the plan row and its
-// latest queue item. Optional because this app and the backend deploy
-// separately; the badge falls back to the raw status until one has shipped.
+// latest build. Optional on the row because a plan pushed over the socket is the
+// row alone; the badge falls back to what the row can support.
 export const PlanStateSchema = z.enum([
-	'planning',
-	'drafted',
-	'confirmed',
-	'queued',
-	'running',
+	'drafting',
+	'needs_approval',
+	'scheduled',
+	'held',
+	'building',
+	'integrating',
+	'verifying',
 	'in_review',
-	'failed'
+	'merged',
+	'needs_you',
+	'failed',
+	'cancelled'
 ])
 
 export type PlanState = z.infer<typeof PlanStateSchema>
@@ -45,55 +65,37 @@ export const PlanSchema = z.object({
 	projectId: z.string(),
 	createdByUserId: z.string().nullable(),
 	machineId: z.string(),
+	repositoryId: z.string().nullable(),
 	title: z.string().nullable(),
 	bodyMd: z.string().nullable(),
 	number: z.number().int(),
 	status: PlanStatusSchema,
 	verifyInUi: z.boolean(),
-	auto: z.boolean(),
-	confirmedAt: z.iso.datetime().nullable(),
+	handsOff: z.boolean(),
+	approvedAt: z.iso.datetime().nullable(),
 	failureReason: z.string().nullable(),
 	input: z.string(),
 	state: PlanStateSchema.nullish().default(null),
 	summary: PlanSummarySchema.nullish().default(null),
 	summarisedAt: z.iso.datetime().nullish().default(null),
-	// Non-null only on a preparation plan: the plans its session was asked to
-	// rewrite. Optional because this app and the backend deploy separately.
-	preparesPlanIds: z.array(z.string()).nullish().default(null),
 	createdAt: z.iso.datetime()
 })
 
 export type Plan = z.infer<typeof PlanSchema>
 
-export const PlanBlockerRefSchema = z.object({
-	number: z.number().int(),
-	title: z.string().nullable()
-})
-
-export type PlanBlockerRef = z.infer<typeof PlanBlockerRefSchema>
-
-// Only the list carries this: a plan pushed over the socket is the row alone, so
-// a shape that expected blockers on every plan would blank them on every push.
+// Only the list carries these: a plan pushed over the socket is the row alone, so
+// a shape that expected them on every plan would blank them on every push.
 export const PlanListEntrySchema = PlanSchema.extend({
-	blockedBy: z.array(PlanBlockerRefSchema).nullish().default([])
+	build: BuildSummarySchema.nullable(),
+	reason: z.string().nullable(),
+	ownerEmail: z.string().nullable()
 })
 
 export type PlanListEntry = z.infer<typeof PlanListEntrySchema>
 
 export const PlanListSchema = z.array(PlanListEntrySchema)
 
-export const PlanQuestionSchema = z.object({
-	header: z.string(),
-	question: z.string(),
-	options: z.array(z.object({ label: z.string(), description: z.string() })),
-	multiSelect: z.boolean()
-})
-
-export type PlanQuestion = z.infer<typeof PlanQuestionSchema>
-
-export const PlanAnswerSchema = z.object({ selected: z.array(z.string()).min(1) })
-
-export type PlanAnswer = z.infer<typeof PlanAnswerSchema>
+export { PlanAnswerSchema, PlanQuestionSchema, type PlanAnswer, type PlanQuestion } from '~/entities/plan/model/question'
 
 const messageBase = {
 	id: z.string(),
@@ -131,8 +133,6 @@ export const AcSchema = z.object({
 	ordinal: z.number(),
 	implemented: z.boolean(),
 	verified: z.boolean(),
-	// Why this criterion could not be driven. Optional for the same reason every
-	// other new field here is: this app and the backend ship separately.
 	blockedReason: z.string().nullish().default(null)
 })
 
@@ -148,7 +148,10 @@ export const SliceSchema = z.object({
 	ordinal: z.number(),
 	kind: SliceKindSchema,
 	title: z.string(),
-	bodyMd: z.string().nullable()
+	bodyMd: z.string().nullable(),
+	foundation: z.boolean(),
+	footprint: FootprintSchema,
+	changedFiles: z.array(z.string()).nullable()
 })
 
 export type Slice = z.infer<typeof SliceSchema>
@@ -167,49 +170,22 @@ export const PlanDecisionSchema = z.object({
 
 export type PlanDecision = z.infer<typeof PlanDecisionSchema>
 
-// Declared here rather than borrowed from the queue slice, which this one may
-// not import. Only what the plan's execution tab renders: the queue screen shows
-// a run differently and asks for different fields.
-export const PlanRunSchema = z.object({
-	id: z.string(),
-	ordinal: z.number().int(),
-	status: z.enum(['pending', 'running', 'done', 'failed']),
-	sliceTitle: z.string(),
-	sliceKind: z.enum(['build', 'verify']),
-	activity: z.string().nullish().default(null),
-	commitSha: z.string().nullable(),
-	report: z.string().nullish().default(null),
-	failureReason: z.string().nullable(),
-	startedAt: z.iso.datetime().nullable(),
-	finishedAt: z.iso.datetime().nullable()
-})
-
-export type PlanRun = z.infer<typeof PlanRunSchema>
-
-// Null until the plan has been handed to a queue.
-export const PlanExecutionSchema = z.object({
-	queueId: z.string(),
-	queueName: z.string(),
-	item: z.object({
-		id: z.string(),
-		status: z.enum(['queued', 'running', 'done', 'failed', 'cancelled']),
-		branch: z.string().nullable(),
-		prUrl: z.string().nullable(),
-		failureReason: z.string().nullable()
-	}),
-	runs: z.array(PlanRunSchema)
-})
-
-export type PlanExecution = z.infer<typeof PlanExecutionSchema>
-
 export const PlanDetailSchema = z.object({
 	plan: PlanSchema,
-	execution: PlanExecutionSchema.nullish().default(null),
 	messages: z.array(PlanMessageSchema),
 	acs: z.array(AcSchema),
 	slices: z.array(SliceSchema),
-	blockedBy: z.array(PlanSchema),
-	decisions: z.array(PlanDecisionSchema)
+	decisions: z.array(PlanDecisionSchema),
+	build: BuildSchema.nullable(),
+	runs: z.array(SliceRunSchema),
+	dependencies: z.array(DependencyViewSchema),
+	dependents: z.array(PlanRefSchema),
+	amendments: z.array(PlanAmendmentSchema),
+	overlapDecisions: z.array(OverlapDecisionViewSchema),
+	integrations: z.array(IntegrationSchema),
+	findings: z.array(VerifyFindingSchema),
+	pendingQuestion: PendingRunQuestionSchema.nullable(),
+	reason: z.string().nullable()
 })
 
 export type PlanDetail = z.infer<typeof PlanDetailSchema>

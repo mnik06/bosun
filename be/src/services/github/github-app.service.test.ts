@@ -4,7 +4,8 @@ import {
 	normalizePrivateKey,
 	signAppJwt,
 	signInstallState,
-	verifyInstallState
+	verifyInstallState,
+	verifyWebhookSignature
 } from 'src/services/github/github-app.service';
 
 const { privateKey, publicKey } = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
@@ -57,5 +58,24 @@ describe('install state', () => {
 		expect(
 			verifyInstallState({ clientSecret: 'other', state, userId: 'u_1', projectId: 'prj_1', now: NOW })
 		).toBe(false);
+	});
+});
+
+// An unsigned merge event would mark a plan merged and start every plan stacked on
+// it, so a delivery is only as trusted as its signature over the exact bytes sent.
+describe('verifyWebhookSignature', () => {
+	const secret = 'webhook-secret-of-some-length';
+	const payload = Buffer.from('{"action":"closed","pull_request":{"merged":true}}');
+	const signed = `sha256=${crypto.createHmac('sha256', secret).update(payload).digest('hex')}`;
+
+	it('accepts a delivery signed with the secret', () => {
+		expect(verifyWebhookSignature({ secret, payload, signature: signed })).toBe(true);
+	});
+
+	it('refuses a missing, malformed, foreign or re-serialized signature', () => {
+		expect(verifyWebhookSignature({ secret, payload, signature: undefined })).toBe(false);
+		expect(verifyWebhookSignature({ secret, payload, signature: 'sha1=abc' })).toBe(false);
+		expect(verifyWebhookSignature({ secret: 'another-secret-entirely', payload, signature: signed })).toBe(false);
+		expect(verifyWebhookSignature({ secret, payload: Buffer.from('{"action": "closed"}'), signature: signed })).toBe(false);
 	});
 });

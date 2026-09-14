@@ -78,7 +78,7 @@ describe('setupChecklist', () => {
 	})
 
 	it('asks for inputs while any are missing, and waits for them before verify', () => {
-		const missing = [{ kind: 'env' as const, path: 'be', key: 'DATABASE_URL', why: 'db', evidence: 'be/.env.example' }]
+		const missing = [{ kind: 'env' as const, path: 'be', key: 'DATABASE_URL', why: 'db', evidence: 'be/.env.example', optional: false }]
 		const result = states({
 			machine: { status: 'online', capabilities: green, repositoryId: 'repo_1' },
 			repository: { ...repository, configDraft: 'version: 1' },

@@ -1,6 +1,7 @@
 import WebSocket from 'ws';
 import { type AskSessions } from '../ask/session';
 import { type ExecutionSessions } from '../execution/session';
+import { type IntegrationSessions } from '../integration/session';
 import { type OnboardingSessions } from '../onboarding/session';
 import { type PlanningSessions } from '../planning/session';
 import { type SummarySessions } from '../summary/session';
@@ -47,9 +48,13 @@ export interface RouterDeps {
 	state: AgentState;
 	sessions: PlanningSessions;
 	executions: ExecutionSessions;
+	integrations: IntegrationSessions;
 	onboarding: OnboardingSessions;
 	summaries: SummarySessions;
 	asks: AskSessions;
+	// Where outcomes that outlive this connection go: a worktree readied while the
+	// socket was replaced still has to reach the backend.
+	sink: (message: AgentMsg) => void;
 	announce: (reason: 'connect' | 'refresh' | 'change') => Promise<void>;
 	onUpgrade: (opts: { version: string; downloadBaseUrl: string; force: boolean }) => Promise<void>;
 }
@@ -127,34 +132,6 @@ async function attachRepository(deps: RouterDeps, msg: Extract<ServerMsg, { type
 	await deps.announce('change');
 }
 
-async function publish(deps: RouterDeps, msg: Extract<ServerMsg, { type: 'queue.publish' }>): Promise<void> {
-	const pushOnly = deps.services.workspace.repositoryId() !== null;
-	const result = await deps.services.publish.publish({
-		worktreePath: msg.worktreePath,
-		branch: msg.branch,
-		baseRef: msg.baseRef,
-		title: msg.title,
-		body: msg.body,
-		pushOnly
-	});
-
-	console.log(`publish ${msg.branch}: ${result.detail}`);
-
-	let reply: AgentMsg;
-
-	if (!result.ok) {
-		reply = { type: 'queue.publish.error', itemId: msg.itemId, message: result.detail };
-	} else if (pushOnly) {
-		reply = { type: 'queue.pushed', itemId: msg.itemId, branch: msg.branch };
-	} else {
-		reply = result.prUrl
-			? { type: 'queue.published', itemId: msg.itemId, prUrl: result.prUrl }
-			: { type: 'queue.publish.error', itemId: msg.itemId, message: result.detail };
-	}
-
-	deps.socket.send(JSON.stringify(reply));
-}
-
 function refusePaused(deps: RouterDeps, reply: AgentMsg): boolean {
 	if (!deps.state.paused) {
 		return false;
@@ -166,6 +143,53 @@ function refusePaused(deps: RouterDeps, reply: AgentMsg): boolean {
 }
 
 const PAUSED = 'this machine is paused';
+
+async function routeBuildFrame(
+	deps: RouterDeps,
+	msg: Extract<ServerMsg, { type: `build.${string}` | `integrate.${string}` | 'line.ask' }>
+): Promise<void> {
+	switch (msg.type) {
+		case 'build.worktree.ensure':
+			if (refusePaused(deps, { type: 'build.worktree.error', buildId: msg.buildId, message: PAUSED })) {
+				return;
+			}
+
+			await ensureWorktree({ services: deps.services, msg, send: deps.sink });
+
+			return;
+
+		case 'build.worktree.remove':
+			await deps.services.worktree.remove(msg.slug);
+			deps.services.setupSteps.forget(msg.slug);
+			console.log(`worktree ${msg.slug}: removed`);
+
+			return;
+
+		case 'build.summarize':
+			await deps.summaries.start(msg);
+
+			return;
+
+		case 'integrate.start':
+			if (refusePaused(deps, { type: 'integrate.needs_you', integrationId: msg.integrationId, reason: 'error', detail: PAUSED })) {
+				return;
+			}
+
+			await deps.integrations.start(msg);
+
+			return;
+
+		case 'integrate.cancel':
+			deps.integrations.cancel(msg.integrationId);
+
+			return;
+
+		// A question is read-only and answers somebody who is waiting, so a paused
+		// machine still takes it: pausing stops dispatching work, not asking.
+		case 'line.ask':
+			await deps.asks.ask(msg);
+	}
+}
 
 // A switch rather than a chain with a fallthrough: the chain's last branch was
 // `shutdown`, so every frame type added to the union terminated the agent until
@@ -238,23 +262,7 @@ export async function routeServerFrame(deps: RouterDeps, msg: ServerMsg): Promis
 				planId: msg.planId,
 				input: msg.input,
 				verifyInUi: msg.verifyInUi,
-				auto: msg.auto,
-				notes: msg.notes,
-				configDraft: msg.configDraft
-			});
-
-			return;
-
-		case 'plan.prepare':
-			if (refusePaused(deps, { type: 'plan.error', planId: msg.planId, message: PAUSED })) {
-				return;
-			}
-
-			await deps.sessions.prepare({
-				planId: msg.planId,
-				planNumber: msg.planNumber,
-				auto: msg.auto,
-				plans: msg.plans,
+				handsOff: msg.handsOff,
 				notes: msg.notes,
 				configDraft: msg.configDraft
 			});
@@ -301,42 +309,20 @@ export async function routeServerFrame(deps: RouterDeps, msg: ServerMsg): Promis
 
 			return;
 
-		case 'queue.ask':
-			await deps.asks.ask(msg);
-
-			return;
-
-		case 'queue.summarize':
-			await deps.summaries.start(msg);
-
-			return;
-
-		case 'queue.publish':
-			await publish(deps, msg);
-
-			return;
-
-		case 'queue.worktree.ensure':
-			await ensureWorktree({
-				services: deps.services,
-				msg,
-				send: (message) => {
-					deps.socket.send(JSON.stringify(message));
-				}
-			});
-
-			return;
-
-		case 'queue.worktree.remove':
-			await deps.services.worktree.remove(msg.slug);
-			deps.services.setupSteps.forget(msg.slug);
-			console.log(`worktree ${msg.slug}: removed`);
+		case 'build.worktree.ensure':
+		case 'build.worktree.remove':
+		case 'build.summarize':
+		case 'integrate.start':
+		case 'integrate.cancel':
+		case 'line.ask':
+			await routeBuildFrame(deps, msg);
 
 			return;
 
 		case 'shutdown':
 			deps.sessions.cancelAll();
 			deps.executions.cancelAll();
+			deps.integrations.cancelAll();
 			deps.onboarding.cancelAll();
 			deps.asks.cancelAll();
 			await deps.services.stack.downAll();

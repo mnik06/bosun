@@ -8,7 +8,8 @@ import { type AgentMsg } from '../protocol';
 //
 // A question is settling for the same reason a result is: it is the session
 // stopping to wait for a person, and losing it leaves a grill blocked on a tool
-// call the browser was never told about.
+// call the browser was never told about. A worktree being ready is settling too:
+// the build waits on it before its first bullet, and nothing asks twice.
 const SETTLING = new Set([
 	'exec.done',
 	'exec.error',
@@ -17,7 +18,11 @@ const SETTLING = new Set([
 	'plan.error',
 	'plan.question',
 	'onboarding.done',
-	'onboarding.error'
+	'onboarding.error',
+	'build.worktree.ready',
+	'build.worktree.error',
+	'integrate.done',
+	'integrate.needs_you'
 ]);
 
 export interface FrameSink {
@@ -27,6 +32,7 @@ export interface FrameSink {
 	pendingRunIds(): string[];
 	pendingPlanIds(): string[];
 	pendingOnboardingRunIds(): string[];
+	pendingIntegrationIds(): string[];
 }
 
 // An execution session outlives the socket it was dispatched over: `claude` keeps
@@ -75,8 +81,7 @@ export function createFrameSink(): FrameSink {
 		// Reported on `hello` alongside the live sessions. A bullet that finished
 		// while the connection was down has no session left to hold it, but its
 		// result is parked right here — and a backend that settled it as stranded
-		// would pause the queue over a plan that in fact landed, and hand the same
-		// bullet out again on resume.
+		// would put back a bullet that in fact landed and hand it out again.
 		// By type, not by field: an onboarding outcome carries a `runId` too, and a
 		// bullet id the backend has never heard of would be read as a run still held.
 		pendingRunIds(): string[] {
@@ -89,6 +94,10 @@ export function createFrameSink(): FrameSink {
 			return pending.flatMap((message) =>
 				message.type.startsWith('onboarding.') && 'runId' in message ? [message.runId] : []
 			);
+		},
+
+		pendingIntegrationIds(): string[] {
+			return pending.flatMap((message) => ('integrationId' in message ? [message.integrationId] : []));
 		},
 
 		// The same argument for a grill: a session that published and settled while

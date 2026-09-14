@@ -1,118 +1,122 @@
+import { type DependencyView } from 'src/api/routes/schemas/plans/PlanRespSchemas';
+import { type LineDeps } from 'src/controllers/line/line-deps';
+import { verifyLine } from 'src/controllers/line/schedule';
+import { dependencyReleased } from 'src/controllers/line/shared/dependencies';
+import { loadRepositorySnapshot } from 'src/controllers/line/shared/line-snapshot';
+import { overlapViews } from 'src/controllers/line/shared/overlap-views';
+import { planStateOf } from 'src/controllers/line/shared/plan-state';
+import { describeReason } from 'src/controllers/line/shared/reason';
 import { getOwnedPlan } from 'src/controllers/plans/shared/plan-access';
-import { planStateOf } from 'src/controllers/plans/shared/plan-state';
-import { type AcRepo } from 'src/repos/plans/ac.repo';
-import { type PlanBlockerRepo } from 'src/repos/plans/plan-blocker.repo';
-import { type PlanDecisionRepo } from 'src/repos/plans/plan-decision.repo';
-import { type PlanMessageRepo } from 'src/repos/plans/plan-message.repo';
-import { type PlanRepo } from 'src/repos/plans/plan.repo';
-import { type SliceRepo } from 'src/repos/plans/slice.repo';
-import { type QueueItemRepo } from 'src/repos/queues/queue-item.repo';
-import { type QueueRepo } from 'src/repos/queues/queue.repo';
-import { type SliceRunRepo } from 'src/repos/queues/slice-run.repo';
-import { type RunActivityService } from 'src/services/runs/run-activity.service';
-import { type PlanState } from 'src/types/PlanStateSchema';
-import { type QueueItem, type SliceRunDetail } from 'src/types/QueueSchema';
-import {
-	type Ac,
-	type Plan,
-	type PlanDecision,
-	type PlanMessage,
-	type Slice
-} from 'src/types/PlanSchema';
+import { ACTIVE_BUILD_STATUSES, type Build, type PlanDependency, type SliceRun } from 'src/types/BuildSchema';
+import { type Plan, type Slice } from 'src/types/PlanSchema';
 
-export interface PlanExecution {
-	queueId: string;
-	queueName: string;
-	item: QueueItem;
-	runs: SliceRunDetail[];
-}
-
-// The runs are read here rather than left to the queue screen because a plan is
-// the thing a person follows: having to work out which queue picked it up before
-// you can see whether it built is a lookup the product should be doing.
-async function executionOf(
-	opts: {
-		queueRepo: QueueRepo;
-		queueItemRepo: QueueItemRepo;
-		sliceRunRepo: SliceRunRepo;
-		runActivity: RunActivityService;
-	},
-	plan: { id: string; slices: Slice[] }
-): Promise<PlanExecution | null> {
-	const item = (await opts.queueItemRepo.latestForPlans([plan.id])).get(plan.id);
-
-	if (!item) {
-		return null;
-	}
-
-	const [queue, runs] = await Promise.all([
-		opts.queueRepo.getById(item.queueId),
-		opts.sliceRunRepo.listForItem(item.id)
+async function dependencyViews(deps: LineDeps, opts: { dependencies: PlanDependency[] }): Promise<DependencyView[]> {
+	const providerIds = [...new Set(opts.dependencies.map((dependency) => dependency.providerPlanId))];
+	const [plans, latest, slices] = await Promise.all([
+		deps.planRepo.listByIds(providerIds),
+		deps.buildRepo.latestForPlans(providerIds),
+		deps.sliceRepo.listByPlans(providerIds)
 	]);
+	const runs = await deps.sliceRunRepo.listForBuilds([...latest.values()].map((build) => build.id));
+	const plansById = new Map(plans.map((plan) => [plan.id, plan]));
+	const slicesById = new Map(slices.map((slice) => [slice.id, slice]));
 
-	if (!queue) {
-		return null;
-	}
+	return opts.dependencies.map((dependency) => {
+		const plan = plansById.get(dependency.providerPlanId);
+		const build = latest.get(dependency.providerPlanId) ?? null;
+		const slice = dependency.providerSliceId === null ? undefined : slicesById.get(dependency.providerSliceId);
 
-	const byId = new Map(plan.slices.map((slice) => [slice.id, slice]));
-
-	return {
-		queueId: queue.id,
-		queueName: queue.name,
-		item,
-		runs: runs.map((run) => ({
-			...run,
-			sliceTitle: byId.get(run.sliceId)?.title ?? 'a bullet',
-			activity: opts.runActivity.label(run.id),
-			sliceKind: byId.get(run.sliceId)?.kind ?? 'build'
-		}))
-	};
-}
-
-export async function getPlanDetail(opts: {
-	planRepo: PlanRepo;
-	planMessageRepo: PlanMessageRepo;
-	planBlockerRepo: PlanBlockerRepo;
-	planDecisionRepo: PlanDecisionRepo;
-	acRepo: AcRepo;
-	sliceRepo: SliceRepo;
-	queueRepo: QueueRepo;
-	queueItemRepo: QueueItemRepo;
-	sliceRunRepo: SliceRunRepo;
-	runActivity: RunActivityService;
-	id: string;
-	projectId: string;
-}): Promise<{
-	plan: Plan & { state: PlanState };
-	execution: PlanExecution | null;
-	messages: PlanMessage[];
-	acs: Ac[];
-	slices: Slice[];
-	blockedBy: Plan[];
-	decisions: PlanDecision[];
-}> {
-	const plan = await getOwnedPlan({
-		planRepo: opts.planRepo,
-		id: opts.id,
-		projectId: opts.projectId
+		return {
+			...dependency,
+			providerNumber: plan?.number ?? 0,
+			providerTitle: plan?.title ?? null,
+			providerSliceOrdinal: slice?.ordinal ?? null,
+			providerSliceTitle: slice?.title ?? null,
+			released: dependencyReleased({
+				dependency,
+				provider: plan
+					? { planId: plan.id, number: plan.number, title: plan.title, build, runs: build ? runs.filter((run) => run.buildId === build.id) : [] }
+					: undefined
+			})
+		};
 	});
-	const [messages, acs, slices, blockedBy, decisions] = await Promise.all([
-		opts.planMessageRepo.listByPlan(plan.id),
-		opts.acRepo.listByPlan(plan.id),
-		opts.sliceRepo.listByPlan(plan.id),
-		opts.planBlockerRepo.listBlockers(plan.id),
-		opts.planDecisionRepo.listByPlan(plan.id)
-	]);
+}
 
-	const execution = await executionOf(opts, { id: plan.id, slices });
+async function reasonFor(deps: LineDeps, build: Build | null): Promise<string | null> {
+	if (build === null) {
+		return null;
+	}
+
+	if (!ACTIVE_BUILD_STATUSES.includes(build.status)) {
+		return build.failureReason;
+	}
+
+	const snapshot = await loadRepositorySnapshot(deps, { repositoryId: build.repositoryId });
+	const state = snapshot?.states.find((entry) => entry.build.id === build.id);
+
+	return snapshot && state ? describeReason({ state, snapshot, verifyLine: verifyLine(snapshot) }) : null;
+}
+
+function runDetails(opts: { runs: SliceRun[]; slices: Slice[]; deps: LineDeps }) {
+	const byId = new Map(opts.slices.map((slice) => [slice.id, slice]));
+
+	return opts.runs.map((run) => ({
+		...run,
+		sliceTitle: byId.get(run.sliceId)?.title ?? 'a bullet',
+		sliceKind: byId.get(run.sliceId)?.kind ?? ('build' as const),
+		activity: opts.deps.runActivity.label(run.id)
+	}));
+}
+
+async function dependents(deps: LineDeps, plan: Plan) {
+	const edges = await deps.planDependencyRepo.listByProviders([plan.id]);
+	const plans = await deps.planRepo.listByIds([...new Set(edges.map((edge) => edge.planId))]);
+
+	return plans.map((entry) => ({ planId: entry.id, number: entry.number, title: entry.title }));
+}
+
+// A plan is the thing a person follows, so its page carries everything its build
+// did — runs, integrations, findings — beside what it waits on and what bosun
+// changed about it to fit the others.
+export async function getPlanDetail(deps: LineDeps, opts: { id: string; projectId: string }) {
+	const plan = await getOwnedPlan({ planRepo: deps.planRepo, id: opts.id, projectId: opts.projectId });
+	const [messages, acs, slices, decisions, amendments, decisionsOpen, dependencies, latest] = await Promise.all([
+		deps.planMessageRepo.listByPlan(plan.id),
+		deps.acRepo.listByPlan(plan.id),
+		deps.sliceRepo.listByPlan(plan.id),
+		deps.planDecisionRepo.listByPlan(plan.id),
+		deps.planAmendmentRepo.listForPlan(plan.id),
+		deps.overlapDecisionRepo.listForPlan(plan.id),
+		deps.planDependencyRepo.listForPlan(plan.id),
+		deps.buildRepo.latestForPlans([plan.id])
+	]);
+	const build = latest.get(plan.id) ?? null;
+	const [runs, integrations, findings] = build
+		? await Promise.all([
+			deps.sliceRunRepo.listForBuild(build.id),
+			deps.integrationRepo.listForBuild(build.id),
+			deps.verifyFindingRepo.listForBuild(build.id)
+		])
+		: [[], [], []];
+	const asking = runs.find((run) => run.questionId !== null && run.question !== null);
 
 	return {
-		plan: { ...plan, state: planStateOf({ plan, item: execution?.item ?? null }) },
-		execution,
+		plan: { ...plan, state: planStateOf({ plan, build }) },
 		messages,
 		acs,
 		slices,
-		blockedBy,
-		decisions
+		decisions,
+		build,
+		runs: runDetails({ runs, slices, deps }),
+		dependencies: await dependencyViews(deps, { dependencies }),
+		dependents: await dependents(deps, plan),
+		amendments,
+		overlapDecisions: await overlapViews(deps, { decisions: decisionsOpen }),
+		integrations,
+		findings,
+		pendingQuestion: asking
+			? { runId: asking.id, questionId: asking.questionId!, questions: asking.question!, askedAt: asking.questionAskedAt, released: asking.status !== 'running' }
+			: null,
+		reason: await reasonFor(deps, build)
 	};
 }

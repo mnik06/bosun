@@ -3,7 +3,7 @@ import os from 'os';
 import path from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { getExecService } from '../services/exec.service';
-import { commitMessageFor, getCommitService, isNothingToCommit } from './commit';
+import { commitMessageFor, getCommitService, isNothingToCommit, mergeBranches } from './commit';
 
 const exec = getExecService();
 
@@ -88,9 +88,8 @@ describe('cleanTree', () => {
 		expect(await git(worktree, ['rev-parse', 'HEAD'])).toBe(before);
 	});
 
-	// Retrying one bullet of an older plan is the case: the queue has moved the
-	// worktree to a later plan's branch since, and a bullet that ran on whatever
-	// was checked out would commit into the wrong pull request.
+	// A bullet that ran on whatever was checked out would commit into the wrong
+	// pull request the day anything else moved the worktree.
 	it('checks out the branch the bullet belongs to', async () => {
 		await git(worktree, ['checkout', '-b', 'bosun/plan/q/1-first']);
 		fs.writeFileSync(path.join(worktree, 'first-plan.txt'), 'plan one\n');
@@ -167,7 +166,7 @@ describe('commitAll', () => {
 });
 
 describe('the plan branch on the remote', () => {
-	const branch = 'bosun/plan/q/1-first';
+	const branch = 'bosun/plan/1-first';
 	let root: string;
 	let worktree: string;
 	let other: string;
@@ -212,8 +211,8 @@ describe('the plan branch on the remote', () => {
 		await git(other, ['push', 'origin', branch]);
 	}
 
-	// The queue this was found on: a commit landed on the pushed plan branch while
-	// the worktree kept building, and the push at the end was refused.
+	// Found on a real plan: a commit landed on the pushed plan branch while the
+	// worktree kept building, and the push at the end was refused.
 	it('brings in what the remote gained, so the push is a fast-forward', async () => {
 		await git(worktree, ['checkout', '-b', branch]);
 		await commitFile(worktree, 'slice-one.txt', 'one\n');
@@ -236,10 +235,13 @@ describe('the plan branch on the remote', () => {
 		await commitFile(other, 'earlier-run.txt', 'pushed before\n');
 		await git(other, ['push', 'origin', branch]);
 
-		const started = await getCommitService({ exec }).startBranch({
+		const started = await getCommitService({ exec }).startBuildBranch({
 			worktreePath: worktree,
 			branch,
-			baseRef: 'main'
+			baseRef: 'main',
+			fresh: true,
+			startFrom: null,
+			mergeIn: []
 		});
 
 		expect(started.ok).toBe(true);
@@ -267,5 +269,155 @@ describe('the plan branch on the remote', () => {
 			false
 		);
 		expect(fs.readFileSync(path.join(worktree, 'shared.txt'), 'utf8')).toBe('mine\n');
+	});
+});
+
+describe('a stacked plan', () => {
+	const provider = 'bosun/plan/3-avatars';
+	const second = 'bosun/plan/5-invites';
+	const dependent = 'bosun/plan/4-comments';
+	let root: string;
+	let worktree: string;
+	let other: string;
+
+	async function identify(cwd: string) {
+		await git(cwd, ['config', 'user.email', 'a@b.c']);
+		await git(cwd, ['config', 'user.name', 'Test']);
+	}
+
+	async function commitFile(cwd: string, file: string, content: string) {
+		fs.writeFileSync(path.join(cwd, file), content);
+		await git(cwd, ['add', '-A']);
+		await git(cwd, ['commit', '-m', file]);
+	}
+
+	beforeEach(async () => {
+		root = fs.mkdtempSync(path.join(os.tmpdir(), 'bosun-stack-'));
+		worktree = path.join(root, 'worktree');
+		other = path.join(root, 'other');
+
+		await git(root, ['init', '--bare', '-b', 'main', 'remote.git']);
+		await git(root, ['init', '-b', 'main', 'worktree']);
+		await identify(worktree);
+		await git(worktree, ['remote', 'add', 'origin', path.join(root, 'remote.git')]);
+		await commitFile(worktree, 'base.txt', 'base\n');
+		await git(worktree, ['push', '-u', 'origin', 'main']);
+		await git(root, ['clone', path.join(root, 'remote.git'), 'other']);
+		await identify(other);
+	});
+
+	afterEach(() => {
+		fs.rmSync(root, { recursive: true, force: true });
+	});
+
+	async function pushProvider(name: string, files: string[]): Promise<string[]> {
+		const shas: string[] = [];
+
+		await git(other, ['checkout', '-B', name, 'origin/main']);
+
+		for (const file of files) {
+			await commitFile(other, file, `${file}\n`);
+			shas.push(await git(other, ['rev-parse', 'HEAD']));
+		}
+
+		await git(other, ['push', '-f', 'origin', name]);
+
+		return shas;
+	}
+
+	// The bug this replaced: a dependent was cut from the base, which does not hold
+	// the provider's work until somebody merges it.
+	it('starts from the provider commit the dependency was satisfied by, not from the base', async () => {
+		const [foundation] = await pushProvider(provider, ['foundation.txt', 'later.txt']);
+
+		const started = await getCommitService({ exec }).startBuildBranch({
+			worktreePath: worktree,
+			branch: dependent,
+			baseRef: 'main',
+			fresh: true,
+			startFrom: foundation!,
+			mergeIn: []
+		});
+
+		expect(started.ok).toBe(true);
+		expect(await git(worktree, ['rev-parse', 'HEAD'])).toBe(foundation);
+		expect(fs.existsSync(path.join(worktree, 'foundation.txt'))).toBe(true);
+		expect(fs.existsSync(path.join(worktree, 'later.txt'))).toBe(false);
+	});
+
+	it('merges every provider it names into its starting point', async () => {
+		await pushProvider(provider, ['avatars.txt']);
+		await pushProvider(second, ['invites.txt']);
+
+		const started = await getCommitService({ exec }).startBuildBranch({
+			worktreePath: worktree,
+			branch: dependent,
+			baseRef: 'main',
+			fresh: true,
+			startFrom: null,
+			mergeIn: [provider, second]
+		});
+
+		expect(started.ok).toBe(true);
+		expect(fs.existsSync(path.join(worktree, 'avatars.txt'))).toBe(true);
+		expect(fs.existsSync(path.join(worktree, 'invites.txt'))).toBe(true);
+	});
+
+	// Before each bullet a stacked plan brings in what its provider gained, and a
+	// provider already contained costs nothing but the fetch.
+	it('brings in what a provider gained since, and nothing twice', async () => {
+		await pushProvider(provider, ['avatars.txt']);
+		await getCommitService({ exec }).startBuildBranch({
+			worktreePath: worktree,
+			branch: dependent,
+			baseRef: 'main',
+			fresh: true,
+			startFrom: null,
+			mergeIn: [provider]
+		});
+		await git(other, ['checkout', provider]);
+		await commitFile(other, 'avatars-v2.txt', 'more\n');
+		await git(other, ['push', 'origin', provider]);
+
+		const merged = await mergeBranches({ exec, worktreePath: worktree, branches: [provider] });
+		const again = await mergeBranches({ exec, worktreePath: worktree, branches: [provider] });
+
+		expect(merged.ok).toBe(true);
+		expect(fs.existsSync(path.join(worktree, 'avatars-v2.txt'))).toBe(true);
+		expect(again.detail).toBe('providers already contained');
+	});
+
+	it('refuses a provider it conflicts with and leaves no merge in progress', async () => {
+		await pushProvider(provider, ['shared.txt']);
+		await git(worktree, ['checkout', '-b', dependent]);
+		fs.writeFileSync(path.join(worktree, 'shared.txt'), 'mine\n');
+		await git(worktree, ['add', '-A']);
+		await git(worktree, ['commit', '-m', 'mine']);
+
+		const merged = await mergeBranches({ exec, worktreePath: worktree, branches: [provider] });
+
+		expect(merged.ok).toBe(false);
+		expect(merged.detail).toContain(`origin/${provider}`);
+		expect((await exec.run('git', ['-C', worktree, 'rev-parse', '-q', '--verify', 'MERGE_HEAD'], {})).ok).toBe(false);
+	});
+
+	// A build resuming after a hold keeps commits a failed push left only here; cut
+	// again from the remote, they would be gone.
+	it('keeps a resuming build\'s own commits', async () => {
+		await git(worktree, ['checkout', '-b', dependent]);
+		await commitFile(worktree, 'unpushed.txt', 'only here\n');
+		await git(worktree, ['checkout', 'main']);
+
+		const started = await getCommitService({ exec }).startBuildBranch({
+			worktreePath: worktree,
+			branch: dependent,
+			baseRef: 'main',
+			fresh: false,
+			startFrom: null,
+			mergeIn: []
+		});
+
+		expect(started.ok).toBe(true);
+		expect(fs.existsSync(path.join(worktree, 'unpushed.txt'))).toBe(true);
 	});
 });

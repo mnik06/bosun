@@ -12,8 +12,8 @@ export const ProjectProfileSchema = z.object({
 	// Run once when a worktree is created. A fresh worktree has no node_modules.
 	setupCommand: z.string().nullable().default(null),
 	migrationCommand: z.string().nullable().default(null),
-	// Started by the verify bullet when it needs something to drive. `{port}` is
-	// substituted with the queue's own port base, so two queues on one machine do
+	// Started by a verify drive when it needs something to drive. `{port}` is
+	// substituted with the build's own port base, so two builds on one machine do
 	// not fight over a listener.
 	startCommand: z.string().nullable().default(null),
 	// The path to them, never the credentials. They stay in the repository or on

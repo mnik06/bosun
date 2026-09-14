@@ -13,7 +13,7 @@ function Line ({ label, value }: { label: string, value: string | null }) {
 	)
 }
 
-// Shown as they land rather than collected at the end. A queue running overnight
+// Shown as they land rather than collected at the end. A build running overnight
 // is watched by somebody who wants to know what it decided while it decides it,
 // not by somebody waiting for a pull request to find out.
 export function PlanDecisions ({ decisions }: { decisions: PlanDecision[] }) {

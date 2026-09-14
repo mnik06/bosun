@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createFrameSink } from './frame-sink';
 import { type AgentMsg } from '../protocol';
 
-const DONE = { type: 'exec.done', runId: 'sr_1', commitSha: 'abc', report: '' } as AgentMsg;
+const DONE = { type: 'exec.done', runId: 'sr_1', commitSha: 'abc', report: '', changedFiles: [], pushed: true, pushError: null } as AgentMsg;
 const ERROR = { type: 'exec.error', runId: 'sr_1', message: 'x' } as AgentMsg;
 const TEXT = { type: 'exec.text', runId: 'sr_1', delta: 'hello' } as AgentMsg;
 
@@ -63,8 +63,7 @@ describe('createFrameSink', () => {
 	});
 
 	// Reported as held on `hello`. Without it the backend settles the run as
-	// stranded, pauses the queue over a bullet that in fact landed, and hands the
-	// same bullet out again on resume.
+	// stranded and hands out again a bullet that in fact landed.
 	it('reports the runs whose results are parked', () => {
 		const sink = createFrameSink();
 
@@ -80,6 +79,17 @@ describe('createFrameSink', () => {
 		sink.send(DONE);
 		sink.attach(vi.fn());
 
+		expect(sink.pendingRunIds()).toEqual([]);
+	});
+
+	// Named in `hello` as held. An integration that pushed while the backend was
+	// away would otherwise be put back and run again over a branch that moved.
+	it('reports the integrations whose results are parked, apart from runs', () => {
+		const sink = createFrameSink();
+
+		sink.send({ type: 'integrate.needs_you', integrationId: 'int_1', reason: 'checks', detail: 'red' } as AgentMsg);
+
+		expect(sink.pendingIntegrationIds()).toEqual(['int_1']);
 		expect(sink.pendingRunIds()).toEqual([]);
 	});
 

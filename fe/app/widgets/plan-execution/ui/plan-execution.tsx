@@ -1,161 +1,96 @@
-import { Alert, Anchor, Badge, Group, Loader, Spoiler, Stack, Text, ThemeIcon } from '@mantine/core'
-import { Check, Circle, Loader as LoaderIcon, X } from 'lucide-react'
+import { Alert, Group, Loader, Stack, Stepper, Text } from '@mantine/core'
 
-import type { PlanExecution, PlanRun } from '~/entities/plan'
-import { RetryVerifyButton } from '~/features/retry-verify'
-import { formatRelativeTime } from '~/shared/lib'
-import { ChangeMap } from '~/widgets/plan-execution/ui/change-map'
+import { RunRow, useIntegrationActivity, useRunActivity, type PlanDetail, type SliceRun } from '~/entities/plan'
+import { BuildActionButton } from '~/features/control-build'
+import { executionStep } from '~/widgets/plan-execution/lib/step'
 
-const RUN_ICON: Record<PlanRun['status'], { color: string, icon: React.ReactNode }> = {
-	pending: { color: 'gray', icon: <Circle size={11} /> },
-	running: { color: 'blue', icon: <LoaderIcon size={11} color="white" /> },
-	done: { color: 'green', icon: <Check size={11} /> },
-	failed: { color: 'red', icon: <X size={11} /> }
+// Build bullets in the order they build, then every verify session in the order it
+// ran — a fix-again is a second fix, not a replacement of the first.
+function orderedRuns (runs: SliceRun[]): SliceRun[] {
+	const bullets = runs.filter((run) => run.phase === null).sort((a, b) => a.ordinal - b.ordinal)
+	const phases = runs.filter((run) => run.phase !== null).sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+
+	return [...bullets, ...phases]
 }
 
-function RunRow ({ run }: { run: PlanRun }) {
-	const { color, icon } = RUN_ICON[run.status]
+function IntegratingLine ({ detail }: { detail: PlanDetail }) {
+	const activity = useIntegrationActivity()
+	const running = detail.integrations.find((integration) => integration.status === 'running')
 
-	return (
-		<Group gap="xs" align="start" wrap="nowrap">
-			<ThemeIcon color={color} size={18} radius="xl" mt={2}>
-				{icon}
-			</ThemeIcon>
-
-			<div className="min-w-0">
-				<Text size="sm">
-					{run.ordinal}. {run.sliceTitle}
-					{run.sliceKind === 'verify' ? (
-						<Text component="span" size="xs" c="dimmed">
-							{' '}
-							· verify
-						</Text>
-					) : null}
-				</Text>
-
-				{run.status === 'running' && run.activity != null ? (
-					<Text size="xs" c="dimmed">
-						{run.activity}
-					</Text>
-				) : null}
-
-				{run.commitSha === null ? null : (
-					<Text size="xs" c="dimmed" className="font-mono">
-						{run.commitSha.slice(0, 8)}
-					</Text>
-				)}
-
-				{run.failureReason === null ? null : (
-					<Text size="xs" c="red">
-						{run.failureReason}
-					</Text>
-				)}
-
-				{/* The session's own account of what it did. On a failed gate it is the
-				    only thing that says why, so it is open rather than behind a click. */}
-				{run.report == null ? null : (
-					<Spoiler
-						maxHeight={run.status === 'failed' ? 240 : 0}
-						showLabel="Show what the session reported"
-						hideLabel="Hide"
-						styles={{ control: { fontSize: 'var(--mantine-font-size-xs)' } }}
-					>
-						<Text size="xs" c="dimmed" className="whitespace-pre-wrap">
-							{run.report}
-						</Text>
-					</Spoiler>
-				)}
-			</div>
+	return running === undefined ? null : (
+		<Group gap="xs">
+			<Loader size={12} />
+			<Text size="sm" c="dimmed">
+				Integrating onto {running.onto}: {activity[running.id] ?? 'starting'}
+			</Text>
 		</Group>
 	)
 }
 
-export function PlanExecutionPanel ({
-	execution,
-	summary,
-	summarisedAt
-}: {
-	execution: PlanExecution | null
-	summary: React.ComponentProps<typeof ChangeMap>['summary'] | null
-	summarisedAt: string | null
-}) {
-	if (execution === null) {
+export function PlanExecution ({ detail }: { detail: PlanDetail }) {
+	const activity = useRunActivity()
+	const { build } = detail
+
+	if (build === null) {
 		return (
 			<Text size="sm" c="dimmed">
-				Nothing has run yet. Push this plan to a queue and its bullets appear here as they go.
+				Nothing has run yet. Approve the plan and its bullets appear here as they build.
 			</Text>
 		)
 	}
 
-	const finished = execution.item.status === 'done'
+	const bullets = detail.runs.filter((run) => run.phase === null)
+	const step = executionStep({
+		status: build.status,
+		bulletsDone: bullets.filter((run) => run.status === 'done').length,
+		bulletsTotal: bullets.filter((run) => run.sliceKind === 'build').length,
+		verifyStarted: detail.runs.some((run) => run.phase !== null && run.status !== 'pending')
+	})
 
 	return (
 		<Stack gap="lg">
-			{summary === null ? (
+			<Stepper active={step} size="xs" allowNextStepsSelect={false}>
+				<Stepper.Step label="Build" />
+				<Stepper.Step label="Integrate" />
+				<Stepper.Step label="Verify" />
+				<Stepper.Step label="Review" />
+			</Stepper>
+
+			{detail.reason === null ? null : (
 				<Text size="sm" c="dimmed">
-					{finished
-						? 'The change map is being written — it lands a few minutes after the branch does.'
-						: 'The change map is written once every bullet has landed.'}
+					{detail.reason}
 				</Text>
-			) : (
-				<Stack gap="xs">
-					<Group justify="space-between" align="center">
-						<Text size="xs" c="dimmed">
-							What changed
-						</Text>
-						{summarisedAt === null ? null : (
-							<Text size="xs" c="dimmed">
-								{formatRelativeTime(summarisedAt)}
-							</Text>
-						)}
-					</Group>
-					<ChangeMap summary={summary} />
-				</Stack>
 			)}
 
-			{execution.item.failureReason === null ? null : (
-				<Alert color="red" variant="light">
-					{execution.item.failureReason}
+			{build.failureReason === null ? null : (
+				<Alert color={build.status === 'failed' ? 'red' : 'orange'} variant="light">
+					<Stack gap="xs" align="start">
+						<Text size="sm" className="whitespace-pre-wrap">
+							{build.failureReason}
+						</Text>
+						{build.status === 'failed' ? <BuildActionButton buildId={build.id} control="retry" /> : null}
+					</Stack>
 				</Alert>
 			)}
 
-			<Stack gap="xs">
-				<Group gap="xs">
-					<Text size="xs" c="dimmed">
-						Run
-					</Text>
-					<Badge size="xs" variant="light">
-						{execution.item.status}
-					</Badge>
-					{execution.item.status === 'running' ? <Loader size={12} /> : null}
+			<IntegratingLine detail={detail} />
 
-					<div className="ml-auto">
-						<RetryVerifyButton
-							queueId={execution.queueId}
-							itemId={execution.item.id}
-							runs={execution.runs}
-						/>
-					</div>
-				</Group>
-
-				{execution.runs.map((run) => (
-					<RunRow key={run.id} run={run} />
+			<Stack gap="sm">
+				{orderedRuns(detail.runs).map((run) => (
+					<RunRow key={run.id} run={run} activity={activity[run.id]} />
 				))}
 			</Stack>
 
-			<Stack gap={4}>
-				<Text size="xs" c="dimmed">
-					queue · {execution.queueName}
-				</Text>
-				{execution.item.branch === null ? null : (
+			<Stack gap={2}>
+				{build.branch === null ? null : (
 					<Text size="xs" c="dimmed" className="font-mono break-all">
-						{execution.item.branch}
+						{build.branch}
 					</Text>
 				)}
-				{execution.item.prUrl === null ? null : (
-					<Anchor href={execution.item.prUrl} target="_blank" rel="noreferrer" size="xs">
-						Open the pull request
-					</Anchor>
+				{build.portBase === null ? null : (
+					<Text size="xs" c="dimmed">
+						ports {build.portBase}–{build.portBase + 9}
+					</Text>
 				)}
 			</Stack>
 		</Stack>

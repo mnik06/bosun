@@ -53,7 +53,7 @@ export async function sayToPlan(opts: {
 
 	// Back to planning even when the plan was ready: what the person just asked
 	// for may rewrite it, and a plan that says "ready" while a session is editing
-	// it is one somebody pushes to a queue mid-revision.
+	// it is one somebody approves mid-revision.
 	if (plan.status !== 'planning') {
 		const updated = await opts.planRepo.update({
 			id: plan.id,
@@ -84,7 +84,7 @@ export async function sayToPlan(opts: {
 			configDraft,
 			plan: {
 				verifyInUi: plan.verifyInUi,
-				auto: plan.auto,
+				handsOff: plan.handsOff,
 				title: plan.title,
 				bodyMd: plan.bodyMd,
 				acs: acs.map((ac) => ({
@@ -96,7 +96,9 @@ export async function sayToPlan(opts: {
 					ordinal: slice.ordinal,
 					kind: slice.kind,
 					title: slice.title,
-					bodyMd: slice.bodyMd
+					bodyMd: slice.bodyMd,
+					foundation: slice.foundation,
+					footprint: slice.footprint
 				}))
 			}
 		}

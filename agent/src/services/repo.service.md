@@ -2,13 +2,12 @@
 
 ## The failure it exists to stop
 
-Every read-only session — planning, revision, preparation — used to run with its cwd set to
+Every read-only session — planning, revision, a question about the line — used to run with its cwd set to
 `config.repoPath`: the machine's own checkout, at whatever commit and on whatever branch the operator
 last left it, with no fetch anywhere in the path. Nothing in the agent ever refreshed it.
 
 So a session's recon answered questions about a tree that could be days old, and answered them with
-confidence. The observed failure was a preparation session proposing to build a table that had landed
-the week before — the tree it read genuinely did not have it. Every "does X already exist?" a session
+confidence. The observed failure was a session proposing to build a table that had landed the week before — the tree it read genuinely did not have it. Every "does X already exist?" a session
 asks is decided against that tree, which makes staleness the most expensive kind of wrong: it
 produces work that looks correct and duplicates something already merged.
 
@@ -24,8 +23,8 @@ produces work that looks correct and duplicates something already merged.
 4. Copy the untracked files across — `.env` and its neighbours exist only in the machine's checkout,
    and a session reading the repository to learn its conventions cannot find them anywhere else.
 
-It is the same ref every queue cuts its branches from, so what a plan is written against is what the
-work will actually be built on top of.
+It is the same ref every plan without a provider is cut from, and every integration merges, so what a
+plan is written against is what the work will actually land on.
 
 ## Why not just refresh the machine's checkout
 
@@ -36,8 +35,8 @@ which puts the fix back where it started.
 
 A worktree of its own costs one directory and is always exactly right.
 
-**Detached, not on a branch.** A branch would claim a name under `refs/heads/`, and queue slugs
-already own `bosun/worktree/<slug>` and `bosun/plan/<slug>`. Detached claims nothing, collides with
+**Detached, not on a branch.** A branch would claim a name under `refs/heads/`, and builds already own
+`bosun/worktree/<slug>` and `bosun/plan/<number>-<title>`. Detached claims nothing, collides with
 nothing, and leaves no branch behind when the directory is removed.
 
 ## Which checkout
@@ -60,21 +59,24 @@ no repository yet has no path, and `readTree` refuses rather than reading an arb
   never move it under each other. Two sessions on different commits mean the second one moves it
   forward, which is at worst the first session seeing newer code — and far better than either seeing
   stale code.
-- **Sessions that write are not part of this.** Execution runs in the queue's worktree on the plan's
-  branch, and `execution/commit.ts` does its own fetching. `startBranch` fetches the base, and
-  continues `origin/<plan branch>` instead when the remote already has one. A later bullet stays where
-  the earlier ones committed and never moves to a newer base, but `cleanTree` — and `publish` before
-  it pushes — merges in whatever `origin/<plan branch>` gained (a reviewer's push, "Update branch", a
-  re-queued plan). Without that the push at the end is refused as a non-fast-forward.
+- **Sessions that write are not part of this.** Execution runs in the build's worktree on the plan's
+  branch, and `execution/commit.ts` does its own fetching. `startBuildBranch` fetches, continues
+  `origin/<plan branch>` when the remote already has one, and otherwise cuts from a provider's commit or
+  the base. A later bullet never moves to a newer base on its own — the integration does that — but
+  `cleanTree`, and `pushBranch` before every push, merge in whatever `origin/<plan branch>` gained (a
+  reviewer's push, "Update branch"). Without that the push after the bullet is refused as a
+  non-fast-forward.
 
 ## Where it is called
 
-- `planning/session.ts` — `start`, `say` and `prepare` each resolve a tree before spawning, and its
+- `planning/session.ts` — `start` and `say` each resolve a tree before spawning, and its
   path becomes the session's cwd. Resolved per session rather than once at connect: a machine can
   hold a socket for days, and what `origin/HEAD` pointed at when it connected is exactly the
   staleness this removes.
-- `worktree.service.ts` `ensure` — fetches before resolving the base ref, so a new queue's worktree,
-  and the setup command it runs, start from code that has not moved on without them.
+- `ask/session.ts` — a question about the line is answered from the read tree, reaching each plan's
+  branch through git.
+- `worktree.service.ts` `ensure` — fetches before resolving the base ref, so a new build's worktree,
+  and the setup steps it runs, start from code that has not moved on without them.
 - `preflight.service.ts` — `git` now also reports whether `origin` is reachable, and is **red** when
   it is not. A machine that cannot fetch keeps working against its last successful fetch, silently;
   that is the one failure mode worth a red check even though sessions still start.

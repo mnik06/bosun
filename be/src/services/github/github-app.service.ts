@@ -41,6 +41,26 @@ const InstallationReposRespSchema = z.object({ repositories: z.array(RepoSchema)
 
 const PullSchema = z.object({ number: z.number(), html_url: z.string() });
 
+const PullStateSchema = PullSchema.extend({
+	state: z.enum(['open', 'closed']),
+	merged: z.boolean().default(false),
+	base: z.object({ ref: z.string(), sha: z.string() }),
+	head: z.object({ ref: z.string(), sha: z.string() })
+});
+
+// `X-Hub-Signature-256` is `sha256=` and the hex HMAC of the raw body. Compared in
+// constant time, over the bytes GitHub sent rather than a re-serialized parse.
+export function verifyWebhookSignature(opts: { secret: string; payload: Buffer; signature: string | undefined }): boolean {
+	if (!opts.signature?.startsWith('sha256=')) {
+		return false;
+	}
+
+	const expected = crypto.createHmac('sha256', opts.secret).update(opts.payload).digest();
+	const given = Buffer.from(opts.signature.slice('sha256='.length), 'hex');
+
+	return given.length === expected.length && crypto.timingSafeEqual(given, expected);
+}
+
 function base64url(input: Buffer | string): string {
 	return Buffer.from(input).toString('base64url');
 }
@@ -232,6 +252,16 @@ export function getGithubAppService(deps: {
 		return RepoSchema.parse(result.json);
 	}
 
+	async function pullToken(opts: { installationId: number; githubRepoId: number }): Promise<string> {
+		const { token } = await mint({
+			installationId: opts.installationId,
+			githubRepoIds: [opts.githubRepoId],
+			permissions: { pull_requests: 'write' }
+		});
+
+		return token;
+	}
+
 	async function openOrUpdatePullRequest(opts: {
 		installationId: number;
 		githubRepoId: number;
@@ -239,7 +269,7 @@ export function getGithubAppService(deps: {
 		base: string;
 		title: string;
 		body: string;
-	}): Promise<{ url: string; updated: boolean }> {
+	}): Promise<{ url: string; number: number; updated: boolean }> {
 		const repo = await repository(opts);
 		const { token } = await mint({
 			installationId: opts.installationId,
@@ -254,7 +284,9 @@ export function getGithubAppService(deps: {
 		});
 
 		if (created.status === 201) {
-			return { url: PullSchema.parse(created.json).html_url, updated: false };
+			const pull = PullSchema.parse(created.json);
+
+			return { url: pull.html_url, number: pull.number, updated: false };
 		}
 
 		// The same re-run behaviour `gh pr create` had: a pull request already open
@@ -274,14 +306,88 @@ export function getGithubAppService(deps: {
 			method: 'PATCH',
 			url: `${API}/repos/${repo.full_name}/pulls/${existing.number}`,
 			token,
-			body: { body: opts.body }
+			body: { body: opts.body, base: opts.base }
 		});
 
 		if (edited.status !== 200) {
 			throw failure('the pull request is open but its description could not be updated', edited);
 		}
 
-		return { url: existing.html_url, updated: true };
+		return { url: existing.html_url, number: existing.number, updated: true };
+	}
+
+	async function getPullRequest(opts: { installationId: number; githubRepoId: number; number: number }) {
+		const result = await call({
+			url: `${API}/repositories/${opts.githubRepoId}/pulls/${opts.number}`,
+			token: await pullToken(opts)
+		});
+
+		if (result.status !== 200) {
+			throw failure(`could not read pull request #${opts.number}`, result);
+		}
+
+		const pull = PullStateSchema.parse(result.json);
+
+		return {
+			number: pull.number,
+			url: pull.html_url,
+			state: pull.state,
+			merged: pull.merged,
+			baseRef: pull.base.ref,
+			baseSha: pull.base.sha,
+			headRef: pull.head.ref
+		};
+	}
+
+	async function editPullRequest(opts: {
+		installationId: number;
+		githubRepoId: number;
+		number: number;
+		base?: string;
+		body?: string;
+	}): Promise<void> {
+		const result = await call({
+			method: 'PATCH',
+			url: `${API}/repositories/${opts.githubRepoId}/pulls/${opts.number}`,
+			token: await pullToken(opts),
+			body: { ...(opts.base === undefined ? {} : { base: opts.base }), ...(opts.body === undefined ? {} : { body: opts.body }) }
+		});
+
+		if (result.status !== 200) {
+			throw failure(`could not update pull request #${opts.number}`, result);
+		}
+	}
+
+	// Created, or force-moved when it already exists: re-shipping a foundation after
+	// its bullet was re-run points the branch at the new commit.
+	async function pointBranch(opts: { installationId: number; githubRepoId: number; branch: string; sha: string }): Promise<void> {
+		const repo = await repository(opts);
+		const { token } = await mint({
+			installationId: opts.installationId,
+			githubRepoIds: [opts.githubRepoId],
+			permissions: { contents: 'write' }
+		});
+		const created = await call({
+			method: 'POST',
+			url: `${API}/repos/${repo.full_name}/git/refs`,
+			token,
+			body: { ref: `refs/heads/${opts.branch}`, sha: opts.sha }
+		});
+
+		if (created.status === 201) {
+			return;
+		}
+
+		const moved = await call({
+			method: 'PATCH',
+			url: `${API}/repos/${repo.full_name}/git/refs/heads/${opts.branch}`,
+			token,
+			body: { sha: opts.sha, force: true }
+		});
+
+		if (moved.status !== 200) {
+			throw failure(`could not point ${opts.branch} at ${opts.sha.slice(0, 8)}`, moved);
+		}
 	}
 
 	return {
@@ -403,6 +509,9 @@ export function getGithubAppService(deps: {
 		},
 
 		openOrUpdatePullRequest,
+		getPullRequest,
+		editPullRequest,
+		pointBranch,
 
 		// A branch cut from the default branch holding exactly one commit that writes
 		// one file. Force-moved back to the base first, so re-proposing after an edit

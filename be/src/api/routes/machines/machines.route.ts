@@ -36,9 +36,9 @@ const routes: FastifyPluginAsync = async function (f) {
 		}
 	);
 
-	// The list stays open to developers where the detail does not: the plan and
-	// queue pickers are built from it, and a plan has to name the machine it runs
-	// on. It carries a name and a status, not the repo path or the profile.
+	// The list stays open to developers where the detail does not: the plan picker
+	// and the capacity strip are built from it, and a plan has to name the machine
+	// it was planned on. It carries a name and a status, not the repo path.
 	fastify.get(
 		'/',
 		{

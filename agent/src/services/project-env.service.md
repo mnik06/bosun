@@ -56,8 +56,8 @@ the file lacked are appended.
 
 ## When files are written
 
-- `queue.worktree.ensure`, after the worktree exists and before the setup command, so a setup that
-  migrates or generates a client runs against the real service.
+- `build.worktree.ensure`, after the worktree exists and its branch is cut, and before the setup
+  steps, so a step that generates a client runs against the real service.
 - Every bullet, in `startProcess`, after the branch is cut or the tree cleaned — `git clean -fd`
   removes an untracked `.env` — and before the session starts. A failure to write fails the bullet.
 
@@ -71,6 +71,6 @@ would otherwise commit the values into the plan's branch and push them with the 
 `env.delete` removes the stored set, and nothing else. The `.env` files already written into
 worktrees are left alone: they may hold the project's own lines, and a running bullet may be reading
 them. The next bullet simply stops rewriting those keys. To remove them from a worktree, edit the file
-there or remove the queue.
+there or cancel the build, which removes its worktree.
 
 A corrupt or unreadable store is treated as empty and logged once, without its content.

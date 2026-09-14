@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { FootprintSchema } from 'src/types/FootprintSchema';
 import { PlanSummarySchema } from 'src/types/PlanSummarySchema';
 
 export const PlanStatusSchema = z.enum(['planning', 'ready', 'failed']);
@@ -10,18 +11,20 @@ export const PlanSchema = z.object({
 	projectId: z.string(),
 	createdByUserId: z.string().nullable(),
 	machineId: z.string(),
+	// The line a plan joins. Null only on a plan written on a machine with no
+	// repository, which can be planned and never approved.
+	repositoryId: z.string().nullable(),
 	title: z.string().nullable(),
 	bodyMd: z.string().nullable(),
 	number: z.number().int(),
 	status: PlanStatusSchema,
 	verifyInUi: z.boolean(),
-	auto: z.boolean(),
-	confirmedAt: z.date().nullable(),
+	handsOff: z.boolean(),
+	approvedAt: z.date().nullable(),
 	failureReason: z.string().nullable(),
 	input: z.string(),
 	summary: PlanSummarySchema.nullable(),
 	summarisedAt: z.date().nullable(),
-	preparesPlanIds: z.array(z.string()).nullable(),
 	createdAt: z.date()
 });
 
@@ -109,7 +112,14 @@ export const SliceSchema = z.object({
 	ordinal: z.number().int(),
 	kind: SliceKindSchema,
 	title: z.string(),
-	bodyMd: z.string().nullable()
+	bodyMd: z.string().nullable(),
+	// The first bullet, holding every piece another plan could consume. It is what a
+	// dependent stacks on, so a dependent waits one bullet rather than a feature.
+	foundation: z.boolean(),
+	footprint: FootprintSchema,
+	// What the landed commit actually touched. The declared footprint stays the
+	// source for schema and contracts, which a file list cannot express.
+	changedFiles: z.array(z.string()).nullable()
 });
 
 export type Slice = z.infer<typeof SliceSchema>;

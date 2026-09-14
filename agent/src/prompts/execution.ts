@@ -1,4 +1,6 @@
+import { type PlanAnswer, type PlanQuestion } from '../protocol';
 import {
+	amendmentsSection,
 	criteriaList,
 	decisionsSection,
 	feedbackLoops,
@@ -14,6 +16,29 @@ export interface ExecutionContext extends RunContext {
 	sliceBodyMd: string | null;
 	acs: { code: string; text: string }[];
 	doneSlices: { ordinal: number; title: string }[];
+	// A bullet restarted after the question it asked was answered.
+	answer: { questions: PlanQuestion[]; answers: PlanAnswer[] } | null;
+}
+
+// The session that asked is gone — it was stopped so the plan's slot could go to
+// another — and this one starts from the last commit with nothing of the first but
+// the ruling. Said as a ruling, so the question is not asked again.
+function answeredSection(answer: ExecutionContext['answer']): string {
+	if (answer === null) {
+		return '';
+	}
+
+	const pairs = answer.questions
+		.map((question, index) => `- **${question.question}** → ${(answer.answers[index]?.selected ?? []).join(', ')}`)
+		.join('\n');
+
+	return `# Already answered
+
+An earlier session on this bullet stopped to ask, and was stopped while it waited. This is a fresh
+start from the last commit; whatever it had written and not committed is gone. The person has answered
+since — treat these as settled, build on them, and do not ask them again:
+
+${pairs}`;
 }
 
 function alreadyDone(slices: ExecutionContext['doneSlices']): string {
@@ -25,7 +50,7 @@ function alreadyDone(slices: ExecutionContext['doneSlices']): string {
 export function executionPrompt(context: ExecutionContext): string {
 	return `You are building one tracer bullet of an approved plan, alone, in a git worktree of its own.
 
-${unattended(context.afk)}
+${unattended(!context.handsOff)}
 
 ${feedbackLoops(context)}
 
@@ -36,6 +61,10 @@ ${context.planBodyMd}
 ## Bullets already built in this worktree
 
 ${alreadyDone(context.doneSlices)}
+
+${amendmentsSection(context)}
+
+${answeredSection(context.answer)}
 
 # Step 2 — your bullet: ${context.sliceOrdinal}. ${context.sliceTitle}
 
@@ -128,8 +157,8 @@ agents, no second review round.
 
 # No browser
 
-Every user-facing criterion in this plan is verified once, by the plan's final verify bullet, against
-the whole feature standing. A criterion whose only evidence is visual — layout, clipping, focus
+Every user-facing criterion in this plan is verified once, by the plan's verify pass, against the whole
+feature standing and against a database bosun prepares for it. A criterion whose only evidence is visual — layout, clipping, focus
 order, what a grid renders — is not yours to confirm and not yours to fail. Implement it and leave
 the driving to verify. Deferring one is correct behaviour, not a gap you are expected to close.
 
@@ -142,7 +171,7 @@ ${gitFlow(context)}
 Report, briefly: the feedback loops you found, their final result, and any failure you judged
 inherited with the file it was in; what you built and which files you touched; which acceptance
 criteria you believe now hold; what the review found and what you did about it; anything you deferred
-to the verify bullet, one line each with how to reproduce it. That report is what the operator reads
+to the verify pass, one line each with how to reproduce it. That report is what the operator reads
 in the browser, and what the next bullet inherits.
 
 If you could not finish, say what stopped you — plainly, first line.`;

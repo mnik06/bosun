@@ -49,7 +49,7 @@ export async function resolveBaseRef(opts: {
 // neighbours. A directory that is ignored whole — node_modules, dist, .venv —
 // comes back from `--directory` as a single `name/` entry and is skipped: that
 // is what the setup command exists to rebuild, and copying it would move
-// gigabytes into every queue.
+// gigabytes into every worktree.
 export async function untrackedPaths(opts: {
 	exec: ExecService;
 	repoPath: string;
@@ -181,7 +181,7 @@ export function getRepoService(deps: { exec: ExecService; repoPath: RepoPathSour
 		// things the repository already had.
 		//
 		// Detached rather than on a branch, so it claims no name under `bosun/` that
-		// a queue slug could collide with, and there is no branch to leave behind.
+		// a build slug could collide with, and there is no branch to leave behind.
 		async readTree(): Promise<ReadTree> {
 			if (current() === null) {
 				throw new Error(NO_REPOSITORY);

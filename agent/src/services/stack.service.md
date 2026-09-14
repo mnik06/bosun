@@ -3,11 +3,11 @@
 ## Why the agent starts the processes
 
 A session used to start the dev stack itself, from a start command it read in the prompt or discovered.
-Two queues on one machine then broke in ways neither session could explain: each picked a port, each
-frontend defaulted to the backend on the port in its `.env`, and a verify bullet drove queue B's
-frontend against queue A's backend. What "start the stack" meant also changed from session to session.
+Two plans building on one machine then broke in ways neither session could explain: each picked a port,
+each frontend defaulted to the backend on the port in its `.env`, and a verify session drove plan B's
+frontend against plan A's backend. What "start the stack" meant also changed from session to session.
 
-Now the agent starts every app of `.bosun/project.yaml` the same way everywhere — a verify bullet,
+Now the agent starts every app of `.bosun/project.yaml` the same way everywhere — a verify drive,
 onboarding's verify, a second machine — and the session only decides *when*. The memory rules in
 `prompts/shared.ts` depend on that: the stack is up for the browser pass and down before the loop runs.
 
@@ -15,8 +15,8 @@ onboarding's verify, a second machine — and the session only decides *when*. T
 
 - **Ports by position.** An app's port is `portBase` plus its index in `apps`; its URL is
   `http://127.0.0.1:<port>`. `{port}`, `{url}`, `{port.<app>}` and `{url.<app>}` are substituted into
-  `start`, `ready` and every `env` value, so a frontend is handed its own queue's backend. There is no
-  allocator and no second place to look, which is why a queue's ten ports cap a config at ten apps and
+  `start`, `ready` and every `env` value, so a frontend is handed its own build's backend. There is no
+  allocator and no second place to look, which is why a build's ten ports cap a config at ten apps and
   why reordering `apps` renumbers them.
 - **Dependencies start first, and a requested app brings its dependencies.** Each app must answer its
   readiness check before the next starts: `ready` polled once a second until any status below 500 or

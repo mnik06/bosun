@@ -28,10 +28,11 @@ verify:                    needs_input ──► verifying ──► ready
 
 ## Invariants
 
-- **One active run per machine.** Onboarding owns the fixed port range 3900–3909, below every queue's
+- **One active run per machine.** Onboarding owns the fixed port range 3900–3909, below every build's
   range, which is only collision-free because of this.
-- **A run is admitted like a verify bullet** (`onboardingAdmission`), and counts as one against every
-  bullet the scheduler admits beside it (`advance-queue`'s `memoryLimitFor`).
+- **A run is admitted like a drive** (`onboardingAdmission`), against every slot and lane the
+  machine's builds hold, and counts as one against everything the scheduler admits beside it
+  (`../line/schedule.ts`).
 - **Outcomes come from what the backend recorded.** A discovery that reports done without a config
   that validated fails with "ended without publishing a valid config".
 - **Agent reports are accepted only for an active run on the calling machine** (`getActiveRunForMachine`),

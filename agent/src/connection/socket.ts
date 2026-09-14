@@ -11,11 +11,11 @@ import { parseServerFrame, routeServerFrame, type AgentState } from './router';
 import { type AgentConfig } from '../config/config';
 import { createAskSessions } from '../ask/session';
 import { createExecutionSessions, type ExecutionSessions } from '../execution/session';
+import { createIntegrationSessions, type IntegrationSessions } from '../integration/session';
 import { createOnboardingSessions, type OnboardingSessions } from '../onboarding/session';
 import { watchBosunFiles } from './file-watch';
 import { createPlanningSessions, type PlanningSessions } from '../planning/session';
 import { planningPrompt, revisionPrompt } from '../prompts/planning';
-import { preparationPrompt } from '../prompts/preparation';
 import { summaryPrompt } from '../prompts/summary';
 import { createSummarySessions } from '../summary/session';
 import { type AgentMsg } from '../protocol';
@@ -49,6 +49,7 @@ interface ConnectionDeps {
 	// rather than built here: see `holdConnection`.
 	sink: FrameSink;
 	executions: ExecutionSessions;
+	integrations: IntegrationSessions;
 	sessions: PlanningSessions;
 	onboarding: OnboardingSessions;
 	// The current connection's announce, so a file changing under ~/.bosun reaches
@@ -102,6 +103,9 @@ function createAnnouncer(deps: ConnectionDeps & { socket: WebSocket }) {
 				planIds: [...new Set([...deps.sessions.held(), ...deps.sink.pendingPlanIds()])],
 				onboardingRunIds: [
 					...new Set([...deps.onboarding.held(), ...deps.sink.pendingOnboardingRunIds()])
+				],
+				integrationIds: [
+					...new Set([...deps.integrations.held(), ...deps.sink.pendingIntegrationIds()])
 				],
 				uptimeMs: Math.round(process.uptime() * 1000),
 				// What the scheduler budgets this machine's bullets against, and how the
@@ -174,7 +178,7 @@ async function connectOnce(deps: ConnectionDeps): Promise<void> {
 			null;
 
 		const sessionsRunning = (): number =>
-			sessions.running() + deps.executions.running() + deps.onboarding.running();
+			sessions.running() + deps.executions.running() + deps.integrations.running() + deps.onboarding.running();
 
 		const install = async (target: {
 			version: string;
@@ -308,9 +312,11 @@ async function connectOnce(deps: ConnectionDeps): Promise<void> {
 					state: deps.state,
 					sessions,
 					executions: deps.executions,
+					integrations: deps.integrations,
 					onboarding: deps.onboarding,
 					summaries,
 					asks,
+					sink: deps.sink.send,
 					announce,
 					onUpgrade
 				},
@@ -372,7 +378,6 @@ export async function holdConnection(opts: {
 		services: opts.services,
 		prompt: planningPrompt,
 		revisionPrompt,
-		preparationPrompt,
 		send: sink.send
 	});
 
@@ -382,6 +387,10 @@ export async function holdConnection(opts: {
 	// reconnects would otherwise leave a `claude` holding a port, a worktree and a
 	// credential behind every `systemctl restart`.
 	const onboarding = createOnboardingSessions({ services: opts.services, send: sink.send });
+	// An integration outlives the socket for the same reason a bullet does: it is a
+	// merge, a regenerate and a check run in a worktree, none of which needs bosun
+	// listening until it has something to say.
+	const integrations = createIntegrationSessions({ services: opts.services, send: sink.send });
 	const announcer: ConnectionDeps['announcer'] = { current: null };
 
 	// Stacks are reaped here too: an app a session started runs in a process group
@@ -390,6 +399,7 @@ export async function holdConnection(opts: {
 		process.once(signal, () => {
 			sessions.cancelAll();
 			executions.cancelAll();
+			integrations.cancelAll();
 			onboarding.cancelAll();
 			void opts.services.stack.downAll().finally(() => {
 				process.exit(0);
@@ -408,7 +418,7 @@ export async function holdConnection(opts: {
 
 	for (;;) {
 		try {
-			await connectOnce({ ...opts, state, sink, executions, sessions, onboarding, announcer });
+			await connectOnce({ ...opts, state, sink, executions, integrations, sessions, onboarding, announcer });
 			console.log('connection closed');
 			attempt = 0;
 		} catch (error) {

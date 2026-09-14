@@ -1,15 +1,20 @@
 import { HttpError } from 'src/api/errors/HttpError';
+import { type LineDeps } from 'src/controllers/line/line-deps';
+import { announceBuild } from 'src/controllers/line/shared/announce';
+import { removeWorktree, stopRunningJobs } from 'src/controllers/line/shared/lifecycle';
 import { getMachinePlan } from 'src/controllers/plans/shared/plan-access';
 import { announcePlan, announcePlanArtifact } from 'src/controllers/plans/shared/plan-broadcast';
-import { getAcRepo } from 'src/repos/plans/ac.repo';
-import { getPlanRepo, type PlanRepo } from 'src/repos/plans/plan.repo';
-import { getSliceRepo } from 'src/repos/plans/slice.repo';
-import { type AcRepo } from 'src/repos/plans/ac.repo';
-import { type SliceRepo } from 'src/repos/plans/slice.repo';
-import { type Db } from 'src/services/drizzle/drizzle.service';
+import { getAcRepo, type AcRepo } from 'src/repos/plans/ac.repo';
+import { getPlanRepo } from 'src/repos/plans/plan.repo';
+import { getSliceRepo, type SliceRepo } from 'src/repos/plans/slice.repo';
 import { type IdService } from 'src/services/ids/id.service';
-import { type SocketRegistry } from 'src/services/sockets/registry.service';
+import { EMPTY_FOOTPRINT, sharedPieces, type Footprint } from 'src/types/FootprintSchema';
 import { type Plan, type SliceKind } from 'src/types/PlanSchema';
+
+// A plan holds its build slot to its last bullet, so a twelve-bullet plan holds one
+// for most of a day and every plan waiting on its whole feature waits with it. Six
+// leaves room for a foundation bullet on top of the three or four the prompt asks for.
+export const MAX_BUILD_BULLETS = 6;
 
 export interface PublishAc {
 	code: string;
@@ -22,6 +27,8 @@ export interface PublishSlice {
 	title: string;
 	bodyMd?: string | null;
 	acCodes: string[];
+	foundation: boolean;
+	footprint: Footprint | null;
 }
 
 // The whole artifact arrives at once, so the browser never sees a plan with two
@@ -57,6 +64,7 @@ function rejectMalformed(opts: {
 	}
 
 	rejectBadVerify(opts);
+	rejectBadFootprints(opts.slices);
 }
 
 function rejectBadVerify(opts: { verifyInUi: boolean; slices: PublishSlice[] }): void {
@@ -85,85 +93,91 @@ function rejectBadVerify(opts: { verifyInUi: boolean; slices: PublishSlice[] }):
 	}
 }
 
-// A session that can publish any plan can rewrite work nobody asked it to touch,
-// so rewriting somebody else's plan is allowed only from a preparation plan that
-// was created with this one in its selection. The scope is read off that plan's
-// row rather than taken from the request: the session names which preparation it
-// is acting for, and the backend decides whether that preparation covers the
-// target. It closes when the preparation session ends, because a plan that has
-// left `planning` is no longer writing anything.
-async function requirePreparationScope(opts: {
-	planRepo: PlanRepo;
-	preparedBy: string;
-	machineId: string;
-	targetId: string;
-}): Promise<void> {
-	const preparation = await opts.planRepo.getByIdForMachine({
-		id: opts.preparedBy,
-		machineId: opts.machineId
-	});
+// Enforced, not suggested. Every piece another plan could consume — schema,
+// contracts, a created shared module — is in bullet 1, and bullet 1 is marked the
+// foundation: it is the commit a dependent stacks on, so a dependent waits one
+// bullet rather than a whole feature.
+function rejectBadFootprints(slices: PublishSlice[]): void {
+	const build = [...slices].filter((slice) => slice.kind === 'build').sort((a, b) => a.ordinal - b.ordinal);
 
-	if (
-		!preparation ||
-		preparation.status !== 'planning' ||
-		!preparation.preparesPlanIds?.includes(opts.targetId)
-	) {
-		throw new HttpError(403, 'That plan is not one this preparation was asked to rewrite');
+	if (build.length > MAX_BUILD_BULLETS) {
+		throw new HttpError(400, `this plan has ${build.length} build bullets, and a plan takes at most ${MAX_BUILD_BULLETS}: this is more than one feature — split it into plans`);
+	}
+
+	for (const slice of slices) {
+		if (slice.kind === 'build' && slice.footprint === null) {
+			throw new HttpError(400, `bullet ${slice.ordinal} has no footprint — every build bullet declares the schema, contracts and modules it changes`);
+		}
+
+		if (slice.kind === 'verify' && (slice.footprint !== null || slice.foundation)) {
+			throw new HttpError(400, 'the verify bullet declares no footprint and is never the foundation');
+		}
+	}
+
+	const [first, ...rest] = build;
+	const misplaced = rest.find((slice) => sharedPieces(slice.footprint!) > 0);
+
+	if (rest.some((slice) => slice.foundation)) {
+		throw new HttpError(400, 'only the first bullet can be the foundation');
+	}
+
+	if (misplaced) {
+		throw new HttpError(400, `bullet ${misplaced.ordinal} declares schema, contracts or a created module — every piece another plan could consume belongs in bullet 1, the foundation`);
+	}
+
+	if (first && sharedPieces(first.footprint!) > 0 && !first.foundation) {
+		throw new HttpError(400, 'bullet 1 holds the pieces other plans could consume — mark it as the foundation');
 	}
 }
 
-export async function publishPlan(opts: {
-	db: Db;
-	planRepo: PlanRepo;
-	acRepo: AcRepo;
-	sliceRepo: SliceRepo;
-	idService: IdService;
-	socketRegistry: SocketRegistry;
-	id: string;
-	machineId: string;
-	preparedBy?: string | null;
-	title: string;
-	bodyMd: string;
-	acs: PublishAc[];
-	slices: PublishSlice[];
-}): Promise<Plan> {
-	const plan = await getMachinePlan({
-		planRepo: opts.planRepo,
-		id: opts.id,
-		machineId: opts.machineId
+// A republish is a different plan, whatever it is called. Its sign-off goes, and a
+// build of the version signed off leaves the line: letting it carry on would build
+// something nobody approved. Its branch stays for whoever approves again.
+async function withdrawBuild(deps: LineDeps, plan: Plan): Promise<void> {
+	const live = await deps.buildRepo.liveForPlan(plan.id);
+
+	if (!live || live.status === 'in_review') {
+		return;
+	}
+
+	await stopRunningJobs(deps, { build: live });
+
+	const cancelled = await deps.buildRepo.update({
+		id: live.id,
+		status: 'cancelled',
+		failureReason: 'the plan was revised after it was approved — approve it again',
+		finishedAt: new Date()
 	});
 
-	if (opts.preparedBy) {
-		await requirePreparationScope({
-			planRepo: opts.planRepo,
-			preparedBy: opts.preparedBy,
-			machineId: opts.machineId,
-			targetId: plan.id
-		});
+	if (cancelled) {
+		removeWorktree(deps, { build: cancelled });
+		announceBuild({ socketRegistry: deps.socketRegistry, projectId: plan.projectId, build: cancelled });
 	}
+}
+
+export async function publishPlan(
+	deps: LineDeps,
+	opts: {
+		id: string;
+		machineId: string;
+		title: string;
+		bodyMd: string;
+		acs: PublishAc[];
+		slices: PublishSlice[];
+	}
+): Promise<Plan> {
+	const plan = await getMachinePlan({ planRepo: deps.planRepo, id: opts.id, machineId: opts.machineId });
 
 	rejectMalformed({ verifyInUi: plan.verifyInUi, acs: opts.acs, slices: opts.slices });
 
-	const published = await opts.db.transaction(async (tx) => {
+	const published = await deps.db.transaction(async (tx) => {
 		const planRepo = getPlanRepo(tx);
-		const acRepo = getAcRepo(tx);
-		const sliceRepo = getSliceRepo(tx);
-
-		// A republish is a different plan, whatever it is called. Keeping the
-		// sign-off would let a revision walk into a queue on the strength of a read
-		// somebody gave the version before it.
-		const updated = await planRepo.update({
-			id: plan.id,
-			title: opts.title,
-			bodyMd: opts.bodyMd,
-			confirmedAt: null
-		});
-
-		const sliceIdByOrdinal = await writeSlices({ sliceRepo, idService: opts.idService, planId: plan.id, slices: opts.slices });
+		const updated = await planRepo.update({ id: plan.id, title: opts.title, bodyMd: opts.bodyMd, approvedAt: null });
+		const sliceIdByOrdinal = await writeSlices({ sliceRepo: getSliceRepo(tx), idService: deps.idService, planId: plan.id, slices: opts.slices });
 
 		await writeAcs({
-			acRepo,
-			idService: opts.idService,
+			acRepo: getAcRepo(tx),
+			idService: deps.idService,
 			planId: plan.id,
 			acs: opts.acs,
 			slices: opts.slices,
@@ -177,19 +191,18 @@ export async function publishPlan(opts: {
 		throw new HttpError(404, 'Plan not found');
 	}
 
-	announcePlan({ socketRegistry: opts.socketRegistry, plan: published });
-	await announcePlanArtifact({
-		socketRegistry: opts.socketRegistry,
-		acRepo: opts.acRepo,
-		sliceRepo: opts.sliceRepo,
-		planId: plan.id
-	});
+	if (plan.approvedAt !== null) {
+		await withdrawBuild(deps, plan);
+	}
+
+	announcePlan({ socketRegistry: deps.socketRegistry, plan: published });
+	await announcePlanArtifact({ socketRegistry: deps.socketRegistry, acRepo: deps.acRepo, sliceRepo: deps.sliceRepo, planId: plan.id });
 
 	return published;
 }
 
-// Matched by ordinal so a republish keeps the slice rows a queue may already
-// have runs against, instead of deleting the bullet out from under them.
+// Matched by ordinal so a republish keeps the slice rows a build may already have
+// runs against, instead of deleting the bullet out from under them.
 async function writeSlices(opts: {
 	sliceRepo: SliceRepo;
 	idService: IdService;
@@ -204,29 +217,22 @@ async function writeSlices(opts: {
 		const found = byOrdinal.get(slice.ordinal);
 		// A verify bullet's body is never written: its job is fixed, and a
 		// description of it is where invented work gets smuggled in.
-		const bodyMd = slice.kind === 'verify' ? null : slice.bodyMd ?? null;
+		const values = {
+			kind: slice.kind,
+			title: slice.title,
+			bodyMd: slice.kind === 'verify' ? null : slice.bodyMd ?? null,
+			foundation: slice.foundation,
+			footprint: slice.footprint ?? EMPTY_FOOTPRINT
+		};
 
 		if (found) {
-			await opts.sliceRepo.updateInPlan({
-				id: found.id,
-				planId: opts.planId,
-				kind: slice.kind,
-				title: slice.title,
-				bodyMd
-			});
+			await opts.sliceRepo.updateInPlan({ id: found.id, planId: opts.planId, ...values });
 			ids.set(slice.ordinal, found.id);
 
 			continue;
 		}
 
-		const created = await opts.sliceRepo.create({
-			id: opts.idService.createSliceId(),
-			planId: opts.planId,
-			ordinal: slice.ordinal,
-			kind: slice.kind,
-			title: slice.title,
-			bodyMd
-		});
+		const created = await opts.sliceRepo.create({ id: opts.idService.createSliceId(), planId: opts.planId, ordinal: slice.ordinal, ...values });
 
 		ids.set(slice.ordinal, created.id);
 	}
@@ -241,7 +247,7 @@ async function writeSlices(opts: {
 }
 
 // Matched by code, and `implemented`/`verified` are never written here: a
-// republish that reset them would hand a queue a criterion it has already met.
+// republish that reset them would hand a build a criterion it has already met.
 async function writeAcs(opts: {
 	acRepo: AcRepo;
 	idService: IdService;
@@ -263,13 +269,7 @@ async function writeAcs(opts: {
 		const sliceId = ownerOf.get(ac.code) ?? null;
 
 		if (found) {
-			await opts.acRepo.updateInPlan({
-				id: found.id,
-				planId: opts.planId,
-				text: ac.text,
-				ordinal: index + 1,
-				sliceId
-			});
+			await opts.acRepo.updateInPlan({ id: found.id, planId: opts.planId, text: ac.text, ordinal: index + 1, sliceId });
 
 			continue;
 		}

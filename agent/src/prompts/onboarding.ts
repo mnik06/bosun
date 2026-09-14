@@ -32,11 +32,26 @@ apps:                           # at most 10; an app's port is portBase + its po
       VITE_API_URL: "{url.be}"
     ready: "{url.fe}/@vite/client"   # a dev server compiles the app on its first page; probe something cheap
 
-checks:                         # the feedback loop every session runs
+checks:                         # the feedback loop every session runs, and what an integration must keep green
   - cwd: be
     run: pnpm preflight
   - cwd: fe
     run: pnpm preflight
+
+regenerate:                     # files produced by a command, never merged: taken from the target branch and produced again
+  - name: migrations
+    cwd: be
+    paths: [be/drizzle-out/**]  # git globs from the repository root; ** crosses directories
+    run: pnpm db:migration:generate
+  - name: lockfile
+    cwd: fe
+    paths: [fe/pnpm-lock.yaml]
+    run: pnpm install --lockfile-only
+
+verify:
+  resetDatabase:                # run before every verify drive, on machines that allow migrations
+    cwd: be
+    run: pnpm db:reset
 
 testAccounts:
   - role: leader
@@ -132,6 +147,14 @@ project's own account of how it is built; they outrank your habits. Find:
   \`testAccounts[].secrets\` and each is a requirement of kind \`secret\`
 - **whether the project migrates a database**. If it does, report a requirement of kind \`policy\` with
   key \`applyMigrations\`: whether this machine may migrate is the operator's decision
+- **which files are generated rather than written** — migrations a generator numbers, lockfiles, a
+  generated client that is committed. Each becomes a \`regenerate\` rule with the paths it owns and the
+  command that produces them. Two plans built side by side both generate migration \`0013\`; the rule is
+  how bosun renumbers them when they land. A repository whose migrations are hand-written and numbered
+  by a person gets no migrations rule — record that as an assumption
+- **how the development database is reset** to an empty, migrated state — a reset, a drop-and-create, a
+  truncate script. It becomes \`verify.resetDatabase\`; leave it out when the project has none rather than
+  inventing one
 
 # Try what you can
 

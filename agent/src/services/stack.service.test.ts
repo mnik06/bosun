@@ -7,7 +7,7 @@ import { type MemoryService } from './memory.service';
 import { appPorts, getStackService, renderTemplate, startOrder } from './stack.service';
 
 function config(apps: ProjectConfig['apps']): ProjectConfig {
-	return { version: 1, setup: [], apps, checks: [], testAccounts: [] };
+	return { version: 1, setup: [], apps, checks: [], regenerate: [], testAccounts: [] };
 }
 
 const temps: string[] = [];

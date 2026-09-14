@@ -1,36 +1,41 @@
 import path from 'path';
 import { createActivityTracker } from '../planning/activity-labels';
 import { createStreamParser } from '../planning/stream-parser';
+import { drivePrompt } from '../prompts/drive';
 import { executionPrompt } from '../prompts/execution';
-import { verifyPrompt } from '../prompts/verify';
+import { fixPrompt } from '../prompts/fix';
+import { type RunContext, type RunMode } from '../prompts/shared';
 import { PROJECT_CONFIG_PATH, type ProjectConfig } from '../project-config';
 import { type AgentMsg, type ExecStart, type PlanAnswer } from '../protocol';
 import { resolveProjectConfig } from '../services/config-resolution';
 import { type Services } from '../services/index';
 import { formatGib, type SessionScope } from '../services/memory.service';
 import { describeApplied, envFileFor } from '../services/project-env.service';
+import { runShell } from '../services/setup-steps.service';
 import { startSessionMcpServer, type SessionMcpServer } from '../sessions/mcp-server';
 import { spawnClaudeSession, type ClaudeSession, type SessionExit } from '../sessions/process';
-import { commitMessageFor } from './commit';
+import { commitMessageFor, mergeBranches } from './commit';
 import {
 	createExecutionDispatch,
 	executionDefinitions,
 	executionMcpTools,
+	type ExecutionPhase,
 	type SessionStack
 } from './mcp/tools';
 import { prepareRunEnvironment } from './run-environment';
 
 const STDERR_KEPT_CHARS = 500;
 const REPORT_KEPT_CHARS = 4_000;
+const TAIL_KEPT_CHARS = 1_500;
 
 // Execution writes. Planning's set is deliberately not reused here: the whole
 // difference between the two halves of the product is that one may change the
 // repository and the other may not.
 const EXECUTION_BUILTIN_TOOLS = ['Read', 'Grep', 'Glob', 'Task', 'Skill', 'Edit', 'Write', 'Bash'];
 
-// A verify bullet orchestrates: its own sub-agents do the reading and the fixing,
-// and it drives a browser through whatever MCP servers the machine has.
-const VERIFY_BUILTIN_TOOLS = [...EXECUTION_BUILTIN_TOOLS, 'ToolSearch'];
+// A drive changes nothing and commissions nothing: it reads, runs the odd command,
+// and drives a browser through whatever MCP servers the machine has.
+const LANE_BUILTIN_TOOLS = ['Read', 'Grep', 'Glob', 'Bash', 'Skill', 'ToolSearch'];
 
 interface Project {
 	// Null on a machine with no repository, and on a repository that has no config
@@ -41,6 +46,18 @@ interface Project {
 	repository: boolean;
 }
 
+function phaseOf(msg: ExecStart): ExecutionPhase {
+	return msg.phase ?? 'build';
+}
+
+function modeOf(msg: ExecStart): RunMode {
+	if (msg.phase === 'drive' || msg.phase === 'recheck') {
+		return 'lane';
+	}
+
+	return msg.phase === 'fix' ? 'fix' : 'build';
+}
+
 function promptFor(opts: {
 	msg: ExecStart;
 	providedEnv: { path: string; keys: string[] }[];
@@ -48,7 +65,9 @@ function promptFor(opts: {
 	sessionSecrets: string[];
 }): string {
 	const { msg } = opts;
-	const shared = {
+	const mode = modeOf(msg);
+	const shared: RunContext = {
+		mode,
 		planNumber: msg.planNumber,
 		planTitle: msg.planTitle,
 		planBodyMd: msg.planBodyMd,
@@ -60,19 +79,31 @@ function promptFor(opts: {
 		applyMigrations: msg.policy?.applyMigrations ?? msg.profile.applyMigrations,
 		sessionSecrets: opts.sessionSecrets,
 		portBase: msg.portBase,
-		afk: msg.afk,
+		handsOff: msg.handsOff,
 		decisions: msg.decisions,
+		amendments: msg.amendments,
 		planAcs: msg.planAcs,
-		sliceOrdinal: msg.slice.ordinal,
-		sliceTitle: msg.slice.title,
-		sliceBodyMd: msg.slice.bodyMd,
-		doneSlices: msg.doneSlices,
 		providedEnv: opts.providedEnv
 	};
 
-	return msg.slice.kind === 'verify'
-		? verifyPrompt(shared)
-		: executionPrompt({ ...shared, sliceKind: msg.slice.kind, acs: msg.acs });
+	if (mode === 'lane') {
+		return drivePrompt({ ...shared, recheckCodes: msg.phase === 'recheck' ? msg.recheckCodes : [] });
+	}
+
+	if (mode === 'fix') {
+		return fixPrompt({ ...shared, findings: msg.findings });
+	}
+
+	return executionPrompt({
+		...shared,
+		sliceOrdinal: msg.slice.ordinal,
+		sliceKind: msg.slice.kind,
+		sliceTitle: msg.slice.title,
+		sliceBodyMd: msg.slice.bodyMd,
+		acs: msg.acs,
+		doneSlices: msg.doneSlices,
+		answer: msg.answer
+	});
 }
 
 // A session the kernel killed for memory exits the way a crash does — nothing on
@@ -102,10 +133,10 @@ export function exitMessage(opts: {
 }
 
 interface Run {
-	// Null while the bullet is being set up. The run is in the map before either
+	// Null while the session is being set up. The run is in the map before either
 	// exists, because `hello` reads this map to say what this agent still holds:
-	// a run missing from it is one the backend puts back and pauses the queue over,
-	// and the setup below can take a `git fetch` and a worktree reset to finish.
+	// a run missing from it is one the backend puts back, and the setup below can
+	// take a `git fetch`, provider merges and a database reset to finish.
 	mcp: SessionMcpServer | null;
 	process: ClaudeSession | null;
 	cancelled: boolean;
@@ -131,9 +162,9 @@ export function createExecutionSessions(opts: {
 }): ExecutionSessions {
 	const runs = new Map<string, Run>();
 
-	// The stack goes with the session however the session ends. A bullet that dies
-	// mid-browser-pass would otherwise leave its apps holding the queue's ports and
-	// the memory the next bullet is admitted against.
+	// The stack goes with the session however the session ends. A session that dies
+	// mid-browser-pass would otherwise leave its apps holding the build's ports and
+	// the memory the next session is admitted against.
 	const teardown = (runId: string): void => {
 		const run = runs.get(runId);
 
@@ -176,24 +207,30 @@ export function createExecutionSessions(opts: {
 		return resolved.source === 'invalid' ? `the bullet left ${resolved.detail}` : null;
 	};
 
+	// A lane session keeps nothing: what a drive left behind must not reach the fix
+	// session's commit, and a finding is a row, not a file.
+	const finishLane = async (msg: ExecStart, run: Run): Promise<void> => {
+		await opts.services.commit.discardChanges(msg.worktreePath);
+		opts.send({
+			type: 'exec.done',
+			runId: msg.runId,
+			commitSha: null,
+			report: run.report.slice(-REPORT_KEPT_CHARS),
+			changedFiles: [],
+			pushed: false,
+			pushError: null
+		});
+	};
+
 	// The commit happens here rather than in the session, because a model that
 	// commits its own work splits the history bosun is keeping and there is then
-	// no single sha to record against the slice.
-	const finish = async (msg: ExecStart): Promise<void> => {
-		const run = runs.get(msg.runId);
-
-		if (!run || run.settled) {
-			return;
-		}
-
-		run.settled = true;
-		await opts.services.stack.down(msg.runId);
-
+	// no single sha to record against the slice. The push follows every commit:
+	// a provider's foundation on the remote is what a dependent stacks on.
+	const finishWriting = async (msg: ExecStart, run: Run): Promise<void> => {
 		const gate = run.repository ? await configGate(msg.worktreePath) : null;
 
 		if (gate !== null) {
 			opts.send({ type: 'exec.error', runId: msg.runId, message: gate });
-			teardown(msg.runId);
 
 			return;
 		}
@@ -204,7 +241,7 @@ export function createExecutionSessions(opts: {
 			message: commitMessageFor({
 				planTitle: msg.planTitle,
 				sliceOrdinal: msg.slice.ordinal,
-				sliceTitle: msg.slice.title
+				sliceTitle: msg.phase === 'fix' ? `${msg.slice.title} (fixes)` : msg.slice.title
 			})
 		});
 
@@ -214,35 +251,53 @@ export function createExecutionSessions(opts: {
 				runId: msg.runId,
 				message: `the bullet finished but could not be committed: ${committed.detail}`
 			});
-			teardown(msg.runId);
 
 			return;
+		}
+
+		const pushed = msg.push
+			? await opts.services.commit.pushBranch({ worktreePath: msg.worktreePath, branch: msg.branch })
+			: null;
+
+		if (pushed !== null && !pushed.ok) {
+			console.error(`[${msg.runId}] ${pushed.detail}`);
 		}
 
 		opts.send({
 			type: 'exec.done',
 			runId: msg.runId,
 			commitSha: committed.commitSha,
-			report: run.report.slice(-REPORT_KEPT_CHARS)
+			report: run.report.slice(-REPORT_KEPT_CHARS),
+			changedFiles:
+				committed.commitSha === null
+					? []
+					: await opts.services.commit.changedFiles({ worktreePath: msg.worktreePath, sha: committed.commitSha }),
+			pushed: pushed?.ok ?? false,
+			pushError: pushed === null || pushed.ok ? null : pushed.detail
 		});
-		teardown(msg.runId);
 	};
 
-	const prepareBranch = async (msg: ExecStart): Promise<void> => {
-		if (msg.freshBranch) {
-			const branched = await opts.services.commit.startBranch({
-				worktreePath: msg.worktreePath,
-				branch: msg.branch,
-				baseRef: msg.baseRef
-			});
+	const finish = async (msg: ExecStart): Promise<void> => {
+		const run = runs.get(msg.runId);
 
-			if (!branched.ok) {
-				throw new Error(branched.detail);
-			}
-
+		if (!run || run.settled) {
 			return;
 		}
 
+		run.settled = true;
+		await opts.services.stack.down(msg.runId);
+
+		try {
+			await (modeOf(msg) === 'lane' ? finishLane(msg, run) : finishWriting(msg, run));
+		} finally {
+			teardown(msg.runId);
+		}
+	};
+
+	// Named, synced with its own remote, and — for a stacked plan — merged with
+	// whatever its providers gained since it started. A conflict there is not
+	// something a session should be handed half-merged.
+	const prepareBranch = async (msg: ExecStart): Promise<void> => {
 		const cleaned = await opts.services.commit.cleanTree({
 			worktreePath: msg.worktreePath,
 			branch: msg.branch
@@ -251,14 +306,24 @@ export function createExecutionSessions(opts: {
 		if (!cleaned.ok) {
 			throw new Error(`could not clean the worktree: ${cleaned.detail}`);
 		}
+
+		if (msg.mergeIn.length === 0) {
+			return;
+		}
+
+		const merged = await mergeBranches({ exec: opts.services.exec, worktreePath: msg.worktreePath, branches: msg.mergeIn });
+
+		if (!merged.ok) {
+			throw new Error(merged.detail);
+		}
 	};
 
-	// Resolved from the tree the bullet runs in, after its branch is checked out: a
+	// Resolved from the tree the session runs in, after its branch is checked out: a
 	// plan that changes how the app starts carries its own config, and that branch's
-	// own verify bullet starts the app the new way. A file that does not validate
-	// stops the bullet here — it never falls back to the draft.
+	// own verify pass starts the app the new way. A file that does not validate stops
+	// the session here — it never falls back to the draft.
 	//
-	// Setup runs again before the bullet when a watched file changed since it last
+	// Setup runs again before the session when a watched file changed since it last
 	// ran, so a plan that added a dependency is not built on the node_modules the
 	// worktree was created with.
 	const prepareProject = async (msg: ExecStart): Promise<Project> => {
@@ -313,9 +378,43 @@ export function createExecutionSessions(opts: {
 		return { config, env: environment.env, repository: true };
 	};
 
+	// The lane owns the machine's development database: it is reset before every
+	// drive and migrated to this branch's schema, so a verdict is never reached
+	// against another plan's unmerged schema. Both steps are policy-gated — a
+	// machine pointed at a database bosun must not migrate is not one to reset.
+	const prepareDatabase = async (msg: ExecStart, project: Project): Promise<void> => {
+		const config = project.config;
+
+		if (config === null || !(msg.policy?.applyMigrations ?? false)) {
+			return;
+		}
+
+		const reset = config.verify?.resetDatabase;
+		const steps = [
+			...(reset === undefined ? [] : [{ label: 'Reset the database', cwd: reset.cwd, run: reset.run }]),
+			...Object.entries(config.apps).flatMap(([app, definition]) =>
+				definition.migrate === undefined ? [] : [{ label: `Migrate ${app}`, cwd: definition.cwd, run: definition.migrate }]
+			)
+		];
+
+		for (const step of steps) {
+			opts.send({ type: 'exec.activity', runId: msg.runId, label: step.label });
+
+			const result = await runShell({
+				command: step.run,
+				cwd: path.join(msg.worktreePath, step.cwd ?? '.'),
+				env: project.env ?? opts.services.claudeAuth.sessionEnv()
+			});
+
+			if (!result.ok) {
+				throw new Error(`${step.label} failed (${result.detail})${result.tail.trim() === '' ? '' : `:\n${result.tail.trim().slice(-TAIL_KEPT_CHARS)}`}`);
+			}
+		}
+	};
+
 	// After the branch step, whose `git clean -fd` takes an untracked `.env` with
-	// it, and before anything reads the worktree. A bullet that starts without its
-	// connection is a bullet that builds a database of its own in /tmp.
+	// it, and before anything reads the worktree. A session that starts without its
+	// connection is a session that builds a database of its own in /tmp.
 	const writeEnvFiles = (msg: ExecStart, run: Run): { path: string; keys: string[] }[] => {
 		let applied: { written: string[]; skipped: string[] };
 
@@ -351,7 +450,7 @@ export function createExecutionSessions(opts: {
 		const { msg, project } = opts2;
 		const config = project.config;
 
-		if (config === null || Object.keys(config.apps).length === 0) {
+		if (config === null || Object.keys(config.apps).length === 0 || modeOf(msg) === 'fix') {
 			return null;
 		}
 
@@ -374,7 +473,7 @@ export function createExecutionSessions(opts: {
 		await prepareBranch(msg);
 
 		// Cancelled while the worktree was being prepared. Carrying on would start a
-		// session for a bullet the backend has already taken back.
+		// session the backend has already taken back.
 		if (run.cancelled) {
 			return;
 		}
@@ -383,6 +482,10 @@ export function createExecutionSessions(opts: {
 		const project = await prepareProject(msg);
 
 		run.repository = project.repository;
+
+		if (modeOf(msg) === 'lane') {
+			await prepareDatabase(msg, project);
+		}
 
 		if (run.cancelled) {
 			return;
@@ -399,21 +502,25 @@ export function createExecutionSessions(opts: {
 			memoryMaxBytes: msg.memoryMaxBytes ?? null
 		});
 		const stack = stackFor({ msg, project, scope });
-		const toolSet = { afk: msg.afk, verify: msg.slice.kind === 'verify', stack: stack !== null };
+		const toolSet = { phase: phaseOf(msg), handsOff: msg.handsOff, stack: stack !== null };
 		const mcp = await startSessionMcpServer({
 			sessionId: msg.runId,
 			definitions: executionDefinitions(toolSet),
 			createDispatch: createExecutionDispatch({
-				afk: msg.afk,
+				toolSet,
 				planId: msg.planId,
 				sliceId: msg.sliceId,
+				buildId: msg.buildId,
+				runId: msg.runId,
 				bosunApi: opts.services.bosunApi,
 				stack,
 				onQuestion: ({ questionId, questions }) => {
 					opts.send({ type: 'exec.question', runId: msg.runId, questionId, questions });
 				}
 			}),
-			userServers: userMcp.servers,
+			// A fix session drives no browser, and a user server is a credential it has
+			// no use for.
+			userServers: modeOf(msg) === 'fix' ? {} : userMcp.servers,
 			log: (line) => {
 				console.log(line);
 			}
@@ -465,9 +572,9 @@ export function createExecutionSessions(opts: {
 				sessionSecrets: project.repository ? opts.services.projectEnv.secretNames() : []
 			}),
 			mcpConfigPath: mcp.configPath,
-			userServerNames: userMcp.serverNames,
+			userServerNames: modeOf(msg) === 'fix' ? [] : userMcp.serverNames,
 			tools: {
-				builtin: msg.slice.kind === 'verify' ? VERIFY_BUILTIN_TOOLS : EXECUTION_BUILTIN_TOOLS,
+				builtin: modeOf(msg) === 'lane' ? LANE_BUILTIN_TOOLS : EXECUTION_BUILTIN_TOOLS,
 				mcp: executionMcpTools(toolSet)
 			},
 			claudeAuth: opts.services.claudeAuth,
@@ -518,9 +625,9 @@ export function createExecutionSessions(opts: {
 
 			// Before the first await, so a reconnect that lands while the worktree is
 			// still being prepared finds this run in `held()`. Without it the backend
-			// reads a bullet it dispatched seconds ago as one that died with the old
-			// socket, puts it back, and pauses the queue — while the session it was
-			// told nothing about goes on to start and build.
+			// reads a session it dispatched seconds ago as one that died with the old
+			// socket and puts it back — while the session it was told nothing about
+			// goes on to start and build.
 			const run: Run = {
 				mcp: null,
 				process: null,
@@ -569,7 +676,7 @@ export function createExecutionSessions(opts: {
 		},
 
 		// The runs this agent still holds a session for. Sent on `hello` so the
-		// backend can tell a bullet that survived a reconnect from one that died
+		// backend can tell a session that survived a reconnect from one that died
 		// with the connection before it and has to be put back.
 		held(): string[] {
 			return [...runs.keys()];

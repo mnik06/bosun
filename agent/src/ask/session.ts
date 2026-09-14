@@ -1,6 +1,6 @@
 import { askPrompt } from '../prompts/ask';
 import { createStreamParser } from '../planning/stream-parser';
-import { type AgentMsg, type QueueAsk } from '../protocol';
+import { type AgentMsg, type LineAsk } from '../protocol';
 import { type Services } from '../services/index';
 import { startSessionMcpServer, type SessionMcpServer } from '../sessions/mcp-server';
 import { spawnClaudeSession, type ClaudeSession } from '../sessions/process';
@@ -10,7 +10,8 @@ const STDERR_KEPT_CHARS = 500;
 // Read plus git, and nothing else. `Bash(git *)` rather than `Bash` is the whole
 // guarantee: a session answering a question must not be able to run the project,
 // touch the database, or edit a file, and a prompt saying "do not" is not a
-// guarantee of anything.
+// guarantee of anything. It stands in the read tree — a checkout of the default
+// branch — and reaches every plan's branch through git.
 const ASK_TOOLS = {
 	builtin: ['Read', 'Grep', 'Glob', 'Bash'],
 	mcp: [],
@@ -18,7 +19,7 @@ const ASK_TOOLS = {
 };
 
 interface Ask {
-	queueId: string;
+	repositoryId: string;
 	mcp: SessionMcpServer;
 	process: ClaudeSession | null;
 	settled: boolean;
@@ -26,7 +27,7 @@ interface Ask {
 }
 
 export interface AskSessions {
-	ask(msg: QueueAsk): Promise<void>;
+	ask(msg: LineAsk): Promise<void>;
 	cancelAll(): void;
 	running(): number;
 }
@@ -61,7 +62,9 @@ export function createAskSessions(opts: {
 		teardown(askId);
 	};
 
-	const start = async (msg: QueueAsk): Promise<void> => {
+	const start = async (msg: LineAsk): Promise<void> => {
+		const tree = await opts.services.repo.readTree();
+
 		// No user servers and no bosun tools: a question needs neither, and every
 		// server started here is a credential handed to a session that only had to
 		// read a git log.
@@ -75,7 +78,7 @@ export function createAskSessions(opts: {
 				console.log(line);
 			}
 		});
-		const ask: Ask = { queueId: msg.queueId, mcp, process: null, settled: false, answer: '' };
+		const ask: Ask = { repositoryId: msg.repositoryId, mcp, process: null, settled: false, answer: '' };
 
 		asks.set(msg.askId, ask);
 
@@ -85,8 +88,8 @@ export function createAskSessions(opts: {
 				if (event.kind === 'text') {
 					ask.answer += event.delta;
 					opts.send({
-						type: 'queue.answer.text',
-						queueId: msg.queueId,
+						type: 'line.answer.text',
+						repositoryId: msg.repositoryId,
 						askId: msg.askId,
 						delta: event.delta
 					});
@@ -102,14 +105,14 @@ export function createAskSessions(opts: {
 					msg.askId,
 					event.ok
 						? {
-							type: 'queue.answer.done',
-							queueId: msg.queueId,
+							type: 'line.answer.done',
+							repositoryId: msg.repositoryId,
 							askId: msg.askId,
 							content: ask.answer.trim()
 						}
 						: {
-							type: 'queue.answer.error',
-							queueId: msg.queueId,
+							type: 'line.answer.error',
+							repositoryId: msg.repositoryId,
 							askId: msg.askId,
 							message: event.message
 						}
@@ -121,7 +124,7 @@ export function createAskSessions(opts: {
 		});
 
 		ask.process = spawnClaudeSession({
-			cwd: msg.worktreePath,
+			cwd: tree.path,
 			prompt: askPrompt({
 				question: msg.question,
 				state: msg.state,
@@ -142,8 +145,8 @@ export function createAskSessions(opts: {
 				// Settles only if the stream did not: an answer that arrived is the
 				// answer, whatever the exit code says afterwards.
 				settle(msg.askId, {
-					type: 'queue.answer.error',
-					queueId: msg.queueId,
+					type: 'line.answer.error',
+					repositoryId: msg.repositoryId,
 					askId: msg.askId,
 					message: stderr.trim() || `claude exited with code ${code ?? 'unknown'}`
 				});
@@ -162,8 +165,8 @@ export function createAskSessions(opts: {
 			} catch (error) {
 				teardown(msg.askId);
 				opts.send({
-					type: 'queue.answer.error',
-					queueId: msg.queueId,
+					type: 'line.answer.error',
+					repositoryId: msg.repositoryId,
 					askId: msg.askId,
 					message: error instanceof Error ? error.message : 'could not start the session'
 				});
@@ -175,8 +178,8 @@ export function createAskSessions(opts: {
 		cancelAll(): void {
 			for (const [askId, ask] of [...asks]) {
 				settle(askId, {
-					type: 'queue.answer.error',
-					queueId: ask.queueId,
+					type: 'line.answer.error',
+					repositoryId: ask.repositoryId,
 					askId,
 					message: 'the connection to bosun dropped before this was answered'
 				});

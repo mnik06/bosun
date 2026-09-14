@@ -11,10 +11,11 @@ import {
 	type Machine,
 	type UpgradeDecline
 } from '~/entities/machine'
-import { queueRefreshBlock, useMachineQueuesQuery } from '~/entities/queue'
+import { machineRefreshBlock, useLineQuery } from '~/entities/plan'
 import { AddMcpServerButton } from '~/features/add-mcp-server'
 import { PausedBanner } from '~/features/pause-machine'
 import { RefreshMachineButton, useRefreshMachine } from '~/features/refresh-machine'
+import { MachineCapacityForm } from '~/features/set-machine-capacity'
 import { SetupClaudeButton } from '~/features/setup-claude'
 import { formatRelativeTime, toErrorMessage } from '~/shared/lib'
 import { GitCard } from '~/widgets/machine-detail/ui/git-card'
@@ -108,8 +109,10 @@ export function MachineDetail ({
 	// The agent stamps lastSeenAt on every push, so a change to it is the signal
 	// that its answer to the refresh has landed.
 	const refresh = useRefreshMachine({ machineId, settleKey: data?.lastSeenAt ?? null })
-	const queues = useMachineQueuesQuery(machineId)
-	const refreshBlockedBy = queueRefreshBlock(queues.data)
+	const line = useLineQuery()
+	const refreshBlockedBy = machineRefreshBlock(
+		line.data?.capacity.find((entry) => entry.machineId === machineId)
+	)
 
 	if (isPending) {
 		return (
@@ -143,6 +146,16 @@ export function MachineDetail ({
 			/>
 
 			<GitCard machine={data} />
+
+			{kind === 'repository' ? (
+				<SetupCard
+					title="Capacity"
+					description="Memory decides how many plans build here at once. These only lower it: verify lanes are plans verifying side by side, each holding a drive's memory back, and the build cap is a ceiling below what memory would admit."
+					action={null}
+				>
+					<MachineCapacityForm machine={data} />
+				</SetupCard>
+			) : null}
 
 			<SetupCard
 				title="MCP servers"

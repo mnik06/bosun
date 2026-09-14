@@ -66,10 +66,4 @@ export const OnboardingErrorMsgSchema = z.object({
 	message: z.string()
 });
 
-export const QueuePushedMsgSchema = z.object({
-	type: z.literal('queue.pushed'),
-	itemId: z.string(),
-	branch: z.string()
-});
-
 export const RunPolicySchema = z.object({ applyMigrations: z.boolean() });

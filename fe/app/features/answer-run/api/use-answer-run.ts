@@ -1,22 +1,24 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 
-import { queueKeys } from '~/entities/queue'
+import { refreshAfterBuild, type PlanAnswer } from '~/entities/plan'
 import { apiClient } from '~/shared/api'
 import { notifyError } from '~/shared/lib'
 
 export interface RunAnswer {
 	questionId: string
-	answers: { selected: string[] }[]
+	answers: PlanAnswer[]
 }
 
-export function useAnswerRun (runId: string) {
+export function useAnswerRun (opts: { runId: string, planId: string }) {
 	const queryClient = useQueryClient()
 
 	return useMutation({
 		mutationFn: async (payload: RunAnswer) => {
-			await apiClient.post(`/queues/runs/${runId}/answer`, payload)
+			await apiClient.post(`/runs/${opts.runId}/answer`, payload)
 		},
-		onSuccess: async () => queryClient.invalidateQueries({ queryKey: queueKeys.all() }),
+		onSuccess: () => {
+			refreshAfterBuild({ queryClient, planId: opts.planId })
+		},
 		onError: (error: unknown) => {
 			notifyError({ title: 'Could not send the answer', error })
 		}

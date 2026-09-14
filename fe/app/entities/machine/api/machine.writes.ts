@@ -23,6 +23,17 @@ export async function putSessionSecrets (opts: { machineId: string, vars: Sealed
 	return MachineSchema.parse(data)
 }
 
+export async function patchMachineCapacity (opts: {
+	machineId: string,
+	verifyLanes?: number,
+	buildCap?: number | null
+}): Promise<Machine> {
+	const { machineId, ...body } = opts
+	const { data } = await apiClient.patch<unknown>(`/machines/${machineId}`, body)
+
+	return MachineSchema.parse(data)
+}
+
 export async function putMachinePolicy (opts: {
 	machineId: string,
 	applyMigrations: boolean

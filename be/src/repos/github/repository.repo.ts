@@ -12,6 +12,7 @@ const columns = {
 	defaultBranch: repositories.defaultBranch,
 	configDraft: repositories.configDraft,
 	configOnDefault: repositories.configOnDefault,
+	autoResolveConflicts: repositories.autoResolveConflicts,
 	createdAt: repositories.createdAt
 };
 
@@ -75,6 +76,24 @@ export function getRepositoryRepo(db: DbOrTx) {
 				.update(repositories)
 				.set({ configDraft: opts.configDraft })
 				.where(eq(repositories.id, opts.id))
+				.returning(columns);
+
+			return row ? RepositorySchema.parse(row) : null;
+		},
+
+		// A webhook names the repository by GitHub's id, and the same repository can be
+		// connected to more than one project.
+		async listByGithubRepoId(githubRepoId: number): Promise<Repository[]> {
+			const rows = await db.select(columns).from(repositories).where(eq(repositories.githubRepoId, githubRepoId));
+
+			return rows.map((row) => RepositorySchema.parse(row));
+		},
+
+		async saveAutoResolve(opts: { id: string; projectId: string; autoResolveConflicts: boolean }): Promise<Repository | null> {
+			const [row] = await db
+				.update(repositories)
+				.set({ autoResolveConflicts: opts.autoResolveConflicts })
+				.where(and(eq(repositories.id, opts.id), eq(repositories.projectId, opts.projectId)))
 				.returning(columns);
 
 			return row ? RepositorySchema.parse(row) : null;

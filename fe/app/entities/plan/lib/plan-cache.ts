@@ -1,5 +1,6 @@
 import type { QueryClient } from '@tanstack/react-query'
 
+import { lineKeys, needsYouKeys } from '~/entities/plan/api/line.queries'
 import { planKeys } from '~/entities/plan/api/plan.queries'
 import type {
 	Ac,
@@ -10,16 +11,20 @@ import type {
 	Slice
 } from '~/entities/plan/model/plan'
 
+// A pushed row carries no derived state, so the state already held survives it:
+// a push saying nothing about the build must not blank what the board shows.
 export function patchPlan (queryClient: QueryClient, plan: Plan): void {
 	queryClient.setQueryData<PlanDetail>(planKeys.detail(plan.id), (previous) =>
-		previous === undefined ? previous : { ...previous, plan }
+		previous === undefined
+			? previous
+			: { ...previous, plan: { ...plan, state: plan.state ?? previous.plan.state } }
 	)
-	// Merged onto the row already held rather than replacing it: the push carries
-	// the plan alone, and what the list knows about its blockers is not on it.
 	queryClient.setQueryData<PlanListEntry[]>(planKeys.list(), (previous) =>
 		previous?.some((entry) => entry.id === plan.id)
-			? previous.map((entry) => (entry.id === plan.id ? { ...entry, ...plan } : entry))
-			: [{ ...plan, blockedBy: [] }, ...(previous ?? [])]
+			? previous.map((entry) =>
+				entry.id === plan.id ? { ...entry, ...plan, state: plan.state ?? entry.state } : entry
+			)
+			: [{ ...plan, build: null, reason: null, ownerEmail: null }, ...(previous ?? [])]
 	)
 }
 
@@ -55,4 +60,36 @@ export function patchPlanArtifact (opts: {
 	opts.queryClient.setQueryData<PlanDetail>(planKeys.detail(opts.planId), (previous) =>
 		previous === undefined ? previous : { ...previous, acs: opts.acs, slices: opts.slices }
 	)
+}
+
+function refetch (queryClient: QueryClient, queryKey: readonly unknown[]): void {
+	queryClient.invalidateQueries({ queryKey }).catch(() => {
+		// A refetch that fails leaves the screen as it was; the next push recovers.
+	})
+}
+
+// Everything a moved build can change: the board, the plan's own page, the line's
+// capacity and the header count. Refetched rather than merged, because the reason
+// lines and capacity are computed by the backend.
+export function refreshAfterBuild (opts: { queryClient: QueryClient, planId: string | null }): void {
+	refetch(opts.queryClient, planKeys.list())
+	refetch(opts.queryClient, lineKeys.all())
+	refetch(opts.queryClient, needsYouKeys.all())
+
+	if (opts.planId !== null) {
+		refetch(opts.queryClient, planKeys.detail(opts.planId))
+	}
+}
+
+export function refreshPlanDetail (queryClient: QueryClient, planId: string): void {
+	refetch(queryClient, planKeys.detail(planId))
+}
+
+export function refreshNeedsYou (queryClient: QueryClient): void {
+	refetch(queryClient, needsYouKeys.all())
+}
+
+export function refreshLine (queryClient: QueryClient): void {
+	refetch(queryClient, planKeys.list())
+	refetch(queryClient, lineKeys.all())
 }

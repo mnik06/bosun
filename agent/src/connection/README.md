@@ -93,25 +93,31 @@ Answered on the socket that asked, like the env frames, with `repo.attached` or 
 can take minutes; once it is in place the agent re-announces, so the new repository reaches `hello` and
 the `git` check turns green with nothing run on the box.
 
-### Publishing on a repository machine
+### Builds, integrations and pushes
 
-`queue.publish` pushes and stops, answering `queue.pushed`; the backend opens or updates the pull
-request through the GitHub App. A machine with no repository still opens it with `gh`.
+`build.worktree.ensure` gives a build its worktree and cuts its branch — from a provider's commit when
+the plan is stacked, with every provider branch merged on top — and answers `build.worktree.ready` or
+`build.worktree.error` through the sink, because a build waits on it before its first bullet and
+nothing asks twice. Every bullet that commits pushes its branch before `exec.done`: a provider's
+foundation on the remote is what lets a dependent start. `integrate.start` merges a finished branch with
+what it lands on and pushes only once the checks are green (`../integration/README.md`). The agent
+never opens a pull request; the backend does, through the GitHub App.
 
 ## Why execution and planning sessions outlive the connection
 
-Onboarding runs (`../onboarding/session.ts`) are built in `holdConnection` for the same reasons, and
-`onboarding.done` / `onboarding.error` are settling frames the sink buffers. The sink reports buffered
+Onboarding runs (`../onboarding/session.ts`) and integrations (`../integration/session.ts`) are built in
+`holdConnection` for the same reasons, and their outcome frames are settling frames the sink buffers;
+`hello.integrationIds` names the integrations held or parked, on the same terms as `runIds`. The sink reports buffered
 run ids by frame type, not by field: an onboarding outcome carries a `runId` too, and naming it in
 `hello.runIds` would read to the backend as a bullet still held.
 
 
-Ask sessions are per-connection and are cancelled on close: one is a single question answered over
-*that* socket by a queue that is waiting on the reply, so a session whose socket has gone has nobody
-left to answer it.
+Ask sessions are per-connection and are cancelled on close: one is a single question about the line,
+answered over *that* socket to a browser waiting on the reply, so a session whose socket has gone has
+nobody left to answer it.
 
 Execution was the first exception, and it took a backend deploy killing a twenty-minute bullet to
-make the difference obvious. An AFK run needs the socket to **report**, not to **work**. `claude` is
+make the difference obvious. A bullet needs the socket to **report**, not to **work**. `claude` is
 building in a worktree; nothing about that depends on a TCP connection to bosun existing at any given
 instant. Cancelling it on close threw away real work for a one-second blip, and the deploy path made
 that routine — every release killed whatever the fleet was mid-way through.
@@ -147,8 +153,8 @@ a credential.
 
 **`hello` carries every run and every plan whose outcome is still coming.** That is the live sessions *plus* the
 sink's parked frames — a bullet that finished during the outage has no session left holding it, but
-its `exec.done` is sitting in the buffer, and a backend that settled that run as stranded would pause
-the queue over a plan which in fact landed and hand the same bullet out again on resume. The backend
+its `exec.done` is sitting in the buffer, and a backend that settled that run as stranded would put
+back a bullet which in fact landed and hand it out again. The backend
 settles every run it cannot account for (`stallMachineRuns`), so this list is the whole of what keeps
 it from resetting the sessions the reconnect was supposed to preserve. `planIds` is the identical
 mechanism for grills, read by `stallMachinePlans`. `announce` sends `hello` before its first `await`
@@ -196,7 +202,7 @@ reconnects in about a second rather than inheriting the delay from an earlier ou
 - **`paused` is remembered across reconnects and re-announced by the backend.** The row outranks the
   socket, so an agent that restarts comes back paused; the backend re-sends `pause` after `hello`,
   which is what keeps the agent's log honest rather than silent.
-- **Execution sessions are not cancelled by a socket closing; every other kind is.** `socket.on
+- **Execution, integration and planning sessions are not cancelled by a socket closing; summary and ask sessions are.** `socket.on
   ('close')` and `socket.on('error')` cancel planning, summary and ask sessions and detach the sink.
   Adding `executions.cancelAll()` back to either would restore the bug where a deploy kills whatever
   the fleet is mid-way through.

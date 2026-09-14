@@ -3,13 +3,17 @@ import { ZodTypeProvider } from 'fastify-type-provider-zod';
 import {
 	AgentBlockersReqSchema,
 	AgentDecisionReqSchema,
+	AgentPlanCriteriaQuerySchema,
 	PlanIdParamsSchema
 } from 'src/api/routes/schemas/plans/PlanReqSchemas';
 import {
 	AgentBlockersRespSchema,
 	AgentDecisionRespSchema,
-	AgentMachinePlansRespSchema
+	AgentMachinePlansRespSchema,
+	AgentPlanCriteriaRespSchema
 } from 'src/api/routes/schemas/plans/PlanRespSchemas';
+import { listPlanCriteria } from 'src/controllers/line/agent/findings';
+import { lineDeps } from 'src/controllers/line/line-deps';
 import { listMachinePlans } from 'src/controllers/plans/agent/list-machine-plans';
 import { recordPlanDecision } from 'src/controllers/plans/agent/record-plan-decision';
 import { setPlanBlockers } from 'src/controllers/plans/agent/set-plan-blockers';
@@ -23,10 +27,20 @@ const routes: FastifyPluginAsync = async function (f) {
 		async (req) => {
 			return listMachinePlans({
 				planRepo: fastify.repos.planRepo,
-				planBlockerRepo: fastify.repos.planBlockerRepo,
+				planDependencyRepo: fastify.repos.planDependencyRepo,
 				sliceRepo: fastify.repos.sliceRepo,
+				buildRepo: fastify.repos.buildRepo,
+				machineRepo: fastify.repos.machineRepo,
 				machineId: req.agent!.machineId
 			});
+		}
+	);
+
+	fastify.get(
+		'/plans/criteria',
+		{ schema: { querystring: AgentPlanCriteriaQuerySchema, response: { 200: AgentPlanCriteriaRespSchema } } },
+		async (req) => {
+			return listPlanCriteria(lineDeps(fastify), { machineId: req.agent!.machineId, numbers: req.query.numbers });
 		}
 	);
 
@@ -42,7 +56,8 @@ const routes: FastifyPluginAsync = async function (f) {
 		async (req) => {
 			return setPlanBlockers({
 				planRepo: fastify.repos.planRepo,
-				planBlockerRepo: fastify.repos.planBlockerRepo,
+				planDependencyRepo: fastify.repos.planDependencyRepo,
+				idService: fastify.services.idService,
 				planId: req.params.id,
 				machineId: req.agent!.machineId,
 				blockedByNumbers: req.body.blockedByNumbers

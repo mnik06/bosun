@@ -132,9 +132,9 @@ export function getPreflightService(deps: {
 		};
 	}
 
-	// Queues are git worktrees of this checkout, so a repo path that is not a
-	// repository is not a queue that fails later — it is a queue that can never be
-	// created at all.
+	// Builds are git worktrees of this checkout, so a repo path that is not a
+	// repository is not a build that fails later — it is a build that can never
+	// start at all.
 	async function checkGit(): Promise<PreflightCheck> {
 		const version = await deps.exec.run('git', ['--version'], {});
 
@@ -205,7 +205,7 @@ export function getPreflightService(deps: {
 			};
 	}
 
-	// Never red — queues run fine without it, they simply cannot open a pull
+	// Never red — a machine builds fine without it, it simply cannot open a pull
 	// request, and a machine used only for building should not look broken for
 	// that. A repository machine has no use for it at all: its pull requests are
 	// opened by bosun through the GitHub App.
@@ -220,7 +220,7 @@ export function getPreflightService(deps: {
 			return {
 				name: 'gh',
 				ok: true,
-				detail: 'not installed — queues will commit but cannot open pull requests'
+				detail: 'not installed — nothing here opens a pull request without a repository attached'
 			};
 		}
 
@@ -298,7 +298,7 @@ export function getPreflightService(deps: {
 	}
 
 	// Which of the two configs a repository machine's sessions run on. Only the
-	// default branch is looked at: a queue's branch may carry its own file, and a
+	// default branch is looked at: a plan's branch may carry its own file, and a
 	// session always uses the one in the tree it runs in.
 	async function checkConfig(): Promise<PreflightCheck | null> {
 		if (deps.workspace.repositoryId() === null) {

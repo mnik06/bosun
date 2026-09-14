@@ -22,6 +22,9 @@ export const RepositorySchema = z.object({
 	// Reported by an agent that has the clone, never looked up here: it is a fact
 	// about the default branch as that machine last fetched it.
 	configOnDefault: z.boolean(),
+	// Whether an integration may hand a real conflict to a session. Off, a conflict
+	// outside `regenerate` paths goes straight to needs you.
+	autoResolveConflicts: z.boolean(),
 	createdAt: z.date()
 });
 

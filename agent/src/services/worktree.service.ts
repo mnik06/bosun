@@ -21,32 +21,26 @@ export interface WorktreeResult {
 	detail: string;
 }
 
-async function deleteBranches(opts: {
+// The worktree's own branch and nothing else. A plan branch cut inside it is the
+// build's deliverable: a cancelled build keeps it for inspection, and a merged
+// one's is already on the remote.
+async function deleteWorktreeBranch(opts: {
 	exec: ExecService;
 	repoPath: string;
 	slug: string;
 }): Promise<void> {
+	const branch = `bosun/worktree/${opts.slug}`;
 	const listed = await opts.exec.run(
 		'git',
-		[
-			'-C',
-			opts.repoPath,
-			'for-each-ref',
-			'--format=%(refname:short)',
-			`refs/heads/bosun/worktree/${opts.slug}`,
-			`refs/heads/bosun/plan/${opts.slug}`
-		],
+		['-C', opts.repoPath, 'for-each-ref', '--format=%(refname:short)', `refs/heads/${branch}`],
 		{ timeoutMs: 30_000 }
 	);
-	const branches = listed.ok ? listed.stdout.split('\n').filter((line) => line !== '') : [];
 
-	if (branches.length === 0) {
+	if (!listed.ok || listed.stdout.trim() !== branch) {
 		return;
 	}
 
-	await opts.exec.run('git', ['-C', opts.repoPath, 'branch', '-D', ...branches], {
-		timeoutMs: 60_000
-	});
+	await opts.exec.run('git', ['-C', opts.repoPath, 'branch', '-D', branch], { timeoutMs: 60_000 });
 }
 
 export function getWorktreeService(deps: {
@@ -77,9 +71,9 @@ export function getWorktreeService(deps: {
 		root,
 		pathFor,
 
-		// Idempotent on purpose. A queue whose machine was offline at creation is
-		// re-sent the same ensure when it reconnects, and a second create must find
-		// the worktree it already made rather than fail on the branch existing.
+		// Idempotent on purpose. A build is sent an ensure every time it takes a slot
+		// — its first, and again after a hold or a question released it — and a
+		// second create must find the worktree it already made.
 		async ensure(opts: { slug: string }): Promise<WorktreeResult> {
 			const slug = opts.slug;
 			const worktreePath = pathFor(slug);
@@ -91,7 +85,7 @@ export function getWorktreeService(deps: {
 
 			// Before the base ref is resolved, not after: `origin/HEAD` is only as
 			// current as the last fetch, and a worktree cut from a stale one starts
-			// every queue — and the setup command it runs — on code that has moved.
+			// every build — and the setup steps it runs — on code that has moved.
 			await deps.repo.fetch();
 
 			const baseRef = await resolveBaseRef({ exec: deps.exec, repoPath: repoPath });
@@ -141,9 +135,9 @@ export function getWorktreeService(deps: {
 			};
 		},
 
-		// `--force` because a queue is deleted to get rid of it: refusing over
-		// uncommitted changes would leave a directory bosun has already forgotten,
-		// with no way left in the browser to ask again.
+		// `--force` because a build is removed to get rid of its checkout: refusing
+		// over uncommitted changes would leave a directory bosun has already
+		// forgotten, with no way left in the browser to ask again.
 		async remove(slug: string): Promise<void> {
 			const worktreePath = pathFor(slug);
 			const repoPath = currentRepoPath();
@@ -162,7 +156,7 @@ export function getWorktreeService(deps: {
 			);
 			fs.rmSync(worktreePath, { recursive: true, force: true });
 			await prune(repoPath);
-			await deleteBranches({ exec: deps.exec, repoPath: repoPath, slug });
+			await deleteWorktreeBranch({ exec: deps.exec, repoPath, slug });
 		}
 	};
 }

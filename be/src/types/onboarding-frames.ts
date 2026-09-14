@@ -57,12 +57,4 @@ export const OnboardingErrorMsgSchema = z.object({
 	message: z.string()
 });
 
-// A repository machine pushes and stops: the pull request is opened by the
-// backend through the App, so the box needs no `gh` and no GitHub credential.
-export const QueuePushedMsgSchema = z.object({
-	type: z.literal('queue.pushed'),
-	itemId: z.string(),
-	branch: z.string()
-});
-
 export const RunPolicySchema = z.object({ applyMigrations: z.boolean() });

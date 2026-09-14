@@ -1,8 +1,8 @@
 import { type FastifyInstance } from 'fastify';
+import { type BuildRepo } from 'src/repos/builds/build.repo';
 import { type RepositoryRepo } from 'src/repos/github/repository.repo';
 import { type MachineRepo } from 'src/repos/machines/machine.repo';
 import { type OnboardingRunRepo } from 'src/repos/onboarding/onboarding-run.repo';
-import { type SliceRunRepo } from 'src/repos/queues/slice-run.repo';
 import { type IdService } from 'src/services/ids/id.service';
 import { type MachineMemoryService } from 'src/services/sockets/machine-memory.service';
 import { type SocketRegistry } from 'src/services/sockets/registry.service';
@@ -11,7 +11,7 @@ export interface OnboardingDeps {
 	onboardingRunRepo: OnboardingRunRepo;
 	repositoryRepo: RepositoryRepo;
 	machineRepo: MachineRepo;
-	sliceRunRepo: SliceRunRepo;
+	buildRepo: BuildRepo;
 	idService: IdService;
 	machineMemory: MachineMemoryService;
 	socketRegistry: SocketRegistry;
@@ -25,7 +25,7 @@ export function onboardingDeps(fastify: FastifyInstance): OnboardingDeps {
 		onboardingRunRepo: fastify.repos.onboardingRunRepo,
 		repositoryRepo: fastify.repos.repositoryRepo,
 		machineRepo: fastify.repos.machineRepo,
-		sliceRunRepo: fastify.repos.sliceRunRepo,
+		buildRepo: fastify.repos.buildRepo,
 		idService: fastify.services.idService,
 		machineMemory: fastify.services.machineMemory,
 		socketRegistry: fastify.services.socketRegistry

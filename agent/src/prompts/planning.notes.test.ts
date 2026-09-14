@@ -15,7 +15,7 @@ describe('operator notes', () => {
 		const prompt = planningPrompt({
 			input: 'ticket',
 			verifyInUi: true,
-			auto: false,
+			handsOff: false,
 			notes: 'Invoke the design skill for any screen work.',
 			tree
 		});
@@ -29,7 +29,7 @@ describe('operator notes', () => {
 		const prompt = planningPrompt({
 			input: 'ticket',
 			verifyInUi: true,
-			auto: false,
+			handsOff: false,
 			notes: null,
 			tree
 		});
@@ -46,7 +46,7 @@ describe('the checkout the session is told to read', () => {
 		const prompt = planningPrompt({
 			input: 'ticket',
 			verifyInUi: true,
-			auto: false,
+			handsOff: false,
 			notes: null,
 			tree
 		});
@@ -60,7 +60,7 @@ describe('the checkout the session is told to read', () => {
 		const prompt = planningPrompt({
 			input: 'ticket',
 			verifyInUi: true,
-			auto: false,
+			handsOff: false,
 			notes: null,
 			tree: {
 				path: '/home/u/repo',

@@ -6,7 +6,7 @@ import { announceRepository } from 'src/controllers/repositories/shared/announce
 import { type GithubInstallationRepo } from 'src/repos/github/github-installation.repo';
 import { type RepositoryRepo } from 'src/repos/github/repository.repo';
 import { type MachineRepo } from 'src/repos/machines/machine.repo';
-import { type QueueRepo } from 'src/repos/queues/queue.repo';
+import { type BuildRepo } from 'src/repos/builds/build.repo';
 import { type GithubAppService } from 'src/services/github/github-app.service';
 import { type IdService } from 'src/services/ids/id.service';
 import { type SocketRegistry } from 'src/services/sockets/registry.service';
@@ -64,7 +64,7 @@ export async function dispatchAttach(opts: {
 }
 
 async function refusal(opts: {
-	queueRepo: QueueRepo;
+	buildRepo: BuildRepo;
 	socketRegistry: SocketRegistry;
 	machine: Machine;
 	projectId: string;
@@ -79,10 +79,10 @@ async function refusal(opts: {
 		return `This machine's agent (${machine.agentVersion ?? 'unknown'}) is older than ${MIN_REPOSITORY_AGENT_VERSION} and cannot clone a repository — upgrade it with Refresh first`;
 	}
 
-	// A queue's worktree is a worktree of the checkout it was made from. Moving the
-	// machine to a new clone underneath one would leave it pointing nowhere.
-	if (machine.repositoryId === null && (await opts.queueRepo.listForMachine({ machineId: machine.id, projectId: opts.projectId })).length > 0) {
-		return 'This machine still has queues on its current checkout — remove them before attaching a repository';
+	// A build's worktree is a worktree of the clone it was made from. Moving the
+	// machine to another clone underneath one would leave it pointing nowhere.
+	if (machine.repositoryId !== null && (await opts.buildRepo.listForMachine({ machineId: machine.id, statuses: ['building', 'integrating', 'waiting_verify', 'driving', 'fixing', 'rechecking', 'in_review', 'held', 'waiting_answer'] })).length > 0) {
+		return 'This machine still holds builds on its current clone — let them finish or cancel them before attaching another repository';
 	}
 
 	return null;
@@ -100,7 +100,7 @@ export async function attachRepository(opts: {
 	machineRepo: MachineRepo;
 	repositoryRepo: RepositoryRepo;
 	githubInstallationRepo: GithubInstallationRepo;
-	queueRepo: QueueRepo;
+	buildRepo: BuildRepo;
 	githubApp: GithubAppService;
 	idService: IdService;
 	socketRegistry: SocketRegistry;

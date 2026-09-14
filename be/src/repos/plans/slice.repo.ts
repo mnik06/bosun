@@ -1,6 +1,7 @@
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import { type DbOrTx } from 'src/services/drizzle/drizzle.service';
 import { slices } from 'src/services/drizzle/schema';
+import { type Footprint } from 'src/types/FootprintSchema';
 import { SliceSchema, type Slice, type SliceKind } from 'src/types/PlanSchema';
 
 const columns = {
@@ -9,7 +10,10 @@ const columns = {
 	ordinal: slices.ordinal,
 	kind: slices.kind,
 	title: slices.title,
-	bodyMd: slices.bodyMd
+	bodyMd: slices.bodyMd,
+	foundation: slices.foundation,
+	footprint: slices.footprint,
+	changedFiles: slices.changedFiles
 };
 
 export function getSliceRepo(db: DbOrTx) {
@@ -21,6 +25,8 @@ export function getSliceRepo(db: DbOrTx) {
 			kind: SliceKind;
 			title: string;
 			bodyMd?: string | null;
+			foundation: boolean;
+			footprint: Footprint;
 		}): Promise<Slice> {
 			const [row] = await db.insert(slices).values(opts).returning(columns);
 
@@ -51,6 +57,12 @@ export function getSliceRepo(db: DbOrTx) {
 			return rows.map((row) => SliceSchema.parse(row));
 		},
 
+		async getById(id: string): Promise<Slice | null> {
+			const [row] = await db.select(columns).from(slices).where(eq(slices.id, id));
+
+			return row ? SliceSchema.parse(row) : null;
+		},
+
 		async updateInPlan(opts: {
 			id: string;
 			planId: string;
@@ -58,6 +70,8 @@ export function getSliceRepo(db: DbOrTx) {
 			title?: string;
 			bodyMd?: string | null;
 			ordinal?: number;
+			foundation?: boolean;
+			footprint?: Footprint;
 		}): Promise<Slice | null> {
 			const { id, planId, ...values } = opts;
 			const [row] = await db
@@ -67,6 +81,10 @@ export function getSliceRepo(db: DbOrTx) {
 				.returning(columns);
 
 			return row ? SliceSchema.parse(row) : null;
+		},
+
+		async saveChangedFiles(opts: { id: string; changedFiles: string[] }): Promise<void> {
+			await db.update(slices).set({ changedFiles: opts.changedFiles }).where(eq(slices.id, opts.id));
 		},
 
 		async deleteInPlan(opts: { id: string; planId: string }): Promise<boolean> {

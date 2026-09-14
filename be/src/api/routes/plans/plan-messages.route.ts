@@ -4,8 +4,9 @@ import {
 	PlanIdParamsSchema,
 	SayToPlanReqSchema
 } from 'src/api/routes/schemas/plans/PlanReqSchemas';
-import { PlanSchema } from 'src/types/PlanSchema';
-import { confirmPlan } from 'src/controllers/plans/confirm-plan';
+import { ApprovePlanRespSchema } from 'src/api/routes/schemas/plans/PlanRespSchemas';
+import { approvePlan } from 'src/controllers/line/approve-plan';
+import { lineDeps } from 'src/controllers/line/line-deps';
 import { sayToPlan } from 'src/controllers/plans/say-to-plan';
 
 const routes: FastifyPluginAsync = async function (f) {
@@ -39,22 +40,15 @@ const routes: FastifyPluginAsync = async function (f) {
 	);
 
 	fastify.post(
-		'/:id/confirm',
+		'/:id/approve',
 		{
 			schema: {
 				params: PlanIdParamsSchema,
-				response: { 200: PlanSchema }
+				response: { 200: ApprovePlanRespSchema }
 			}
 		},
 		async (req) => {
-			return confirmPlan({
-				planRepo: fastify.repos.planRepo,
-				acRepo: fastify.repos.acRepo,
-				sliceRepo: fastify.repos.sliceRepo,
-				socketRegistry: fastify.services.socketRegistry,
-				id: req.params.id,
-				projectId: req.membership!.projectId
-			});
+			return approvePlan(lineDeps(fastify), { id: req.params.id, projectId: req.membership!.projectId });
 		}
 	);
 };

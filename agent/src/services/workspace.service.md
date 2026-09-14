@@ -44,7 +44,7 @@ and `gh`, unchanged.
   failing: `bosun-agent git-credential get` prints its reason on stderr when run by hand with
   `printf 'protocol=https\nhost=github.com\n\n'` on stdin.
 - **A backend outage stops pushes.** Tokens are cached in the backend for most of their hour, which
-  covers a deploy but not a long outage; a queue fails at its next push rather than silently.
+  covers a deploy but not a long outage; a bullet's push fails and is reported rather than lost, and an integration stops before it pushes.
 - **A session can call the helper.** It has `Bash` and the helper is on its `PATH`. What it gets is an
   hour of `contents: write` on the repository it is already working in. Onboarding's discovery runs
   with `GIT_CONFIG_*` clearing every helper, so it has nothing to push with at all.

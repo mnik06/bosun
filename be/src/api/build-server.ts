@@ -9,6 +9,9 @@ import cors from '@fastify/cors';
 import websocket from '@fastify/websocket';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import { errorHandler } from 'src/api/errors/error.handler';
+import { startPullRequestReconcile } from 'src/controllers/github/reconcile-pull-requests';
+import { lineDeps } from 'src/controllers/line/line-deps';
+import { startQuestionSweep } from 'src/controllers/line/release-stale-questions';
 import { startStalePlanSweep } from 'src/controllers/plans/sweep-stale-plans';
 import { getLoggerOptions } from 'src/api/plugins/logger.plugin';
 import {
@@ -135,8 +138,16 @@ export async function buildServer(): Promise<FastifyInstance> {
 		socketRegistry: server.services.socketRegistry,
 		log: server.log
 	});
+	// A question past its hold gives its slot up whether or not anything else
+	// happens on its machine, and a merge whose webhook was missed is still a merge.
+	const stopQuestionSweep = startQuestionSweep({ deps: lineDeps(server), log: server.log });
+	const stopReconcile = startPullRequestReconcile({ deps: lineDeps(server), log: server.log });
 
 	server.addHook('onClose', stopSweep);
+	server.addHook('onClose', async () => {
+		stopQuestionSweep();
+		stopReconcile();
+	});
 
 	return server;
 }

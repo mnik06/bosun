@@ -21,7 +21,7 @@ export async function startPlan(opts: {
 	machineId: string;
 	input: string;
 	verifyInUi: boolean;
-	auto: boolean;
+	handsOff: boolean;
 }): Promise<Plan> {
 	const machine = await requireHost({
 		machineRepo: opts.machineRepo,
@@ -35,9 +35,10 @@ export async function startPlan(opts: {
 		projectId: opts.projectId,
 		createdByUserId: opts.createdByUserId,
 		machineId: machine.id,
+		repositoryId: machine.repositoryId,
 		input: opts.input,
 		verifyInUi: opts.verifyInUi,
-		auto: opts.auto
+		handsOff: opts.handsOff
 	});
 
 	await opts.planMessageRepo.append({
@@ -54,7 +55,7 @@ export async function startPlan(opts: {
 			planId: plan.id,
 			input: opts.input,
 			verifyInUi: opts.verifyInUi,
-			auto: opts.auto,
+			handsOff: opts.handsOff,
 			notes: machine.projectProfile?.notes ?? null,
 			configDraft: await configDraftFor({ repositoryRepo: opts.repositoryRepo, machine })
 		}

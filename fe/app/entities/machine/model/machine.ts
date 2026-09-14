@@ -65,6 +65,9 @@ export const MachineSchema = z.object({
 	publicKey: z.string().nullish(),
 	policy: MachinePolicySchema.nullish(),
 	sessionSecrets: z.array(z.string()).nullish(),
+	// Nullish for the same reason: a backend older than the line omits both.
+	verifyLanes: z.number().int().nullish(),
+	buildCap: z.number().int().nullish(),
 	createdAt: z.iso.datetime()
 })
 

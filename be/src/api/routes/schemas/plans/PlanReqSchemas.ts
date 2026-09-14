@@ -1,4 +1,9 @@
 import { z } from 'zod';
+import {
+	FindingKindSchema,
+	FindingSeveritySchema
+} from 'src/types/BuildSchema';
+import { FootprintSchema } from 'src/types/FootprintSchema';
 import { PlanAnswerSchema, SliceKindSchema } from 'src/types/PlanSchema';
 
 export const PlanIdParamsSchema = z.object({ id: z.string() });
@@ -7,14 +12,7 @@ export const CreatePlanReqSchema = z.object({
 	machineId: z.string().min(1),
 	input: z.string().min(1),
 	verifyInUi: z.boolean().default(true),
-	auto: z.boolean().default(false)
-});
-
-// Two is the floor because a preparation plan holds what more than one plan
-// needs: with one selected there is nothing to share it with, and the session
-// would be asked to guess at a second consumer that does not exist.
-export const PreparePlansReqSchema = z.object({
-	planIds: z.array(z.string().min(1)).min(2)
+	handsOff: z.boolean().default(false)
 });
 
 export const SayToPlanReqSchema = z.object({ text: z.string().trim().min(1) });
@@ -27,10 +25,6 @@ export const AnswerPlanReqSchema = z.object({
 export const AgentPlanNameReqSchema = z.object({ title: z.string().min(1) });
 
 export const AgentPublishReqSchema = z.object({
-	// The preparation plan on whose behalf another plan is being rewritten. The id
-	// is checked against that plan's recorded scope rather than believed, so a
-	// session naming one it was not created with is refused.
-	preparedBy: z.string().nullable().default(null),
 	title: z.string().min(1),
 	bodyMd: z.string().min(1),
 	acs: z.array(z.object({ code: z.string().min(1), text: z.string().min(1) })).min(1),
@@ -41,7 +35,11 @@ export const AgentPublishReqSchema = z.object({
 				kind: SliceKindSchema,
 				title: z.string().min(1),
 				bodyMd: z.string().nullable().default(null),
-				acCodes: z.array(z.string().min(1)).default([])
+				acCodes: z.array(z.string().min(1)).default([]),
+				foundation: z.boolean().default(false),
+				// Required on a build bullet, refused on a verify bullet — `publishPlan`
+				// says which, by ordinal, rather than a union the session cannot read.
+				footprint: FootprintSchema.nullable().default(null)
 			})
 		)
 		.min(1)
@@ -68,4 +66,28 @@ export const AgentDecisionReqSchema = z.object({
 	chose: z.string().min(1),
 	blastRadius: z.string().nullable().default(null),
 	reversing: z.string().nullable().default(null)
+});
+
+export const AgentPlanCriteriaQuerySchema = z.object({
+	numbers: z
+		.string()
+		.regex(/^\d+(,\d+)*$/)
+		.transform((value) => value.split(',').map(Number))
+});
+
+export const AgentBuildIdParamsSchema = z.object({ buildId: z.string().min(1) });
+
+export const AgentFindingReqSchema = z.object({
+	runId: z.string().min(1),
+	acCode: z.string().min(1).nullable().default(null),
+	kind: FindingKindSchema,
+	reproduction: z.string().trim().min(1).max(4000),
+	severity: FindingSeveritySchema.default('medium')
+});
+
+export const AgentFindingIdParamsSchema = z.object({ id: z.string().min(1) });
+
+export const AgentResolveFindingReqSchema = z.object({
+	status: z.enum(['fixed', 'left']),
+	note: z.string().trim().min(1).max(2000)
 });

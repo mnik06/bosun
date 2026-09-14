@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { type DbOrTx } from 'src/services/drizzle/drizzle.service';
 import { users } from 'src/services/drizzle/schema';
 import { UserSchema, type User } from 'src/types/UserSchema';
@@ -17,6 +17,16 @@ export function getUserRepo(db: DbOrTx) {
 			const [row] = await db.select(publicColumns).from(users).where(eq(users.subId, subId));
 
 			return row ? UserSchema.parse(row) : null;
+		},
+
+		async listByIds(ids: string[]): Promise<User[]> {
+			if (ids.length === 0) {
+				return [];
+			}
+
+			const rows = await db.select(publicColumns).from(users).where(inArray(users.id, ids));
+
+			return rows.map((row) => UserSchema.parse(row));
 		},
 
 		async findByEmail(email: string): Promise<User | null> {

@@ -15,7 +15,6 @@ import {
 	PlanQuestionMsgSchema,
 	PlanTextMsgSchema
 } from 'src/types/plan-stream';
-import { PlanPrepareMsgSchema } from 'src/types/plan-prepare';
 import { MachineMemorySchema } from 'src/types/machine-memory';
 import {
 	EnvDeleteMsgSchema,
@@ -30,23 +29,28 @@ import {
 	OnboardingDoneMsgSchema,
 	OnboardingErrorMsgSchema,
 	OnboardingStartMsgSchema,
-	QueuePushedMsgSchema,
 	RepoAttachedMsgSchema,
 	RepoAttachMsgSchema,
 	RepoErrorMsgSchema,
 	RunPolicySchema
 } from 'src/types/onboarding-frames';
 import {
-	QueueAnswerDoneMsgSchema,
-	QueueAnswerErrorMsgSchema,
-	QueueAnswerTextMsgSchema,
-	QueuePublishedMsgSchema,
-	QueuePublishErrorMsgSchema,
-	QueueWorktreeErrorMsgSchema,
-	QueueWorktreeReadyMsgSchema
-} from 'src/types/queue-frames';
-
-export { PlanPrepareMsgSchema, PreparePlanSchema, type PreparePlan } from 'src/types/plan-prepare';
+	BuildSummarizeMsgSchema,
+	BuildWorktreeEnsureMsgSchema,
+	BuildWorktreeErrorMsgSchema,
+	BuildWorktreeReadyMsgSchema,
+	BuildWorktreeRemoveMsgSchema,
+	IntegrateActivityMsgSchema,
+	IntegrateCancelMsgSchema,
+	IntegrateDoneMsgSchema,
+	IntegrateNeedsYouMsgSchema,
+	IntegrateStartMsgSchema,
+	LineAnswerDoneMsgSchema,
+	LineAnswerErrorMsgSchema,
+	LineAnswerTextMsgSchema,
+	LineAskMsgSchema
+} from 'src/types/build-frames';
+import { FindingKindSchema, FindingSeveritySchema, RunPhaseSchema } from 'src/types/BuildSchema';
 
 export {
 	PlanActivityMsgSchema,
@@ -75,13 +79,14 @@ export const HelloMsgSchema = z.object({
 	planIds: z.array(z.string()).optional(),
 	// The onboarding runs still held, on the same terms.
 	onboardingRunIds: z.array(z.string()).optional(),
+	// The integrations still held, on the same terms.
+	integrationIds: z.array(z.string()).optional(),
 	// How long that agent process has been alive. A dropped socket and a restarted
 	// agent are indistinguishable here otherwise, and only one of them means every
-	// session on the machine is gone — which is the difference between a queue
-	// that was unlucky and a machine that is killing its own agent.
+	// session on the machine is gone.
 	uptimeMs: z.number().optional(),
 	// Absent off Linux and from agents older than memory budgets, which are then
-	// scheduled with the fixed cap alone.
+	// scheduled without a budget.
 	memory: MachineMemorySchema.optional(),
 	// How the agent process before this one ended, as systemd recorded it. `oom-kill`
 	// beside an uptime newer than a stranded bullet is the kernel having killed the
@@ -130,11 +135,16 @@ export const ExecQuestionMsgSchema = z.object({
 	questions: z.array(PlanQuestionSchema).min(1)
 });
 
+// `changedFiles` is what the landed commit touched; `pushed` is whether the branch
+// reached the remote after it, which is what lets a dependent start elsewhere.
 export const ExecDoneMsgSchema = z.object({
 	type: z.literal('exec.done'),
 	runId: z.string(),
 	commitSha: z.string().nullable(),
-	report: z.string()
+	report: z.string(),
+	changedFiles: z.array(z.string()).default([]),
+	pushed: z.boolean().default(false),
+	pushError: z.string().nullable().default(null)
 });
 
 export const ExecErrorMsgSchema = z.object({
@@ -168,19 +178,19 @@ export const AgentMsgSchema = z.discriminatedUnion('type', [
 	PlanQuestionMsgSchema,
 	PlanDoneMsgSchema,
 	PlanErrorMsgSchema,
-	QueueWorktreeReadyMsgSchema,
-	QueueWorktreeErrorMsgSchema,
+	BuildWorktreeReadyMsgSchema,
+	BuildWorktreeErrorMsgSchema,
 	ExecTextMsgSchema,
 	ExecActivityMsgSchema,
 	ExecQuestionMsgSchema,
 	ExecDoneMsgSchema,
 	ExecErrorMsgSchema,
-	QueuePublishedMsgSchema,
-	QueuePublishErrorMsgSchema,
-	QueuePushedMsgSchema,
-	QueueAnswerTextMsgSchema,
-	QueueAnswerDoneMsgSchema,
-	QueueAnswerErrorMsgSchema,
+	IntegrateActivityMsgSchema,
+	IntegrateDoneMsgSchema,
+	IntegrateNeedsYouMsgSchema,
+	LineAnswerTextMsgSchema,
+	LineAnswerDoneMsgSchema,
+	LineAnswerErrorMsgSchema,
 	EnvSavedMsgSchema,
 	EnvErrorMsgSchema,
 	RepoAttachedMsgSchema,
@@ -216,13 +226,19 @@ export const ShutdownMsgSchema = z.object({
 	reason: z.string()
 });
 
-// The slug rather than a path: where a worktree lives is the agent's decision,
-// because only it knows the home directory it is running under.
 export const ExecSliceSchema = z.object({
 	ordinal: z.number().int(),
 	kind: z.enum(['build', 'verify']),
 	title: z.string(),
 	bodyMd: z.string().nullable()
+});
+
+export const ExecFindingSchema = z.object({
+	id: z.string(),
+	acCode: z.string().nullable(),
+	kind: FindingKindSchema,
+	reproduction: z.string(),
+	severity: FindingSeveritySchema
 });
 
 // Everything the session needs travels in the frame. The agent holds no plan
@@ -231,13 +247,12 @@ export const ExecSliceSchema = z.object({
 export const ExecStartMsgSchema = z.object({
 	type: z.literal('exec.start'),
 	runId: z.string(),
+	buildId: z.string(),
 	worktreePath: z.string(),
 	branch: z.string(),
 	baseRef: z.string(),
-	// True only for the first slice of a plan: later slices build on the commits
-	// the earlier ones made rather than resetting over them.
-	freshBranch: z.boolean(),
-	afk: z.boolean(),
+	// A hands-off plan's bullets are given no way to ask.
+	handsOff: z.boolean(),
 	planId: z.string(),
 	sliceId: z.string(),
 	planNumber: z.number().int(),
@@ -246,23 +261,38 @@ export const ExecStartMsgSchema = z.object({
 	// A machine with no repository still runs on the profile edited in the
 	// browser. A repository machine reads `.bosun/project.yaml` from the worktree
 	// and falls back to `configDraft` only when the file does not exist; `policy`
-	// is the one environment fact the file never holds.
+	// is the one environment fact the file never holds, and governs only the lane.
 	profile: ProjectProfileSchema,
 	configDraft: z.string().nullable(),
 	policy: RunPolicySchema.nullable(),
 	portBase: z.number().int(),
 	slice: ExecSliceSchema,
+	// Null on a build bullet.
+	phase: RunPhaseSchema.nullable(),
 	acs: z.array(z.object({ code: z.string(), text: z.string() })),
-	// Every criterion in the plan, not only this bullet's — a verify bullet is
+	// Every criterion in the plan, not only this bullet's — a verify session is
 	// measured against the whole feature.
 	planAcs: z.array(z.object({ code: z.string(), text: z.string() })),
-	decisions: z.array(
-		z.object({ fork: z.string(), chose: z.string() })
-	),
+	decisions: z.array(z.object({ fork: z.string(), chose: z.string() })),
 	doneSlices: z.array(z.object({ ordinal: z.number().int(), title: z.string() })),
-	// The most memory this bullet's session may use: the same number it was admitted
-	// against, so the limits of everything running fit the machine. Null for an
-	// agent that has not reported its memory, which the scheduler cannot budget.
+	// What bosun changed about this plan to fit the others: rendered as standing
+	// instruction, never as a request to reconsider.
+	amendments: z.array(z.string()),
+	// Provider branches merged in before the bullet, so a stacked plan builds on
+	// whatever its provider gained since it started.
+	mergeIn: z.array(z.string()),
+	// Push the branch after committing. Off for a machine with no repository.
+	push: z.boolean(),
+	// A bullet restarted after its question was answered.
+	answer: z
+		.object({ questions: z.array(PlanQuestionSchema), answers: z.array(PlanAnswerSchema) })
+		.nullable(),
+	// A fix session's findings.
+	findings: z.array(ExecFindingSchema),
+	// The criteria a re-check drives.
+	recheckCodes: z.array(z.string()),
+	// The most memory this session may use: the same number it was admitted
+	// against, so the limits of everything running fit the machine.
 	memoryMaxBytes: z.number().int().positive().nullable()
 });
 
@@ -275,57 +305,6 @@ export const ExecAnswerMsgSchema = z.object({
 	answers: z.array(PlanAnswerSchema).min(1)
 });
 
-export const QueueAskMsgSchema = z.object({
-	type: z.literal('queue.ask'),
-	queueId: z.string(),
-	askId: z.string(),
-	worktreePath: z.string(),
-	question: z.string(),
-	// The state bosun holds, rendered for the session. It reads the worktree for
-	// everything else, but the statuses and the failure reasons live here.
-	state: z.string(),
-	transcript: z.array(z.object({ role: z.enum(['user', 'assistant']), content: z.string() }))
-});
-
-export const QueuePublishMsgSchema = z.object({
-	type: z.literal('queue.publish'),
-	itemId: z.string(),
-	worktreePath: z.string(),
-	branch: z.string(),
-	baseRef: z.string(),
-	title: z.string(),
-	body: z.string()
-});
-
-// Sent after the pull request is asked for, not instead of it: the summary is a
-// convenience and the branch is the deliverable, so a machine that cannot write
-// one still opens the PR.
-export const QueueSummarizeMsgSchema = z.object({
-	type: z.literal('queue.summarize'),
-	planId: z.string(),
-	worktreePath: z.string(),
-	branch: z.string(),
-	baseRef: z.string(),
-	planTitle: z.string(),
-	planBodyMd: z.string()
-});
-
-export const QueueWorktreeEnsureMsgSchema = z.object({
-	type: z.literal('queue.worktree.ensure'),
-	queueId: z.string(),
-	slug: z.string(),
-	// A machine with no repository runs this; a repository machine runs the setup
-	// steps of the config it finds in the new worktree, or of this draft.
-	setupCommand: z.string().nullable().default(null),
-	configDraft: z.string().nullable().default(null)
-});
-
-export const QueueWorktreeRemoveMsgSchema = z.object({
-	type: z.literal('queue.worktree.remove'),
-	queueId: z.string(),
-	slug: z.string()
-});
-
 export const ServerMsgSchema = z.discriminatedUnion('type', [
 	PingMsgSchema,
 	RefreshMsgSchema,
@@ -334,18 +313,18 @@ export const ServerMsgSchema = z.discriminatedUnion('type', [
 	ResumeMsgSchema,
 	ShutdownMsgSchema,
 	PlanStartMsgSchema,
-	PlanPrepareMsgSchema,
 	PlanAnswerMsgSchema,
 	PlanCancelMsgSchema,
 	PlanSayMsgSchema,
-	QueueWorktreeEnsureMsgSchema,
-	QueueWorktreeRemoveMsgSchema,
+	BuildWorktreeEnsureMsgSchema,
+	BuildWorktreeRemoveMsgSchema,
 	ExecStartMsgSchema,
 	ExecCancelMsgSchema,
 	ExecAnswerMsgSchema,
-	QueuePublishMsgSchema,
-	QueueSummarizeMsgSchema,
-	QueueAskMsgSchema,
+	IntegrateStartMsgSchema,
+	IntegrateCancelMsgSchema,
+	BuildSummarizeMsgSchema,
+	LineAskMsgSchema,
 	EnvSetMsgSchema,
 	EnvDeleteMsgSchema,
 	SecretsSetMsgSchema,
@@ -355,5 +334,7 @@ export const ServerMsgSchema = z.discriminatedUnion('type', [
 ]);
 
 export type ServerMsg = z.infer<typeof ServerMsgSchema>;
+
+export type ExecStart = z.infer<typeof ExecStartMsgSchema>;
 
 export { UiMsgSchema, UiCommandSchema, type UiMsg, type UiCommand } from 'src/types/ui-protocol';

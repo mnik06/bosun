@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { BuildSchema, RepositoryMessageSchema } from 'src/types/BuildSchema';
 import { MachineSchema } from 'src/types/MachineSchema';
 import {
 	AcSchema,
@@ -8,7 +9,6 @@ import {
 	PlanSchema,
 	SliceSchema
 } from 'src/types/PlanSchema';
-import { QueueMessageSchema, QueueSchema } from 'src/types/QueueSchema';
 import { RepositorySchema } from 'src/types/RepositorySchema';
 import {
 	PlanActivityMsgSchema,
@@ -103,14 +103,32 @@ export const PlanArtifactMsgSchema = z.object({
 	slices: z.array(SliceSchema)
 });
 
-export const QueueUpdatedMsgSchema = z.object({
-	type: z.literal('queue.updated'),
-	queue: QueueSchema
+// A nudge: something the plan page reads changed — its dependencies, amendments,
+// findings, integrations or runs. The page refetches rather than merging each.
+export const PlanChangedMsgSchema = z.object({
+	type: z.literal('plan.changed'),
+	planId: z.string()
 });
 
-export const QueueDeletedMsgSchema = z.object({
-	type: z.literal('queue.deleted'),
-	queueId: z.string()
+export const BuildUpdatedMsgSchema = z.object({
+	type: z.literal('build.updated'),
+	build: BuildSchema
+});
+
+export const BuildDeletedMsgSchema = z.object({
+	type: z.literal('build.deleted'),
+	buildId: z.string(),
+	planId: z.string()
+});
+
+// A nudge: a repository's line moved — an order, a capacity, a reason line.
+export const LineChangedMsgSchema = z.object({
+	type: z.literal('line.changed'),
+	repositoryId: z.string()
+});
+
+export const NeedsYouChangedMsgSchema = z.object({
+	type: z.literal('needs_you.changed')
 });
 
 export const RunTextMsgSchema = z.object({
@@ -128,8 +146,16 @@ export const RunActivityMsgSchema = z.object({
 export const RunQuestionMsgSchema = z.object({
 	type: z.literal('run.question'),
 	runId: z.string(),
+	planId: z.string(),
 	questionId: z.string(),
 	questions: z.array(PlanQuestionSchema).min(1)
+});
+
+export const IntegrationActivityMsgSchema = z.object({
+	type: z.literal('integration.activity'),
+	integrationId: z.string(),
+	planId: z.string(),
+	label: z.string()
 });
 
 export const PlanDecisionMsgSchema = z.object({
@@ -138,14 +164,14 @@ export const PlanDecisionMsgSchema = z.object({
 	decision: PlanDecisionSchema
 });
 
-export const QueueMessageMsgSchema = z.object({
-	type: z.literal('queue.message'),
-	message: QueueMessageSchema
+export const RepositoryMessageMsgSchema = z.object({
+	type: z.literal('repository.message'),
+	message: RepositoryMessageSchema
 });
 
-export const QueueAnswerMsgSchema = z.object({
-	type: z.literal('queue.answer'),
-	queueId: z.string(),
+export const RepositoryAnswerMsgSchema = z.object({
+	type: z.literal('repository.answer'),
+	repositoryId: z.string(),
 	askId: z.string(),
 	delta: z.string()
 });
@@ -168,14 +194,18 @@ export const UiMsgSchema = z.discriminatedUnion('type', [
 	PlanDeletedMsgSchema,
 	PlanMessageMsgSchema,
 	PlanArtifactMsgSchema,
-	QueueUpdatedMsgSchema,
-	QueueDeletedMsgSchema,
+	PlanChangedMsgSchema,
+	BuildUpdatedMsgSchema,
+	BuildDeletedMsgSchema,
+	LineChangedMsgSchema,
+	NeedsYouChangedMsgSchema,
 	RunTextMsgSchema,
 	RunActivityMsgSchema,
 	RunQuestionMsgSchema,
+	IntegrationActivityMsgSchema,
 	PlanDecisionMsgSchema,
-	QueueMessageMsgSchema,
-	QueueAnswerMsgSchema
+	RepositoryMessageMsgSchema,
+	RepositoryAnswerMsgSchema
 ]);
 
 export type UiMsg = z.infer<typeof UiMsgSchema>;

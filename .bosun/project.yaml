@@ -36,6 +36,24 @@ apps:
       VITE_API_URL: "{url.be}"
     ready: "{url.fe}"
 
+regenerate:
+  - name: migrations
+    cwd: be
+    paths: [be/drizzle-out/**]
+    run: pnpm db:migration:generate
+  - name: be lockfile
+    cwd: be
+    paths: [be/pnpm-lock.yaml]
+    run: pnpm install --lockfile-only
+  - name: fe lockfile
+    cwd: fe
+    paths: [fe/pnpm-lock.yaml]
+    run: pnpm install --lockfile-only
+  - name: agent lockfile
+    cwd: agent
+    paths: [agent/pnpm-lock.yaml]
+    run: pnpm install --lockfile-only
+
 checks:
   - cwd: be
     run: pnpm preflight

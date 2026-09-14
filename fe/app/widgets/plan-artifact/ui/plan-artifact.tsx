@@ -1,11 +1,10 @@
-import { Badge, Card, Checkbox, Divider, Group, Stack, Text, Title } from '@mantine/core'
+import { Badge, Checkbox, Divider, Group, Stack, Text, Title } from '@mantine/core'
 
-import type { Ac, Plan, PlanDecision, Slice } from '~/entities/plan'
+import type { Ac, DependencyView, Plan, PlanAmendment, PlanDecision, Slice } from '~/entities/plan'
 import { MarkdownBlock } from '~/shared/ui'
 import { PlanDecisions } from '~/widgets/plan-artifact/ui/plan-decisions'
-
-const VERIFY_JOB =
-	'Drives every acceptance criterion through the running product and repairs what it finds broken. It builds nothing of its own.'
+import { PlanDependencies } from '~/widgets/plan-artifact/ui/plan-dependencies'
+import { SliceCard } from '~/widgets/plan-artifact/ui/slice-card'
 
 function AcLine ({ ac, verifyInUi }: { ac: Ac, verifyInUi: boolean }) {
 	// A criterion nobody could drive is neither a pass nor a defect, and showing it
@@ -39,47 +38,6 @@ function AcLine ({ ac, verifyInUi }: { ac: Ac, verifyInUi: boolean }) {
 	)
 }
 
-function SliceCard ({ slice, acs }: { slice: Slice, acs: Ac[] }) {
-	const claimed = acs.filter((ac) => ac.sliceId === slice.id)
-
-	return (
-		<Card withBorder padding="md" radius="md">
-			<Stack gap="sm">
-				<Group gap="xs">
-					<Text fw={600}>
-						{slice.ordinal}. {slice.title}
-					</Text>
-					{slice.kind === 'verify' ? (
-						<Badge variant="light" color="grape">
-							verify
-						</Badge>
-					) : null}
-				</Group>
-
-				{slice.kind === 'verify' ? (
-					<Text size="sm" c="dimmed">
-						{VERIFY_JOB}
-					</Text>
-				) : (
-					<>
-						{slice.bodyMd === null ? null : <MarkdownBlock source={slice.bodyMd} />}
-
-						{claimed.length === 0 ? null : (
-							<Group gap="xs">
-								{claimed.map((ac) => (
-									<Badge key={ac.id} size="sm" variant="outline">
-										{ac.code}
-									</Badge>
-								))}
-							</Group>
-						)}
-					</>
-				)}
-			</Stack>
-		</Card>
-	)
-}
-
 // Read-only by design. The plan is what the sessions were briefed with, and a
 // browser that can reorder its bullets or reword a criterion is a second author
 // nobody downstream knows about.
@@ -87,18 +45,33 @@ export function PlanArtifact ({
 	plan,
 	acs,
 	slices,
-	decisions
+	decisions,
+	dependencies,
+	amendments,
+	buildId
 }: {
 	plan: Plan
 	acs: Ac[]
 	slices: Slice[]
 	decisions: PlanDecision[]
+	dependencies: DependencyView[]
+	amendments: PlanAmendment[]
+	buildId: string | null
 }) {
 	return (
 		<Stack gap="lg">
-			<Title order={2}>{plan.title ?? 'Untitled'}</Title>
+			<Group gap="sm">
+				<Title order={2}>{plan.title ?? 'Untitled'}</Title>
+				{plan.handsOff ? (
+					<Badge variant="light" color="gray">
+						hands-off
+					</Badge>
+				) : null}
+			</Group>
 
 			{plan.bodyMd === null ? null : <MarkdownBlock source={plan.bodyMd} />}
+
+			<PlanDependencies dependencies={dependencies} amendments={amendments} buildId={buildId} />
 
 			<Divider label="Acceptance criteria" labelPosition="left" />
 

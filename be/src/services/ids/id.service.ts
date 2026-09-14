@@ -10,14 +10,18 @@ export function getIdService() {
 		createPlanMessageId: (): string => `pm_${nanoid(12)}`,
 		createAcId: (): string => `ac_${nanoid(12)}`,
 		createSliceId: (): string => `sl_${nanoid(12)}`,
-		createQueueId: (): string => `q_${nanoid(12)}`,
-		createQueueMessageId: (): string => `qm_${nanoid(12)}`,
-		createQueueItemId: (): string => `qi_${nanoid(12)}`,
 		createPlanDecisionId: (): string => `pd_${nanoid(12)}`,
 		createSliceRunId: (): string => `sr_${nanoid(12)}`,
 		createGithubInstallationId: (): string => `ghi_${nanoid(12)}`,
 		createRepositoryId: (): string => `repo_${nanoid(12)}`,
-		createOnboardingRunId: (): string => `onb_${nanoid(12)}`
+		createOnboardingRunId: (): string => `onb_${nanoid(12)}`,
+		createBuildId: (): string => `bld_${nanoid(12)}`,
+		createDependencyId: (): string => `dep_${nanoid(12)}`,
+		createAmendmentId: (): string => `am_${nanoid(12)}`,
+		createOverlapDecisionId: (): string => `ovd_${nanoid(12)}`,
+		createFindingId: (): string => `vf_${nanoid(12)}`,
+		createIntegrationId: (): string => `int_${nanoid(12)}`,
+		createRepositoryMessageId: (): string => `rm_${nanoid(12)}`
 	};
 }
 

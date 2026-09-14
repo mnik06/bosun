@@ -76,13 +76,13 @@ unconditional delete would drop the live connection and mark a connected machine
 
 **Corollary, and it is the sharp edge of the above:** the close handler in `ws.route.ts` returns on
 that `false`, so *nothing* on the disconnect path runs for a replaced socket — not
-`markMachineOffline`, which is right, and not the grace window `pauseMachineQueues` settles on, which
+`markMachineOffline`, which is right, and not the grace window `pauseMachineBuilds` settles on, which
 is not. A reconnect fast enough to keep the slot leaves the bullet dispatched over the old socket
-sitting in the database as `running` with nobody having settled it. `claimNext` then refuses to take
-the next bullet — one worktree holds one session — and the queue would be stuck for good rather than
+sitting in the database as `running` with nobody having settled it. A run's claim then refuses the
+build's next job — one worktree holds one session — and the build would be stuck for good rather than
 for a moment.
 
-The settling therefore happens on the way *in*, not on the way out: `hello` calls `stallMachineRuns`.
+The settling therefore happens on the way *in*, not on the way out: `hello` calls `stallMachineBuilds`.
 Which runs it settles is not guesswork — the agent says. Its execution sessions outlive the socket
 they were dispatched over, so `hello` carries the run ids it is still building and everything else
 this machine has marked `running` is a ghost. Two further guards sit under that: a run whose
@@ -91,10 +91,10 @@ connection (a resume racing the hello) and is left alone, and `runIds` absent me
 to survive a reconnect, which holds nothing across one — so the empty default is the truth for those
 agents rather than a fallback.
 
-`stallMachineRuns` also runs the mirror check, because the same outage breaks the other direction:
-`exec.cancel` for a queue paused while the machine was unreachable was never delivered, and the
+`stallMachineBuilds` also runs the mirror check, because the same outage breaks the other direction:
+`exec.cancel` for a build held while the machine was unreachable was never delivered, and the
 session it was meant to stop is still writing to the worktree. Any run the agent reports holding
-whose row is not `running` on a queue of *this* machine is cancelled on the spot. The queue is
+whose row is not `running` on a build of *this* machine is cancelled on the spot. The build is
 derived from the run rather than trusted, the same as every other frame that names one.
 
 ## Failure modes
@@ -112,9 +112,9 @@ derived from the run rather than trusted, the same as every other frame that nam
   socket before closing it, rather than waiting for the close event, so the entry is gone by the time
   the delete returns. Relying on the close event would leave a window in which the row does not exist
   and the socket still does.
-- **A queue is `running` with nothing running.** Its bullet died with a socket that was replaced
-  before its close event landed, so the disconnect path bailed. `stallMachineRuns` on the next
-  `hello` is what settles it; if the queue is still stuck, either the agent never re-announced, or it
+- **A build has a job `running` with nothing running.** Its bullet died with a socket that was replaced
+  before its close event landed, so the disconnect path bailed. `stallMachineBuilds` on the next
+  `hello` is what settles it; if the build is still stuck, either the agent never re-announced, or it
   named that run in `hello.runIds` while holding no process for it. `ps` on the machine decides
   which.
 - **A bullet re-runs work that is already on its branch.** Its `exec.done` was produced while the

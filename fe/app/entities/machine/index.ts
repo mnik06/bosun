@@ -5,7 +5,7 @@ export {
 	useMachineQuery,
 	useMachinesQuery
 } from './api/machine.queries'
-export { putEnvSet, putMachinePolicy, putSessionSecrets } from './api/machine.writes'
+export { patchMachineCapacity, putEnvSet, putMachinePolicy, putSessionSecrets } from './api/machine.writes'
 export { machineKind, type MachineKind } from './lib/machine-kind'
 export {
 	AGENT_TOO_OLD_FOR_INPUTS,
@@ -32,8 +32,6 @@ export {
 export {
 	MachinesSocketProvider,
 	useLastPong,
-	useQueueAnswer,
-	useRunActivity,
 	useUpgradeDecline,
 	useUpgradingTo,
 	type UpgradeDecline,

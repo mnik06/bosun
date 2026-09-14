@@ -1,12 +1,12 @@
 import { type AgentConfig } from '../config/config';
-import { type ServerMsg } from '../protocol';
+import { type BuildSummarize } from '../protocol';
 import { type Services } from '../services/index';
 import { spawnClaudeSession, type ClaudeSession } from '../sessions/process';
 import { startSessionMcpServer, type SessionMcpServer } from '../sessions/mcp-server';
 import { createStreamParser } from '../planning/stream-parser';
 import { createSummaryDispatch, SUMMARY_TOOL_DEFINITIONS } from './mcp/tools';
 
-type Summarize = Extract<ServerMsg, { type: 'queue.summarize' }>;
+type Summarize = BuildSummarize;
 
 // Reads the branch and nothing else. `Bash` is loaded so `Bash(git *)` can be
 // allowed at all — the CLI cannot allow a constrained form of a tool it was not

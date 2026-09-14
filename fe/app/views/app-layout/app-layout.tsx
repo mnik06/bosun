@@ -8,6 +8,7 @@ import { useSession } from '~/entities/session'
 import { FullPageLoader } from '~/shared/ui'
 import { AppHeader } from '~/widgets/app-header'
 import { AppNav, MobileNav } from '~/widgets/app-nav'
+import { NeedsYouMenu } from '~/widgets/needs-you-menu'
 import { ProjectSwitcher } from '~/widgets/project-switcher'
 
 // Nothing below may make a scoped request before a project is chosen: the header
@@ -37,7 +38,7 @@ function ProjectScoped ({ email }: { email: string }) {
 			navbar={{ width: 60, breakpoint: 'sm', collapsed: { mobile: true } }}
 			padding={{ base: 'sm', sm: 'md' }}
 		>
-			<AppHeader email={email} projectSwitcher={<ProjectSwitcher />} />
+			<AppHeader email={email} projectSwitcher={<ProjectSwitcher />} needsYou={<NeedsYouMenu />} />
 			<AppNav />
 
 			<AppShell.Main className="min-w-0 max-sm:pb-[calc(var(--mobile-nav-height)+env(safe-area-inset-bottom))]">

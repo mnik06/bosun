@@ -30,6 +30,10 @@ export const MachineSchema = z.object({
 	publicKey: z.string().nullable(),
 	policy: MachinePolicySchema,
 	sessionSecrets: z.array(z.string()).nullable(),
+	// How many plans may verify here at once. Each lane reserves one drive's memory.
+	verifyLanes: z.number().int(),
+	// A leader's ceiling on concurrent builds, below what memory would admit.
+	buildCap: z.number().int().nullable(),
 	createdAt: z.date()
 });
 

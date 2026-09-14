@@ -1,5 +1,6 @@
 import { FastifyPluginAsync } from 'fastify';
 import { ZodTypeProvider } from 'fastify-type-provider-zod';
+import { UpdateRepositoryReqSchema } from 'src/api/routes/schemas/line/LineSchemas';
 import {
 	PullRequestRespSchema,
 	RepositoryConfigRespSchema,
@@ -11,6 +12,7 @@ import {
 import { getRepositoryConfig } from 'src/controllers/repositories/get-repository-config';
 import { listRepositories } from 'src/controllers/repositories/list-repositories';
 import { openConfigPullRequest } from 'src/controllers/repositories/open-config-pull-request';
+import { saveAutoResolve } from 'src/controllers/repositories/save-auto-resolve';
 import { saveConfigDraft } from 'src/controllers/repositories/save-config-draft';
 
 const routes: FastifyPluginAsync = async function (f) {
@@ -51,6 +53,25 @@ const routes: FastifyPluginAsync = async function (f) {
 				id: req.params.id,
 				projectId: req.membership!.projectId,
 				yaml: req.body.yaml
+			});
+
+			return { repository };
+		}
+	);
+
+	fastify.patch(
+		'/:id',
+		{
+			preValidation: fastify.requireLeader,
+			schema: { params: RepositoryIdParamsSchema, body: UpdateRepositoryReqSchema, response: { 200: RepositoryRespSchema } }
+		},
+		async (req) => {
+			const repository = await saveAutoResolve({
+				repositoryRepo: fastify.repos.repositoryRepo,
+				socketRegistry: fastify.services.socketRegistry,
+				id: req.params.id,
+				projectId: req.membership!.projectId,
+				autoResolveConflicts: req.body.autoResolveConflicts
 			});
 
 			return { repository };

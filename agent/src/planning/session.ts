@@ -1,21 +1,10 @@
 import { type AgentConfig } from '../config/config';
-import {
-	type AgentMsg,
-	type PlanAnswer,
-	type PlanQuestion,
-	type PlanSnapshot,
-	type PreparePlan
-} from '../protocol';
+import { type AgentMsg, type PlanAnswer, type PlanQuestion, type PlanSnapshot } from '../protocol';
 import { resolveProjectConfig } from '../services/config-resolution';
 import { type ReadTree } from '../services/repo.service';
 import { type Services } from '../services/index';
 import { createActivityTracker } from './activity-labels';
-import {
-	createPlanDispatch,
-	createPrepareDispatch,
-	PREPARE_TOOL_DEFINITIONS,
-	TOOL_DEFINITIONS
-} from './mcp/tools';
+import { createPlanDispatch, TOOL_DEFINITIONS } from './mcp/tools';
 import {
 	startSessionMcpServer,
 	type SessionDispatchFactory,
@@ -33,19 +22,6 @@ const PLANNING_TOOLS = {
 		'mcp__bosun__name_plan',
 		'mcp__bosun__set_blockers',
 		'mcp__bosun__publish_plan'
-	]
-};
-
-const PREPARATION_TOOLS = {
-	builtin: PLANNING_TOOLS.builtin,
-	mcp: [
-		'mcp__bosun__bosun_ask',
-		'mcp__bosun__list_plans',
-		'mcp__bosun__name_plan',
-		'mcp__bosun__publish_plan',
-		'mcp__bosun__republish_plan',
-		'mcp__bosun__set_plan_blockers',
-		'mcp__bosun__abandon_preparation'
 	]
 };
 
@@ -71,18 +47,6 @@ const UNGRILLED_NUDGE = [
 	'The grill has not started: ask the next question now with bosun_ask, one question, and keep going until the decisions are settled.'
 ].join(' ');
 
-// The same failure in a preparation session, which has a different pair of exits.
-// Publishing nothing is legitimate there, but only through `abandon_preparation`
-// — a turn that ends on a summary in prose leaves an empty plan, and an empty
-// plan is recorded as a session that died. Naming both exits is what turns that
-// into the answer the person was waiting for.
-const PREPARE_NUDGE = [
-	'Your turn ended without calling publish_plan or abandon_preparation, so nothing was written and this preparation is still empty.',
-	'Subagent results arrive inside the turn that spawned them — nothing is running in the background and no report is on its way.',
-	'A preparation ends in exactly one of two ways: publish_plan with the foundation, or abandon_preparation with the reason there is nothing left to lift.',
-	'Record any ordering you found with set_plan_blockers first, then make one of those two calls now.'
-].join(' ');
-
 // Twice, not once. The first prod is regularly answered with another turn of
 // thinking that ends the same way, and a session told twice what its exits are
 // has had the chance a person would give it. Past that, prodding is arguing.
@@ -95,8 +59,6 @@ const MAX_NUDGES = 2;
 // `plan.cancel` from the backend.
 const SESSION_MAX_MS = 24 * 60 * 60 * 1000;
 const REAP_SWEEP_MS = 60 * 1000;
-
-type SessionKind = 'plan' | 'prepare';
 
 interface Session {
 	mcp: SessionMcpServer;
@@ -113,14 +75,7 @@ interface Session {
 	// person shaped from one the model wrote for itself.
 	grilled: boolean;
 	nudges: number;
-	// Which set of endings this session has. A preparation may legitimately publish
-	// nothing, but only by calling `abandon_preparation`, so it is nudged too —
-	// towards whichever of its two exits it meant.
-	kind: SessionKind;
 	requireGrill: boolean;
-	// Set by `abandon_preparation`. Recorded rather than acted on inside the tool
-	// so the call returns before the process is torn down under it.
-	abandonedReason: string | null;
 }
 
 export interface PlanningSessions {
@@ -128,19 +83,11 @@ export interface PlanningSessions {
 		planId: string;
 		input: string;
 		verifyInUi: boolean;
-		auto: boolean;
+		handsOff: boolean;
 		notes: string | null;
 		configDraft: string | null;
 	}): Promise<void>;
 	held(): string[];
-	prepare(opts: {
-		planId: string;
-		planNumber: number;
-		auto: boolean;
-		plans: PreparePlan[];
-		notes: string | null;
-		configDraft: string | null;
-	}): Promise<void>;
 	say(opts: {
 		planId: string;
 		text: string;
@@ -162,20 +109,13 @@ export function createPlanningSessions(opts: {
 	prompt: (opts: {
 		input: string;
 		verifyInUi: boolean;
-		auto: boolean;
+		handsOff: boolean;
 		notes: string | null;
 		tree: ReadTree;
 	}) => string;
 	revisionPrompt: (opts: {
 		plan: PlanSnapshot;
 		request: string;
-		notes: string | null;
-		tree: ReadTree;
-	}) => string;
-	preparationPrompt: (opts: {
-		planNumber: number;
-		auto: boolean;
-		plans: PreparePlan[];
 		notes: string | null;
 		tree: ReadTree;
 	}) => string;
@@ -218,14 +158,6 @@ export function createPlanningSessions(opts: {
 			return;
 		}
 
-		// A preparation that found nothing to share ends as a failure with the reason
-		// it gave, rather than as an empty plan nobody can read an answer off.
-		if (session.abandonedReason !== null) {
-			fail(planId, session.abandonedReason);
-
-			return;
-		}
-
 		if (session.published || session.nudges >= MAX_NUDGES || !session.process) {
 			done(planId);
 
@@ -239,14 +171,10 @@ export function createPlanningSessions(opts: {
 		session.process.send(nudge.text);
 	};
 
-	// Which prod a stalled turn gets. A preparation has two endings rather than one,
-	// and a plan session mid-grill must not be told to publish — `publish_plan`
-	// refuses in that state, so the nudge would only spend a turn being refused.
+	// Which prod a stalled turn gets. A plan session mid-grill must not be told to
+	// publish — `publish_plan` refuses in that state, so the nudge would only spend a
+	// turn being refused.
 	const nudgeFor = (session: Session): { label: string; text: string } => {
-		if (session.kind === 'prepare') {
-			return { label: 'Asking the session to finish the preparation', text: PREPARE_NUDGE };
-		}
-
 		return session.requireGrill && !session.grilled
 			? { label: 'Asking the session to keep grilling', text: UNGRILLED_NUDGE }
 			: { label: 'Asking the session to publish', text: UNPUBLISHED_NUDGE };
@@ -268,14 +196,6 @@ export function createPlanningSessions(opts: {
 
 		if (current) {
 			current.published = true;
-		}
-	};
-
-	const onAbandoned = (planId: string) => (reason: string): void => {
-		const current = sessions.get(planId);
-
-		if (current) {
-			current.abandonedReason = reason;
 		}
 	};
 
@@ -355,7 +275,6 @@ export function createPlanningSessions(opts: {
 		prompt: string;
 		cwd: string;
 		published: boolean;
-		kind: SessionKind;
 		requireGrill: boolean;
 		tools: { builtin: string[]; mcp: string[] };
 		definitions: unknown[];
@@ -386,9 +305,7 @@ export function createPlanningSessions(opts: {
 			published: opts2.published,
 			grilled: false,
 			nudges: 0,
-			kind: opts2.kind,
-			requireGrill: opts2.requireGrill,
-			abandonedReason: null
+			requireGrill: opts2.requireGrill
 		};
 
 		sessions.set(planId, session);
@@ -510,20 +427,19 @@ export function createPlanningSessions(opts: {
 				prompt: opts.prompt({
 					input: payload.input,
 					verifyInUi: payload.verifyInUi,
-					auto: payload.auto,
+					handsOff: payload.handsOff,
 					notes,
 					tree
 				}),
 				cwd: tree.path,
 				published: false,
-				kind: 'plan',
-				requireGrill: !payload.auto,
+				requireGrill: !payload.handsOff,
 				tools: PLANNING_TOOLS,
 				definitions: TOOL_DEFINITIONS,
 				createDispatch: createPlanDispatch({
 					planId: payload.planId,
-					auto: payload.auto,
-					requireGrill: !payload.auto,
+					handsOff: payload.handsOff,
+					requireGrill: !payload.handsOff,
 					bosunApi: opts.services.bosunApi,
 					onPublished: onPublished(payload.planId),
 					onGrilled: onGrilled(payload.planId),
@@ -537,51 +453,6 @@ export function createPlanningSessions(opts: {
 		// marked `planning` and this does not name has nothing left to finish it.
 		held(): string[] {
 			return [...sessions.keys()];
-		},
-
-		// One session, three outputs: its own plan, the selected plans rewritten
-		// without the shared work, and the blockers that hold them until it lands.
-		// All three here because this is the only moment one reader has every plan
-		// in front of it — split across sessions, the second re-derives days later
-		// from a diff what this one already knew.
-		async prepare(payload): Promise<void> {
-			if (sessions.has(payload.planId)) {
-				return;
-			}
-
-			const read = await readTree(payload.planId, payload);
-
-			if (read === null) {
-				return;
-			}
-
-			const { tree, notes } = read;
-
-			await spawnFor({
-				planId: payload.planId,
-				prompt: opts.preparationPrompt({
-					planNumber: payload.planNumber,
-					auto: payload.auto,
-					plans: payload.plans,
-					notes,
-					tree
-				}),
-				cwd: tree.path,
-				published: false,
-				kind: 'prepare',
-				requireGrill: false,
-				tools: PREPARATION_TOOLS,
-				definitions: PREPARE_TOOL_DEFINITIONS,
-				createDispatch: createPrepareDispatch({
-					planId: payload.planId,
-					auto: payload.auto,
-					plans: payload.plans,
-					bosunApi: opts.services.bosunApi,
-					onPublished: onPublished(payload.planId),
-					onAbandoned: onAbandoned(payload.planId),
-					onQuestion: onQuestion(payload.planId)
-				})
-			});
 		},
 
 		// Delivered to the session that is already up whenever there is one, so the
@@ -617,7 +488,6 @@ export function createPlanningSessions(opts: {
 				// A revision is handed a plan that is already written, so a turn that
 				// changes nothing is a legitimate answer rather than an empty plan.
 				published: payload.plan.bodyMd !== null,
-				kind: 'plan',
 				// A revision edits a plan that was already grilled into existence, and
 				// a plan that was never published has nothing to revise — the person
 				// asked for a change in prose, which is the decision the grill exists to
@@ -627,10 +497,10 @@ export function createPlanningSessions(opts: {
 				definitions: TOOL_DEFINITIONS,
 				createDispatch: createPlanDispatch({
 					planId: payload.planId,
-					// A revision of an auto plan is still an auto plan: the snapshot
+					// A revision of a hands-off plan is still hands-off: the snapshot
 					// carries the flag, because the agent holds no plan state between
 					// sessions.
-					auto: payload.plan.auto,
+					handsOff: payload.plan.handsOff,
 					requireGrill: false,
 					bosunApi: opts.services.bosunApi,
 					onPublished: onPublished(payload.planId),

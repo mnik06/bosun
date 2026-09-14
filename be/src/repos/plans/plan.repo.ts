@@ -13,14 +13,14 @@ export const planColumns = {
 	title: plans.title,
 	bodyMd: plans.bodyMd,
 	status: plans.status,
+	repositoryId: plans.repositoryId,
 	verifyInUi: plans.verifyInUi,
-	auto: plans.auto,
-	confirmedAt: plans.confirmedAt,
+	handsOff: plans.handsOff,
+	approvedAt: plans.approvedAt,
 	failureReason: plans.failureReason,
 	input: plans.input,
 	summary: plans.summary,
 	summarisedAt: plans.summarisedAt,
-	preparesPlanIds: plans.preparesPlanIds,
 	createdAt: plans.createdAt
 };
 
@@ -37,10 +37,10 @@ export function getPlanRepo(db: DbOrTx) {
 			projectId: string;
 			createdByUserId: string;
 			machineId: string;
+			repositoryId: string | null;
 			input: string;
 			verifyInUi: boolean;
-			auto: boolean;
-			preparesPlanIds?: string[];
+			handsOff: boolean;
 		}): Promise<Plan> {
 			const [row] = await db
 				.insert(plans)
@@ -53,15 +53,37 @@ export function getPlanRepo(db: DbOrTx) {
 			return PlanSchema.parse(row);
 		},
 
-		// Everything a session may reason about when it asks what else exists for
-		// this machine. Machine-scoped is enough: the agent asks with a machine key,
-		// and a machine belongs to exactly one project.
-		async listForMachineContext(machineId: string): Promise<Plan[]> {
+		// Everything a session may reason about when it asks what else exists. The
+		// repository is the line a plan joins, so it is what a session is shown; a
+		// machine with none sees what was planned on it.
+		async listForContext(opts: { machineId: string; repositoryId: string | null }): Promise<Plan[]> {
 			const rows = await db
 				.select(planColumns)
 				.from(plans)
-				.where(eq(plans.machineId, machineId))
+				.where(
+					opts.repositoryId === null
+						? eq(plans.machineId, opts.machineId)
+						: eq(plans.repositoryId, opts.repositoryId)
+				)
 				.orderBy(asc(plans.number));
+
+			return rows.map((row) => PlanSchema.parse(row));
+		},
+
+		// Scheduler-only and unscoped: reached from a build whose ownership has
+		// already been established.
+		async getById(id: string): Promise<Plan | null> {
+			const [row] = await db.select(planColumns).from(plans).where(eq(plans.id, id));
+
+			return row ? PlanSchema.parse(row) : null;
+		},
+
+		async listByIds(ids: string[]): Promise<Plan[]> {
+			if (ids.length === 0) {
+				return [];
+			}
+
+			const rows = await db.select(planColumns).from(plans).where(inArray(plans.id, ids));
 
 			return rows.map((row) => PlanSchema.parse(row));
 		},
@@ -128,7 +150,7 @@ export function getPlanRepo(db: DbOrTx) {
 			title?: string | null;
 			bodyMd?: string | null;
 			status?: PlanStatus;
-			confirmedAt?: Date | null;
+			approvedAt?: Date | null;
 			failureReason?: string | null;
 		}): Promise<Plan | null> {
 			const { id, ...values } = opts;

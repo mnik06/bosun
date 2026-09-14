@@ -1,4 +1,4 @@
-import { Layers, ListTodo, Server, Settings, Users, type LucideIcon } from 'lucide-react'
+import { ListTodo, Server, Settings, Users, type LucideIcon } from 'lucide-react'
 
 interface NavLinkSpec {
 	to: string
@@ -11,9 +11,8 @@ interface NavLinkSpec {
 // `prefixes` rather than the href alone: the machines tab lives at `/`, so
 // matching on the href would drop the highlight the moment you open a machine.
 export const NAV_LINKS: NavLinkSpec[] = [
-	{ to: '/', label: 'Machines', icon: Server, prefixes: ['/machines'], leaderOnly: true },
 	{ to: '/plans', label: 'Plans', icon: ListTodo, prefixes: ['/plans'], leaderOnly: false },
-	{ to: '/queues', label: 'Queues', icon: Layers, prefixes: ['/queues'], leaderOnly: false },
+	{ to: '/', label: 'Machines', icon: Server, prefixes: ['/machines'], leaderOnly: true },
 	{ to: '/members', label: 'Members', icon: Users, prefixes: ['/members'], leaderOnly: true },
 	{ to: '/settings', label: 'Settings', icon: Settings, prefixes: ['/settings', '/github'], leaderOnly: true }
 ]

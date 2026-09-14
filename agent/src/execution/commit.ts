@@ -105,28 +105,131 @@ export async function syncWithRemote(opts: {
 	};
 }
 
+const SHA = /^[0-9a-f]{7,40}$/i;
+
+async function haveCommit(opts: { exec: ExecService; worktreePath: string; sha: string }): Promise<boolean> {
+	const found = await opts.exec.run('git', ['-C', opts.worktreePath, 'rev-parse', '-q', '--verify', `${opts.sha}^{commit}`], {
+		timeoutMs: 30_000
+	});
+
+	return found.ok;
+}
+
+// A provider's commit reaches this clone by whichever route the remote allows:
+// asked for by sha, and failing that by fetching every plan branch it could sit on.
+async function resolveStartFrom(opts: {
+	exec: ExecService;
+	worktreePath: string;
+	startFrom: string;
+}): Promise<string | null> {
+	if (!SHA.test(opts.startFrom)) {
+		return fetchRemoteBranch({ exec: opts.exec, worktreePath: opts.worktreePath, branch: opts.startFrom.replace(/^origin\//, '') });
+	}
+
+	const fetch = async (args: string[]) =>
+		opts.exec.run('git', ['-C', opts.worktreePath, 'fetch', 'origin', ...args], { timeoutMs: NETWORK_TIMEOUT_MS });
+
+	for (const attempt of [[] as string[], [opts.startFrom], ['+refs/heads/bosun/plan/*:refs/remotes/origin/bosun/plan/*']]) {
+		if (attempt.length > 0) {
+			await fetch(attempt);
+		}
+
+		if (await haveCommit({ ...opts, sha: opts.startFrom })) {
+			return opts.startFrom;
+		}
+	}
+
+	return null;
+}
+
+// A stacked plan is built on its providers' branches, merged rather than rebased
+// for the reason `syncWithRemote` gives. One already contained is skipped, so this
+// runs before every bullet at the cost of a fetch per provider.
+export async function mergeBranches(opts: {
+	exec: ExecService;
+	worktreePath: string;
+	branches: string[];
+}): Promise<{ ok: boolean; detail: string }> {
+	const git = (args: string[]) =>
+		opts.exec.run('git', ['-C', opts.worktreePath, ...args], { timeoutMs: 60_000 });
+	const merged: string[] = [];
+
+	for (const branch of opts.branches) {
+		const remote = await fetchRemoteBranch({ exec: opts.exec, worktreePath: opts.worktreePath, branch });
+
+		if (remote === null) {
+			return { ok: false, detail: `${branch} is not on the remote, so there is nothing of it to build on` };
+		}
+
+		if ((await git(['merge-base', '--is-ancestor', remote, 'HEAD'])).ok) {
+			continue;
+		}
+
+		const result = await git(['merge', '--no-edit', remote]);
+
+		if (!result.ok) {
+			await git(['merge', '--abort']);
+
+			return { ok: false, detail: `merging ${remote} conflicts with this branch: ${result.stdout || result.reason}` };
+		}
+
+		merged.push(remote);
+	}
+
+	return { ok: true, detail: merged.length === 0 ? 'providers already contained' : `merged ${merged.join(', ')}` };
+}
+
 export function getCommitService(deps: { exec: ExecService }) {
 	async function git(worktreePath: string, args: string[]) {
 		return deps.exec.run('git', ['-C', worktreePath, ...args], { timeoutMs: 60_000 });
 	}
 
+	// A repository with no remote is a legitimate setup — the branch is then cut
+	// from whatever this clone holds, which is all there is.
+	async function startPointFor(opts: {
+		worktreePath: string;
+		branch: string;
+		baseRef: string;
+		startFrom: string | null;
+		fetched: boolean;
+	}): Promise<{ ref: string } | { failure: string }> {
+		const pushed = opts.fetched
+			? await fetchRemoteBranch({ exec: deps.exec, worktreePath: opts.worktreePath, branch: opts.branch })
+			: null;
+
+		if (pushed !== null) {
+			return { ref: pushed };
+		}
+
+		if (opts.startFrom !== null) {
+			const provider = await resolveStartFrom({ exec: deps.exec, worktreePath: opts.worktreePath, startFrom: opts.startFrom });
+
+			return provider === null
+				? { failure: `could not find ${opts.startFrom} to start this plan from — its provider has not pushed it` }
+				: { ref: provider };
+		}
+
+		return { ref: opts.fetched ? await resolveStartPoint(git, opts) : opts.baseRef };
+	}
+
 	return {
-		// Checked out before the plan's first slice, so a plan that fails leaves its
-		// partial work on a branch of its own rather than underneath the next plan's
-		// pull request.
+		// A build's branch, decided when it takes its first slot. A branch the remote
+		// already has is continued rather than cut again — cut from the base, it would
+		// share no history with the pushed one and the next push would be refused —
+		// and one this worktree already holds is kept when the build is resuming, so
+		// commits a failed push left only here are not thrown away.
 		//
-		// The fetch is what makes each plan start from what the default branch
-		// actually is now, rather than from whatever this worktree last saw. A queue
-		// left running for a day would otherwise cut every plan from the same stale
-		// commit and rediscover the same conflicts in every pull request.
-		//
-		// A branch the remote already has is continued rather than cut again. Cut
-		// from the base, it would share no history with the pushed one, and the
-		// push at the end of the plan would be refused.
-		async startBranch(opts: {
+		// Otherwise it starts from the provider's commit the dependency was satisfied
+		// by, or from what the default branch is now; and every provider branch named
+		// in `mergeIn` is merged on top. A dependent is never cut from a base that
+		// does not contain the work it waits on.
+		async startBuildBranch(opts: {
 			worktreePath: string;
 			branch: string;
 			baseRef: string;
+			fresh: boolean;
+			startFrom: string | null;
+			mergeIn: string[];
 		}): Promise<{ ok: boolean; detail: string }> {
 			const reset = await git(opts.worktreePath, ['reset', '--hard']);
 
@@ -137,17 +240,42 @@ export function getCommitService(deps: { exec: ExecService }) {
 			await git(opts.worktreePath, ['clean', '-fd']);
 
 			const fetched = await git(opts.worktreePath, ['fetch', 'origin', '--prune']);
-			const pushed = fetched.ok
-				? await fetchRemoteBranch({ exec: deps.exec, worktreePath: opts.worktreePath, branch: opts.branch })
-				: null;
-			// A repository with no remote is a legitimate setup — the branch is then
-			// cut from whatever this clone holds, which is all there is.
-			const startPoint = pushed ?? (fetched.ok ? await resolveStartPoint(git, opts) : opts.baseRef);
-			const checkout = await git(opts.worktreePath, ['checkout', '-B', opts.branch, startPoint]);
+			const local = (await git(opts.worktreePath, ['rev-parse', '-q', '--verify', `refs/heads/${opts.branch}`])).ok;
+			let detail: string;
 
-			return checkout.ok
-				? { ok: true, detail: `${opts.branch} from ${startPoint}` }
-				: { ok: false, detail: checkout.reason };
+			if (!opts.fresh && local) {
+				const checkout = await git(opts.worktreePath, ['checkout', opts.branch]);
+
+				if (!checkout.ok) {
+					return { ok: false, detail: `could not check out ${opts.branch}: ${checkout.reason}` };
+				}
+
+				const synced = await syncWithRemote({ exec: deps.exec, worktreePath: opts.worktreePath, branch: opts.branch });
+
+				if (!synced.ok) {
+					return synced;
+				}
+
+				detail = `${opts.branch} resumed, ${synced.detail}`;
+			} else {
+				const start = await startPointFor({ ...opts, fetched: fetched.ok });
+
+				if ('failure' in start) {
+					return { ok: false, detail: start.failure };
+				}
+
+				const checkout = await git(opts.worktreePath, ['checkout', '-B', opts.branch, start.ref]);
+
+				if (!checkout.ok) {
+					return { ok: false, detail: checkout.reason };
+				}
+
+				detail = `${opts.branch} from ${start.ref}`;
+			}
+
+			const merged = await mergeBranches({ exec: deps.exec, worktreePath: opts.worktreePath, branches: opts.mergeIn });
+
+			return merged.ok ? { ok: true, detail: `${detail}, ${merged.detail}` } : merged;
 		},
 
 		// Run before every bullet that is not cutting the branch. A bullet that
@@ -170,12 +298,10 @@ export function getCommitService(deps: { exec: ExecService }) {
 
 			await git(opts.worktreePath, ['clean', '-fd']);
 
-			// Named rather than assumed. A bullet that is not cutting the branch used
-			// to run on whatever the worktree was already on, which holds while a plan
-			// runs start to finish — and stops holding the moment one bullet of an
-			// older plan is run again, because the queue has moved the worktree to a
-			// later plan's branch since. That bullet would then commit onto the wrong
-			// branch, and the pull request it belongs to would never see the work.
+			// Named rather than assumed. A worktree belongs to one build, but a bullet
+			// running on whatever happens to be checked out commits onto the wrong
+			// branch the day anything else moves it — an integration abandoned mid-way,
+			// a person poking at the checkout — and its pull request never sees the work.
 			const head = await git(opts.worktreePath, ['rev-parse', '--abbrev-ref', 'HEAD']);
 
 			if (!head.ok || head.stdout.trim() !== opts.branch) {
@@ -238,6 +364,37 @@ export function getCommitService(deps: { exec: ExecService }) {
 			const sha = await git(opts.worktreePath, ['rev-parse', 'HEAD']);
 
 			return { ok: true, commitSha: sha.ok ? sha.stdout : null, detail: 'committed' };
+		},
+
+		// Pushed after every bullet, not only at the end: a provider's foundation on
+		// the remote is what lets a dependent start, on this machine or another.
+		async pushBranch(opts: { worktreePath: string; branch: string }): Promise<{ ok: boolean; detail: string }> {
+			const synced = await syncWithRemote({ exec: deps.exec, worktreePath: opts.worktreePath, branch: opts.branch });
+
+			if (!synced.ok) {
+				return { ok: false, detail: `could not push ${opts.branch}: ${synced.detail}` };
+			}
+
+			const pushed = await deps.exec.run(
+				'git',
+				['-C', opts.worktreePath, 'push', '-u', 'origin', `HEAD:refs/heads/${opts.branch}`],
+				{ timeoutMs: NETWORK_TIMEOUT_MS }
+			);
+
+			return pushed.ok ? { ok: true, detail: 'pushed' } : { ok: false, detail: `could not push ${opts.branch}: ${pushed.reason}` };
+		},
+
+		async changedFiles(opts: { worktreePath: string; sha: string }): Promise<string[]> {
+			const shown = await git(opts.worktreePath, ['show', '--name-only', '--format=', opts.sha]);
+
+			return shown.ok ? shown.stdout.split('\n').map((line) => line.trim()).filter(Boolean) : [];
+		},
+
+		// A drive commits nothing, and whatever it left behind — a file a browser tool
+		// wrote, a log — must not be committed by the fix session that follows it.
+		async discardChanges(worktreePath: string): Promise<void> {
+			await git(worktreePath, ['reset', '--hard', 'HEAD']);
+			await git(worktreePath, ['clean', '-fd']);
 		}
 	};
 }

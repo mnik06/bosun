@@ -4,7 +4,12 @@ import { envFileFor } from '../services/project-env.service';
 import { appPorts, renderTemplate } from '../services/stack.service';
 import { type ReadTree } from '../services/repo.service';
 
+// A build bullet and a fix session write and commit. A lane session — a drive or a
+// re-check — drives the product against a database bosun prepared, and keeps nothing.
+export type RunMode = 'build' | 'lane' | 'fix';
+
 export interface RunContext {
+	mode: RunMode;
 	planNumber: number;
 	planTitle: string;
 	planBodyMd: string;
@@ -15,13 +20,15 @@ export interface RunContext {
 	// A repository machine's config, from the worktree's own file or the draft. Null
 	// on a machine with no repository, which runs on `profile` as before.
 	config: ProjectConfig | null;
-	// Policy, not a fact about the code: whether this machine may migrate.
+	// Policy, not a fact about the code: whether this machine's lane may migrate.
 	applyMigrations: boolean;
 	// Session-secret names in the session's environment. Never the values.
 	sessionSecrets: string[];
 	portBase: number;
-	afk: boolean;
+	handsOff: boolean;
 	decisions: { fork: string; chose: string }[];
+	// What bosun changed about this plan so it fits beside the others.
+	amendments: string[];
 	planAcs: { code: string; text: string }[];
 	// The `.env` files bosun wrote into this worktree, by key name. Never the values:
 	// a prompt ends up in a transcript, and the transcript leaves the machine.
@@ -37,10 +44,10 @@ export function criteriaList(acs: { code: string; text: string }[]): string {
 // Nobody is reading the output, and there is no second chance to ask. Every rule
 // here exists because the alternative wastes the whole session rather than
 // degrading it.
-export function unattended(afk: boolean): string {
-	const asking = afk
-		? `**You cannot ask anything.** No tool exists for it. Decide, record the decision with \`record_decision\`, and carry on. A choice you are unsure of is still better than a session that ends having built nothing.`
-		: `You may call \`bosun_ask\` when a decision is genuinely the operator's and you cannot settle it from the plan or the code. It blocks this queue — every plan behind it waits — so spend it on decisions that change what gets built, never on confirmations.`;
+export function unattended(canAsk: boolean): string {
+	const asking = canAsk
+		? `You may call \`bosun_ask\` when a decision is genuinely the operator's and you cannot settle it from the plan or the code. This plan keeps its build slot while you wait, but only for ten minutes: past that the session is stopped, other plans take the slot, and this bullet starts again from its last commit — with the answer in its prompt — once somebody gives one. Spend it on decisions that change what gets built, never on confirmations.`
+		: `**You cannot ask anything.** No tool exists for it. Decide, record the decision with \`record_decision\` where you have one, and carry on. A choice you are unsure of is still better than a session that ends having done nothing.`;
 
 	return `# Nobody is watching this run
 
@@ -165,16 +172,13 @@ this step, and it is the same for every session bosun starts on this machine.
 
 ${configured.length === 0 ? '_The operator configured nothing — everything above is yours to discover._' : `${source}:\n\n${configured.join('\n')}`}${providedEnv(context)}
 
-**Ports are yours: ${context.portBase}–${context.portBase + 9}.** Other queues on this machine are
-running their own copies of this project at the same time, from their own worktrees. Any listener you
-start must be inside that range — take a port outside it and you take one another queue is using, and
-both stacks break in ways neither session can explain.
+${portsRule(context)}
 
-Migrations: ${context.applyMigrations ? 'apply them yourself when your work needs them, and never hand-write the SQL — change the schema and regenerate. Once applied, the new schema is live and you can exercise your work for real in this session, so an unapplied migration is never a blocker and never a reason to skip a check.' : '**do not apply them.** This machine points at a database bosun must not migrate. Generate the migration and commit it, then say in your report that it is pending.'}
+${migrationRule(context)}
 
 ## How the loop runs — once per iteration, by you, one command at a time
 
-This machine is shared with other queues and its memory is finite. Typechecking or linting a whole
+This machine is shared with other plans and its memory is finite. Typechecking or linting a whole
 package can take gigabytes on its own; two of them at once, beside a dev stack, is how a session gets
 killed by the kernel halfway through its work.
 
@@ -200,6 +204,41 @@ killed by the kernel halfway through its work.
   would start one. No database connection configured is a blocker to report, not something to build.
   If the app needs a service that is not reachable, that is a blocker to report with what you tried —
   a stand-in costs this machine memory it does not have and proves nothing about the real one.`;
+}
+
+export function portsRule(context: Pick<RunContext, 'portBase'>): string {
+	return `**Ports are yours: ${context.portBase}–${context.portBase + 9}.** Other plans on this machine are
+running their own copies of this project at the same time, from their own worktrees. Any listener you
+start must be inside that range — take a port outside it and you take one another plan is using, and
+both stacks break in ways neither session can explain.`;
+}
+
+// The database belongs to the lane. Every worktree gets the same env, so a bullet
+// that migrated would put its unmerged schema under every other plan on the box —
+// and a verify that passed against another plan's schema proves nothing.
+export function migrationRule(context: Pick<RunContext, 'mode' | 'applyMigrations'>): string {
+	if (context.mode === 'lane') {
+		return `Migrations: bosun ${context.applyMigrations ? 'reset this machine\'s development database and applied every migration' : 'left the database alone — this machine may not be migrated —'} before you started. **Never generate, apply or roll back a migration, and never reset or seed the database yourself.**`;
+	}
+
+	return `Migrations: **never apply one, and never run a test that needs a database.** Change the schema and
+generate the migration with this project's own generator, then leave it in the tree to be committed
+with your work. Bosun applies migrations only when it verifies the plan, against a database it resets
+first, and renumbers generated migrations when this plan lands beside others. A check that needs a
+database is not part of your loop — say in your report which ones you skipped.`;
+}
+
+export function amendmentsSection(context: Pick<RunContext, 'amendments'>): string {
+	if (context.amendments.length === 0) {
+		return '';
+	}
+
+	return `# What bosun changed about this plan
+
+This plan was approved beside others, and bosun amended it so they fit together. These are standing
+instructions, not suggestions — where one contradicts the plan above, the amendment wins:
+
+${context.amendments.map((entry) => `- ${entry}`).join('\n')}`;
 }
 
 export function decisionsSection(context: RunContext): string {
@@ -236,12 +275,22 @@ ${taken}`;
 }
 
 export function gitFlow(context: RunContext): string {
+	const checkedOut = `The branch \`${context.branch}\` is already checked out in this worktree, cut from \`${context.baseRef}\`,
+and the tree is clean. **Do not commit, do not push, do not touch git at all.**`;
+
+	if (context.mode === 'lane') {
+		return `# Git
+
+${checkedOut} Nothing you change here is kept: bosun discards the tree when you finish, because this
+session drives the product and does not change it.`;
+	}
+
 	return `# Git
 
-The branch \`${context.branch}\` is already checked out in this worktree, cut from \`${context.baseRef}\`,
-and the tree is clean. **Do not commit, do not push, do not touch git at all.** Bosun commits this
-bullet for you when you finish and opens one pull request per plan once every bullet has landed — a
-commit of your own splits the history it keeps and leaves no single sha against this bullet.`;
+${checkedOut} Bosun commits ${context.mode === 'fix' ? 'your fixes' : 'this bullet'} when you finish and pushes
+the branch, so a plan waiting on this one can build on it. It integrates the branch with its base and
+opens the pull request once the plan is built and verified — a commit of your own splits the history
+it keeps and leaves no single sha against this ${context.mode === 'fix' ? 'session' : 'bullet'}.`;
 }
 
 // Every read-only session is pointed at a checkout of the current default branch
@@ -262,8 +311,8 @@ find it in a tree of unknown age" rather than as a fact.`;
 	return `## The checkout you are reading
 
 You are reading \`${tree.path}\` — a checkout of **\`${tree.ref}\`** at \`${tree.sha ?? 'unknown'}\`,
-fetched from the remote a moment ago. It is the same ref every queue cuts its branches from, so what
-you see here is what the work will actually be built on top of.
+fetched from the remote a moment ago. It is the same ref every plan is built on top of, so what you see
+here is what the work will actually land on.
 
 It is **not** the operator's own working copy, so uncommitted or unpushed work of theirs is not here
 and is not something to reason about. What is here is current: if you cannot find something, it is

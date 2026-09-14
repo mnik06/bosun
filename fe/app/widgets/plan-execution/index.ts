@@ -1,1 +1,1 @@
-export { PlanExecutionPanel } from './ui/plan-execution'
+export { PlanExecution } from './ui/plan-execution'

@@ -15,21 +15,26 @@ adds a member and the backend mints the Supabase account with a generated passwo
 thing that needs the secret key. See `src/services/auth/supabase-auth.service.md` and
 `src/services/auth/supabase-admin.service.md`.
 
-**Authorization is by project.** `machines`, `plans` and `queues` belong to a project, never to a
+**Authorization is by project.** `machines`, `plans` and `repositories` — and through them every
+build in a repository's line — belong to a project, never to a
 person. `fastify.requireMembership` reads `X-Project-Id`, resolves the caller's role and puts
 `request.membership = { projectId, role }` on the request; `fastify.requireLeader` refuses a
 `developer` on every `/machines` route but the list, and on the member routes. A `users.is_app_owner` row resolves as `leader` of every
 project without holding a membership. A project the caller is not in answers **404**; a role they do
 not hold answers **403**. See `plans/006-projects-and-roles.md`. Every `/github` route is leader-only
-(its `autohooks.ts`); `/repositories` lists to any member — the plan and queue pickers name machines
-by repository — and refuses everything else to a developer. See `plans/008-machine-onboarding.md`.
+(its `autohooks.ts`); `/repositories` lists to any member — the plan picker names machines by
+repository, and the line's chat is a member's — and refuses everything else to a developer. See
+`plans/008-machine-onboarding.md`. The line — builds, dependencies, integration, verify — is
+`src/controllers/line/README.md` and `plans/009-the-line.md`.
 
 **The GitHub App's private key is read in one place**, `src/services/github/github-app.service.ts`,
 the same containment `SUPABASE_SECRET_KEY` gets. No GitHub token is written to the database: see
 `github-app.service.md`.
 
 `/enroll`, `/agent/ws`, `/install.sh`, `/mcp-presets` and `/health` stay unauthenticated by design —
-they are the agent's and the installer's surface.
+they are the agent's and the installer's surface. `/github/webhook` carries no bearer token either:
+GitHub's `X-Hub-Signature-256` over the raw body, checked against `GITHUB_WEBHOOK_SECRET`, is its
+credential.
 
 ## Tech Stack
 

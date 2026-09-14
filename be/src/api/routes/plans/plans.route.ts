@@ -8,6 +8,7 @@ import {
 	PlanDetailRespSchema,
 	PlanListRespSchema
 } from 'src/api/routes/schemas/plans/PlanRespSchemas';
+import { lineDeps } from 'src/controllers/line/line-deps';
 import { discardPlan } from 'src/controllers/plans/discard-plan';
 import { getPlanDetail } from 'src/controllers/plans/get-plan-detail';
 import { listPlans } from 'src/controllers/plans/list-plans';
@@ -38,7 +39,7 @@ const routes: FastifyPluginAsync = async function (f) {
 				machineId: req.body.machineId,
 				input: req.body.input,
 				verifyInUi: req.body.verifyInUi,
-				auto: req.body.auto
+				handsOff: req.body.handsOff
 			});
 
 			return reply.status(201).send(plan);
@@ -46,12 +47,7 @@ const routes: FastifyPluginAsync = async function (f) {
 	);
 
 	fastify.get('/', { schema: { response: { 200: PlanListRespSchema } } }, async (req) => {
-		return listPlans({
-			planRepo: fastify.repos.planRepo,
-			planBlockerRepo: fastify.repos.planBlockerRepo,
-			queueItemRepo: fastify.repos.queueItemRepo,
-			projectId: req.membership!.projectId
-		});
+		return listPlans(lineDeps(fastify), { projectId: req.membership!.projectId });
 	});
 
 	fastify.get(
@@ -63,31 +59,12 @@ const routes: FastifyPluginAsync = async function (f) {
 			}
 		},
 		async (req) => {
-			return getPlanDetail({
-				queueRepo: fastify.repos.queueRepo,
-				queueItemRepo: fastify.repos.queueItemRepo,
-				sliceRunRepo: fastify.repos.sliceRunRepo,
-				runActivity: fastify.services.runActivity,
-				planRepo: fastify.repos.planRepo,
-				planMessageRepo: fastify.repos.planMessageRepo,
-				planBlockerRepo: fastify.repos.planBlockerRepo,
-				planDecisionRepo: fastify.repos.planDecisionRepo,
-				acRepo: fastify.repos.acRepo,
-				sliceRepo: fastify.repos.sliceRepo,
-				id: req.params.id,
-				projectId: req.membership!.projectId
-			});
+			return getPlanDetail(lineDeps(fastify), { id: req.params.id, projectId: req.membership!.projectId });
 		}
 	);
 
 	fastify.delete('/:id', { schema: { params: PlanIdParamsSchema } }, async (req, reply) => {
-		await discardPlan({
-			planRepo: fastify.repos.planRepo,
-			planTextService: fastify.services.planTextService,
-			socketRegistry: fastify.services.socketRegistry,
-			id: req.params.id,
-			projectId: req.membership!.projectId
-		});
+		await discardPlan(lineDeps(fastify), { id: req.params.id, projectId: req.membership!.projectId });
 
 		return reply.status(204).send(undefined);
 	});

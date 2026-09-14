@@ -1,4 +1,5 @@
 export { base64ToBytes, bytesToBase64 } from './base64'
+export { formatGib } from './format-bytes'
 export { formatDuration } from './format-duration'
 export { formatRelativeTime } from './format-relative-time'
 export { keyFingerprint } from './key-fingerprint'

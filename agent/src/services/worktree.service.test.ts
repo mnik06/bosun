@@ -44,7 +44,7 @@ describe('worktree service', () => {
 		return getWorktreeService({ exec, repo, repoPath, homeDir: home });
 	}
 
-	it('creates a checkout of its own on a branch named for the queue', async () => {
+	it('creates a checkout of its own on a branch named for the build', async () => {
 		const result = await service().ensure({ slug: 'auth-work' });
 
 		expect(result.ok).toBe(true);
@@ -55,9 +55,6 @@ describe('worktree service', () => {
 		);
 	});
 
-	// A queue created against an offline machine is re-sent the same ensure when it
-	// reconnects, so a second one has to find the worktree rather than fail on the
-	// branch already existing.
 	// Git refs are paths: a branch at `bosun/auth-work` makes every
 	// `bosun/auth-work/...` impossible to create, and plan branches are exactly
 	// that shape. Keeping the worktree's own branch under its own segment is what
@@ -68,10 +65,12 @@ describe('worktree service', () => {
 
 		expect(head.startsWith('bosun/worktree/')).toBe(true);
 		await expect(
-			git(created.worktreePath, ['branch', 'bosun/plan/shared/1-a', 'HEAD'])
+			git(created.worktreePath, ['branch', 'bosun/plan/1-a', 'HEAD'])
 		).resolves.toBeDefined();
 	});
 
+	// A build is sent an ensure every time it takes a slot, so a second one has to
+	// find the worktree rather than fail on the branch already existing.
 	it('is idempotent', async () => {
 		const first = await service().ensure({ slug: 'auth-work' });
 		const second = await service().ensure({ slug: 'auth-work' });
@@ -80,7 +79,7 @@ describe('worktree service', () => {
 		expect(second.worktreePath).toBe(first.worktreePath);
 	});
 
-	it('keeps two queues in separate checkouts', async () => {
+	it('keeps two builds in separate checkouts', async () => {
 		const one = await service().ensure({ slug: 'one' });
 		const two = await service().ensure({ slug: 'two' });
 
@@ -97,8 +96,8 @@ describe('worktree service', () => {
 		expect(await git(repoPath, ['worktree', 'list'])).not.toContain('gone');
 	});
 
-	// Removing a queue is how somebody gets rid of it, so refusing over changes
-	// they no longer want would leave a directory bosun has already forgotten.
+	// Removing a build's checkout is how somebody gets rid of it, so refusing over
+	// changes they no longer want would leave a directory bosun has already forgotten.
 	it('removes a checkout with uncommitted changes in it', async () => {
 		const created = await service().ensure({ slug: 'dirty' });
 
@@ -108,13 +107,12 @@ describe('worktree service', () => {
 		expect(fs.existsSync(created.worktreePath)).toBe(false);
 	});
 
-	// Killing a queue takes its local branches with it — the worktree branch and
-	// every plan branch cut inside it — and nothing else. A branch belonging to
-	// another queue, or to the person's own work, is not this operation's to take.
-	it('deletes its own branches and leaves everybody else\'s alone', async () => {
+	// A cancelled build keeps its branch for inspection, and a merged one's is on
+	// the remote already. Only the worktree's own branch goes with the checkout.
+	it('deletes its worktree branch and keeps every plan branch', async () => {
 		await service().ensure({ slug: 'doomed' });
 		await service().ensure({ slug: 'kept' });
-		await git(repoPath, ['branch', 'bosun/plan/doomed/1-thing', 'main']);
+		await git(repoPath, ['branch', 'bosun/plan/7-thing', 'main']);
 		await git(repoPath, ['branch', 'feature/mine', 'main']);
 
 		await service().remove('doomed');
@@ -122,7 +120,7 @@ describe('worktree service', () => {
 		const branches = await git(repoPath, ['branch', '--list']);
 
 		expect(branches).not.toContain('bosun/worktree/doomed');
-		expect(branches).not.toContain('bosun/plan/doomed/1-thing');
+		expect(branches).toContain('bosun/plan/7-thing');
 		expect(branches).toContain('bosun/worktree/kept');
 		expect(branches).toContain('feature/mine');
 	});
@@ -140,7 +138,7 @@ describe('worktree service', () => {
 	// A worktree with no .env runs nothing, and git tracks none of those files —
 	// the machine's own checkout is the only place they exist. An ignored file is
 	// copied; a directory ignored whole is what the setup command rebuilds, and
-	// copying it would move node_modules into every queue.
+	// copying it would move node_modules into every worktree.
 	it('copies untracked and ignored files, but not an ignored directory', async () => {
 		fs.writeFileSync(path.join(repoPath, '.gitignore'), '.env.local\nnode_modules/\n');
 		fs.writeFileSync(path.join(repoPath, '.env'), 'SECRET=1\n');
