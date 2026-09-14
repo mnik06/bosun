@@ -59,7 +59,8 @@ export const OnboardingRequirementSchema = z.object({
 	path: z.string().nullable(),
 	key: z.string(),
 	why: z.string(),
-	evidence: z.string()
+	evidence: z.string(),
+	optional: z.boolean().default(false)
 })
 
 export type OnboardingRequirement = z.infer<typeof OnboardingRequirementSchema>

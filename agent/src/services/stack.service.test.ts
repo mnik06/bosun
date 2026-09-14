@@ -130,6 +130,21 @@ describe('up and down', () => {
 		expect(stack.running('sr_2')).toEqual([]);
 	}, 30_000);
 
+	// A dev server's first page compiles the whole app. A probe that gives up after
+	// a few seconds and asks again never lets that request finish.
+	it('waits out a server that takes longer than one probe to answer', async () => {
+		const homeDir = tempDir();
+		const stack = getStackService({ memory: unscoped, homeDir });
+		const slow = `node -e "require('http').createServer((q,s)=>setTimeout(()=>s.end('ok'),4000)).listen(Number(process.env.PORT),'127.0.0.1')"`;
+		const compiling = config({ web: { start: slow, env: { PORT: '{port}' }, ready: '{url}', readyTimeoutSeconds: 10 } });
+
+		const result = await stack.up({ key: 'sr_3', config: compiling, worktreePath: homeDir, portBase: portBase + 40, env: process.env, memoryMaxBytes: null });
+
+		expect(result.ok).toBe(true);
+
+		await stack.down('sr_3');
+	}, 30_000);
+
 	it('does nothing for a stack it never started', async () => {
 		await expect(getStackService({ memory: unscoped, homeDir: tempDir() }).down('nope')).resolves.toBeUndefined();
 	});

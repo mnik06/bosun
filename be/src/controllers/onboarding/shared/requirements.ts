@@ -1,6 +1,6 @@
 import { HttpError } from 'src/api/errors/HttpError';
 import { type Machine } from 'src/types/MachineSchema';
-import { type OnboardingRequirement } from 'src/types/OnboardingSchema';
+import { isOptionalRequirement, type OnboardingRequirement } from 'src/types/OnboardingSchema';
 import { normalizeEnvPath } from 'src/utils/env-path';
 
 // Decided from what bosun already holds about the machine — key names and the
@@ -17,6 +17,10 @@ export function missingRequirements(opts: {
 	const secrets = new Set(opts.machine.sessionSecrets ?? []);
 
 	return opts.requirements.filter((requirement) => {
+		if (isOptionalRequirement(requirement)) {
+			return false;
+		}
+
 		if (requirement.kind === 'policy') {
 			return !opts.machine.policy.confirmed;
 		}

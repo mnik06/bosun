@@ -39,6 +39,18 @@ describe('missingRequirements', () => {
 		]);
 	});
 
+	// An optional input counted as missing is an onboarding nobody can finish
+	// without inventing a Sentry DSN.
+	it('never holds verify back on an optional input, flagged or said so in prose by an older agent', () => {
+		const flagged = { ...env('be', 'SENTRY_DSN'), optional: true };
+		const prose = { ...env('fe', 'VITE_HOTJAR_ID'), why: 'Optional; absent disables HotJar.' };
+		const overridden = { ...env('be', 'SWAGGER_USER'), why: 'Optional in the schema but read unguarded', optional: false };
+
+		expect(
+			missingRequirements({ requirements: [flagged, prose, overridden, secret('TEST_USER_EMAIL')], machine: machine({}) })
+		).toEqual([overridden, secret('TEST_USER_EMAIL')]);
+	});
+
 	it('treats the root path and "." as the same set', () => {
 		const held = machine({ envSets: [{ path: '.', keys: ['TOKEN'], updatedAt: '' }] });
 

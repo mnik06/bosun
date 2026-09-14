@@ -6,7 +6,7 @@ let next = 0
 const newId = () => `id-${++next}`
 
 function requirement (key: string) {
-	return { key, why: 'why', evidence: 'be/.env.example', missing: false }
+	return { key, why: 'why', evidence: 'be/.env.example', missing: false, optional: false }
 }
 
 describe('editorPairs', () => {

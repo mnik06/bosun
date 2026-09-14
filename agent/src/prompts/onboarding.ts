@@ -26,11 +26,11 @@ apps:                           # at most 10; an app's port is portBase + its po
     codegen: pnpm generate      # optional
   fe:
     cwd: fe
-    start: pnpm dev --port {port} --strictPort
+    start: pnpm dev --port {port} --strictPort --host 127.0.0.1   # {url.*} is always 127.0.0.1
     dependsOn: [be]
     env:
       VITE_API_URL: "{url.be}"
-    ready: "{url.fe}"
+    ready: "{url.fe}/@vite/client"   # a dev server compiles the app on its first page; probe something cheap
 
 checks:                         # the feedback loop every session runs
   - cwd: be
@@ -89,7 +89,18 @@ confirmed by reading or running it is not one.
 
 Use \`report_step\` for a line of progress whenever you move on to something new — what you are
 reading, what you are running and how it went — with \`progress\` set to how far through this job you
-honestly think you are. The operator watches that number to know how long is left.
+honestly think you are. The operator watches that number to know how long is left, and a report that
+has not moved for minutes reads as a session that hung. At the least, report each of these as you reach
+it, and never go longer than a couple of minutes without a line:
+
+1. the packages and apps found, and the toolchain (~0.2)
+2. the env keys each app reads (~0.35)
+3. each command you run to try it, before it starts — a typecheck can take minutes (~0.4–0.6)
+4. the config written and published (~0.8)
+5. requirements and assumptions all reported (~0.9)
+
+**Report every requirement the moment you find it**, not at the end. The operator can start filling
+them in while you work, and verify starts sooner.
 
 ${existingSection(opts)}
 
@@ -106,11 +117,17 @@ project's own account of how it is built; they outrank your habits. Find:
 - **how each installs**, and which lockfile's change means installing again
 - **how each generates code** (clients, types from a schema) and **how each migrates**, if it has a database
 - **how each starts**, on which port, and how it learns the URL of another app it talks to — these
-  are the \`env\` entries that must be wired with \`{port}\` and \`{url.<app>}\`
+  are the \`env\` entries that must be wired with \`{port}\` and \`{url.<app>}\`. Every \`{url.<app>}\` is
+  \`http://127.0.0.1:<port>\`, so each server must listen on 127.0.0.1: a server bound to \`localhost\`
+  can end up on IPv6 alone and never answer (Vite: \`--host 127.0.0.1\`). Point \`ready\` at something
+  that answers without rendering the app — a health route, or \`/@vite/client\` for a Vite dev server —
+  because the first page of a dev server compiles everything and can take minutes on a small machine
 - **how each proves itself**: the typecheck, lint and test commands, or the one command that runs them
 - **every env key each reads**: \`.env.example\`, config and env schemas, and the code itself. Each key
   that needs a real value from the operator is a requirement of kind \`env\`, with \`path\` set to the
-  folder whose \`.env\` it lives in (\`.\` for the root)
+  folder whose \`.env\` it lives in (\`.\` for the root). Set \`optional\` on a key the project starts and
+  works without — telemetry, a feature that switches itself off, a value with a default. Verify waits
+  for every input that is not optional, so a key marked required that is not blocks the operator
 - **how a user signs in**, and which credentials a test account needs. Their key names go in
   \`testAccounts[].secrets\` and each is a requirement of kind \`secret\`
 - **whether the project migrates a database**. If it does, report a requirement of kind \`policy\` with
@@ -138,8 +155,8 @@ ${CONFIG_REFERENCE}
 Call \`publish_config\` with the whole file. When it is refused, fix every field it names and publish
 again, until it is accepted. Do not stop with a config that was never accepted — that fails onboarding.
 
-Before you finish, make sure every env key, every test-account secret and the migration policy you
-found is reported as a requirement, and every guess is recorded as an assumption.
+Before you finish, check that every env key, every test-account secret and the migration policy you
+found has been reported as a requirement, and every guess recorded as an assumption.
 
 # When you are done
 

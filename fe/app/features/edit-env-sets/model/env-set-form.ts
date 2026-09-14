@@ -55,4 +55,5 @@ export interface RequiredVar {
 	why: string
 	evidence: string
 	missing: boolean
+	optional: boolean
 }

@@ -56,7 +56,8 @@ export function inputGroups (opts: {
 			key: requirement.key,
 			why: requirement.why,
 			evidence: requirement.evidence,
-			missing: isMissing(opts.missing, requirement)
+			missing: isMissing(opts.missing, requirement),
+			optional: requirement.optional
 		}
 
 		if (requirement.kind === 'policy') {

@@ -17,7 +17,7 @@ import {
 import { OpenPullRequestButton } from '~/features/open-onboarding-pr'
 import { StartOnboardingButton } from '~/features/start-onboarding'
 import { formatRelativeTime } from '~/shared/lib'
-import { displaySteps } from '~/widgets/onboarding-report/lib/display-steps'
+import { displaySteps, pendingStep } from '~/widgets/onboarding-report/lib/display-steps'
 import { OnboardingSteps } from '~/widgets/onboarding-report/ui/onboarding-steps'
 
 function ReportActions ({
@@ -155,6 +155,8 @@ export function OnboardingReport ({ machine }: { machine: Machine }) {
 
 	const { run, missing } = onboarding.data
 	const repository = repositories.data?.find((entry) => entry.id === run.repositoryId) ?? null
+	const steps = displaySteps(run)
+	const pending = pendingStep(run, steps)
 
 	return (
 		<Card withBorder padding="md" radius="md">
@@ -175,7 +177,7 @@ export function OnboardingReport ({ machine }: { machine: Machine }) {
 					<RunProgress run={run} />
 				</Stack>
 
-				{run.steps.length === 0 ? null : <OnboardingSteps steps={displaySteps(run)} />}
+				{steps.length === 0 && pending === null ? null : <OnboardingSteps steps={steps} pending={pending} />}
 
 				{run.failureReason === null ? null : (
 					<Alert color="red" variant="light" title="The run failed">

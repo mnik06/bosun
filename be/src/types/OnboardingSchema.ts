@@ -40,7 +40,8 @@ export const OnboardingRequirementSchema = z
 		path: z.string().max(200).nullable().default(null),
 		key: z.string().min(1).max(100),
 		why: z.string().trim().min(1).max(1000),
-		evidence: z.string().trim().min(1).max(500)
+		evidence: z.string().trim().min(1).max(500),
+		optional: z.boolean().optional()
 	})
 	.superRefine((requirement, ctx) => {
 		if (requirement.kind === 'env' && requirement.path === null) {
@@ -57,6 +58,15 @@ export const OnboardingRequirementSchema = z
 	});
 
 export type OnboardingRequirement = z.infer<typeof OnboardingRequirementSchema>;
+
+const LEGACY_OPTIONAL = /^\s*optional\b/i;
+
+// An optional input never holds verify back. Agents older than the flag could
+// only say so in prose, and they did — "Optional; absent disables Sentry" — so a
+// requirement that carries no flag is read from how its reason opens.
+export function isOptionalRequirement(requirement: OnboardingRequirement): boolean {
+	return requirement.optional ?? LEGACY_OPTIONAL.test(requirement.why);
+}
 
 export const OnboardingAssumptionSchema = z.object({
 	text: z.string(),

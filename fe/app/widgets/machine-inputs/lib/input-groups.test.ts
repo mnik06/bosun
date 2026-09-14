@@ -8,15 +8,15 @@ describe('inputGroups', () => {
 	it('gives every path one tab, required paths first, and counts what is still missing', () => {
 		const groups = inputGroups({
 			requirements: [
-				{ kind: 'env', path: 'be/', key: 'DATABASE_URL', why: 'db', evidence: 'be/.env.example' },
-				{ kind: 'env', path: 'be/', key: 'SUPABASE_URL', why: 'auth', evidence: 'be/src/env.ts' },
-				{ kind: 'env', path: null, key: 'VITE_API_URL', why: 'api', evidence: '.env.example' },
-				{ kind: 'secret', path: null, key: 'TEST_LEADER_EMAIL', why: 'sign in', evidence: 'fe/login' },
-				{ kind: 'policy', path: null, key: 'applyMigrations', why: 'migrations', evidence: 'be/drizzle' }
+				{ kind: 'env', path: 'be/', key: 'DATABASE_URL', why: 'db', evidence: 'be/.env.example', optional: false },
+				{ kind: 'env', path: 'be/', key: 'SUPABASE_URL', why: 'auth', evidence: 'be/src/env.ts', optional: false },
+				{ kind: 'env', path: null, key: 'VITE_API_URL', why: 'api', evidence: '.env.example', optional: false },
+				{ kind: 'secret', path: null, key: 'TEST_LEADER_EMAIL', why: 'sign in', evidence: 'fe/login', optional: false },
+				{ kind: 'policy', path: null, key: 'applyMigrations', why: 'migrations', evidence: 'be/drizzle', optional: false }
 			],
 			missing: [
-				{ kind: 'env', path: 'be/', key: 'SUPABASE_URL', why: 'auth', evidence: 'be/src/env.ts' },
-				{ kind: 'secret', path: null, key: 'TEST_LEADER_EMAIL', why: 'sign in', evidence: 'fe/login' }
+				{ kind: 'env', path: 'be/', key: 'SUPABASE_URL', why: 'auth', evidence: 'be/src/env.ts', optional: false },
+				{ kind: 'secret', path: null, key: 'TEST_LEADER_EMAIL', why: 'sign in', evidence: 'fe/login', optional: false }
 			],
 			envSets: [
 				{ path: 'fe', keys: ['SENTRY_DSN'], updatedAt },

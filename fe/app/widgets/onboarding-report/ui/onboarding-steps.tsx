@@ -2,6 +2,11 @@ import { Group, Loader, Stack, Text, ThemeIcon } from '@mantine/core'
 import { Check, Dot, X } from 'lucide-react'
 
 import type { OnboardingStep } from '~/entities/repository'
+import { useNow } from '~/shared/hooks'
+import { formatRelativeTime } from '~/shared/lib'
+import type { PendingStep } from '~/widgets/onboarding-report/lib/display-steps'
+
+const PENDING_TICK_MS = 15_000
 
 function StepIcon ({ status }: { status: OnboardingStep['status'] }) {
 	switch (status) {
@@ -16,7 +21,23 @@ function StepIcon ({ status }: { status: OnboardingStep['status'] }) {
 	}
 }
 
-export function OnboardingSteps ({ steps }: { steps: OnboardingStep[] }) {
+function PendingRow ({ pending }: { pending: PendingStep }) {
+	useNow(PENDING_TICK_MS)
+
+	return (
+		<Group gap="sm" align="start" wrap="nowrap">
+			<Loader size={16} />
+			<Stack gap={2} className="min-w-0">
+				<Text size="sm">{pending.label}</Text>
+				<Text size="xs" c="dimmed">
+					last update {formatRelativeTime(pending.since)}
+				</Text>
+			</Stack>
+		</Group>
+	)
+}
+
+export function OnboardingSteps ({ steps, pending }: { steps: OnboardingStep[], pending: PendingStep | null }) {
 	return (
 		<Stack gap={6}>
 			{steps.map((step, index) => (
@@ -32,6 +53,7 @@ export function OnboardingSteps ({ steps }: { steps: OnboardingStep[] }) {
 					</Stack>
 				</Group>
 			))}
+			{pending === null ? null : <PendingRow pending={pending} />}
 		</Stack>
 	)
 }

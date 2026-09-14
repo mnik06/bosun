@@ -200,6 +200,7 @@ export function getBosunApiService(deps: { serverUrl: string; machineKey?: strin
 			key: string;
 			why: string;
 			evidence: string;
+			optional: boolean;
 		}): Promise<unknown> {
 			const { runId, ...body } = opts;
 

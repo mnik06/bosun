@@ -155,9 +155,13 @@ function describeExit(exit: NonNullable<Running['exit']>): string {
 	return `exited before it was ready (${exit.signal === null ? `code ${exit.code ?? 'unknown'}` : exit.signal})`;
 }
 
-async function answers(url: string): Promise<boolean> {
+// A refused connection fails at once and is polled again. A connection that is
+// accepted is left to answer until the deadline: a dev server compiles the whole
+// app on its first request, and aborting that every few seconds is a server that
+// is working and a probe that never lets it finish.
+async function answers(url: string, timeoutMs: number): Promise<boolean> {
 	try {
-		const response = await fetch(url, { signal: AbortSignal.timeout(PROBE_TIMEOUT_MS), redirect: 'manual' });
+		const response = await fetch(url, { signal: AbortSignal.timeout(Math.max(timeoutMs, PROBE_TIMEOUT_MS)), redirect: 'manual' });
 
 		await response.body?.cancel();
 
@@ -165,6 +169,20 @@ async function answers(url: string): Promise<boolean> {
 	} catch {
 		return false;
 	}
+}
+
+// `{url.<app>}` is always 127.0.0.1, and a server bound to `localhost` can end up
+// on ::1 alone — the one failure that looks like a hang but is an address.
+async function answersOnlyOnIpv6(ready: string): Promise<boolean> {
+	const url = new URL(ready);
+
+	if (url.hostname !== '127.0.0.1') {
+		return false;
+	}
+
+	url.hostname = '[::1]';
+
+	return answers(url.toString(), PROBE_TIMEOUT_MS);
 }
 
 async function waitReady(opts: { running: Running; ready: string | null; timeoutSeconds: number }): Promise<string | null> {
@@ -181,12 +199,14 @@ async function waitReady(opts: { running: Running; ready: string | null; timeout
 			return describeExit(opts.running.exit);
 		}
 
-		if (await answers(opts.ready)) {
+		if (await answers(opts.ready, deadline - Date.now())) {
 			return opts.running.exit === null ? null : describeExit(opts.running.exit);
 		}
 
 		if (Date.now() >= deadline) {
-			return `did not answer ${opts.ready} within ${opts.timeoutSeconds}s`;
+			return (await answersOnlyOnIpv6(opts.ready))
+				? `answers on [::1] but not on ${opts.ready} — it is bound to localhost; start it on 127.0.0.1 (for Vite, --host 127.0.0.1)`
+				: `did not answer ${opts.ready} within ${opts.timeoutSeconds}s`;
 		}
 
 		await Promise.race([opts.running.exited, sleep(POLL_MS)]);

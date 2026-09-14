@@ -30,7 +30,7 @@ function RequirementHint ({ requirement }: { requirement: RequiredVar }) {
 	return (
 		<Group gap={6} wrap="nowrap" className="min-w-0">
 			<Badge size="xs" variant="light" color={requirement.missing ? 'red' : 'gray'} className="shrink-0">
-				required
+				{requirement.optional ? 'optional' : 'required'}
 			</Badge>
 			<Text size="xs" c="dimmed" className="min-w-0 break-words">
 				{requirement.why}

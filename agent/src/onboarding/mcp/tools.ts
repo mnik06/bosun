@@ -17,7 +17,8 @@ export const ReportRequirementArgsSchema = z
 		path: z.string().max(200).optional(),
 		key: z.string().min(1).max(100),
 		why: z.string().trim().min(1).max(1000),
-		evidence: z.string().trim().min(1).max(500)
+		evidence: z.string().trim().min(1).max(500),
+		optional: z.boolean().optional()
 	})
 	.refine((requirement) => requirement.kind !== 'env' || requirement.path !== undefined, {
 		message: 'an env requirement names the folder its .env lives in, as path',
@@ -69,7 +70,7 @@ export const DISCOVERY_DEFINITIONS = [
 	definition({
 		name: 'report_requirement',
 		description:
-			'List one input only the operator can give: an env key a package reads (kind env, with the path of the folder whose .env holds it), a secret a session needs in its environment such as a test-account password (kind secret), or whether this machine may apply migrations (kind policy, key applyMigrations). Say why it is needed and cite the file that told you.',
+			'List one input only the operator can give: an env key a package reads (kind env, with the path of the folder whose .env holds it), a secret a session needs in its environment such as a test-account password (kind secret), or whether this machine may apply migrations (kind policy, key applyMigrations). Say why it is needed and cite the file that told you. Set optional to true when the project starts and works without it — telemetry, a feature that switches off, a value with a default; verify waits for every input that is not optional.',
 		schema: ReportRequirementArgsSchema
 	}),
 	definition({
@@ -112,6 +113,14 @@ export function describePublishAnswer(answer: unknown): { published: boolean; te
 	};
 }
 
+const ENTITIES: Record<string, string> = { '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'", '&amp;': '&' };
+
+// Sessions now and then write their tool arguments HTML-escaped, and the report
+// renders text, so `node&gt;=22` would reach the operator as written.
+export function unescapeEntities(text: string): string {
+	return text.replace(/&(?:lt|gt|quot|#39|amp);/g, (entity) => ENTITIES[entity] ?? entity);
+}
+
 export function createDiscoveryDispatch(opts: {
 	runId: string;
 	bosunApi: BosunApiService;
@@ -127,9 +136,9 @@ export function createDiscoveryDispatch(opts: {
 
 				await opts.bosunApi.reportOnboardingStep({
 					runId: opts.runId,
-					label: parsed.label,
+					label: unescapeEntities(parsed.label),
 					status: parsed.status,
-					detail: parsed.detail ?? null,
+					detail: parsed.detail === undefined ? null : unescapeEntities(parsed.detail),
 					progress: opts.advance(parsed.progress)
 				});
 
@@ -156,15 +165,22 @@ export function createDiscoveryDispatch(opts: {
 					kind: parsed.kind,
 					path: parsed.path ?? null,
 					key: parsed.key,
-					why: parsed.why,
-					evidence: parsed.evidence
+					why: unescapeEntities(parsed.why),
+					evidence: unescapeEntities(parsed.evidence),
+					optional: parsed.optional ?? false
 				});
 
 				return textToolResult('recorded');
 			}
 
 			if (name === 'record_assumption') {
-				await opts.bosunApi.recordOnboardingAssumption({ runId: opts.runId, ...RecordAssumptionArgsSchema.parse(args) });
+				const parsed = RecordAssumptionArgsSchema.parse(args);
+
+				await opts.bosunApi.recordOnboardingAssumption({
+					runId: opts.runId,
+					text: unescapeEntities(parsed.text),
+					evidence: unescapeEntities(parsed.evidence)
+				});
 
 				return textToolResult('recorded');
 			}
