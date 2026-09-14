@@ -118,12 +118,12 @@ export type ExecutionPhase = 'build' | 'drive' | 'recheck' | 'fix';
 
 interface ToolSet {
 	phase: ExecutionPhase;
-	handsOff: boolean;
+	afk: boolean;
 	// Only a repository machine whose config declares apps can start a stack.
 	stack: boolean;
 }
 
-// A hands-off plan's bullets are given no way to ask at all, rather than a tool
+// An AFK plan's bullets are given no way to ask at all, rather than a tool
 // they are told not to call: a model that can see `bosun_ask` will eventually
 // reach for it. Only a build bullet ever asks — a verify session's questions are
 // findings, and nobody is waiting on one.
@@ -133,7 +133,7 @@ export function executionDefinitions(opts: ToolSet): { name: string }[] {
 	switch (opts.phase) {
 		case 'build':
 			return [
-				...(opts.handsOff ? [] : [ASK_DEFINITION]),
+				...(opts.afk ? [] : [ASK_DEFINITION]),
 				LIST_PLANS_DEFINITION,
 				RECORD_DECISION_DEFINITION,
 				MARK_IMPLEMENTED_DEFINITION,

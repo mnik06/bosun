@@ -162,6 +162,27 @@
       "when": 1789399918015,
       "tag": "0022_the_line_drop_queues",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1789406621024,
+      "tag": "0023_plan_modes_add",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1789406621923,
+      "tag": "0024_plan_modes_data",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1789406676190,
+      "tag": "0025_plan_modes_drop_hands_off",
+      "breakpoints": true
     }
   ]
 }

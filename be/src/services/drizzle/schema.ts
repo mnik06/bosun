@@ -219,9 +219,12 @@ export const plans = pgTable(
 		// Settled when the ticket is pasted, not by the session: whether this plan
 		// ends in a verify bullet that drives the feature through its interface.
 		verifyInUi: boolean().notNull().default(true),
-		// Also settled when the ticket is pasted: the grill answers itself, the
-		// bullets cannot ask, and nothing a fix repaired is driven again before review.
-		handsOff: boolean().notNull().default(false),
+		// Settled when the ticket is pasted: the grill answers itself instead of
+		// stopping for a person who is not there.
+		auto: boolean().notNull().default(false),
+		// Changeable while the plan builds, and read at each dispatch: its bullets
+		// cannot ask, and nothing a fix repaired is driven again before review.
+		afk: boolean().notNull().default(false),
 		// The person's own sign-off, and the last thing a person does before review.
 		// Cleared by a revision from a person or a session, because what was signed
 		// off no longer exists — never by a change bosun makes to fit other plans.

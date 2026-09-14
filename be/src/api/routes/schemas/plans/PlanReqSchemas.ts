@@ -12,8 +12,11 @@ export const CreatePlanReqSchema = z.object({
 	machineId: z.string().min(1),
 	input: z.string().min(1),
 	verifyInUi: z.boolean().default(true),
-	handsOff: z.boolean().default(false)
+	auto: z.boolean().default(false),
+	afk: z.boolean().default(false)
 });
+
+export const UpdatePlanReqSchema = z.object({ afk: z.boolean() });
 
 export const SayToPlanReqSchema = z.object({ text: z.string().trim().min(1) });
 

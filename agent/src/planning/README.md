@@ -75,9 +75,9 @@ sets `MCP_TOOL_TIMEOUT` for the session. Changing that constant to something a p
 breaks the entire mechanism, and it breaks it silently — the session keeps running, it just stops
 listening.
 
-## A hands-off plan answers `bosun_ask` for the person
+## An auto plan answers `bosun_ask` for the person
 
-A plan created hands-off runs the identical grill — same rounds, same one question at a time,
+A plan created in auto mode runs the identical grill — same rounds, same one question at a time,
 same prompt — but `createAskTool` never registers a pending promise. It takes the **first** option of
 each question, which the prompt requires to be the session's own recommendation, and returns it as
 the tool result immediately.
@@ -89,7 +89,7 @@ question does not resolve on its own. Answering in the tool means the wait canno
 whatever the model does.
 
 The question is still emitted as a `plan.question` frame, carrying its answers as `autoAnswers`, and
-the backend writes both rows. So the transcript of a hands-off plan reads exactly like a manual one, and
+the backend writes both rows. So the transcript of an auto plan reads exactly like a manual one, and
 whether the plan is still waiting stays derivable from the transcript alone — a question written with
 no answer beside it is what the browser renders a prompt for.
 
@@ -105,6 +105,22 @@ one hop away from the socket, and every answer would need a second channel to ge
 
 Loopback is not on the network, but every process on the box shares it, so the config carries a
 per-session bearer token and the server rejects anything without it.
+
+## The checkout is served to the session's browser
+
+A planning session has no shell, and the Playwright MCP refuses `file://` navigation. A repository
+skill that says "start `python3 -m http.server` and open the prototype" therefore cannot be followed,
+and the session stalls asking the person what to do. So each session gets `services/static-server.service.ts`:
+the read tree served on loopback at an ephemeral port, and the prompt tells the session to open any
+file under that URL instead of starting a server or using `file://`.
+
+Rejected: `--allow-unrestricted-file-access` on the Playwright MCP. It opens every file on the box to
+every session — `~/.bosun/env` and the machine's inputs key included — to make one page reachable.
+Giving planning `Bash` was rejected for the same read-and-ask reason `Skill` is limited below.
+
+The server answers GET and HEAD only, resolves every path through `realpath` so a symlink cannot lead
+out of the checkout, and never serves `.git` or an `.env*` file: loopback is shared with every process
+on the machine. It is closed with the session, on every path a session ends by.
 
 ## Activity comes from two narrators
 
@@ -178,11 +194,11 @@ interleaved.
   duplicate prompt on the screen; one that repeats a question already answered is handed the answer
   back. A model that re-asks has lost the tool result — a compaction, a restarted turn — and asking
   the person again reads as the grill going in circles.
-- **A plan that is not hands-off cannot be published before it is grilled.** `publish_plan` refuses until one
+- **A plan not in auto mode cannot be published before it is grilled.** `publish_plan` refuses until one
   `bosun_ask` has been answered by a person, and the nudge for a turn that ended early says to keep
   grilling rather than to publish. The point of a planning session is that the plan is not the
   model's own first draft; a session that loses the thread and writes one anyway produces something
-  that looks reviewed and is not. A hands-off plan is exempt because its answers are the model's own by
+  that looks reviewed and is not. An auto plan is exempt because its answers are the model's own by
   design, and a revision is exempt because the plan it edits was already grilled into existence.
 - **Cancelling reaps the process group.** The child is spawned `detached`, so `SIGTERM` goes to the
   group and takes any subagent with it. A `claude` process outliving its session holds a port and a

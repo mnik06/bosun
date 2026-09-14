@@ -9,7 +9,7 @@ export const PlanStartMsgSchema = z.object({
 	verifyInUi: z.boolean().default(true),
 	// The grill answers itself: the session takes its own recommendation instead of
 	// stopping for a person who is not there.
-	handsOff: z.boolean().default(false),
+	auto: z.boolean().default(false),
 	// The operator's notes from the machine's project setup. Planning gets them
 	// for the same reason execution does: a convention nobody can read off the
 	// code — a skill this repository expects a session to invoke, a rule the team
@@ -24,7 +24,7 @@ export const PlanStartMsgSchema = z.object({
 // the grill ended needs the artifact handed to it.
 export const PlanSnapshotSchema = z.object({
 	verifyInUi: z.boolean(),
-	handsOff: z.boolean(),
+	auto: z.boolean(),
 	title: z.string().nullable(),
 	bodyMd: z.string().nullable(),
 	acs: z.array(

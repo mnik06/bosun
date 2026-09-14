@@ -92,7 +92,7 @@ async function execStartFrame(
 		worktreePath: build.worktreePath,
 		branch: build.branch,
 		baseRef: `origin/${build.baseBranch ?? opts.repository.defaultBranch}`,
-		handsOff: plan.handsOff,
+		afk: plan.afk,
 		planId: plan.id,
 		sliceId: slice.id,
 		planNumber: plan.number,

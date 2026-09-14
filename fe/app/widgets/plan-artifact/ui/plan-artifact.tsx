@@ -12,13 +12,15 @@ function AcLine ({ ac, verifyInUi }: { ac: Ac, verifyInUi: boolean }) {
 	const blocked = verifyInUi && !ac.verified && ac.blockedReason != null
 
 	return (
-		<Group gap="sm" align="start">
-			<Badge variant="light" className="shrink-0">
+		// A grid rather than a wrapping row: a long criterion wraps inside its own
+		// column, so the code and the boxes line up on every row whatever its length.
+		<div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3 gap-y-1 sm:grid-cols-[auto_minmax(0,1fr)_auto]">
+			<Badge variant="light" className="mt-0.5">
 				{ac.code}
 			</Badge>
 
-			<Stack gap={2} className="min-w-40 grow">
-				<Text size="sm">{ac.text}</Text>
+			<Stack gap={2} className="min-w-0">
+				<Text size="sm" className="break-words">{ac.text}</Text>
 				{blocked ? (
 					<Text size="xs" c="orange">
 						Not verified — {ac.blockedReason}
@@ -28,13 +30,13 @@ function AcLine ({ ac, verifyInUi }: { ac: Ac, verifyInUi: boolean }) {
 
 			{/* Ticked by the sessions, never here: the boxes report what the build and
 			    verify bullets have actually done, so a click would be a lie. */}
-			<Group gap="md" wrap="nowrap" className="shrink-0">
+			<Group gap="md" wrap="nowrap" className="col-start-2 mt-0.5 sm:col-start-3">
 				<Checkbox size="xs" readOnly label="implemented" checked={ac.implemented} />
 				{verifyInUi ? (
 					<Checkbox size="xs" readOnly label="verified" checked={ac.verified} />
 				) : null}
 			</Group>
-		</Group>
+		</div>
 	)
 }
 
@@ -62,9 +64,9 @@ export function PlanArtifact ({
 		<Stack gap="lg">
 			<Group gap="sm">
 				<Title order={2}>{plan.title ?? 'Untitled'}</Title>
-				{plan.handsOff ? (
+				{plan.auto ? (
 					<Badge variant="light" color="gray">
-						hands-off
+						auto
 					</Badge>
 				) : null}
 			</Group>

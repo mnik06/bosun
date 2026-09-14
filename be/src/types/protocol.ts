@@ -251,8 +251,8 @@ export const ExecStartMsgSchema = z.object({
 	worktreePath: z.string(),
 	branch: z.string(),
 	baseRef: z.string(),
-	// A hands-off plan's bullets are given no way to ask.
-	handsOff: z.boolean(),
+	// An AFK plan's bullets are given no way to ask.
+	afk: z.boolean(),
 	planId: z.string(),
 	sliceId: z.string(),
 	planNumber: z.number().int(),

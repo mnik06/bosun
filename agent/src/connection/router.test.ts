@@ -178,7 +178,7 @@ describe('routeServerFrame', () => {
 	it('refuses to start a plan while paused, and tells the backend why', async () => {
 		const { send, sessions, route } = build({ paused: true });
 
-		await route({ type: 'plan.start', verifyInUi: true, handsOff: false, notes: null, configDraft: null, planId: 'p_1', input: 'go' });
+		await route({ type: 'plan.start', verifyInUi: true, auto: false, notes: null, configDraft: null, planId: 'p_1', input: 'go' });
 
 		expect(sessions.start).not.toHaveBeenCalled();
 		expect(sent(send)).toEqual([
@@ -189,13 +189,13 @@ describe('routeServerFrame', () => {
 	it('starts a plan when not paused', async () => {
 		const { sessions, route } = build();
 
-		await route({ type: 'plan.start', verifyInUi: true, handsOff: true, notes: null, configDraft: 'version: 1', planId: 'p_1', input: 'go' });
+		await route({ type: 'plan.start', verifyInUi: true, auto: true, notes: null, configDraft: 'version: 1', planId: 'p_1', input: 'go' });
 
 		expect(sessions.start).toHaveBeenCalledWith({
 			planId: 'p_1',
 			input: 'go',
 			verifyInUi: true,
-			handsOff: true,
+			auto: true,
 			notes: null,
 			configDraft: 'version: 1'
 		});
@@ -282,7 +282,7 @@ describe('exec frames', () => {
 		worktreePath: '/w',
 		branch: 'bosun/plan/1-auth',
 		baseRef: 'origin/main',
-		handsOff: false,
+		afk: false,
 		planId: 'p_1',
 		sliceId: 'sl_1',
 		planNumber: 1,

@@ -74,7 +74,7 @@ export const TOOL_DEFINITIONS = [
 // The one thing a session cannot be trusted to enforce on itself. A turn that
 // runs long, loses the thread and writes the plan it already had in mind is the
 // failure this catches: the person is grilled precisely because the plan is not
-// supposed to be the model's own first draft. A hands-off plan is exempt because its
+// supposed to be the model's own first draft. An auto plan is exempt because its
 // answers are the model's own by design, and a revision is exempt because the
 // plan it is editing was already grilled into existence.
 const GRILL_REQUIRED = [
@@ -85,7 +85,7 @@ const GRILL_REQUIRED = [
 
 export function createPlanDispatch(opts: {
 	planId: string;
-	handsOff: boolean;
+	auto: boolean;
 	// Off for a revision: the plan handed to it is already the product of a grill,
 	// and a change the person asked for in prose is not a new one.
 	requireGrill: boolean;
@@ -103,7 +103,7 @@ export function createPlanDispatch(opts: {
 		const ask = createAskTool({
 			pending,
 			onQuestion: opts.onQuestion,
-			auto: opts.handsOff,
+			auto: opts.auto,
 			onAnswered: () => {
 				grilled = true;
 				opts.onGrilled();

@@ -17,7 +17,7 @@ the session errors.** Waiting is not one of them. A \`Task\` subagent returns in
 dispatched it — nothing of yours keeps running once you stop, and no result is ever delivered to you
 later. "I'll continue once recon reports back" ends the session on an empty plan, which is recorded
 as a failure. If you have dispatched work, stay in the turn until it comes back.
-{{HANDS_OFF_RULE}}
+{{AUTO_RULE}}
 ## The governing principle: grey box
 
 The plan settles *what the feature must do* and *how it is put together*. It does not settle how a
@@ -460,13 +460,13 @@ What this work waits on and why. "None" if there are none.
 
 `;
 
-// The tool answers itself on a hands-off plan whatever this says — the prompt
+// The tool answers itself on an auto plan whatever this says — the prompt
 // exists so the session knows *why* its own recommendation came back, and writes
 // the plan as one full of executive calls rather than one somebody signed off on.
-const HANDS_OFF_ON = `
-## Hands-off
+const AUTO_ON = `
+## Auto mode
 
-This plan is **hands-off**: nobody is at the keyboard, and no question will ever reach a
+This plan runs in **auto mode**: nobody is at the keyboard, and no question will ever reach a
 person. Run the grill exactly as written anyway — every round, one question at a time, each formed
 with its real options, its real trade-offs and your recommendation first. \`bosun_ask\` answers itself
 with that recommendation and hands it straight back to you. Take it as the ruling and carry on.
@@ -499,20 +499,30 @@ function operatorNotes(notes: string | null): string {
 		: `\n## Operator notes\n\nWritten by the person who set this machine up. Treat it as standing instruction for this repository, in planning and in every session that follows:\n\n${notes.trim()}\n`;
 }
 
+// The session has no shell, so a skill's "start a local server" step cannot run,
+// and the browser tool refuses `file://`. The agent serves the checkout instead,
+// and this is where the session learns to use it.
+function servedTree(url: string | null): string {
+	return url === null
+		? ''
+		: `\n## Opening repository files in a browser\n\nYou have no shell and cannot start a server. This checkout is already served, read-only, at ${url}/ — every file in it is at \`${url}/<path from the repository root>\`. When a skill or a doc says to start a local server (\`python3 -m http.server\`, \`npx serve\`) or to open a \`file://\` URL, open the same file under ${url}/ with the browser tool instead, keeping any \`#fragment\` it needs. Nothing under \`.git\` and no \`.env\` file is served.\n`;
+}
+
 export function planningPrompt(opts: {
 	input: string;
 	verifyInUi: boolean;
-	handsOff: boolean;
+	auto: boolean;
 	notes: string | null;
 	tree: ReadTree;
+	served: string | null;
 }): string {
 	const prompt = PLANNING_PROMPT.replace(
 		'{{VERIFY_RULE}}',
 		opts.verifyInUi ? VERIFY_ON : VERIFY_OFF
 	)
-		.replace('{{HANDS_OFF_RULE}}', opts.handsOff ? HANDS_OFF_ON : '')
+		.replace('{{AUTO_RULE}}', opts.auto ? AUTO_ON : '')
 		.replace('{{REPO_STATE}}', `\n${repoState(opts.tree)}\n`)
-		.replace('{{OPERATOR_NOTES}}', operatorNotes(opts.notes));
+		.replace('{{OPERATOR_NOTES}}', `${operatorNotes(opts.notes)}${servedTree(opts.served)}`);
 
 	return `${prompt}\n${opts.input.trim()}\n`;
 }
@@ -549,6 +559,7 @@ export function revisionPrompt(opts: {
 	request: string;
 	notes: string | null;
 	tree: ReadTree;
+	served: string | null;
 }): string {
 	return `You are revising a plan that has already been published. It is shown beside this conversation, and
 the person has just asked for a change.
@@ -566,7 +577,7 @@ dispatched it — nothing of yours keeps running once you stop, and no result is
 later. "I'll continue once recon reports back" ends the session on an empty plan, which is recorded
 as a failure. If you have dispatched work, stay in the turn until it comes back.
 
-${operatorNotes(opts.notes)}
+${operatorNotes(opts.notes)}${servedTree(opts.served)}
 ## The plan as it stands
 
 ${artifactMarkdown(opts.plan)}
@@ -592,7 +603,7 @@ is usually because it was parked on a bullet with no surface to demonstrate it �
 the same fault while you are here, and merge any two criteria that describe the same behaviour.
 
 ${opts.plan.verifyInUi ? 'This plan has UI verification on: the last bullet is the verify bullet, with no body and no claimed criteria.' : 'This plan has UI verification off: it takes no verify bullet, and the API refuses one.'}
-${opts.plan.handsOff ? 'This plan is hands-off: nobody is at the keyboard. Ask with `bosun_ask` exactly where you would have, and it answers itself with the option you recommended first — take that as the ruling, and record what you settled in the key decisions section as a call made on their behalf.' : ''}
+${opts.plan.auto ? 'This plan runs in auto mode: nobody is at the keyboard. Ask with `bosun_ask` exactly where you would have, and it answers itself with the option you recommended first — take that as the ruling, and record what you settled in the key decisions section as a call made on their behalf.' : ''}
 
 Never paste a preview of the plan into the chat and never ask for permission to publish — the plan
 they are reading updates the moment you publish it. Say one sentence about what you changed, and

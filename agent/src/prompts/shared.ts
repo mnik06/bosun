@@ -25,7 +25,7 @@ export interface RunContext {
 	// Session-secret names in the session's environment. Never the values.
 	sessionSecrets: string[];
 	portBase: number;
-	handsOff: boolean;
+	afk: boolean;
 	decisions: { fork: string; chose: string }[];
 	// What bosun changed about this plan so it fits beside the others.
 	amendments: string[];

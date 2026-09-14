@@ -88,7 +88,7 @@ branch changed: one more round of fix agents, then the loop once more. **Two ite
 Call \`resolve_finding\` for **every** finding listed above, by its id:
 
 - \`fixed\` when the cause is repaired, with a note saying what changed. A criterion finding marked fixed
-  is driven again by bosun before the pull request opens${context.handsOff ? ' — except on this plan, which is hands-off, so your word is what the reviewer gets' : ''}, so mark it fixed only
+  is driven again by bosun before the pull request opens${context.afk ? ' — except on this plan, which runs AFK, so your word is what the reviewer gets' : ''}, so mark it fixed only
   when you would stake the re-check on it.
 - \`left\` with the reason when you did not fix it: out of scope, needs a person, not reproducible from the
   code. It goes into the pull request as a known gap.

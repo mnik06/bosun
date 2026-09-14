@@ -50,7 +50,7 @@ function alreadyDone(slices: ExecutionContext['doneSlices']): string {
 export function executionPrompt(context: ExecutionContext): string {
 	return `You are building one tracer bullet of an approved plan, alone, in a git worktree of its own.
 
-${unattended(!context.handsOff)}
+${unattended(!context.afk)}
 
 ${feedbackLoops(context)}
 

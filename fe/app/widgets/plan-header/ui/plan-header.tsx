@@ -3,6 +3,7 @@ import { Link } from 'react-router'
 
 import { useMachinesQuery } from '~/entities/machine'
 import { PLAN_STATE_LABEL, resolvePlanState, type PlanDetail } from '~/entities/plan'
+import { AfkSwitch } from '~/features/toggle-plan-afk'
 import { statusLine } from '~/widgets/plan-header/lib/status-line'
 import { PlanMenu, PrimaryAction } from '~/widgets/plan-header/ui/plan-actions'
 import { PlanPanels } from '~/widgets/plan-header/ui/plan-panels'
@@ -33,6 +34,7 @@ export function PlanHeader ({ detail }: { detail: PlanDetail }) {
 				</Group>
 
 				<Group gap="xs" wrap="nowrap" className="shrink-0">
+					{state === 'merged' || state === 'cancelled' ? null : <AfkSwitch plan={detail.plan} />}
 					<PrimaryAction detail={detail} state={state} />
 					<PlanMenu detail={detail} state={state} />
 				</Group>

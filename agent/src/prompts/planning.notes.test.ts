@@ -15,9 +15,10 @@ describe('operator notes', () => {
 		const prompt = planningPrompt({
 			input: 'ticket',
 			verifyInUi: true,
-			handsOff: false,
+			auto: false,
 			notes: 'Invoke the design skill for any screen work.',
-			tree
+			tree,
+			served: null
 		});
 
 		expect(prompt).toContain('Operator notes');
@@ -29,9 +30,10 @@ describe('operator notes', () => {
 		const prompt = planningPrompt({
 			input: 'ticket',
 			verifyInUi: true,
-			handsOff: false,
+			auto: false,
 			notes: null,
-			tree
+			tree,
+			served: null
 		});
 
 		expect(prompt).not.toContain('Operator notes');
@@ -46,9 +48,10 @@ describe('the checkout the session is told to read', () => {
 		const prompt = planningPrompt({
 			input: 'ticket',
 			verifyInUi: true,
-			handsOff: false,
+			auto: false,
 			notes: null,
-			tree
+			tree,
+			served: null
 		});
 
 		expect(prompt).toContain('origin/main');
@@ -60,7 +63,7 @@ describe('the checkout the session is told to read', () => {
 		const prompt = planningPrompt({
 			input: 'ticket',
 			verifyInUi: true,
-			handsOff: false,
+			auto: false,
 			notes: null,
 			tree: {
 				path: '/home/u/repo',
@@ -68,7 +71,8 @@ describe('the checkout the session is told to read', () => {
 				sha: null,
 				fresh: false,
 				detail: 'could not create a read tree: no space left on device'
-			}
+			},
+			served: null
 		});
 
 		expect(prompt).toContain('could not be refreshed');

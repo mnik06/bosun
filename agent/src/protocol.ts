@@ -168,7 +168,7 @@ export const PlanQuestionMsgSchema = z.object({
 	planId: z.string(),
 	questionId: z.string(),
 	questions: z.array(PlanQuestionSchema).min(1),
-	// Present only on a hands-off plan, where the session answered itself. Carried on the
+	// Present only on an auto plan, where the session answered itself. Carried on the
 	// question rather than sent as a second frame so the transcript cannot record
 	// a question that is briefly, and wrongly, waiting on somebody.
 	autoAnswers: z.array(PlanAnswerSchema).min(1).optional()
@@ -317,7 +317,7 @@ export const PlanStartMsgSchema = z.object({
 	verifyInUi: z.boolean().default(true),
 	// The grill answers itself: the session takes its own recommendation instead of
 	// stopping for a person who is not there.
-	handsOff: z.boolean().default(false),
+	auto: z.boolean().default(false),
 	// The operator's notes from the machine's project setup. Planning gets them
 	// for the same reason execution does: a convention nobody can read off the
 	// code — a skill this repository expects a session to invoke, a rule the team
@@ -332,7 +332,7 @@ export const PlanStartMsgSchema = z.object({
 // the grill ended needs the artifact handed to it.
 export const PlanSnapshotSchema = z.object({
 	verifyInUi: z.boolean(),
-	handsOff: z.boolean(),
+	auto: z.boolean(),
 	title: z.string().nullable(),
 	bodyMd: z.string().nullable(),
 	acs: z.array(
@@ -413,8 +413,8 @@ export const ExecStartMsgSchema = z.object({
 	worktreePath: z.string(),
 	branch: z.string(),
 	baseRef: z.string(),
-	// A hands-off plan's bullets are given no way to ask.
-	handsOff: z.boolean(),
+	// An AFK plan's bullets are given no way to ask.
+	afk: z.boolean(),
 	planId: z.string(),
 	sliceId: z.string(),
 	planNumber: z.number().int(),

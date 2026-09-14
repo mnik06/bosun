@@ -3,6 +3,7 @@ import { type AgentMsg, type PlanAnswer, type PlanQuestion, type PlanSnapshot } 
 import { resolveProjectConfig } from '../services/config-resolution';
 import { type ReadTree } from '../services/repo.service';
 import { type Services } from '../services/index';
+import { serveTree, type ServedTree } from '../services/static-server.service';
 import { createActivityTracker } from './activity-labels';
 import { createPlanDispatch, TOOL_DEFINITIONS } from './mcp/tools';
 import {
@@ -62,6 +63,7 @@ const REAP_SWEEP_MS = 60 * 1000;
 
 interface Session {
 	mcp: SessionMcpServer;
+	served: ServedTree | null;
 	process: ClaudeSession | null;
 	cancelled: boolean;
 	startedAt: number;
@@ -83,7 +85,7 @@ export interface PlanningSessions {
 		planId: string;
 		input: string;
 		verifyInUi: boolean;
-		handsOff: boolean;
+		auto: boolean;
 		notes: string | null;
 		configDraft: string | null;
 	}): Promise<void>;
@@ -109,15 +111,17 @@ export function createPlanningSessions(opts: {
 	prompt: (opts: {
 		input: string;
 		verifyInUi: boolean;
-		handsOff: boolean;
+		auto: boolean;
 		notes: string | null;
 		tree: ReadTree;
+		served: string | null;
 	}) => string;
 	revisionPrompt: (opts: {
 		plan: PlanSnapshot;
 		request: string;
 		notes: string | null;
 		tree: ReadTree;
+		served: string | null;
 	}) => string;
 }): PlanningSessions {
 	const sessions = new Map<string, Session>();
@@ -132,6 +136,18 @@ export function createPlanningSessions(opts: {
 		sessions.delete(planId);
 		session.process?.kill();
 		void session.mcp.close();
+		void session.served?.close();
+	};
+
+	// A server that will not start costs the session one convenience, not the grill.
+	const serveFor = async (planId: string, tree: ReadTree): Promise<ServedTree | null> => {
+		try {
+			return await serveTree(tree.path);
+		} catch (error) {
+			console.error(`[${planId}] could not serve ${tree.path}: ${error instanceof Error ? error.message : 'unknown error'}`);
+
+			return null;
+		}
 	};
 
 	// A finished turn is not a finished session: the plan is announced as done and
@@ -274,6 +290,7 @@ export function createPlanningSessions(opts: {
 		planId: string;
 		prompt: string;
 		cwd: string;
+		served: ServedTree | null;
 		published: boolean;
 		requireGrill: boolean;
 		tools: { builtin: string[]; mcp: string[] };
@@ -298,6 +315,7 @@ export function createPlanningSessions(opts: {
 		});
 		const session: Session = {
 			mcp,
+			served: opts2.served,
 			process: null,
 			cancelled: false,
 			startedAt: Date.now(),
@@ -365,6 +383,7 @@ export function createPlanningSessions(opts: {
 				if (session.idleAt !== null) {
 					sessions.delete(planId);
 					void session.mcp.close();
+					void session.served?.close();
 
 					return;
 				}
@@ -378,7 +397,10 @@ export function createPlanningSessions(opts: {
 		try {
 			await startProcess(payload);
 		} catch (error) {
+			// Closed here as well: a start that failed before the session was
+			// registered left nothing for the teardown to find.
 			teardown(payload.planId);
+			void payload.served?.close();
 			opts.send({
 				type: 'plan.error',
 				planId: payload.planId,
@@ -421,25 +443,28 @@ export function createPlanningSessions(opts: {
 			}
 
 			const { tree, notes } = read;
+			const served = await serveFor(payload.planId, tree);
 
 			await spawnFor({
 				planId: payload.planId,
 				prompt: opts.prompt({
 					input: payload.input,
 					verifyInUi: payload.verifyInUi,
-					handsOff: payload.handsOff,
+					auto: payload.auto,
 					notes,
-					tree
+					tree,
+					served: served?.url ?? null
 				}),
 				cwd: tree.path,
+				served,
 				published: false,
-				requireGrill: !payload.handsOff,
+				requireGrill: !payload.auto,
 				tools: PLANNING_TOOLS,
 				definitions: TOOL_DEFINITIONS,
 				createDispatch: createPlanDispatch({
 					planId: payload.planId,
-					handsOff: payload.handsOff,
-					requireGrill: !payload.handsOff,
+					auto: payload.auto,
+					requireGrill: !payload.auto,
 					bosunApi: opts.services.bosunApi,
 					onPublished: onPublished(payload.planId),
 					onGrilled: onGrilled(payload.planId),
@@ -475,6 +500,7 @@ export function createPlanningSessions(opts: {
 			}
 
 			const { tree, notes } = read;
+			const served = await serveFor(payload.planId, tree);
 
 			await spawnFor({
 				planId: payload.planId,
@@ -482,9 +508,11 @@ export function createPlanningSessions(opts: {
 					plan: payload.plan,
 					request: payload.text,
 					notes,
-					tree
+					tree,
+					served: served?.url ?? null
 				}),
 				cwd: tree.path,
+				served,
 				// A revision is handed a plan that is already written, so a turn that
 				// changes nothing is a legitimate answer rather than an empty plan.
 				published: payload.plan.bodyMd !== null,
@@ -497,10 +525,10 @@ export function createPlanningSessions(opts: {
 				definitions: TOOL_DEFINITIONS,
 				createDispatch: createPlanDispatch({
 					planId: payload.planId,
-					// A revision of a hands-off plan is still hands-off: the snapshot
+					// A revision of an auto plan still answers itself: the snapshot
 					// carries the flag, because the agent holds no plan state between
 					// sessions.
-					handsOff: payload.plan.handsOff,
+					auto: payload.plan.auto,
 					requireGrill: false,
 					bosunApi: opts.services.bosunApi,
 					onPublished: onPublished(payload.planId),

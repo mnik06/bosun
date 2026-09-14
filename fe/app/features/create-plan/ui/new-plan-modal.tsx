@@ -20,7 +20,7 @@ export function NewPlanModal ({ opened, onClose }: { opened: boolean, onClose: (
 
 	const form = useForm<CreatePlanForm>({
 		mode: 'uncontrolled',
-		initialValues: { machineId: '', input: '', verifyInUi: true, handsOff: false },
+		initialValues: { machineId: '', input: '', verifyInUi: true, auto: false, afk: false },
 		validate: zod4Resolver(CreatePlanFormSchema)
 	})
 
@@ -85,10 +85,17 @@ export function NewPlanModal ({ opened, onClose }: { opened: boolean, onClose: (
 					/>
 
 					<Switch
-						label="Hands-off"
-						description="On, nothing stops for you: the grill answers each of its own questions with the option it recommended, its bullets cannot ask, and the re-check after verify's fixes is skipped. Every question and answer still lands in the transcript."
-						key={form.key('handsOff')}
-						{...form.getInputProps('handsOff', { type: 'checkbox' })}
+						label="Auto-mode"
+						description="Planning never waits for you: the grill answers each of its own questions with the option it recommended. Every question and answer still lands in the transcript."
+						key={form.key('auto')}
+						{...form.getInputProps('auto', { type: 'checkbox' })}
+					/>
+
+					<Switch
+						label="AFK execution"
+						description="Building never waits for you: bullets cannot ask a question, and the re-check after verify's fixes is skipped. Can be changed from the plan page; it applies from the next bullet."
+						key={form.key('afk')}
+						{...form.getInputProps('afk', { type: 'checkbox' })}
 					/>
 
 					<Button type="submit" loading={createPlan.isPending} disabled={options.length === 0}>

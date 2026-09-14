@@ -79,7 +79,7 @@ function promptFor(opts: {
 		applyMigrations: msg.policy?.applyMigrations ?? msg.profile.applyMigrations,
 		sessionSecrets: opts.sessionSecrets,
 		portBase: msg.portBase,
-		handsOff: msg.handsOff,
+		afk: msg.afk,
 		decisions: msg.decisions,
 		amendments: msg.amendments,
 		planAcs: msg.planAcs,
@@ -502,7 +502,7 @@ export function createExecutionSessions(opts: {
 			memoryMaxBytes: msg.memoryMaxBytes ?? null
 		});
 		const stack = stackFor({ msg, project, scope });
-		const toolSet = { phase: phaseOf(msg), handsOff: msg.handsOff, stack: stack !== null };
+		const toolSet = { phase: phaseOf(msg), afk: msg.afk, stack: stack !== null };
 		const mcp = await startSessionMcpServer({
 			sessionId: msg.runId,
 			definitions: executionDefinitions(toolSet),

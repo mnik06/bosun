@@ -84,7 +84,7 @@ export async function sayToPlan(opts: {
 			configDraft,
 			plan: {
 				verifyInUi: plan.verifyInUi,
-				handsOff: plan.handsOff,
+				auto: plan.auto,
 				title: plan.title,
 				bodyMd: plan.bodyMd,
 				acs: acs.map((ac) => ({

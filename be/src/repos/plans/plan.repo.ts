@@ -15,7 +15,8 @@ export const planColumns = {
 	status: plans.status,
 	repositoryId: plans.repositoryId,
 	verifyInUi: plans.verifyInUi,
-	handsOff: plans.handsOff,
+	auto: plans.auto,
+	afk: plans.afk,
 	approvedAt: plans.approvedAt,
 	failureReason: plans.failureReason,
 	input: plans.input,
@@ -40,7 +41,8 @@ export function getPlanRepo(db: DbOrTx) {
 			repositoryId: string | null;
 			input: string;
 			verifyInUi: boolean;
-			handsOff: boolean;
+			auto: boolean;
+			afk: boolean;
 		}): Promise<Plan> {
 			const [row] = await db
 				.insert(plans)
@@ -152,6 +154,7 @@ export function getPlanRepo(db: DbOrTx) {
 			status?: PlanStatus;
 			approvedAt?: Date | null;
 			failureReason?: string | null;
+			afk?: boolean;
 		}): Promise<Plan | null> {
 			const { id, ...values } = opts;
 			const [row] = await db

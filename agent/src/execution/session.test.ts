@@ -28,7 +28,7 @@ const START = {
 	worktreePath: '/w',
 	branch: 'bosun/plan/1-x',
 	baseRef: 'origin/main',
-	handsOff: false,
+	afk: false,
 	planId: 'p_1',
 	sliceId: 's_1',
 	planNumber: 1,
@@ -315,11 +315,11 @@ describe('lane sessions', () => {
 		});
 	});
 
-	// The build bullet is the only session that may ask; a hands-off plan's may not.
-	it('gives a hands-off bullet no way to ask', async () => {
+	// The build bullet is the only session that may ask; an AFK plan's may not.
+	it('gives an AFK bullet no way to ask', async () => {
 		const deps = services(async () => ({ ok: true, detail: 'cleaned' }));
 
-		await createExecutionSessions({ services: deps, send: vi.fn() }).start({ ...START, handsOff: true });
+		await createExecutionSessions({ services: deps, send: vi.fn() }).start({ ...START, afk: true });
 
 		const { spawnClaudeSession } = await import('../sessions/process');
 

@@ -87,14 +87,14 @@ presses Prepare, and every pull request that reaches review is mergeable with it
 - [ ] **AC-32** — The verify lane's memory runs build bullets while nothing waits to verify; once a plan waits, no new build bullet starts in it, and no running bullet is stopped.
 - [ ] **AC-33** — A plan verifies only after every plan it depends on has verified.
 - [ ] **AC-34** — Verify is two sessions: a drive session in the lane that starts the stack, drives every criterion and records findings, committing nothing; and a fix session in a build slot that reviews the branch, fixes the findings, runs the checks and commits.
-- [ ] **AC-35** — Criteria the fix session repaired are driven again in the lane before the pull request opens, except on a hands-off plan.
+- [ ] **AC-35** — Criteria the fix session repaired are driven again in the lane before the pull request opens, except on an AFK plan.
 - [ ] **AC-35b** — A criterion that still fails at re-check stops the plan on needs you with Fix again, Accept as a known gap, or Cancel. Accepting marks it blocked with the reproduction and who accepted it, and the pull request lists it under Known gaps.
 - [ ] **AC-36** — Only the lane applies migrations to a machine's dev database, resetting it before each drive. Build bullets generate migrations and apply none.
 - [ ] **AC-37** — An integration after verify that resolved a conflict queues the drive again; one that only regenerated files re-runs the checks.
 
-**Hands-off and migration**
+**Auto, AFK and migration**
 
-- [ ] **AC-38** — A plan's hands-off switch replaces `plans.auto` and `queues.afk`: its grill answers itself, its bullets cannot ask, and its re-check is skipped.
+- [ ] **AC-38** — A plan carries two independent switches: auto (kept from `plans.auto`), whose grill answers itself, and AFK (replacing `queues.afk`), whose bullets cannot ask and whose re-check is skipped. AFK can be changed while the plan builds and applies from the next bullet dispatched.
 - [ ] **AC-39** — Queued plans become builds in the order they were queued, a confirmed plan becomes approved, and the migration refuses to run while any bullet is running.
 - [ ] **AC-40** — Queues, pushing to a queue and "Prepare for parallel work" are gone from the browser and the API.
 
@@ -302,7 +302,7 @@ Today's verify session already hands off between these halves: it never looks at
 reads Agent A's report and fixes from that. The split makes the handoff a table, and gives the lane back
 the moment the browser pass is over.
 
-**Re-check** — in the lane, only when a finding tied to a criterion was fixed, and never on a hands-off
+**Re-check** — in the lane, only when a finding tied to a criterion was fixed, and never on an AFK
 plan: reset, stack up, drive those criteria, stack down. "Fixed" then means watched working rather than
 checks green.
 
@@ -315,7 +315,7 @@ reproduction and three choices:
   recorded against whoever accepted it. The gate passes, and the pull request lists it under Known gaps.
 - **Cancel** — the build is cancelled and its branch kept.
 
-A hands-off plan has no re-check, so it never stops here: a finding its fix session left is in the pull
+An AFK plan has no re-check, so it never stops here: a finding its fix session left is in the pull
 request with the reason.
 
 **The database belongs to the lane.** Every worktree gets the same env today, so concurrent plans share
@@ -329,7 +329,7 @@ database. The machine's `applyMigrations` policy from 008 now governs only the l
 ```
 plans
   ~ confirmed_at   → approved_at
-  ~ auto           → hands_off
+  + afk            boolean not null default false             (queues.afk, per plan)
   + repository_id  text not null → repositories.id        (machine_id stays: where it was planned)
 
 slices
@@ -569,7 +569,7 @@ bullet. Small, and it makes preparation plans do what they claim.
 ### Phase 2 — Builds replace queues
 
 `builds`, the scheduler on memory, the board, approve/hold/order, questions that release their slot,
-hands-off, the migration. "Prepare for parallel work" stays until phase 3 replaces it.
+auto and AFK, the migration. "Prepare for parallel work" stays until phase 3 replaces it.
 
 ### Phase 3 — Footprints and dependencies
 

@@ -262,7 +262,7 @@ export async function routeServerFrame(deps: RouterDeps, msg: ServerMsg): Promis
 				planId: msg.planId,
 				input: msg.input,
 				verifyInUi: msg.verifyInUi,
-				handsOff: msg.handsOff,
+				auto: msg.auto,
 				notes: msg.notes,
 				configDraft: msg.configDraft
 			});

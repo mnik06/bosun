@@ -73,10 +73,10 @@ async function gateFor(deps: LineDeps, located: Located): Promise<string | null>
 	return driveGateFailure(deps, { plan, buildId: build.id, runId: run.id, acCodes: run.phase === 'recheck' ? run.acCodes : null });
 }
 
-// What the fix repaired and nobody has watched working yet. Skipped on a hands-off
+// What the fix repaired and nobody has watched working yet. Skipped on an AFK
 // plan, whose fix goes straight to review with what it left written down.
 async function recheckCodes(deps: LineDeps, located: Located): Promise<string[]> {
-	if (located.plan.handsOff) {
+	if (located.plan.afk) {
 		return [];
 	}
 
