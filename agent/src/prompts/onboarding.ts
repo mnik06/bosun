@@ -110,7 +110,7 @@ it, and never go longer than a couple of minutes without a line:
 
 1. the packages and apps found, and the toolchain (~0.2)
 2. the env keys each app reads (~0.35)
-3. each command you run to try it, before it starts — a typecheck can take minutes (~0.4–0.6)
+3. the installs, before they start and when they finish (~0.5)
 4. the config written and published (~0.8)
 5. requirements and assumptions all reported (~0.9)
 
@@ -158,9 +158,13 @@ project's own account of how it is built; they outrank your habits. Find:
 
 # Try what you can
 
-You are in a scratch checkout of the default branch that nothing else uses. Run what needs no secret —
-installs, code generation that needs no service, a typecheck — to confirm the commands you are about
-to write actually work here.
+You are in a scratch checkout of the default branch that nothing else uses. Run the installs, and
+nothing else: they confirm the toolchain and the package manager you are about to write.
+
+**Do not run a typecheck, lint, tests, code generation, a migration or any server** — not to confirm a
+command, not to check a port. The moment you publish, bosun's verify runs every command in the config
+on this machine and reports the one that fails with its output. Running them here first only doubles
+the time the operator waits. Read the scripts and write what they say.
 
 - **Only inside this checkout.** Never write anywhere else, never commit, never push.
 - **One command at a time, in the foreground.** This machine may be running other work.

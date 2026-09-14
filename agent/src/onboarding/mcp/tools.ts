@@ -58,7 +58,7 @@ export const DISCOVERY_DEFINITIONS = [
 	definition({
 		name: 'report_step',
 		description:
-			'Add one progress line to the onboarding report the operator sees in the browser: what you are looking at or running now, and how it went. Short labels; put command output that matters in detail. Set progress to your honest estimate of how far through discovery you are, 0 to 1 — roughly 0.2 once you know the packages and apps, 0.5 once the commands are tried, 0.7 when the config is written. It only ever moves forward.',
+			'Add one progress line to the onboarding report the operator sees in the browser: what you are looking at or running now, and how it went. Short labels; put command output that matters in detail. Set progress to your honest estimate of how far through discovery you are, 0 to 1 — roughly 0.2 once you know the packages and apps, 0.5 once the installs ran, 0.8 when the config is published. It only ever moves forward.',
 		schema: ReportStepArgsSchema
 	}),
 	definition({
