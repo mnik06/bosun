@@ -53,8 +53,11 @@ nothing, and leaves no branch behind when the directory is removed.
   forward, which is at worst the first session seeing newer code — and far better than either seeing
   stale code.
 - **Sessions that write are not part of this.** Execution runs in the queue's worktree on the plan's
-  branch, and `execution/commit.ts` `startBranch` does its own fetch when it cuts the branch. A later
-  bullet must stay where the earlier ones committed, so it fetches nothing.
+  branch, and `execution/commit.ts` does its own fetching. `startBranch` fetches the base, and
+  continues `origin/<plan branch>` instead when the remote already has one. A later bullet stays where
+  the earlier ones committed and never moves to a newer base, but `cleanTree` — and `publish` before
+  it pushes — merges in whatever `origin/<plan branch>` gained (a reviewer's push, "Update branch", a
+  re-queued plan). Without that the push at the end is refused as a non-fast-forward.
 
 ## Where it is called
 

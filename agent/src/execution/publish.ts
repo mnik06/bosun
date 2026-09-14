@@ -1,4 +1,5 @@
 import { type ExecService } from '../services/exec.service';
+import { syncWithRemote } from './commit';
 
 const PUSH_TIMEOUT_MS = 180_000;
 
@@ -25,6 +26,18 @@ export function getPublishService(deps: { exec: ExecService }) {
 			title: string;
 			body: string;
 		}): Promise<PublishResult> {
+			// The last bullet can run for an hour, and the remote branch can gain a
+			// commit in that time just as well as before it started.
+			const synced = await syncWithRemote({
+				exec: deps.exec,
+				worktreePath: opts.worktreePath,
+				branch: opts.branch
+			});
+
+			if (!synced.ok) {
+				return { ok: false, prUrl: null, detail: `could not push ${opts.branch}: ${synced.detail}` };
+			}
+
 			const pushed = await deps.exec.run(
 				'git',
 				['-C', opts.worktreePath, 'push', '-u', 'origin', opts.branch],

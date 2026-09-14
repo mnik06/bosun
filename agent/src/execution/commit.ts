@@ -1,5 +1,7 @@
 import { type ExecService } from '../services/exec.service';
 
+const NETWORK_TIMEOUT_MS = 180_000;
+
 export interface CommitResult {
 	ok: boolean;
 	commitSha: string | null;
@@ -37,6 +39,71 @@ async function resolveStartPoint(
 	return (await git(opts.worktreePath, ['rev-parse', '--verify', remote])).ok ? remote : opts.baseRef;
 }
 
+// The plan's branch on the remote is not bosun's alone. A reviewer pushes a fix
+// to the pull request, "Update branch" merges the base into it, a plan queued
+// again after its pull request opened cuts the same branch name — and each of
+// those leaves `origin/<branch>` holding commits this worktree never saw. Work
+// built without them is refused at push, after every bullet has already run.
+//
+// Fetched by explicit refspec: a `--single-branch` clone's default refspec
+// covers only the default branch, so `origin/<branch>` would never appear.
+// Null when the remote has no such branch, or cannot be reached — a clone with
+// no remote is a legitimate setup, and an unreachable one fails at push with
+// its own reason.
+async function fetchRemoteBranch(opts: {
+	exec: ExecService;
+	worktreePath: string;
+	branch: string;
+}): Promise<string | null> {
+	const run = (args: string[]) =>
+		opts.exec.run('git', ['-C', opts.worktreePath, ...args], { timeoutMs: NETWORK_TIMEOUT_MS });
+	const listed = await run(['ls-remote', '--heads', 'origin', `refs/heads/${opts.branch}`]);
+
+	if (!listed.ok || listed.stdout === '') {
+		return null;
+	}
+
+	const remote = `origin/${opts.branch}`;
+	const fetched = await run(['fetch', 'origin', `+refs/heads/${opts.branch}:refs/remotes/${remote}`]);
+
+	return fetched.ok ? remote : null;
+}
+
+// Merged rather than rebased: each finished bullet's sha is recorded against its
+// slice, and a rebase would leave those pointing at commits no branch contains.
+export async function syncWithRemote(opts: {
+	exec: ExecService;
+	worktreePath: string;
+	branch: string;
+}): Promise<{ ok: boolean; detail: string }> {
+	const git = (args: string[]) =>
+		opts.exec.run('git', ['-C', opts.worktreePath, ...args], { timeoutMs: 60_000 });
+	const remote = await fetchRemoteBranch(opts);
+
+	if (remote === null) {
+		return { ok: true, detail: 'nothing on the remote to bring in' };
+	}
+
+	if ((await git(['merge-base', '--is-ancestor', remote, 'HEAD'])).ok) {
+		return { ok: true, detail: `already contains ${remote}` };
+	}
+
+	const merged = await git(['merge', '--no-edit', remote]);
+
+	if (merged.ok) {
+		return { ok: true, detail: `merged ${remote}` };
+	}
+
+	// A half-applied merge left in place would be committed by the next bullet
+	// under its own name, conflict markers and all.
+	await git(['merge', '--abort']);
+
+	return {
+		ok: false,
+		detail: `${remote} has commits that conflict with this branch: ${merged.stdout || merged.reason}`
+	};
+}
+
 export function getCommitService(deps: { exec: ExecService }) {
 	async function git(worktreePath: string, args: string[]) {
 		return deps.exec.run('git', ['-C', worktreePath, ...args], { timeoutMs: 60_000 });
@@ -51,6 +118,10 @@ export function getCommitService(deps: { exec: ExecService }) {
 		// actually is now, rather than from whatever this worktree last saw. A queue
 		// left running for a day would otherwise cut every plan from the same stale
 		// commit and rediscover the same conflicts in every pull request.
+		//
+		// A branch the remote already has is continued rather than cut again. Cut
+		// from the base, it would share no history with the pushed one, and the
+		// push at the end of the plan would be refused.
 		async startBranch(opts: {
 			worktreePath: string;
 			branch: string;
@@ -65,9 +136,12 @@ export function getCommitService(deps: { exec: ExecService }) {
 			await git(opts.worktreePath, ['clean', '-fd']);
 
 			const fetched = await git(opts.worktreePath, ['fetch', 'origin', '--prune']);
+			const pushed = fetched.ok
+				? await fetchRemoteBranch({ exec: deps.exec, worktreePath: opts.worktreePath, branch: opts.branch })
+				: null;
 			// A repository with no remote is a legitimate setup — the branch is then
 			// cut from whatever this clone holds, which is all there is.
-			const startPoint = fetched.ok ? await resolveStartPoint(git, opts) : opts.baseRef;
+			const startPoint = pushed ?? (fetched.ok ? await resolveStartPoint(git, opts) : opts.baseRef);
 			const checkout = await git(opts.worktreePath, ['checkout', '-B', opts.branch, startPoint]);
 
 			return checkout.ok
@@ -103,15 +177,26 @@ export function getCommitService(deps: { exec: ExecService }) {
 			// branch, and the pull request it belongs to would never see the work.
 			const head = await git(opts.worktreePath, ['rev-parse', '--abbrev-ref', 'HEAD']);
 
-			if (head.ok && head.stdout.trim() === opts.branch) {
-				return { ok: true, detail: `${opts.branch} clean at HEAD` };
+			if (!head.ok || head.stdout.trim() !== opts.branch) {
+				const checkout = await git(opts.worktreePath, ['checkout', opts.branch]);
+
+				if (!checkout.ok) {
+					return { ok: false, detail: `could not check out ${opts.branch}: ${checkout.reason}` };
+				}
 			}
 
-			const checkout = await git(opts.worktreePath, ['checkout', opts.branch]);
+			// Before the bullet rather than only at push: a bullet built on top of what
+			// the remote gained resolves any conflict with it as part of its own work,
+			// where one found at push has nobody left to resolve it.
+			const synced = await syncWithRemote({
+				exec: deps.exec,
+				worktreePath: opts.worktreePath,
+				branch: opts.branch
+			});
 
-			return checkout.ok
-				? { ok: true, detail: `${opts.branch} checked out, clean at HEAD` }
-				: { ok: false, detail: `could not check out ${opts.branch}: ${checkout.reason}` };
+			return synced.ok
+				? { ok: true, detail: `${opts.branch} clean at HEAD, ${synced.detail}` }
+				: synced;
 		},
 
 		async commitAll(opts: { worktreePath: string; message: string }): Promise<CommitResult> {

@@ -116,3 +116,107 @@ describe('cleanTree', () => {
 		expect(cleaned.detail).toContain('no-such');
 	});
 });
+
+describe('the plan branch on the remote', () => {
+	const branch = 'bosun/plan/q/1-first';
+	let root: string;
+	let worktree: string;
+	let other: string;
+
+	async function identify(cwd: string) {
+		await git(cwd, ['config', 'user.email', 'a@b.c']);
+		await git(cwd, ['config', 'user.name', 'Test']);
+	}
+
+	async function commitFile(cwd: string, file: string, content: string) {
+		fs.writeFileSync(path.join(cwd, file), content);
+		await git(cwd, ['add', '-A']);
+		await git(cwd, ['commit', '-m', file]);
+	}
+
+	beforeEach(async () => {
+		root = fs.mkdtempSync(path.join(os.tmpdir(), 'bosun-sync-'));
+		worktree = path.join(root, 'worktree');
+		other = path.join(root, 'other');
+
+		await git(root, ['init', '--bare', '-b', 'main', 'remote.git']);
+		await git(root, ['init', '-b', 'main', 'worktree']);
+		await identify(worktree);
+		await git(worktree, ['remote', 'add', 'origin', path.join(root, 'remote.git')]);
+		await commitFile(worktree, 'base.txt', 'base\n');
+		await git(worktree, ['push', '-u', 'origin', 'main']);
+	});
+
+	afterEach(() => {
+		fs.rmSync(root, { recursive: true, force: true });
+	});
+
+	async function cloneOther() {
+		await git(root, ['clone', path.join(root, 'remote.git'), 'other']);
+		await identify(other);
+	}
+
+	async function pushFromOther(file: string, content: string) {
+		await git(other, ['fetch', 'origin']);
+		await git(other, ['checkout', '-B', branch, `origin/${branch}`]);
+		await commitFile(other, file, content);
+		await git(other, ['push', 'origin', branch]);
+	}
+
+	// The queue this was found on: a commit landed on the pushed plan branch while
+	// the worktree kept building, and the push at the end was refused.
+	it('brings in what the remote gained, so the push is a fast-forward', async () => {
+		await git(worktree, ['checkout', '-b', branch]);
+		await commitFile(worktree, 'slice-one.txt', 'one\n');
+		await git(worktree, ['push', '-u', 'origin', branch]);
+		await cloneOther();
+		await pushFromOther('review.txt', 'reviewer fix\n');
+		await commitFile(worktree, 'slice-two.txt', 'two\n');
+
+		const cleaned = await getCommitService({ exec }).cleanTree({ worktreePath: worktree, branch });
+
+		expect(cleaned.ok).toBe(true);
+		expect(fs.existsSync(path.join(worktree, 'review.txt'))).toBe(true);
+		expect(fs.existsSync(path.join(worktree, 'slice-two.txt'))).toBe(true);
+		expect((await exec.run('git', ['-C', worktree, 'push', 'origin', branch], {})).ok).toBe(true);
+	});
+
+	it('continues a branch the remote already has instead of cutting it again', async () => {
+		await cloneOther();
+		await git(other, ['checkout', '-b', branch]);
+		await commitFile(other, 'earlier-run.txt', 'pushed before\n');
+		await git(other, ['push', 'origin', branch]);
+
+		const started = await getCommitService({ exec }).startBranch({
+			worktreePath: worktree,
+			branch,
+			baseRef: 'main'
+		});
+
+		expect(started.ok).toBe(true);
+		expect(fs.existsSync(path.join(worktree, 'earlier-run.txt'))).toBe(true);
+		expect(await git(worktree, ['rev-parse', 'HEAD'])).toBe(
+			await git(worktree, ['rev-parse', `origin/${branch}`])
+		);
+	});
+
+	// A merge left half-applied would be committed, markers and all, by the bullet
+	// that runs next.
+	it('refuses a remote it conflicts with and leaves no merge in progress', async () => {
+		await git(worktree, ['checkout', '-b', branch]);
+		await commitFile(worktree, 'shared.txt', 'first\n');
+		await git(worktree, ['push', '-u', 'origin', branch]);
+		await cloneOther();
+		await pushFromOther('shared.txt', 'theirs\n');
+		await commitFile(worktree, 'shared.txt', 'mine\n');
+
+		const cleaned = await getCommitService({ exec }).cleanTree({ worktreePath: worktree, branch });
+
+		expect(cleaned.ok).toBe(false);
+		expect(cleaned.detail).toContain(`origin/${branch}`);
+		expect((await exec.run('git', ['-C', worktree, 'rev-parse', '-q', '--verify', 'MERGE_HEAD'], {})).ok).toBe(
+			false
+		);
+		expect(fs.readFileSync(path.join(worktree, 'shared.txt'), 'utf8')).toBe('mine\n');
+	});
+});
