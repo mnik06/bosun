@@ -1,18 +1,23 @@
-import { ActionIcon, Button, Group, PasswordInput, Stack, Text, TextInput } from '@mantine/core'
+import { Button, Group, Stack, Text, TextInput } from '@mantine/core'
 import { useForm } from '@mantine/form'
 import { randomId } from '@mantine/hooks'
-import { Plus, X } from 'lucide-react'
+import { notifications } from '@mantine/notifications'
+import { ClipboardPaste, Plus } from 'lucide-react'
 import { zod4Resolver } from 'mantine-form-zod-resolver'
 import { useState } from 'react'
 
 import type { EnvSetSummary } from '~/entities/machine'
 import { useSaveEnvSet } from '~/features/edit-env-sets/api/use-save-env-set'
+import { mergePastedPairs } from '~/features/edit-env-sets/lib/merge-pasted-pairs'
+import { parseEnvText } from '~/features/edit-env-sets/lib/parse-env-text'
 import { toEnvSetPayload } from '~/features/edit-env-sets/lib/to-env-set-payload'
 import {
 	EnvSetFormSchema,
 	type EnvPair,
 	type EnvSetForm
 } from '~/features/edit-env-sets/model/env-set-form'
+import { EnvPairRow } from '~/features/edit-env-sets/ui/env-pair-row'
+import { PasteEnvPanel } from '~/features/edit-env-sets/ui/paste-env-panel'
 import { AppModal } from '~/shared/ui'
 
 function emptyPair (): EnvPair {
@@ -30,6 +35,14 @@ function initialValues (envSet: EnvSetSummary | null): EnvSetForm {
 	}
 }
 
+// Line numbers only: the notification is on screen for anyone nearby, and a
+// skipped line is as likely as any other to hold a secret.
+function skippedMessage (skippedLines: number[]): string | null {
+	return skippedLines.length === 0
+		? null
+		: `Skipped line ${skippedLines.join(', ')} — not a single-line KEY=value.`
+}
+
 function EnvSetFormBody ({
 	machineId,
 	envSet,
@@ -40,12 +53,41 @@ function EnvSetFormBody ({
 	onDone: () => void
 }) {
 	const save = useSaveEnvSet(machineId)
+	const [pasting, setPasting] = useState(false)
 	const form = useForm<EnvSetForm>({
 		mode: 'uncontrolled',
 		initialValues: initialValues(envSet),
 		validate: zod4Resolver(EnvSetFormSchema)
 	})
 	const pairs = form.getValues().pairs
+
+	const addPasted = (text: string): boolean => {
+		const { vars, skippedLines } = parseEnvText(text)
+		const skipped = skippedMessage(skippedLines)
+
+		if (vars.length === 0) {
+			notifications.show({
+				color: 'yellow',
+				title: 'No variables found',
+				message: skipped ?? 'Paste lines in KEY=value form.'
+			})
+
+			return false
+		}
+
+		form.setFieldValue(
+			'pairs',
+			mergePastedPairs({ pairs: form.getValues().pairs, vars, newId: randomId })
+		)
+		notifications.show({
+			color: skipped === null ? 'green' : 'yellow',
+			title: `Filled in ${vars.length} ${vars.length === 1 ? 'variable' : 'variables'}`,
+			message: skipped ?? 'Check the keys, then save.'
+		})
+		setPasting(false)
+
+		return true
+	}
 
 	const submit = (values: EnvSetForm) => {
 		save.mutate(toEnvSetPayload(values), { onSuccess: onDone })
@@ -72,56 +114,53 @@ function EnvSetFormBody ({
 					</Text>
 
 					{pairs.map((pair, index) => (
-						<Group key={pair.id} gap="xs" align="flex-start" wrap="nowrap">
-							<TextInput
-								className="min-w-0 flex-1"
-								aria-label="Key"
-								placeholder="DATABASE_URL"
-								readOnly={pair.stored}
-								autoComplete="off"
-								classNames={{ input: 'font-mono' }}
-								key={form.key(`pairs.${index}.key`)}
-								{...form.getInputProps(`pairs.${index}.key`)}
-							/>
-							<PasswordInput
-								className="min-w-0 flex-1"
-								aria-label="Value"
-								placeholder={pair.stored ? 'Unchanged — type to replace' : 'Value'}
-								autoComplete="new-password"
-								key={form.key(`pairs.${index}.value`)}
-								{...form.getInputProps(`pairs.${index}.value`)}
-							/>
-							<ActionIcon
-								variant="subtle"
-								color="gray"
-								size="input-sm"
-								aria-label="Remove pair"
-								disabled={pairs.length === 1}
-								onClick={() => {
-									form.removeListItem('pairs', index)
-								}}
-							>
-								<X size={16} />
-							</ActionIcon>
-						</Group>
+						<EnvPairRow
+							key={pair.id}
+							form={form}
+							pair={pair}
+							index={index}
+							removable={pairs.length > 1}
+							onPasteEnv={addPasted}
+						/>
 					))}
 
-					<Button
-						variant="subtle"
-						size="xs"
-						className="self-start"
-						leftSection={<Plus size={14} />}
-						onClick={() => {
-							form.insertListItem('pairs', emptyPair())
-						}}
-					>
-						Add pair
-					</Button>
+					{pasting ? (
+						<PasteEnvPanel
+							onAdd={addPasted}
+							onCancel={() => {
+								setPasting(false)
+							}}
+						/>
+					) : (
+						<Group gap="xs">
+							<Button
+								variant="subtle"
+								size="xs"
+								leftSection={<Plus size={14} />}
+								onClick={() => {
+									form.insertListItem('pairs', emptyPair())
+								}}
+							>
+								Add pair
+							</Button>
+							<Button
+								variant="subtle"
+								size="xs"
+								leftSection={<ClipboardPaste size={14} />}
+								onClick={() => {
+									setPasting(true)
+								}}
+							>
+								Paste .env
+							</Button>
+						</Group>
+					)}
 				</Stack>
 
 				<Text size="xs" c="dimmed">
-					Values are write-only. They go to the machine once and bosun keeps only the key names, so
-					a value is never shown again.
+					Paste a whole .env file with Paste .env, or straight into any Key field — every KEY=value
+					line becomes a pair. Values are write-only: they go to the machine once and bosun keeps only
+					the key names, so a value is never shown again.
 					{envSet === null
 						? ''
 						: ' Leave a stored value empty to keep it; remove its pair to delete the key.'}
