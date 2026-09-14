@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import {
-	OnboardingAssumptionSchema,
+	OnboardingAssumptionInputSchema,
 	OnboardingRequirementSchema,
 	OnboardingStepInputSchema
 } from 'src/types/OnboardingSchema';
@@ -18,7 +18,7 @@ export const OnboardingConfigRespSchema = z.union([
 
 export const OnboardingRequirementReqSchema = OnboardingRequirementSchema;
 
-export const OnboardingAssumptionReqSchema = OnboardingAssumptionSchema;
+export const OnboardingAssumptionReqSchema = OnboardingAssumptionInputSchema;
 
 export const OkRespSchema = z.object({ ok: z.literal(true) });
 

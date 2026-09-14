@@ -58,11 +58,18 @@ export const OnboardingRequirementSchema = z
 
 export type OnboardingRequirement = z.infer<typeof OnboardingRequirementSchema>;
 
+export const OnboardingAssumptionSchema = z.object({
+	text: z.string(),
+	evidence: z.string()
+});
+
 // Short on purpose. An assumption is read by a person deciding whether discovery
 // understood their project, in a list; a paragraph each is a list nobody reads.
 // The limit is what holds a session to one sentence — a longer one comes back to
-// it as a refused tool call it has to rewrite.
-export const OnboardingAssumptionSchema = z.object({
+// it as a refused tool call it has to rewrite. Only what arrives is held to it:
+// runs recorded before it keep their longer lines, and re-parsing them must not
+// turn a report into a 500.
+export const OnboardingAssumptionInputSchema = z.object({
 	text: z.string().trim().min(1).max(240),
 	evidence: z.string().trim().min(1).max(120)
 });

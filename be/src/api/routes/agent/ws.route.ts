@@ -397,7 +397,9 @@ const routes: FastifyPluginAsync = async function (fastify) {
 				return;
 			}
 
-			void handle();
+			// A rejection nobody awaits takes the whole process down, and the agent's
+			// reconnect replays the same frame into the restarted one.
+			void handle().catch((error: unknown) => request.log.error({ error, machineId, type: msg.type }, 'failed handling an agent frame'));
 		});
 
 		socket.on('close', () => {
