@@ -1,5 +1,5 @@
 import { HttpError } from 'src/api/errors/HttpError';
-import { toGithubHttpError } from 'src/controllers/github/shared/github-errors';
+import { accessibleInstallations } from 'src/controllers/github/shared/accessible-installations';
 import { type GithubInstallationRepo } from 'src/repos/github/github-installation.repo';
 import { type GithubAppService } from 'src/services/github/github-app.service';
 import { type IdService } from 'src/services/ids/id.service';
@@ -20,15 +20,7 @@ export async function connectInstallation(opts: {
 	code: string;
 	state: string;
 }): Promise<GithubInstallation> {
-	if (!opts.githubApp.verifyState({ state: opts.state, userId: opts.userId, projectId: opts.projectId })) {
-		throw new HttpError(403, 'This GitHub connection was started by someone else, for another project, or too long ago — start it again');
-	}
-
-	const accessible = await opts.githubApp
-		.installationsForCode(opts.code)
-		.catch((error: unknown) => {
-			throw toGithubHttpError(error);
-		});
+	const accessible = await accessibleInstallations(opts);
 	const match = accessible.find((installation) => installation.installationId === opts.installationId);
 
 	if (!match) {

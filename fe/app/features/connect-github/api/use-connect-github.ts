@@ -5,24 +5,34 @@ import { GithubInstallationSchema, repositoryKeys, type GithubInstallation } fro
 import { apiClient } from '~/shared/api'
 import { notifyError } from '~/shared/lib'
 
-const InstallUrlSchema = z.object({ url: z.string() })
+const InstallUrlSchema = z.object({ url: z.string(), authorizeUrl: z.string() })
 
 const InstalledSchema = z.object({ installation: GithubInstallationSchema })
 
-export interface GithubInstallCallback {
-	installationId: number
+const ImportedSchema = z.array(GithubInstallationSchema)
+
+export interface GithubAuthorization {
 	code: string
 	state: string
 }
 
+export interface GithubInstallCallback extends GithubAuthorization {
+	installationId: number
+}
+
 // The URL carries a state the backend signed for this person and this project,
 // so it is fetched on the click rather than built here.
-export function useConnectGithub () {
+//
+// `import` skips the install page. GitHub answers that page, for an account the
+// App is already installed on, with the installation's settings — and those never
+// redirect back — so an existing installation is connected by authorizing alone.
+export function useConnectGithub (mode: 'install' | 'import' = 'install') {
 	return useMutation({
 		mutationFn: async (): Promise<string> => {
 			const { data } = await apiClient.get<unknown>('/github/install-url')
+			const urls = InstallUrlSchema.parse(data)
 
-			return InstallUrlSchema.parse(data).url
+			return mode === 'install' ? urls.url : urls.authorizeUrl
 		},
 		onSuccess: (url) => {
 			window.location.assign(url)
@@ -41,6 +51,19 @@ export function useCompleteGithubInstall () {
 			const { data } = await apiClient.post<unknown>('/github/installations', callback)
 
 			return InstalledSchema.parse(data).installation
+		},
+		onSuccess: async () => queryClient.invalidateQueries({ queryKey: repositoryKeys.all() })
+	})
+}
+
+export function useImportGithubInstallations () {
+	const queryClient = useQueryClient()
+
+	return useMutation({
+		mutationFn: async (authorization: GithubAuthorization): Promise<GithubInstallation[]> => {
+			const { data } = await apiClient.post<unknown>('/github/installations/import', authorization)
+
+			return ImportedSchema.parse(data)
 		},
 		onSuccess: async () => queryClient.invalidateQueries({ queryKey: repositoryKeys.all() })
 	})

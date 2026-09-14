@@ -8,7 +8,7 @@ const newId = () => `new-${++next}`
 describe('mergePastedPairs', () => {
 	it('replaces the value of a key the machine stores instead of adding it twice', () => {
 		const merged = mergePastedPairs({
-			pairs: [{ id: '1', key: 'DATABASE_URL', value: '', stored: true }],
+			pairs: [{ id: '1', key: 'DATABASE_URL', value: '', stored: true, required: false }],
 			vars: [{ key: 'DATABASE_URL', value: 'postgres://next' }, { key: 'TZ', value: 'UTC' }],
 			newId
 		})
@@ -22,7 +22,7 @@ describe('mergePastedPairs', () => {
 
 	it('drops the blank pair a new set opens with', () => {
 		const merged = mergePastedPairs({
-			pairs: [{ id: '1', key: '', value: '', stored: false }],
+			pairs: [{ id: '1', key: '', value: '', stored: false, required: false }],
 			vars: [{ key: 'PORT', value: '1306' }],
 			newId
 		})

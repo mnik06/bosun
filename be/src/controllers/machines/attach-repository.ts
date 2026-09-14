@@ -1,13 +1,16 @@
 import { HttpError } from 'src/api/errors/HttpError';
+import { listAvailableRepositories } from 'src/controllers/github/list-available-repositories';
 import { toGithubHttpError } from 'src/controllers/github/shared/github-errors';
 import { getMachine } from 'src/controllers/machines/get-machine';
-import { getOwnedRepository } from 'src/controllers/repositories/shared/announce-repository';
+import { announceRepository } from 'src/controllers/repositories/shared/announce-repository';
 import { type GithubInstallationRepo } from 'src/repos/github/github-installation.repo';
 import { type RepositoryRepo } from 'src/repos/github/repository.repo';
 import { type MachineRepo } from 'src/repos/machines/machine.repo';
 import { type QueueRepo } from 'src/repos/queues/queue.repo';
 import { type GithubAppService } from 'src/services/github/github-app.service';
+import { type IdService } from 'src/services/ids/id.service';
 import { type SocketRegistry } from 'src/services/sockets/registry.service';
+import { type Machine } from 'src/types/MachineSchema';
 import { toRepositorySlug, type Repository } from 'src/types/RepositorySchema';
 import { compareVersions } from 'src/utils/general';
 
@@ -60,6 +63,36 @@ export async function dispatchAttach(opts: {
 	});
 }
 
+async function refusal(opts: {
+	queueRepo: QueueRepo;
+	socketRegistry: SocketRegistry;
+	machine: Machine;
+	projectId: string;
+}): Promise<string | null> {
+	const { machine } = opts;
+
+	if (machine.status !== 'online' || !opts.socketRegistry.getAgentSocket(machine.id)) {
+		return 'machine offline';
+	}
+
+	if (machine.agentVersion === null || compareVersions(machine.agentVersion, MIN_REPOSITORY_AGENT_VERSION) < 0) {
+		return `This machine's agent (${machine.agentVersion ?? 'unknown'}) is older than ${MIN_REPOSITORY_AGENT_VERSION} and cannot clone a repository — upgrade it with Refresh first`;
+	}
+
+	// A queue's worktree is a worktree of the checkout it was made from. Moving the
+	// machine to a new clone underneath one would leave it pointing nowhere.
+	if (machine.repositoryId === null && (await opts.queueRepo.listForMachine({ machineId: machine.id, projectId: opts.projectId })).length > 0) {
+		return 'This machine still has queues on its current checkout — remove them before attaching a repository';
+	}
+
+	return null;
+}
+
+// The repository is named by its GitHub id and resolved against what the project's
+// installations grant right now, so an id nobody granted cannot be attached by
+// typing it. Picking it is what creates the repository's row: a second machine on
+// the same repository finds that row, with its draft and its discovery.
+//
 // `repositoryId` is written before the frame goes out, not when the clone lands:
 // the clone asks the credential route for a token, and that route answers only for
 // the repository the machine is attached to.
@@ -69,33 +102,39 @@ export async function attachRepository(opts: {
 	githubInstallationRepo: GithubInstallationRepo;
 	queueRepo: QueueRepo;
 	githubApp: GithubAppService;
+	idService: IdService;
 	socketRegistry: SocketRegistry;
 	id: string;
 	projectId: string;
-	repositoryId: string;
+	githubRepoId: number;
 }): Promise<void> {
-	const [machine, repository] = await Promise.all([
-		getMachine({ machineRepo: opts.machineRepo, id: opts.id, projectId: opts.projectId }),
-		getOwnedRepository({ repositoryRepo: opts.repositoryRepo, id: opts.repositoryId, projectId: opts.projectId })
-	]);
+	const machine = await getMachine({ machineRepo: opts.machineRepo, id: opts.id, projectId: opts.projectId });
+	const refused = await refusal({ ...opts, machine });
 
-	if (machine.status !== 'online' || !opts.socketRegistry.getAgentSocket(machine.id)) {
-		throw new HttpError(409, 'machine offline');
+	if (refused !== null) {
+		throw new HttpError(409, refused);
 	}
 
-	if (machine.agentVersion === null || compareVersions(machine.agentVersion, MIN_REPOSITORY_AGENT_VERSION) < 0) {
-		throw new HttpError(409, `This machine's agent (${machine.agentVersion ?? 'unknown'}) is older than ${MIN_REPOSITORY_AGENT_VERSION} and cannot clone a repository — upgrade it with Refresh first`);
+	const granted = (await listAvailableRepositories(opts)).find((repo) => repo.githubRepoId === opts.githubRepoId);
+
+	if (!granted) {
+		throw new HttpError(404, 'No GitHub account connected to this project grants that repository');
 	}
+
+	const repository = await opts.repositoryRepo.upsert({
+		id: opts.idService.createRepositoryId(),
+		projectId: opts.projectId,
+		installationId: granted.installationId,
+		githubRepoId: granted.githubRepoId,
+		fullName: granted.fullName,
+		defaultBranch: granted.defaultBranch
+	});
 
 	if (machine.repositoryId !== null && machine.repositoryId !== repository.id) {
 		throw new HttpError(409, 'This machine is already attached to another repository — a machine works on one repository');
 	}
 
-	// A queue's worktree is a worktree of the checkout it was made from. Moving the
-	// machine to a new clone underneath one would leave it pointing nowhere.
-	if (machine.repositoryId === null && (await opts.queueRepo.listForMachine({ machineId: machine.id, projectId: opts.projectId })).length > 0) {
-		throw new HttpError(409, 'This machine still has queues on its current checkout — remove them before attaching a repository');
-	}
+	announceRepository({ socketRegistry: opts.socketRegistry, repository });
 
 	const attached = await opts.machineRepo.setRepository({ id: machine.id, repositoryId: repository.id });
 	const sent = await dispatchAttach({ ...opts, machineId: machine.id, repository }).catch(async (error: unknown) => {

@@ -1,10 +1,9 @@
 import { ActionIcon, Badge, Group, Paper, Stack, Text, Tooltip } from '@mantine/core'
-import { modals } from '@mantine/modals'
 import { Pencil, Trash2 } from 'lucide-react'
 
 import type { EnvSetSummary } from '~/entities/machine'
-import { useDeleteEnvSet } from '~/features/edit-env-sets/api/use-delete-env-set'
 import { envFilePath } from '~/features/edit-env-sets/lib/env-file-path'
+import { useConfirmDeleteEnvSet } from '~/features/edit-env-sets/model/use-confirm-delete-env-set'
 import { formatRelativeTime } from '~/shared/lib'
 
 export function EnvSetRow ({
@@ -16,26 +15,8 @@ export function EnvSetRow ({
 	envSet: EnvSetSummary,
 	onEdit: () => void
 }) {
-	const deleteEnvSet = useDeleteEnvSet(machineId)
+	const deleteEnvSet = useConfirmDeleteEnvSet(machineId)
 	const file = envFilePath(envSet.path)
-
-	const confirm = () => {
-		modals.openConfirmModal({
-			title: `Delete ${file}?`,
-			centered: true,
-			labels: { confirm: 'Delete', cancel: 'Cancel' },
-			confirmProps: { color: 'red' },
-			children: (
-				<Text size="sm">
-					bosun stops writing {file} before each bullet and the machine forgets these values. They
-					cannot be read back, so adding the set again means typing every value again.
-				</Text>
-			),
-			onConfirm: () => {
-				deleteEnvSet.mutate(envSet.path)
-			}
-		})
-	}
 
 	return (
 		<Paper withBorder radius="sm" p="xs">
@@ -71,7 +52,9 @@ export function EnvSetRow ({
 							color="red"
 							aria-label={`Delete ${file}`}
 							loading={deleteEnvSet.isPending}
-							onClick={confirm}
+							onClick={() => {
+								deleteEnvSet.confirm(envSet.path)
+							}}
 						>
 							<Trash2 size={16} />
 						</ActionIcon>

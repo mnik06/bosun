@@ -1,10 +1,7 @@
 import { z } from 'zod';
-import { OnboardingRunSchema } from 'src/types/OnboardingSchema';
 import { RepositorySchema } from 'src/types/RepositorySchema';
 
 export const RepositoryIdParamsSchema = z.object({ id: z.string().min(1) });
-
-export const AddRepositoryReqSchema = z.object({ githubRepoId: z.number().int().positive() });
 
 export const SaveConfigDraftReqSchema = z.object({ yaml: z.string().min(1).max(100_000) });
 
@@ -14,7 +11,9 @@ export const RepositoryListRespSchema = z.array(RepositorySchema);
 
 export const PullRequestRespSchema = z.object({ prUrl: z.string() });
 
-export const RepositoryOnboardingRespSchema = z.object({
-	discovery: OnboardingRunSchema.nullable(),
-	runs: z.array(OnboardingRunSchema)
+export const RepositoryConfigRespSchema = z.object({
+	defaultBranch: z.string(),
+	file: z.string().nullable(),
+	draft: z.string().nullable(),
+	source: z.enum(['file', 'draft', 'none'])
 });

@@ -10,12 +10,13 @@ export async function recordOnboardingStep(
 		label: string;
 		status: 'info' | 'running' | 'passed' | 'failed';
 		detail: string | null;
+		progress: number | null;
 	}
 ): Promise<void> {
 	const run = await getActiveRunForMachine(deps, opts);
 	const updated = await deps.onboardingRunRepo.appendStep({
 		id: run.id,
-		step: { label: opts.label, status: opts.status, detail: opts.detail, at: new Date().toISOString() }
+		step: { label: opts.label, status: opts.status, detail: opts.detail, progress: opts.progress, at: new Date().toISOString() }
 	});
 
 	announceOnboarding({ socketRegistry: deps.socketRegistry, projectId: opts.projectId, run: updated ?? run });

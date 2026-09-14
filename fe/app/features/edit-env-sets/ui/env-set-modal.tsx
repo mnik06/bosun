@@ -1,48 +1,27 @@
 import { Alert, Button, Group, Stack, Text, TextInput } from '@mantine/core'
 import { useForm } from '@mantine/form'
 import { randomId } from '@mantine/hooks'
-import { notifications } from '@mantine/notifications'
-import { ClipboardPaste, Plus } from 'lucide-react'
 import { zod4Resolver } from 'mantine-form-zod-resolver'
 import { useState } from 'react'
 
 import { AGENT_TOO_OLD_FOR_INPUTS, type EnvSetSummary, type Machine } from '~/entities/machine'
-import { useSaveEnvSet } from '~/features/edit-env-sets/api/use-save-env-set'
-import { mergePastedPairs } from '~/features/edit-env-sets/lib/merge-pasted-pairs'
-import { parseEnvText } from '~/features/edit-env-sets/lib/parse-env-text'
+import { useSaveVars } from '~/features/edit-env-sets/api/use-save-vars'
+import { blankPair, editorPairs } from '~/features/edit-env-sets/lib/editor-pairs'
 import { toEnvSetPayload } from '~/features/edit-env-sets/lib/to-env-set-payload'
-import {
-	EnvSetFormSchema,
-	type EnvPair,
-	type EnvSetForm
-} from '~/features/edit-env-sets/model/env-set-form'
+import { EnvSetFormSchema, type EnvSetForm } from '~/features/edit-env-sets/model/env-set-form'
+import { pasteEnv } from '~/features/edit-env-sets/model/paste-env'
 import { EnvPairRow } from '~/features/edit-env-sets/ui/env-pair-row'
-import { PasteEnvPanel } from '~/features/edit-env-sets/ui/paste-env-panel'
+import { PairsActions } from '~/features/edit-env-sets/ui/pairs-actions'
 import { AppModal } from '~/shared/ui'
 
 type MachineKey = Pick<Machine, 'id' | 'publicKey'>
 
-function emptyPair (): EnvPair {
-	return { id: randomId(), key: '', value: '', stored: false }
-}
-
 function initialValues (envSet: EnvSetSummary | null): EnvSetForm {
 	if (envSet === null) {
-		return { path: '', pairs: [emptyPair()] }
+		return { path: '', pairs: [blankPair(randomId())] }
 	}
 
-	return {
-		path: envSet.path,
-		pairs: envSet.keys.map((key) => ({ id: randomId(), key, value: '', stored: true }))
-	}
-}
-
-// Line numbers only: the notification is on screen for anyone nearby, and a
-// skipped line is as likely as any other to hold a secret.
-function skippedMessage (skippedLines: number[]): string | null {
-	return skippedLines.length === 0
-		? null
-		: `Skipped line ${skippedLines.join(', ')} — not a single-line KEY=value.`
+	return { path: envSet.path, pairs: editorPairs({ required: [], storedKeys: envSet.keys, newId: randomId }) }
 }
 
 function EnvSetFormBody ({
@@ -54,8 +33,7 @@ function EnvSetFormBody ({
 	envSet: EnvSetSummary | null,
 	onDone: () => void
 }) {
-	const save = useSaveEnvSet(machine)
-	const [pasting, setPasting] = useState(false)
+	const save = useSaveVars(machine)
 	const form = useForm<EnvSetForm>({
 		mode: 'uncontrolled',
 		initialValues: initialValues(envSet),
@@ -64,36 +42,10 @@ function EnvSetFormBody ({
 	const pairs = form.getValues().pairs
 	const keyless = machine.publicKey == null
 
-	const addPasted = (text: string): boolean => {
-		const { vars, skippedLines } = parseEnvText(text)
-		const skipped = skippedMessage(skippedLines)
-
-		if (vars.length === 0) {
-			notifications.show({
-				color: 'yellow',
-				title: 'No variables found',
-				message: skipped ?? 'Paste lines in KEY=value form.'
-			})
-
-			return false
-		}
-
-		form.setFieldValue(
-			'pairs',
-			mergePastedPairs({ pairs: form.getValues().pairs, vars, newId: randomId })
-		)
-		notifications.show({
-			color: skipped === null ? 'green' : 'yellow',
-			title: `Filled in ${vars.length} ${vars.length === 1 ? 'variable' : 'variables'}`,
-			message: skipped ?? 'Check the keys, then save.'
-		})
-		setPasting(false)
-
-		return true
-	}
-
 	const submit = (values: EnvSetForm) => {
-		save.mutate(toEnvSetPayload(values), { onSuccess: onDone })
+		const payload = toEnvSetPayload(values)
+
+		save.mutate({ target: { kind: 'env', path: payload.path }, vars: payload.vars }, { onSuccess: onDone })
 	}
 
 	return (
@@ -129,41 +81,11 @@ function EnvSetFormBody ({
 							pair={pair}
 							index={index}
 							removable={pairs.length > 1}
-							onPasteEnv={addPasted}
+							onPasteEnv={(text) => pasteEnv({ form, text })}
 						/>
 					))}
 
-					{pasting ? (
-						<PasteEnvPanel
-							onAdd={addPasted}
-							onCancel={() => {
-								setPasting(false)
-							}}
-						/>
-					) : (
-						<Group gap="xs">
-							<Button
-								variant="subtle"
-								size="xs"
-								leftSection={<Plus size={14} />}
-								onClick={() => {
-									form.insertListItem('pairs', emptyPair())
-								}}
-							>
-								Add pair
-							</Button>
-							<Button
-								variant="subtle"
-								size="xs"
-								leftSection={<ClipboardPaste size={14} />}
-								onClick={() => {
-									setPasting(true)
-								}}
-							>
-								Paste .env
-							</Button>
-						</Group>
-					)}
+					<PairsActions form={form} />
 				</Stack>
 
 				<Text size="xs" c="dimmed">

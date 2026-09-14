@@ -5,7 +5,8 @@ import { type BosunApiService } from '../../services/bosun-api.service';
 export const ReportStepArgsSchema = z.object({
 	label: z.string().trim().min(1).max(200),
 	status: z.enum(['info', 'running', 'passed', 'failed']),
-	detail: z.string().max(4000).optional()
+	detail: z.string().max(4000).optional(),
+	progress: z.number().min(0).max(1).optional()
 });
 
 export const PublishConfigArgsSchema = z.object({ yaml: z.string().min(1).max(100_000) });
@@ -23,9 +24,11 @@ export const ReportRequirementArgsSchema = z
 		path: ['path']
 	});
 
+// The same limits the backend holds an assumption to. A person skims these as a
+// list, so one is a sentence; a longer one is refused and has to be rewritten.
 export const RecordAssumptionArgsSchema = z.object({
-	text: z.string().trim().min(1).max(1000),
-	evidence: z.string().trim().min(1).max(500)
+	text: z.string().trim().min(1).max(240),
+	evidence: z.string().trim().min(1).max(120)
 });
 
 export const ReportSignInArgsSchema = z.object({
@@ -54,7 +57,7 @@ export const DISCOVERY_DEFINITIONS = [
 	definition({
 		name: 'report_step',
 		description:
-			'Add one progress line to the onboarding report the operator sees in the browser: what you are looking at or running now, and how it went. Short labels; put command output that matters in detail.',
+			'Add one progress line to the onboarding report the operator sees in the browser: what you are looking at or running now, and how it went. Short labels; put command output that matters in detail. Set progress to your honest estimate of how far through discovery you are, 0 to 1 — roughly 0.2 once you know the packages and apps, 0.5 once the commands are tried, 0.7 when the config is written. It only ever moves forward.',
 		schema: ReportStepArgsSchema
 	}),
 	definition({
@@ -72,7 +75,7 @@ export const DISCOVERY_DEFINITIONS = [
 	definition({
 		name: 'record_assumption',
 		description:
-			'Record something you had to guess — which script is the real start command, which of two databases is meant — citing the file you drew it from. The operator reads these before trusting the config.',
+			'Record something you had to guess — which script is the real start command, which of two databases is meant. One plain sentence (at most 240 characters) saying what you assumed, and evidence naming the file or files it came from (at most 120 characters, no quotes from them). The operator skims these before trusting the config.',
 		schema: RecordAssumptionArgsSchema
 	})
 ];
@@ -113,6 +116,9 @@ export function createDiscoveryDispatch(opts: {
 	runId: string;
 	bosunApi: BosunApiService;
 	onPublished: () => void;
+	// Turns the session's estimate into the progress bosun records: never backwards,
+	// never the whole bar before the run has actually finished.
+	advance: (estimate: number | undefined) => number | null;
 }): SessionDispatchFactory {
 	return () =>
 		async function dispatch(name: string, args: unknown) {
@@ -123,7 +129,8 @@ export function createDiscoveryDispatch(opts: {
 					runId: opts.runId,
 					label: parsed.label,
 					status: parsed.status,
-					detail: parsed.detail ?? null
+					detail: parsed.detail ?? null,
+					progress: opts.advance(parsed.progress)
 				});
 
 				return textToolResult('recorded');

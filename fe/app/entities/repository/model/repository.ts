@@ -47,6 +47,8 @@ export const OnboardingStepSchema = z.object({
 	label: z.string(),
 	status: z.enum(['info', 'running', 'passed', 'failed']),
 	detail: z.string().nullable(),
+	// Defaulted: steps recorded before progress existed carry none.
+	progress: z.number().nullable().default(null),
 	at: z.string()
 })
 
@@ -94,9 +96,11 @@ export const MachineOnboardingSchema = z.object({
 
 export type MachineOnboarding = z.infer<typeof MachineOnboardingSchema>
 
-export const RepositoryOnboardingSchema = z.object({
-	discovery: OnboardingRunSchema.nullable(),
-	runs: z.array(OnboardingRunSchema)
+export const RepositoryConfigSchema = z.object({
+	defaultBranch: z.string(),
+	file: z.string().nullable(),
+	draft: z.string().nullable(),
+	source: z.enum(['file', 'draft', 'none'])
 })
 
-export type RepositoryOnboarding = z.infer<typeof RepositoryOnboardingSchema>
+export type RepositoryConfig = z.infer<typeof RepositoryConfigSchema>

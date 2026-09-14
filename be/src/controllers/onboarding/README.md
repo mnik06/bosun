@@ -41,6 +41,15 @@ verify:                    needs_input ──► verifying ──► ready
   bosun no longer considers active is cancelled. The last step's timestamp counts as activity, because
   a verify is dispatched long after its row was created.
 
+## Progress
+
+Each step may carry `progress`, 0 to 1 within the run's current phase. Verify's is exact: once the
+config is resolved the agent counts every step it will report as finished, and each finished step moves
+the count. Discovery's is an estimate: the agent's own milestones (checkout ready, config accepted) and
+the session's `report_step` estimates, clamped so it never moves backwards and never reaches 1 before
+the run settles. The browser maps the phase's progress onto one bar — discovery, waiting for inputs,
+verify — so the number an operator sees only ever grows.
+
 ## Failure surfacing
 
 Every step the agent reports lands in `steps` with its status and output tail, and every change is

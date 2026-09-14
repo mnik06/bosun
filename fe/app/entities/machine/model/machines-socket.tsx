@@ -140,6 +140,7 @@ function handleRepositoryMsg (queryClient: QueryClient, msg: RepositoryMsg): voi
 	switch (msg.type) {
 		case 'repository.updated':
 			patchRepository(queryClient, msg.repository)
+			refetch(queryClient, repositoryKeys.config(msg.repository.id))
 
 			return
 		case 'onboarding.updated':

@@ -4,7 +4,7 @@ import os from 'os';
 import path from 'path';
 import { readConfig, type AgentConfig } from '../config/config';
 import { getBosunApiService, type McpPreset } from '../services/bosun-api.service';
-import { findBrowserExecutable, INSTALL_DEPS_COMMAND, launchBrowser } from '../services/browser.service';
+import { findBrowserExecutable, installDepsCommand, launchBrowser } from '../services/browser.service';
 import { getClaudeAuthService } from '../services/claude-auth.service';
 import { getEnvService } from '../services/env.service';
 import { getExecService } from '../services/exec.service';
@@ -220,7 +220,7 @@ async function browserStep(): Promise<StepResult> {
 
 	if (launched.missingLibrary !== null) {
 		console.log('  Chromium links against system libraries, and installing those needs root:');
-		console.log(`    ${INSTALL_DEPS_COMMAND}`);
+		console.log(`    ${installDepsCommand()}`);
 		console.log('  Then run `bosun-agent setup` again.');
 	}
 

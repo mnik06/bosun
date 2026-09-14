@@ -2,9 +2,34 @@ import fs from 'fs';
 import path from 'path';
 import { type ExecService } from './exec.service';
 
+function isExecutable(file: string): boolean {
+	try {
+		fs.accessSync(file, fs.constants.X_OK);
+
+		return true;
+	} catch {
+		return false;
+	}
+}
+
 // Needs root: it installs the system libraries Chromium links against, which is
-// the one thing a user-level install cannot do for itself.
-export const INSTALL_DEPS_COMMAND = 'sudo npx playwright install-deps chromium';
+// the one thing a user-level install cannot do for itself. `sudo` resets PATH,
+// and the node this agent runs with lives in its own toolchain directory rather
+// than on the system path — so a bare `sudo npx …` is a command that is not found.
+// The directory the agent's own `npx` is in travels with the command instead.
+export function installDepsCommand(opts?: {
+	pathEnv?: string;
+	executable?: (file: string) => boolean;
+}): string {
+	const executable = opts?.executable ?? isExecutable;
+	const dir = (opts?.pathEnv ?? process.env.PATH ?? '')
+		.split(path.delimiter)
+		.find((entry) => entry !== '' && executable(path.join(entry, 'npx')));
+
+	return dir === undefined
+		? 'sudo npx -y playwright install-deps chromium'
+		: `sudo env "PATH=${dir}:$PATH" npx -y playwright install-deps chromium`;
+}
 
 const LAUNCH_TIMEOUT_MS = 20_000;
 const SEARCH_DEPTH = 3;
@@ -92,6 +117,28 @@ export function missingLibrary(output: string): string | null {
 	return /error while loading shared libraries: ([^:\s]+)/.exec(output)?.[1] ?? null;
 }
 
+export function lddMissing(output: string): string[] {
+	return [...new Set([...output.matchAll(/^\s*(\S+) => not found/gm)].map((match) => match[1]))];
+}
+
+// Playwright refuses to launch until `ldd` finds every library of every binary
+// in the build, including the ones Chromium only loads later — so a build that
+// starts for `--dump-dom` can still be one the browser tool will not open.
+async function unresolvedLibraries(deps: { exec: ExecService; executable: string }): Promise<string[]> {
+	const dir = path.dirname(deps.executable);
+	let libraries: string[];
+
+	try {
+		libraries = fs.readdirSync(dir).filter((name) => name.endsWith('.so')).map((name) => path.join(dir, name));
+	} catch {
+		libraries = [];
+	}
+
+	const linked = await deps.exec.run('ldd', [deps.executable, ...libraries], { timeoutMs: LAUNCH_TIMEOUT_MS });
+
+	return lddMissing(linked.stdout);
+}
+
 // A build in the cache is not a browser that starts. A fresh Ubuntu lacks the
 // libraries Chromium links against, and the only way to find that out is to
 // launch it — which is what a session would otherwise discover an hour into a
@@ -99,6 +146,7 @@ export function missingLibrary(output: string): string | null {
 export async function launchBrowser(deps: {
 	exec: ExecService;
 	cachePath: string | null;
+	platform?: NodeJS.Platform;
 }): Promise<{ ok: boolean; detail: string; missingLibrary: string | null }> {
 	if (deps.cachePath === null) {
 		return {
@@ -118,6 +166,18 @@ export async function launchBrowser(deps: {
 		};
 	}
 
+	if ((deps.platform ?? process.platform) === 'linux') {
+		const missing = await unresolvedLibraries({ exec: deps.exec, executable });
+
+		if (missing.length > 0) {
+			return {
+				ok: false,
+				detail: `chromium cannot start: ${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} missing — install the system libraries it needs with \`${installDepsCommand()}\``,
+				missingLibrary: missing[0]
+			};
+		}
+	}
+
 	const launched = await deps.exec.run(
 		executable,
 		['--headless', '--no-sandbox', '--dump-dom', 'about:blank'],
@@ -135,7 +195,7 @@ export async function launchBrowser(deps: {
 		detail:
 			library === null
 				? `chromium in ${deps.cachePath} did not launch: ${launched.reason}`
-				: `chromium cannot start: ${library} is missing — as root, run \`${INSTALL_DEPS_COMMAND}\``,
+				: `chromium cannot start: ${library} is missing — install the system libraries it needs with \`${installDepsCommand()}\``,
 		missingLibrary: library
 	};
 }

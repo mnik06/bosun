@@ -6,7 +6,7 @@ export default [
 		layout('views/leader-layout/leader-layout.tsx', [
 			index('views/machines/machines-page.tsx'),
 			route('machines/:machineId', 'views/machine-detail/machine-detail-page.tsx'),
-			route('repositories', 'views/repositories/repositories-page.tsx'),
+			route('settings', 'views/settings/settings-page.tsx'),
 			route('github/callback', 'views/github-callback/github-callback-page.tsx'),
 			route('members', 'views/members/members-page.tsx')
 		]),

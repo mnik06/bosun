@@ -208,7 +208,7 @@ review skills in a pull request like any other code.
 ### Repositories, the config and onboarding
 
 **GitHub is an integration, not a CLI on the box.** A leader connects bosun's GitHub App on the
-Repositories page and adds a repository; attaching it to a machine clones its default branch into
+project's Settings, and each machine then picks a repository those accounts grant; attaching clones its default branch into
 `~/.bosun/repos/<slug>` with a token that lasts an hour and reaches that one repository. No GitHub
 token is stored in the database or on the machine's disk: git asks `bosun-agent git-credential` on
 every fetch and push, and the backend mints one. A finished plan's pull request is opened by the
@@ -414,7 +414,8 @@ browser reaches the app from where it reaches itself.
 
 **The GitHub App is registered once per deployment**, and the deploy refuses until its five variables
 exist. Create it with repository permissions `contents: write`, `pull_requests: write` and
-`metadata: read`; switch on *Request user authorization (OAuth) during installation*; set the
+`metadata: read`; make it installable on any account (*Make public*), or it can never be installed on an
+organization other than the one that owns it; switch on *Request user authorization (OAuth) during installation*; set the
 **Callback URL** to `PUBLIC_APP_URL/github/callback` (with that option on, GitHub disables the setup URL
 and sends the installer to the callback URL instead); leave webhooks off. Then:
 

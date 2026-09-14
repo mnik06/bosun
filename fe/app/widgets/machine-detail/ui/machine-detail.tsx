@@ -1,11 +1,10 @@
-import { Alert, Button, Card, Center, Group, Loader, Stack, Text, Title } from '@mantine/core'
+import { Alert, Button, Center, Group, Loader, Stack, Text, Title } from '@mantine/core'
 import { Download } from 'lucide-react'
 import type { ReactNode } from 'react'
 
 import {
 	machineKind,
 	MachineStatusDot,
-	PreflightChecklist,
 	useMachineQuery,
 	useUpgradeDecline,
 	useUpgradingTo,
@@ -20,9 +19,9 @@ import { SetupClaudeButton } from '~/features/setup-claude'
 import { formatRelativeTime, toErrorMessage } from '~/shared/lib'
 import { GitCard } from '~/widgets/machine-detail/ui/git-card'
 import { MachineActions } from '~/widgets/machine-detail/ui/machine-actions'
+import { MachineTabs } from '~/widgets/machine-detail/ui/machine-tabs'
 import { ProjectSetupCard } from '~/widgets/machine-detail/ui/project-setup-card'
 import { SetupCard } from '~/widgets/machine-detail/ui/setup-card'
-import { QueuesPanel } from '~/widgets/queues-panel'
 
 // Waiting is not a refusal, and a version this machine rolled back is not the
 // same as one it simply cannot take.
@@ -34,14 +33,74 @@ function declineTone (decline: UpgradeDecline): string {
 	return decline.retryable ? 'yellow' : 'gray'
 }
 
+function UpgradeNotices ({
+	decline,
+	upgradingTo,
+	isRefreshing,
+	onRetry
+}: {
+	decline: UpgradeDecline | null,
+	upgradingTo: string | null,
+	isRefreshing: boolean,
+	onRetry: () => void
+}) {
+	return (
+		<>
+			{decline === null ? null : (
+				<Alert
+					color={declineTone(decline)}
+					variant="light"
+					title={
+						decline.queued
+							? `${decline.to} will install when this machine finishes its work`
+							: `The agent did not upgrade to ${decline.to}`
+					}
+				>
+					<Stack gap="xs" align="start">
+						<Text size="sm">{decline.reason}</Text>
+						{decline.retryable ? (
+							<Button size="xs" variant="light" loading={isRefreshing} onClick={onRetry}>
+								Install {decline.to} anyway
+							</Button>
+						) : null}
+					</Stack>
+				</Alert>
+			)}
+
+			{upgradingTo === null ? null : (
+				<Alert
+					color="blue"
+					variant="light"
+					icon={<Download size={18} />}
+					title={`Upgrading the agent to ${upgradingTo}`}
+				>
+					<Group gap="xs" align="center">
+						<Loader size={14} />
+						<Text size="sm">
+							It downloads the build, verifies it, swaps its own binary and restarts. The machine
+							drops offline for a few seconds and comes back on its own — nothing to do here.
+						</Text>
+					</Group>
+				</Alert>
+			)}
+		</>
+	)
+}
+
 export function MachineDetail ({
 	machineId,
-	renderSetup
+	renderSetup,
+	renderOnboarding,
+	renderInputs,
+	renderConfig
 }: {
 	machineId: string,
-	// The setup checklist and the onboarding report are widgets of their own, so
-	// the page hands them in rather than this widget importing a sibling.
-	renderSetup?: (machine: Machine) => ReactNode
+	// The checklist, onboarding report, inputs and config are widgets of their
+	// own, so the page hands them in rather than this widget importing siblings.
+	renderSetup?: (machine: Machine) => ReactNode,
+	renderOnboarding?: (machine: Machine) => ReactNode,
+	renderInputs?: (machine: Machine) => ReactNode,
+	renderConfig?: (machine: Machine) => ReactNode
 }) {
 	const { data, isPending, error } = useMachineQuery(machineId)
 	const upgradingTo = useUpgradingTo(machineId)
@@ -69,6 +128,31 @@ export function MachineDetail ({
 	}
 
 	const kind = machineKind(data)
+	// A machine enrolled before repositories keeps the page it always had: it has
+	// no onboarding to put in a tab.
+	const tabbed = kind === 'unattached' || kind === 'repository'
+
+	const setup = (
+		<Stack gap="lg">
+			{tabbed ? renderSetup?.(data) : null}
+
+			<SetupCard
+				title="Claude"
+				description="The CLI and the credential every session on this machine runs on."
+				action={<SetupClaudeButton machineName={data.name} />}
+			/>
+
+			<GitCard machine={data} />
+
+			<SetupCard
+				title="MCP servers"
+				description="Extra tools for planning sessions, configured on the machine itself."
+				action={<AddMcpServerButton machineName={data.name} />}
+			/>
+
+			{kind === 'legacy' ? <ProjectSetupCard machine={data} /> : null}
+		</Stack>
+	)
 
 	return (
 		<Stack gap="lg">
@@ -101,85 +185,22 @@ export function MachineDetail ({
 
 			<PausedBanner machine={data} />
 
-			{decline === null ? null : (
-				<Alert
-					color={declineTone(decline)}
-					variant="light"
-					title={
-						decline.queued
-							? `${decline.to} will install when this machine finishes its work`
-							: `The agent did not upgrade to ${decline.to}`
-					}
-				>
-					<Stack gap="xs" align="start">
-						<Text size="sm">{decline.reason}</Text>
-						{decline.retryable ? (
-							<Button
-								size="xs"
-								variant="light"
-								loading={refresh.isRefreshing}
-								onClick={refresh.retryUpgrade}
-							>
-								Install {decline.to} anyway
-							</Button>
-						) : null}
-					</Stack>
-				</Alert>
-			)}
-
-			{upgradingTo === null ? null : (
-				<Alert
-					color="blue"
-					variant="light"
-					icon={<Download size={18} />}
-					title={`Upgrading the agent to ${upgradingTo}`}
-				>
-					<Group gap="xs" align="center">
-						<Loader size={14} />
-						<Text size="sm">
-							It downloads the build, verifies it, swaps its own binary and restarts. The machine
-							drops offline for a few seconds and comes back on its own — nothing to do here.
-						</Text>
-					</Group>
-				</Alert>
-			)}
-
-			{kind === 'unattached' || kind === 'repository' ? renderSetup?.(data) : null}
-
-			<Card withBorder padding="md" radius="md">
-				<Stack gap="sm">
-					<Group gap="xs">
-						<Text fw={600}>Preflight</Text>
-						{refresh.isRefreshing ? (
-							<Group gap={6}>
-								<Loader size={14} />
-								<Text size="xs" c="dimmed">
-									refreshing on the machine…
-								</Text>
-							</Group>
-						) : null}
-					</Group>
-					<PreflightChecklist checks={data.capabilities} />
-				</Stack>
-			</Card>
-
-			<SetupCard
-				title="Claude"
-				description="The CLI and the credential every session on this machine runs on."
-				action={<SetupClaudeButton machineName={data.name} />}
+			<UpgradeNotices
+				decline={decline}
+				upgradingTo={upgradingTo}
+				isRefreshing={refresh.isRefreshing}
+				onRetry={refresh.retryUpgrade}
 			/>
 
-			<GitCard machine={data} />
-
-			<SetupCard
-				title="MCP servers"
-				description="Extra tools for planning sessions, configured on the machine itself."
-				action={<AddMcpServerButton machineName={data.name} />}
-			/>
-
-			<ProjectSetupCard machine={data} />
-
-			<QueuesPanel machineId={data.id} />
+			{tabbed ? (
+				<MachineTabs
+					machine={data}
+					setup={setup}
+					panes={{ onboarding: renderOnboarding, inputs: renderInputs, config: renderConfig }}
+				/>
+			) : (
+				setup
+			)}
 		</Stack>
 	)
 }

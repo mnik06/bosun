@@ -17,23 +17,31 @@ const columns = {
 
 export function getRepositoryRepo(db: DbOrTx) {
 	return {
-		// Null when the project already has it, so adding twice reads as a conflict
-		// rather than as a second row for one repository.
-		async create(opts: {
+		// Picking a repository for a machine is what creates its row, so the second
+		// machine on it lands on the same row — its draft, its onboarding runs. What
+		// GitHub says now wins: a renamed repository or a changed default branch.
+		async upsert(opts: {
 			id: string;
 			projectId: string;
 			installationId: string;
 			githubRepoId: number;
 			fullName: string;
 			defaultBranch: string;
-		}): Promise<Repository | null> {
+		}): Promise<Repository> {
 			const [row] = await db
 				.insert(repositories)
 				.values(opts)
-				.onConflictDoNothing({ target: [repositories.projectId, repositories.githubRepoId] })
+				.onConflictDoUpdate({
+					target: [repositories.projectId, repositories.githubRepoId],
+					set: {
+						installationId: opts.installationId,
+						fullName: opts.fullName,
+						defaultBranch: opts.defaultBranch
+					}
+				})
 				.returning(columns);
 
-			return row ? RepositorySchema.parse(row) : null;
+			return RepositorySchema.parse(row);
 		},
 
 		async listForProject(projectId: string): Promise<Repository[]> {

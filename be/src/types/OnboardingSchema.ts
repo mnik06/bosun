@@ -21,7 +21,11 @@ export const OnboardingStepStatusSchema = z.enum(['info', 'running', 'passed', '
 export const OnboardingStepInputSchema = z.object({
 	label: z.string().trim().min(1).max(200),
 	status: OnboardingStepStatusSchema,
-	detail: z.string().max(4000).nullable().default(null)
+	detail: z.string().max(4000).nullable().default(null),
+	// How far through its phase the run is, 0 to 1. Exact for verify, whose steps
+	// are known before it starts; an estimate for discovery, which is a session.
+	// Null on a step that says nothing about it.
+	progress: z.number().min(0).max(1).nullable().default(null)
 });
 
 export const OnboardingStepSchema = OnboardingStepInputSchema.extend({ at: z.string() });
@@ -54,9 +58,13 @@ export const OnboardingRequirementSchema = z
 
 export type OnboardingRequirement = z.infer<typeof OnboardingRequirementSchema>;
 
+// Short on purpose. An assumption is read by a person deciding whether discovery
+// understood their project, in a list; a paragraph each is a list nobody reads.
+// The limit is what holds a session to one sentence — a longer one comes back to
+// it as a refused tool call it has to rewrite.
 export const OnboardingAssumptionSchema = z.object({
-	text: z.string().trim().min(1).max(1000),
-	evidence: z.string().trim().min(1).max(500)
+	text: z.string().trim().min(1).max(240),
+	evidence: z.string().trim().min(1).max(120)
 });
 
 export type OnboardingAssumption = z.infer<typeof OnboardingAssumptionSchema>;

@@ -1,19 +1,23 @@
-import { Alert, Card, Code, Divider, Group, List, Spoiler, Stack, Text } from '@mantine/core'
+import { Alert, Anchor, Card, Center, Collapse, Group, Loader, Progress, Stack, Text } from '@mantine/core'
+import { useDisclosure } from '@mantine/hooks'
+import { Link } from 'react-router'
 
 import type { Machine } from '~/entities/machine'
 import {
 	configSource,
 	describeConfigSource,
+	onboardingProgress,
 	OnboardingStatusBadge,
 	useMachineOnboardingQuery,
 	useRepositoriesQuery,
+	type OnboardingAssumption,
 	type OnboardingRun,
 	type Repository
 } from '~/entities/repository'
 import { OpenPullRequestButton } from '~/features/open-onboarding-pr'
-import { ProvideInputsForm } from '~/features/provide-inputs'
 import { StartOnboardingButton } from '~/features/start-onboarding'
 import { formatRelativeTime } from '~/shared/lib'
+import { displaySteps } from '~/widgets/onboarding-report/lib/display-steps'
 import { OnboardingSteps } from '~/widgets/onboarding-report/ui/onboarding-steps'
 
 function ReportActions ({
@@ -50,31 +54,83 @@ function ReportActions ({
 	)
 }
 
-function Assumptions ({ run }: { run: OnboardingRun }) {
-	if (run.assumptions.length === 0) {
+function progressColor (status: OnboardingRun['status']): string {
+	if (status === 'failed') {
+		return 'red'
+	}
+
+	return status === 'ready' ? 'green' : 'blue'
+}
+
+function RunProgress ({ run }: { run: OnboardingRun }) {
+	const { percent, label } = onboardingProgress(run)
+	const running = run.status === 'discovering' || run.status === 'verifying'
+
+	return (
+		<Group gap="sm" wrap="nowrap">
+			<Progress
+				aria-label="Onboarding progress"
+				className="min-w-0 flex-1"
+				size="md"
+				value={percent}
+				color={progressColor(run.status)}
+				striped={running}
+				animated={running}
+			/>
+			<Text size="xs" c="dimmed" className="shrink-0">
+				{label}
+			</Text>
+		</Group>
+	)
+}
+
+function countLabel (count: number, noun: string): string {
+	return count === 1 ? `1 ${noun}` : `${count} ${noun}s`
+}
+
+// Collapsed: what discovery guessed is worth a look once, not on every visit.
+function Assumptions ({ assumptions }: { assumptions: OnboardingAssumption[] }) {
+	const [opened, { toggle }] = useDisclosure(false)
+
+	if (assumptions.length === 0) {
 		return null
 	}
 
 	return (
-		<Stack gap="xs">
-			<Text size="sm" fw={600}>
-				Assumptions
-			</Text>
-			<Text size="xs" c="dimmed">
-				What discovery had to guess. Verify catches what does not run; what runs but is not how your
-				team works is only visible here.
-			</Text>
-			<List size="sm" spacing={4}>
-				{run.assumptions.map((assumption) => (
-					<List.Item key={`${assumption.text}:${assumption.evidence}`}>
-						{assumption.text}{' '}
-						<Text component="span" size="xs" c="dimmed" className="font-mono">
-							({assumption.evidence})
-						</Text>
-					</List.Item>
-				))}
-			</List>
+		<Stack gap={6}>
+			<Anchor component="button" type="button" size="sm" className="self-start" onClick={toggle}>
+				{countLabel(assumptions.length, 'assumption')} — {opened ? 'hide' : 'review'}
+			</Anchor>
+			<Collapse expanded={opened}>
+				<Stack gap="xs">
+					{assumptions.map((assumption) => (
+						<Stack key={`${assumption.text}:${assumption.evidence}`} gap={0}>
+							<Text size="sm">{assumption.text}</Text>
+							<Text size="xs" c="dimmed" className="font-mono break-all">
+								{assumption.evidence}
+							</Text>
+						</Stack>
+					))}
+				</Stack>
+			</Collapse>
 		</Stack>
+	)
+}
+
+// The tab has to say something before there is a run: an empty panel reads as a
+// page that failed to load.
+function NoRun ({ machine }: { machine: Machine }) {
+	return (
+		<Card withBorder padding="md" radius="md">
+			<Stack gap="sm" align="start">
+				<Text fw={600}>Onboarding</Text>
+				<Text size="sm" c="dimmed">
+					Not started. A session reads the repository and comes back with a config and the inputs this
+					machine needs; verify starts on its own once they are in.
+				</Text>
+				<StartOnboardingButton machine={machine} phase="discover" />
+			</Stack>
+		</Card>
 	)
 }
 
@@ -85,29 +141,41 @@ export function OnboardingReport ({ machine }: { machine: Machine }) {
 	})
 	const repositories = useRepositoriesQuery()
 
-	if (machine.repositoryId == null || onboarding.data == null) {
-		return null
+	if (onboarding.isLoading) {
+		return (
+			<Center py="xl">
+				<Loader />
+			</Center>
+		)
 	}
 
-	const { run } = onboarding.data
+	if (onboarding.data == null) {
+		return <NoRun machine={machine} />
+	}
+
+	const { run, missing } = onboarding.data
 	const repository = repositories.data?.find((entry) => entry.id === run.repositoryId) ?? null
 
 	return (
 		<Card withBorder padding="md" radius="md">
 			<Stack gap="md">
-				<Stack gap={2}>
-					<Group gap="sm">
-						<Text fw={600}>Onboarding</Text>
-						<OnboardingStatusBadge status={run.status} />
-					</Group>
-					<Text size="xs" c="dimmed">
-						{run.phase === 'discover' ? 'Discovery and verify' : 'Verify'} · started{' '}
-						{formatRelativeTime(run.startedAt)}
-						{repository === null ? '' : ` · config ${describeConfigSource(repository)}`}
-					</Text>
+				<Stack gap="xs">
+					<Stack gap={2}>
+						<Group gap="sm">
+							<Text fw={600}>Onboarding</Text>
+							<OnboardingStatusBadge status={run.status} />
+						</Group>
+						<Text size="xs" c="dimmed">
+							{run.phase === 'discover' ? 'Discovery and verify' : 'Verify'} · started{' '}
+							{formatRelativeTime(run.startedAt)}
+							{repository === null ? '' : ` · config ${describeConfigSource(repository)}`}
+						</Text>
+					</Stack>
+
+					<RunProgress run={run} />
 				</Stack>
 
-				{run.steps.length === 0 ? null : <OnboardingSteps steps={run.steps} />}
+				{run.steps.length === 0 ? null : <OnboardingSteps steps={displaySteps(run)} />}
 
 				{run.failureReason === null ? null : (
 					<Alert color="red" variant="light" title="The run failed">
@@ -117,22 +185,15 @@ export function OnboardingReport ({ machine }: { machine: Machine }) {
 					</Alert>
 				)}
 
-				<Assumptions run={run} />
-
-				{run.config === null ? null : (
-					<Spoiler maxHeight={0} showLabel="Show the config this run published" hideLabel="Hide the config">
-						<Code block className="font-mono text-xs">
-							{run.config}
-						</Code>
-					</Spoiler>
+				{missing.length === 0 ? null : (
+					<Alert color="yellow" variant="light" title={`${countLabel(missing.length, 'input')} missing`}>
+						<Anchor component={Link} to="?tab=inputs" replace size="sm">
+							Fill them in on Inputs
+						</Anchor>
+					</Alert>
 				)}
 
-				{run.status === 'discovering' ? null : (
-					<Stack gap="sm" id="onboarding-inputs">
-						<Divider label="Inputs for this machine" labelPosition="left" />
-						<ProvideInputsForm machine={machine} onboarding={onboarding.data} />
-					</Stack>
-				)}
+				<Assumptions assumptions={run.assumptions} />
 
 				<ReportActions machine={machine} run={run} repository={repository} />
 			</Stack>

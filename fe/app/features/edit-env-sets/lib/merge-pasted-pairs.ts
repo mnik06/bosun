@@ -17,7 +17,7 @@ export function mergePastedPairs (opts: {
 		const existing = merged.find((pair) => pair.key === envVar.key)
 
 		if (existing === undefined) {
-			merged.push({ id: opts.newId(), key: envVar.key, value: envVar.value, stored: false })
+			merged.push({ id: opts.newId(), key: envVar.key, value: envVar.value, stored: false, required: false })
 		} else {
 			existing.value = envVar.value
 		}

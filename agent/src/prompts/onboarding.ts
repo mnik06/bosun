@@ -82,8 +82,14 @@ anything you had to guess goes in \`record_assumption\`, citing the file you dre
 reads those, fills one form, and bosun then proves your config by running it. A wrong guess is caught;
 a silent one is not.
 
+**An assumption is one plain sentence** — what you assumed, not how you reasoned your way there — with
+the file it came from as evidence. "fe's dev server is started with \`pnpm dev\` rather than \`pnpm
+start\`" is an assumption; a paragraph weighing both is not. Record only real guesses: something you
+confirmed by reading or running it is not one.
+
 Use \`report_step\` for a line of progress whenever you move on to something new — what you are
-reading, what you are running and how it went.
+reading, what you are running and how it went — with \`progress\` set to how far through this job you
+honestly think you are. The operator watches that number to know how long is left.
 
 ${existingSection(opts)}
 

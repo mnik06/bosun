@@ -20,7 +20,10 @@ export function useSaveConfigDraft (repositoryId: string) {
 		},
 		onSuccess: async () => {
 			notifications.show({ color: 'green', title: 'Draft saved', message: 'It validated.' })
-			await queryClient.invalidateQueries({ queryKey: repositoryKeys.list() })
+			await Promise.all([
+				queryClient.invalidateQueries({ queryKey: repositoryKeys.list() }),
+				queryClient.invalidateQueries({ queryKey: repositoryKeys.config(repositoryId) })
+			])
 		},
 		onError: (error: unknown) => {
 			// Issues render beside the editor; only a failure without them is a toast.

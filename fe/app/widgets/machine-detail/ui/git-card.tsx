@@ -1,9 +1,7 @@
 import { Anchor, Card, Divider, Group, Stack, Text } from '@mantine/core'
-import { Link } from 'react-router'
 
 import { machineKind, type Machine } from '~/entities/machine'
 import { useRepositoriesQuery } from '~/entities/repository'
-import { AttachRepositoryButton } from '~/features/attach-repository'
 import { SetupGithubButton } from '~/features/setup-github'
 
 // One provider today. The card is a list because the second one — GitLab,
@@ -43,12 +41,10 @@ function AttachedRepository ({ machine }: { machine: Machine }) {
 
 	if (machine.repositoryId == null) {
 		return (
-			<Group justify="space-between" align="center" gap="sm">
-				<Text size="sm" c="dimmed">
-					No repository attached. Until one is, this machine is not offered for plans or queues.
-				</Text>
-				<AttachRepositoryButton machine={machine} />
-			</Group>
+			<Text size="sm" c="dimmed">
+				No repository attached — pick one in the Repository row above. Until one is, this machine is not
+				offered for plans or queues.
+			</Text>
 		)
 	}
 
@@ -56,9 +52,22 @@ function AttachedRepository ({ machine }: { machine: Machine }) {
 
 	return (
 		<Stack gap={2}>
-			<Anchor component={Link} to="/repositories" size="sm" fw={500} className="break-all">
-				{repository?.fullName ?? 'Attached repository'}
-			</Anchor>
+			{repository === undefined ? (
+				<Text size="sm" fw={500}>
+					Attached repository
+				</Text>
+			) : (
+				<Anchor
+					href={`https://github.com/${repository.fullName}`}
+					target="_blank"
+					rel="noreferrer"
+					size="sm"
+					fw={500}
+					className="break-all"
+				>
+					{repository.fullName}
+				</Anchor>
+			)}
 			<Text size="xs" c="dimmed">
 				Cloned into ~/.bosun/repos on the machine. Fetches and pushes use an hour-long token for this
 				one repository, and pull requests are opened through the GitHub App — nothing to set up on the

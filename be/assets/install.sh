@@ -115,7 +115,7 @@ chromium_libraries() {
 	version="$(resolve_lts_version || true)"
 
 	if [ -z "$version" ] || ! fetch_node "$version" "$TMP/node-deps"; then
-		note "skipped the libraries headless Chromium needs — install them later as root with: npx playwright install-deps chromium"
+		note "skipped the libraries headless Chromium needs — run \`bosun-agent setup\` as $AGENT_USER afterwards; its browser step prints the exact root command"
 
 		return 0
 	fi

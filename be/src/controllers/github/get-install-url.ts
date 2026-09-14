@@ -4,6 +4,8 @@ export function getInstallUrl(opts: {
 	githubApp: GithubAppService;
 	userId: string;
 	projectId: string;
-}): { url: string } {
-	return { url: opts.githubApp.installUrl(opts.githubApp.signState({ userId: opts.userId, projectId: opts.projectId })) };
+}): { url: string; authorizeUrl: string } {
+	const state = opts.githubApp.signState({ userId: opts.userId, projectId: opts.projectId });
+
+	return { url: opts.githubApp.installUrl(state), authorizeUrl: opts.githubApp.authorizeUrl(state) };
 }

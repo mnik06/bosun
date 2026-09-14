@@ -289,6 +289,13 @@ export function getGithubAppService(deps: {
 			return `https://github.com/apps/${encodeURIComponent(deps.slug)}/installations/new?state=${encodeURIComponent(state)}`;
 		},
 
+		// Authorization alone, with no install page in between. It is how an App that
+		// is already installed on an account gets connected: GitHub answers the install
+		// page for such an account with its settings, which never redirect back here.
+		authorizeUrl(state: string): string {
+			return `https://github.com/login/oauth/authorize?client_id=${encodeURIComponent(deps.clientId)}&state=${encodeURIComponent(state)}`;
+		},
+
 		signState(opts: { userId: string; projectId: string }): string {
 			return signInstallState({ ...opts, clientSecret: deps.clientSecret, now: now() });
 		},
@@ -350,6 +357,37 @@ export function getGithubAppService(deps: {
 			const repo = await repository(opts);
 
 			return { fullName: repo.full_name, defaultBranch: repo.default_branch, cloneUrl: repo.clone_url };
+		},
+
+		// Null when the file is not there. Read with a token that can read one
+		// repository's contents and nothing else.
+		async readFile(opts: {
+			installationId: number;
+			githubRepoId: number;
+			path: string;
+			ref: string;
+		}): Promise<string | null> {
+			const { token } = await mint({
+				installationId: opts.installationId,
+				githubRepoIds: [opts.githubRepoId],
+				permissions: { contents: 'read' }
+			});
+			const result = await call({
+				url: `${API}/repositories/${opts.githubRepoId}/contents/${opts.path}?ref=${encodeURIComponent(opts.ref)}`,
+				token
+			});
+
+			if (result.status === 404) {
+				return null;
+			}
+
+			const file = z.object({ content: z.string(), encoding: z.literal('base64') }).safeParse(result.json);
+
+			if (result.status !== 200 || !file.success) {
+				throw failure(`could not read ${opts.path}`, result);
+			}
+
+			return Buffer.from(file.data.content, 'base64').toString('utf8');
 		},
 
 		// What a machine's git credential helper receives: one repository, contents

@@ -6,13 +6,13 @@ import {
 	AvailableRepositorySchema,
 	GithubInstallationSchema,
 	MachineOnboardingSchema,
-	RepositoryOnboardingSchema,
+	RepositoryConfigSchema,
 	RepositorySchema,
 	type AvailableRepository,
 	type GithubInstallation,
 	type MachineOnboarding,
 	type Repository,
-	type RepositoryOnboarding
+	type RepositoryConfig
 } from '~/entities/repository/model/repository'
 import { apiClient, getActiveProjectId } from '~/shared/api'
 
@@ -21,10 +21,9 @@ export const repositoryKeys = {
 	list: () => [...repositoryKeys.all(), 'list'] as const,
 	installations: () => [...repositoryKeys.all(), 'installations'] as const,
 	available: () => [...repositoryKeys.all(), 'available'] as const,
+	config: (repositoryId: string) => [...repositoryKeys.all(), 'config', repositoryId] as const,
 	onboarding: () => [...repositoryKeys.all(), 'onboarding'] as const,
-	machineOnboarding: (machineId: string) => [...repositoryKeys.onboarding(), 'machine', machineId] as const,
-	repositoryOnboarding: (repositoryId: string) =>
-		[...repositoryKeys.onboarding(), 'repository', repositoryId] as const
+	machineOnboarding: (machineId: string) => [...repositoryKeys.onboarding(), 'machine', machineId] as const
 }
 
 export async function fetchRepositories (): Promise<Repository[]> {
@@ -45,6 +44,12 @@ export async function fetchAvailableRepositories (): Promise<AvailableRepository
 	return z.array(AvailableRepositorySchema).parse(data)
 }
 
+export async function fetchRepositoryConfig (repositoryId: string): Promise<RepositoryConfig> {
+	const { data } = await apiClient.get<unknown>(`/repositories/${repositoryId}/config`)
+
+	return RepositoryConfigSchema.parse(data)
+}
+
 // A machine that has never been onboarded answers 404, which is a state the
 // checklist renders rather than an error it reports.
 export async function fetchMachineOnboarding (machineId: string): Promise<MachineOnboarding | null> {
@@ -59,12 +64,6 @@ export async function fetchMachineOnboarding (machineId: string): Promise<Machin
 
 		throw error
 	}
-}
-
-export async function fetchRepositoryOnboarding (repositoryId: string): Promise<RepositoryOnboarding> {
-	const { data } = await apiClient.get<unknown>(`/repositories/${repositoryId}/onboarding`)
-
-	return RepositoryOnboardingSchema.parse(data)
 }
 
 export function useRepositoriesQuery () {
@@ -89,17 +88,17 @@ export function useAvailableRepositoriesQuery (opts: { enabled: boolean }) {
 	})
 }
 
+export function useRepositoryConfigQuery (repositoryId: string) {
+	return useQuery({
+		queryKey: repositoryKeys.config(repositoryId),
+		queryFn: async () => fetchRepositoryConfig(repositoryId)
+	})
+}
+
 export function useMachineOnboardingQuery (opts: { machineId: string, enabled: boolean }) {
 	return useQuery({
 		queryKey: repositoryKeys.machineOnboarding(opts.machineId),
 		queryFn: async () => fetchMachineOnboarding(opts.machineId),
 		enabled: opts.enabled
-	})
-}
-
-export function useRepositoryOnboardingQuery (repositoryId: string) {
-	return useQuery({
-		queryKey: repositoryKeys.repositoryOnboarding(repositoryId),
-		queryFn: async () => fetchRepositoryOnboarding(repositoryId)
 	})
 }

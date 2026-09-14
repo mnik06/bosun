@@ -31,10 +31,11 @@ const routes: FastifyPluginAsync = async function (f) {
 				githubInstallationRepo: fastify.repos.githubInstallationRepo,
 				queueRepo: fastify.repos.queueRepo,
 				githubApp: fastify.services.githubApp,
+				idService: fastify.services.idService,
 				socketRegistry: fastify.services.socketRegistry,
 				id: req.params.id,
 				projectId: req.membership!.projectId,
-				repositoryId: req.body.repositoryId
+				githubRepoId: req.body.githubRepoId
 			});
 
 			return reply.status(202).send({ status: 'requested' as const });

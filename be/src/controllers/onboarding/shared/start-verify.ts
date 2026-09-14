@@ -42,7 +42,7 @@ export async function maybeStartVerify(deps: OnboardingDeps, opts: { machineId: 
 
 	const started = await deps.onboardingRunRepo.appendStep({
 		id: run.id,
-		step: { label: 'Verify started', status: 'info', detail: null, at: new Date().toISOString() }
+		step: { label: 'Verify started', status: 'info', detail: null, progress: 0, at: new Date().toISOString() }
 	});
 	const proposed = run.phase === 'discover' && run.config !== null;
 	const sent = deps.socketRegistry.sendToAgent({

@@ -3,14 +3,20 @@ import { GitBranchPlus } from 'lucide-react'
 
 import { useConnectGithub } from '~/features/connect-github/api/use-connect-github'
 
-export function ConnectGithubButton ({ label = 'Connect GitHub' }: { label?: string }) {
-	const connect = useConnectGithub()
+export function ConnectGithubButton ({
+	label = 'Connect GitHub',
+	mode = 'install'
+}: {
+	label?: string,
+	mode?: 'install' | 'import'
+}) {
+	const connect = useConnectGithub(mode)
 
 	return (
 		<Button
-			variant="light"
+			variant={mode === 'install' ? 'light' : 'subtle'}
 			size="xs"
-			leftSection={<GitBranchPlus size={14} />}
+			leftSection={mode === 'install' ? <GitBranchPlus size={14} /> : null}
 			loading={connect.isPending}
 			onClick={() => {
 				connect.mutate()

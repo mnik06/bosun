@@ -176,6 +176,7 @@ export function getBosunApiService(deps: { serverUrl: string; machineKey?: strin
 			label: string;
 			status: 'info' | 'running' | 'passed' | 'failed';
 			detail: string | null;
+			progress?: number | null;
 		}): Promise<unknown> {
 			const { runId, ...body } = opts;
 

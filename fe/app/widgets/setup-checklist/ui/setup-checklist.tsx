@@ -1,8 +1,9 @@
 import { Anchor, Card, Divider, Group, Loader, Stack, Text, ThemeIcon } from '@mantine/core'
 import { Check, CircleDashed, Minus, X } from 'lucide-react'
+import { Link } from 'react-router'
 
 import type { Machine } from '~/entities/machine'
-import { AttachRepositoryButton } from '~/features/attach-repository'
+import { AttachRepository } from '~/features/attach-repository'
 import { StartOnboardingButton } from '~/features/start-onboarding'
 import { useKeyFingerprint } from '~/shared/hooks'
 import { setupProgress, type ChecklistRow } from '~/widgets/setup-checklist/lib/checklist'
@@ -31,15 +32,15 @@ function RowAction ({ row, machine }: { row: ChecklistRow, machine: Machine }) {
 		case 'run-setup':
 			return <InlineCommand command="bosun-agent setup" />
 		case 'attach-repository':
-			return <AttachRepositoryButton machine={machine} />
+			return <AttachRepository machine={machine} />
 		case 'start-onboarding':
 			return <StartOnboardingButton machine={machine} phase="discover" again={row.state === 'failed'} />
 		case 'run-verify':
 			return <StartOnboardingButton machine={machine} phase="verify" again={row.state === 'failed'} />
 		case 'provide-inputs':
 			return (
-				<Anchor href="#onboarding-inputs" size="sm">
-					Fill them in below
+				<Anchor component={Link} to="?tab=inputs" replace size="sm">
+					Fill them in on Inputs
 				</Anchor>
 			)
 		case null:

@@ -2,7 +2,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { findBrowserExecutable, launchBrowser, missingLibrary } from './browser.service';
+import { findBrowserExecutable, installDepsCommand, launchBrowser, missingLibrary } from './browser.service';
 import { type ExecService } from './exec.service';
 
 const roots: string[] = [];
@@ -77,6 +77,27 @@ describe('findBrowserExecutable', () => {
 	});
 });
 
+describe('installDepsCommand', () => {
+	// `sudo` resets PATH, and the agent's node is not on the system one: a bare
+	// `sudo npx …` is what an operator pasted and got "command not found" for.
+	it('carries the directory of the npx the agent runs with through sudo', () => {
+		const toolchain = '/home/bosun/.bosun/toolchains/node-24.15.0/bin';
+
+		expect(
+			installDepsCommand({
+				pathEnv: ['/home/bosun/.local/bin', toolchain, '/usr/bin'].join(path.delimiter),
+				executable: (file) => file === path.join(toolchain, 'npx')
+			})
+		).toBe(`sudo env "PATH=${toolchain}:$PATH" npx -y playwright install-deps chromium`);
+	});
+
+	it('falls back to a plain npx when the agent has none on its PATH', () => {
+		expect(installDepsCommand({ pathEnv: '/usr/bin', executable: () => false })).toBe(
+			'sudo npx -y playwright install-deps chromium'
+		);
+	});
+});
+
 describe('launchBrowser', () => {
 	it('fails with the missing library and the command that installs it', async () => {
 		const root = cache([{ path: 'chromium_headless_shell-1187/chrome-linux/headless_shell' }]);
@@ -91,6 +112,21 @@ describe('launchBrowser', () => {
 
 		expect(result).toMatchObject({ ok: false, missingLibrary: 'libasound.so.2' });
 		expect(result.detail).toContain('install-deps');
+	});
+
+	it('fails on a library ldd cannot resolve even when nothing would load it at launch', async () => {
+		const root = cache([{ path: 'chromium_headless_shell-1200/chrome-headless-shell-linux64/chrome-headless-shell' }]);
+		const run = vi.fn().mockResolvedValue({
+			ok: true,
+			stdout: '\tlibc.so.6 => /lib/libc.so.6\n\tlibasound.so.2 => not found\n\tlibnspr4.so => not found\n\tlibasound.so.2 => not found',
+			stderr: '',
+			reason: ''
+		});
+		const result = await launchBrowser({ cachePath: root, platform: 'linux', exec: { run } as unknown as ExecService });
+
+		expect(result).toMatchObject({ ok: false, missingLibrary: 'libasound.so.2' });
+		expect(result.detail).toContain('libasound.so.2, libnspr4.so are missing');
+		expect(run).toHaveBeenCalledTimes(1);
 	});
 
 	it('reports no build without trying to launch anything', async () => {

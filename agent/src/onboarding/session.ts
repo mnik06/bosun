@@ -6,8 +6,10 @@ import { createStreamParser } from '../planning/stream-parser';
 import { PROJECT_CONFIG_PATH, type ProjectConfig } from '../project-config';
 import { DISCOVERY_NUDGE, discoveryPrompt, signInPrompt } from '../prompts/onboarding';
 import { type AgentMsg, type OnboardingStart } from '../protocol';
+import { launchBrowser } from '../services/browser.service';
 import { resolveProjectConfig } from '../services/config-resolution';
 import { type Services } from '../services/index';
+import { browserCachePath } from '../services/preflight.service';
 import { describeApplied } from '../services/project-env.service';
 import { NO_REPOSITORY } from '../services/repo.service';
 import { runShell } from '../services/setup-steps.service';
@@ -43,6 +45,32 @@ interface Run {
 	// Progress lines are posted one after another, so the report reads in the order
 	// the steps happened rather than the order their requests came back.
 	reports: Promise<void>;
+	// Verify's plan once its config is known: every step it will report as finished.
+	// What makes its percentage exact rather than a guess.
+	plan: { done: number; total: number } | null;
+	// Discovery's, which is an estimate and only ever moves forward.
+	estimate: number;
+}
+
+// Below the whole bar: a discovery is not done until it has settled, whatever the
+// session thinks of its own progress.
+const ESTIMATE_CEILING = 0.95;
+
+// Every step verify will report as finished, counted from the config before any
+// of them runs.
+export function verifyPlanTotal(opts: { config: ProjectConfig; applyMigrations: boolean }): number {
+	const apps = Object.values(opts.config.apps);
+	const codegen = apps.filter((app) => app.codegen !== undefined).length;
+	const migrate = apps.filter((app) => app.migrate !== undefined).length;
+
+	return (
+		3 +
+		Math.max(1, opts.config.setup.length) +
+		codegen +
+		(opts.applyMigrations ? migrate : 1) +
+		1 +
+		(opts.config.testAccounts.length > 0 ? 1 + opts.config.testAccounts.length : 1)
+	);
 }
 
 export interface OnboardingSessions {
@@ -70,12 +98,39 @@ export function createOnboardingSessions(opts: { services: Services; send: (mess
 
 	const git = async (args: string[], timeoutMs = 60_000) => services.exec.run('git', args, { timeoutMs });
 
-	function report(opts2: { runId: string; run: Run; label: string; status: 'info' | 'running' | 'passed' | 'failed'; detail?: string | null }): void {
+	function advance(run: Run, estimate: number | undefined): number | null {
+		if (estimate === undefined) {
+			return null;
+		}
+
+		run.estimate = Math.max(run.estimate, Math.min(estimate, ESTIMATE_CEILING));
+
+		return run.estimate;
+	}
+
+	// A finished step of verify's plan moves its count; anything else carries the
+	// progress as it stands. Discovery's lines carry whatever estimate they were given.
+	function progressFor(opts2: { run: Run; status: 'info' | 'running' | 'passed' | 'failed'; estimate?: number }): number | null {
+		const { plan } = opts2.run;
+
+		if (plan === null) {
+			return advance(opts2.run, opts2.estimate);
+		}
+
+		if (opts2.status === 'passed' || opts2.status === 'info') {
+			plan.done += 1;
+		}
+
+		return Math.min(1, plan.done / plan.total);
+	}
+
+	function report(opts2: { runId: string; run: Run; label: string; status: 'info' | 'running' | 'passed' | 'failed'; detail?: string | null; estimate?: number }): void {
 		const detail = opts2.detail === undefined || opts2.detail === null || opts2.detail.trim() === '' ? null : clip(opts2.detail);
+		const progress = progressFor(opts2);
 
 		opts2.run.reports = opts2.run.reports
 			.then(async () => {
-				await services.bosunApi.reportOnboardingStep({ runId: opts2.runId, label: opts2.label, status: opts2.status, detail });
+				await services.bosunApi.reportOnboardingStep({ runId: opts2.runId, label: opts2.label, status: opts2.status, detail, progress });
 			})
 			.catch((error: unknown) => {
 				console.error(`[${opts2.runId}] could not report "${opts2.label}": ${errorMessage(error, 'unknown error')}`);
@@ -251,7 +306,7 @@ export function createOnboardingSessions(opts: { services: Services; send: (mess
 		let published = false;
 		let nudged = false;
 
-		report({ runId: msg.runId, run, label: 'Reading the repository', status: 'running', detail: null });
+		report({ runId: msg.runId, run, label: 'Reading the repository', status: 'running', detail: null, estimate: 0.05 });
 
 		return converse({
 			runId: msg.runId,
@@ -265,8 +320,13 @@ export function createOnboardingSessions(opts: { services: Services; send: (mess
 				runId: msg.runId,
 				bosunApi: services.bosunApi,
 				onPublished: () => {
+					if (!published) {
+						report({ runId: msg.runId, run, label: 'Config accepted by bosun', status: 'passed', detail: null, estimate: 0.85 });
+					}
+
 					published = true;
-				}
+				},
+				advance: (estimate) => advance(run, estimate)
 			}),
 			env: NO_PUSH_GIT_ENV,
 			memoryMaxBytes: msg.memoryMaxBytes,
@@ -398,6 +458,7 @@ export function createOnboardingSessions(opts: { services: Services; send: (mess
 			return { ok: false, message: `Resolve the config: ${detail}` };
 		}
 
+		run.plan = { done: 0, total: verifyPlanTotal({ config: resolved.config, applyMigrations: msg.applyMigrations }) };
 		step('Resolve the config', 'passed', resolved.source === 'file' ? `from ${PROJECT_CONFIG_PATH} on the default branch` : 'from the draft in bosun');
 
 		try {
@@ -492,6 +553,28 @@ export function createOnboardingSessions(opts: { services: Services; send: (mess
 		return { ok: true };
 	}
 
+	// The sign-in session drives a browser, and the browser tool's own refusal only
+	// reaches the report as the session's paraphrase. Checked here, the report names
+	// what is missing and the root command that installs it, and no session starts.
+	async function checkBrowser(msg: OnboardingStart, run: Run): Promise<Outcome> {
+		const label = 'Browser can start';
+
+		if (!services.mcpConfig.read().serverNames.includes('playwright')) {
+			report({ runId: msg.runId, run, label, status: 'info', detail: 'playwright is switched off on this machine' });
+
+			return { ok: true };
+		}
+
+		const launched = await launchBrowser({
+			exec: services.exec,
+			cachePath: browserCachePath({ platform: process.platform, home: os.homedir(), configured: process.env.PLAYWRIGHT_BROWSERS_PATH })
+		});
+
+		report({ runId: msg.runId, run, label, status: launched.ok ? 'passed' : 'failed', detail: launched.detail });
+
+		return launched.ok ? { ok: true } : { ok: false, message: `${label}: ${launched.detail}` };
+	}
+
 	async function verify(msg: OnboardingStart, run: Run, scratch: string): Promise<Outcome> {
 		const prepared = await prepare(msg, run, scratch);
 
@@ -515,7 +598,9 @@ export function createOnboardingSessions(opts: { services: Services; send: (mess
 				async () => startStack(msg, run, scratch, prepared),
 				async () => {
 					if (prepared.config.testAccounts.length > 0) {
-						return signIn({ msg, run, scratch, config: prepared.config, env: prepared.env });
+						const browser = await checkBrowser(msg, run);
+
+						return browser.ok ? signIn({ msg, run, scratch, config: prepared.config, env: prepared.env }) : browser;
 					}
 
 					report({ runId: msg.runId, run, label: 'Sign in', status: 'info', detail: 'the config names no test accounts' });
@@ -562,7 +647,16 @@ export function createOnboardingSessions(opts: { services: Services; send: (mess
 
 			// In the map before the first await, so a `hello` sent while the scratch
 			// checkout is still being made names this run as held.
-			const run: Run = { cancelled: false, repoPath: null, worktreePath: null, mcp: null, process: null, reports: Promise.resolve() };
+			const run: Run = {
+				cancelled: false,
+				repoPath: null,
+				worktreePath: null,
+				mcp: null,
+				process: null,
+				reports: Promise.resolve(),
+				plan: null,
+				estimate: 0
+			};
 
 			runs.set(msg.runId, run);
 

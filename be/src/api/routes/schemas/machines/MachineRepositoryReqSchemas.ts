@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { EnvVarInputSchema } from 'src/types/env-sets';
 import { OnboardingPhaseSchema, OnboardingRequirementSchema, OnboardingRunSchema } from 'src/types/OnboardingSchema';
 
-export const AttachRepositoryReqSchema = z.object({ repositoryId: z.string().min(1) });
+export const AttachRepositoryReqSchema = z.object({ githubRepoId: z.number().int().positive() });
 
 export const AttachRepositoryRespSchema = z.object({ status: z.literal('requested') });
 

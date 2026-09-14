@@ -23,7 +23,7 @@ export function EnvPairRow ({
 				className="min-w-0 flex-1"
 				aria-label="Key"
 				placeholder="DATABASE_URL"
-				readOnly={pair.stored}
+				readOnly={pair.stored || pair.required}
 				autoComplete="off"
 				classNames={{ input: 'font-mono' }}
 				key={form.key(`pairs.${index}.key`)}
@@ -42,7 +42,7 @@ export function EnvPairRow ({
 			<PasswordInput
 				className="min-w-0 flex-1"
 				aria-label="Value"
-				placeholder={pair.stored ? 'Unchanged — type to replace' : 'Value'}
+				placeholder={pair.stored ? 'Held by the machine — type to replace' : 'Value'}
 				autoComplete="new-password"
 				key={form.key(`pairs.${index}.value`)}
 				{...form.getInputProps(`pairs.${index}.value`)}

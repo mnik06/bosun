@@ -41,4 +41,3 @@ export {
 } from './model/machines-socket'
 export { UiMsgSchema, type UiMsg } from './model/ui-message'
 export { MachineStatusDot } from './ui/machine-status-dot'
-export { PreflightChecklist } from './ui/preflight-checklist'

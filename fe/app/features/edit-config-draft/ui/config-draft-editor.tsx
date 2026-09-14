@@ -1,7 +1,6 @@
 import { Alert, Button, Group, List, Stack, Text, Textarea } from '@mantine/core'
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 
-import type { Repository } from '~/entities/repository'
 import { useSaveConfigDraft } from '~/features/edit-config-draft/api/use-save-config-draft'
 import { configIssues } from '~/features/edit-config-draft/lib/config-issues'
 
@@ -21,27 +20,29 @@ apps:
     start: pnpm dev --port {port}
     ready: "{url.web}"`
 
-export function ConfigDraftEditor ({ repository }: { repository: Repository }) {
-	const [yaml, setYaml] = useState(repository.configDraft ?? '')
-	const save = useSaveConfigDraft(repository.id)
+export function ConfigDraftEditor ({
+	repositoryId,
+	initialYaml,
+	actions
+}: {
+	repositoryId: string,
+	initialYaml: string,
+	actions?: ReactNode
+}) {
+	const [yaml, setYaml] = useState(initialYaml)
+	const save = useSaveConfigDraft(repositoryId)
 	const issues = save.isError ? configIssues(save.error) : null
+	const changed = yaml !== initialYaml
 
 	return (
 		<Stack gap="sm">
-			{repository.configOnDefault ? (
-				<Text size="xs" c="dimmed">
-					{repository.defaultBranch} already has .bosun/project.yaml, and a session always uses the
-					file in its own tree. This draft only applies to a branch that has no file.
-				</Text>
-			) : null}
-
 			<Textarea
-				label="Config draft"
+				aria-label="project.yaml"
 				description="Facts about the code — how it installs, starts and proves itself. Never secrets, never which database."
 				placeholder={PLACEHOLDER}
 				autosize
-				minRows={8}
-				maxRows={30}
+				minRows={12}
+				maxRows={40}
 				spellCheck={false}
 				classNames={{ input: 'font-mono text-xs' }}
 				value={yaml}
@@ -65,17 +66,32 @@ export function ConfigDraftEditor ({ repository }: { repository: Repository }) {
 				</Alert>
 			)}
 
-			<Group justify="flex-end">
-				<Button
-					size="xs"
-					loading={save.isPending}
-					disabled={yaml.trim() === ''}
-					onClick={() => {
-						save.mutate(yaml)
-					}}
-				>
-					Save draft
-				</Button>
+			<Group justify="space-between" gap="sm">
+				<Group gap="sm">{actions}</Group>
+
+				<Group gap="sm">
+					<Button
+						variant="default"
+						size="xs"
+						disabled={!changed}
+						onClick={() => {
+							setYaml(initialYaml)
+							save.reset()
+						}}
+					>
+						Discard draft changes
+					</Button>
+					<Button
+						size="xs"
+						loading={save.isPending}
+						disabled={!changed || yaml.trim() === ''}
+						onClick={() => {
+							save.mutate(yaml)
+						}}
+					>
+						Save draft
+					</Button>
+				</Group>
 			</Group>
 		</Stack>
 	)

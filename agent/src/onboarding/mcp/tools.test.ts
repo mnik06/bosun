@@ -8,7 +8,7 @@ function dispatchWith(answer: unknown) {
 		publishOnboardingConfig: vi.fn().mockResolvedValue(answer),
 		reportOnboardingRequirement: vi.fn().mockResolvedValue({ ok: true })
 	} as unknown as BosunApiService;
-	const dispatch = createDiscoveryDispatch({ runId: 'onb_1', bosunApi, onPublished })(new Map());
+	const dispatch = createDiscoveryDispatch({ runId: 'onb_1', bosunApi, onPublished, advance: () => null })(new Map());
 
 	return { dispatch, onPublished, bosunApi };
 }
