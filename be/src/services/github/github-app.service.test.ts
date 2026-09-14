@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { describe, expect, it } from 'vitest';
 import {
+	getGithubAppService,
 	normalizePrivateKey,
 	signAppJwt,
 	signInstallState,
@@ -77,5 +78,68 @@ describe('verifyWebhookSignature', () => {
 		expect(verifyWebhookSignature({ secret, payload, signature: 'sha1=abc' })).toBe(false);
 		expect(verifyWebhookSignature({ secret: 'another-secret-entirely', payload, signature: signed })).toBe(false);
 		expect(verifyWebhookSignature({ secret, payload: Buffer.from('{"action": "closed"}'), signature: signed })).toBe(false);
+	});
+});
+
+describe('openOrUpdatePullRequest', () => {
+	const NO_COMMITS = { message: 'Validation Failed', errors: [{ resource: 'PullRequest', code: 'custom', message: 'No commits between main and bosun/onboarding' }] };
+	const request = { installationId: 1, githubRepoId: 7, head: 'bosun/onboarding', base: 'main', title: 't', body: 'b' };
+
+	function github(opts: { refusals: number }) {
+		const posts: string[] = [];
+		const reply = (status: number, json: unknown) => new Response(JSON.stringify(json), { status });
+		const fetchImpl = (async (input: string | URL | Request, init?: RequestInit) => {
+			const url = String(input);
+
+			if (url.endsWith('/access_tokens')) {
+				return reply(201, { token: 't', expires_at: new Date(NOW + 3_600_000).toISOString() });
+			}
+
+			if (url.endsWith('/repositories/7')) {
+				return reply(200, { id: 7, full_name: 'acme/app', default_branch: 'main', private: true, clone_url: 'https://github.com/acme/app.git' });
+			}
+
+			if (url.endsWith('/repos/acme/app/pulls') && init?.method === 'POST') {
+				posts.push(url);
+
+				return posts.length <= opts.refusals ? reply(422, NO_COMMITS) : reply(201, { number: 12, html_url: 'https://github.com/acme/app/pull/12' });
+			}
+
+			return url.includes('/pulls?state=open') ? reply(200, []) : reply(404, { message: 'Not Found' });
+		}) as typeof fetch;
+		const service = getGithubAppService({
+			appId: '1',
+			slug: 'bosun',
+			clientId: 'client',
+			clientSecret: 'secret',
+			privateKey: pem,
+			fetchImpl,
+			now: () => NOW,
+			sleep: async () => {}
+		});
+
+		return { service, posts };
+	}
+
+	// The branch was committed to a moment before; GitHub can still count no
+	// commits on it, and a refusal then is a state that settles, not a failure.
+	it('asks again while GitHub still sees no commits on a branch just written', async () => {
+		const { service, posts } = github({ refusals: 2 });
+
+		await expect(service.openOrUpdatePullRequest(request)).resolves.toEqual({
+			url: 'https://github.com/acme/app/pull/12',
+			number: 12,
+			updated: false
+		});
+		expect(posts).toHaveLength(3);
+	});
+
+	it('gives up with the reason GitHub gave, not only "Validation Failed"', async () => {
+		const { service, posts } = github({ refusals: 10 });
+
+		await expect(service.openOrUpdatePullRequest(request)).rejects.toThrow(
+			'could not open the pull request: GitHub answered 422 — Validation Failed (No commits between main and bosun/onboarding)'
+		);
+		expect(posts).toHaveLength(4);
 	});
 });

@@ -25,6 +25,10 @@ export function compareVersions(a: string, b: string): number {
 	return 0;
 }
 
+export async function sleep(ms: number): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export function findDuplicate(values: string[]): string | null {
 	const seen = new Set<string>();
 

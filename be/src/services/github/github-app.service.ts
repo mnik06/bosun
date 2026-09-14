@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { z } from 'zod';
+import { sleep } from 'src/utils/general';
 
 const API = 'https://api.github.com';
 const OAUTH_TOKEN_URL = 'https://github.com/login/oauth/access_token';
@@ -40,6 +41,52 @@ const RepoSchema = z.object({
 const InstallationReposRespSchema = z.object({ repositories: z.array(RepoSchema) });
 
 const PullSchema = z.object({ number: z.number(), html_url: z.string() });
+
+const GithubErrorBodySchema = z.object({
+	message: z.string(),
+	errors: z
+		.array(
+			z.union([
+				z.string(),
+				z.object({
+					message: z.string().optional(),
+					resource: z.string().optional(),
+					field: z.string().optional(),
+					code: z.string().optional()
+				})
+			])
+		)
+		.optional()
+});
+
+const PULL_RETRY_DELAYS_MS = [1_000, 2_000, 4_000];
+
+type GithubErrorEntry = NonNullable<z.infer<typeof GithubErrorBodySchema>['errors']>[number];
+
+function describeGithubError(entry: GithubErrorEntry): string {
+	if (typeof entry === 'string') {
+		return entry;
+	}
+
+	return entry.message ?? [entry.resource, entry.field, entry.code].filter(Boolean).join(' ');
+}
+
+// "Validation Failed" alone names nothing to fix; the reason GitHub gives —
+// "No commits between main and bosun/onboarding", a field that is invalid — is
+// in `errors`.
+function githubReasons(json: unknown): { message: string; reasons: string[] } | null {
+	const said = GithubErrorBodySchema.safeParse(json);
+
+	if (!said.success) {
+		return null;
+	}
+
+	return { message: said.data.message, reasons: (said.data.errors ?? []).map(describeGithubError).filter((reason) => reason !== '') };
+}
+
+function noCommitsYet(result: { status: number; json: unknown }): boolean {
+	return result.status === 422 && (githubReasons(result.json)?.reasons.some((reason) => /no commits between/i.test(reason)) ?? false);
+}
 
 const PullStateSchema = PullSchema.extend({
 	state: z.enum(['open', 'closed']),
@@ -144,9 +191,11 @@ export function getGithubAppService(deps: {
 	privateKey: string;
 	fetchImpl?: typeof fetch;
 	now?: () => number;
+	sleep?: (ms: number) => Promise<void>;
 }) {
 	const fetchImpl = deps.fetchImpl ?? fetch;
 	const now = deps.now ?? Date.now;
+	const wait = deps.sleep ?? sleep;
 	const privateKey = normalizePrivateKey(deps.privateKey);
 	const tokens = new Map<string, { token: string; expiresAt: number }>();
 
@@ -175,9 +224,10 @@ export function getGithubAppService(deps: {
 	}
 
 	function failure(what: string, result: { status: number; json: unknown }): GithubError {
-		const said = z.object({ message: z.string() }).safeParse(result.json);
+		const said = githubReasons(result.json);
+		const reasons = said === null || said.reasons.length === 0 ? '' : ` (${said.reasons.join('; ')})`;
 
-		return new GithubError(result.status, `${what}: GitHub answered ${result.status}${said.success ? ` — ${said.data.message}` : ''}`);
+		return new GithubError(result.status, `${what}: GitHub answered ${result.status}${said === null ? '' : ` — ${said.message}${reasons}`}`);
 	}
 
 	async function mint(opts: {
@@ -276,12 +326,26 @@ export function getGithubAppService(deps: {
 			githubRepoIds: [opts.githubRepoId],
 			permissions: { pull_requests: 'write' }
 		});
-		const created = await call({
-			method: 'POST',
-			url: `${API}/repos/${repo.full_name}/pulls`,
-			token,
-			body: { title: opts.title, head: opts.head, base: opts.base, body: opts.body }
-		});
+		const create = async () =>
+			call({
+				method: 'POST',
+				url: `${API}/repos/${repo.full_name}/pulls`,
+				token,
+				body: { title: opts.title, head: opts.head, base: opts.base, body: opts.body }
+			});
+		let created = await create();
+
+		// A commit pushed a moment ago can still read as "no commits between" the
+		// branch and its base, so a pull request opened straight after writing the
+		// file is refused for a state GitHub settles within seconds.
+		for (const delay of PULL_RETRY_DELAYS_MS) {
+			if (!noCommitsYet(created)) {
+				break;
+			}
+
+			await wait(delay);
+			created = await create();
+		}
 
 		if (created.status === 201) {
 			const pull = PullSchema.parse(created.json);
