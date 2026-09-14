@@ -62,7 +62,8 @@ function TabBody ({ tab, detail, stream }: { tab: PlanTab, detail: PlanDetail, s
 
 	return (
 		<div className="min-h-0 grow overflow-y-auto pr-2">
-			<Scrolled tab={tab} detail={detail} />
+			<Scrolled tab={tab}
+				detail={detail} />
 		</div>
 	)
 }
