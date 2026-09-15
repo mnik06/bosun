@@ -60,8 +60,6 @@ export const EnvSchema = z.object({
 	// subscription can be created against the same key pair the backend signs with.
 	VAPID_PUBLIC_KEY: z.string().min(1),
 	VAPID_PRIVATE_KEY: z.string().min(1),
-	// A mailto: or https: contact URI, required by the Web Push spec so a push
-	// service can reach the sender about a misbehaving application.
 	VAPID_SUBJECT: z.string().min(1)
 });
 

@@ -20,6 +20,7 @@ export function PlanChat ({
 	const bottom = useRef<HTMLDivElement>(null)
 	const pending = findPendingQuestion(messages)
 	const answer = useAnswerQuestion(plan.id)
+
 	// One sentence cannot be the answer to three questions, so the composer only
 	// takes over the reply when exactly one is open.
 	const open = pending !== null && pending.questions.length === 1 ? pending : null
