@@ -2,6 +2,7 @@ import { Alert, AppShell } from '@mantine/core'
 import { Navigate, Outlet } from 'react-router'
 
 import { MachinesSocketProvider } from '~/entities/machine'
+import { NotificationsSocketProvider } from '~/entities/notification'
 import { PlansSocketProvider } from '~/entities/plan'
 import { ActiveProjectProvider, useActiveProject } from '~/entities/project'
 import { useSession } from '~/entities/session'
@@ -44,7 +45,9 @@ function ProjectScoped ({ email }: { email: string }) {
 			<AppShell.Main className="min-w-0 max-sm:pb-[calc(var(--mobile-nav-height)+env(safe-area-inset-bottom))]">
 				<MachinesSocketProvider>
 					<PlansSocketProvider>
-						<Outlet />
+						<NotificationsSocketProvider>
+							<Outlet />
+						</NotificationsSocketProvider>
 					</PlansSocketProvider>
 				</MachinesSocketProvider>
 			</AppShell.Main>
