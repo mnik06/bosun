@@ -119,3 +119,72 @@ describe('secretBlock', () => {
 		expect(await prompt.secretBlock('Claude token')).toBe('');
 	});
 });
+
+describe('secretBlock with a completion check', () => {
+	// Input delivered as separate, unended writes, the way a live terminal feeds a
+	// process one keystroke burst at a time — unlike `harness()`, which closes the
+	// stream up front and so cannot tell an early return from one that only
+	// happened because EOF forced it.
+	function liveHarness() {
+		const input = new PassThrough();
+		const output = new PassThrough();
+		const prompt = getPromptService({ input, output });
+
+		return {
+			prompt,
+			write: (chunk: string) => input.write(chunk),
+			end: () => input.end()
+		};
+	}
+
+	const PENDING = Symbol('pending');
+
+	// Races a promise against a short timer so a test can assert "still waiting"
+	// without actually hanging when the wait is the point of the test.
+	function settledWithin(promise: Promise<unknown>, ms: number): Promise<unknown> {
+		return Promise.race([promise, new Promise((resolve) => setTimeout(() => resolve(PENDING), ms))]);
+	}
+
+	const isComplete = (value: string): boolean => value.startsWith('sk-ant-oat01-') && value.length > 20;
+
+	// AC-1: a clean, non-wrapped paste followed by exactly one Enter resolves on
+	// its own — proven here by resolving before the stream is ever closed, which a
+	// wait for blank-line-or-EOF could not do.
+	it('submits a single-line paste on one Enter, without waiting for a blank line', async () => {
+		const { prompt, write } = liveHarness();
+		const result = prompt.secretBlock('Claude token', { isComplete });
+
+		write('sk-ant-oat01-wholetokenwithplentyoflength\n');
+
+		expect(await settledWithin(result, 50)).toBe('sk-ant-oat01-wholetokenwithplentyoflength');
+	});
+
+	// AC-2: a terminal's line wrap turns a paste into two newline-separated rows
+	// that arrive in the same read. The first row alone already satisfies
+	// `isComplete` here, so this only holds if the still-queued second row is what
+	// stops the early return — proving the `ready` gate, not just the check itself.
+	it('still reassembles a token wrapped across rows delivered in one chunk', async () => {
+		const { prompt, write } = liveHarness();
+		const result = prompt.secretBlock('Claude token', { isComplete: (value) => value.length >= 5 });
+
+		write('sk-ant-\noat01-wholetoken\n');
+
+		expect(await settledWithin(result, 50)).toBe('sk-ant-oat01-wholetoken');
+	});
+
+	// AC-3: a value the check never accepts must not be auto-submitted — proven
+	// by showing the prompt is still pending after it arrives, then that a blank
+	// line is what finally resolves it.
+	it('waits for a blank line when the value never looks complete', async () => {
+		const { prompt, write, end } = liveHarness();
+		const result = prompt.secretBlock('Claude token', { isComplete });
+
+		write('not-a-token\n');
+
+		expect(await settledWithin(result, 50)).toBe(PENDING);
+
+		end();
+
+		expect(await result).toBe('not-a-token');
+	});
+});

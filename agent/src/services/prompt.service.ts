@@ -115,8 +115,21 @@ export function getPromptService(deps: {
 		// with nothing on screen to say why, because the input is hidden. So the
 		// whole paste is collected instead of its first line, and the blank line is
 		// what ends it.
-		async secretBlock(label: string): Promise<string> {
+		//
+		// `isComplete` lets a caller skip that second, blank-line Enter for the common
+		// case: once the lines collected so far already look like a whole value, and
+		// nothing else from the same paste is already queued in `ready` (a wrapped row
+		// that arrived in the same chunk as this one), there is nothing left to wait
+		// for. If another line is already queued, the loop keeps consuming it exactly
+		// as before, so a wrapped paste is still fully reassembled. A value
+		// `isComplete` never accepts falls back to exactly the old behavior: wait for a
+		// blank line or EOF. This only catches rows already queued from the same
+		// chunk — a wrapped row a slow link delivers as its own separate read would
+		// still submit early, but only into the same verify-and-retry path a bad
+		// paste already goes through today, so nothing new can go wrong from it.
+		async secretBlock(label: string, opts?: { isComplete?: (value: string) => boolean }): Promise<string> {
 			const lines: string[] = [];
+			let value = '';
 
 			for (;;) {
 				const line = await ask(
@@ -129,12 +142,18 @@ export function getPromptService(deps: {
 				}
 
 				lines.push(line);
+
+				// Joined without a separator and stripped throughout: every piece is a
+				// fragment of one value that a terminal broke in two, so any whitespace
+				// inside it came from the display, never from the token.
+				value = lines.join('').replace(/\s/g, '');
+
+				if (opts?.isComplete && ready.length === 0 && opts.isComplete(value)) {
+					break;
+				}
 			}
 
-			// Joined without a separator and stripped throughout: every piece is a
-			// fragment of one value that a terminal broke in two, so any whitespace
-			// inside it came from the display, never from the token.
-			return lines.join('').replace(/\s/g, '');
+			return value;
 		},
 
 		close(): void {

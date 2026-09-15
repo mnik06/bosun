@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	credentialEnv,
 	describeToken,
+	isCompleteToken,
 	CLAUDE_TOKEN_VARIABLE,
 	readClaudeAuthStatus,
 	readVerifyResult
@@ -217,6 +218,24 @@ describe('credentialEnv', () => {
 		credentialEnv({ env: original });
 
 		expect(original.ANTHROPIC_API_KEY).toBe('sk-ant-api03-stale');
+	});
+});
+
+describe('isCompleteToken', () => {
+	const wholeToken = `sk-ant-oat01-${'a'.repeat(80)}`;
+
+	it('accepts a token long enough to be the whole thing', () => {
+		expect(isCompleteToken(wholeToken)).toBe(true);
+	});
+
+	// A short fragment that happens to start with the prefix is exactly what the
+	// first row of a wrapped, still-incomplete paste looks like.
+	it('rejects a fragment that only has the prefix so far', () => {
+		expect(isCompleteToken('sk-ant-oat01-firstrow')).toBe(false);
+	});
+
+	it('rejects a value with the wrong prefix regardless of length', () => {
+		expect(isCompleteToken(`sk-ant-api03-${'a'.repeat(80)}`)).toBe(false);
 	});
 });
 

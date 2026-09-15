@@ -129,7 +129,6 @@ The only things that have to be typed on the box, in order:
 | Step | Skipped when | Otherwise |
 | ---- | ------------ | --------- |
 | Claude | `claude auth status` has a credential and one API call accepts it | the `auth set` flow below |
-| MCP servers | every preset bosun offers is configured | offers each preset; `mcp add` for each one you accept |
 | Browser | the installed Chromium launches headless | offers to install the build; names a missing system library and the root command that installs it |
 | Machine key | — | prints the machine's key fingerprint |
 

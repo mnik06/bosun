@@ -49,7 +49,7 @@ program
 
 program
 	.command('setup')
-	.description('Walk through what only this machine can be given: the Claude token, MCP servers and the browser')
+	.description('Walk through what only this machine can be given: the Claude token and the browser')
 	.option('--config <path>', 'path to the agent config', defaultConfigPath())
 	.action(async (opts: { config: string }) => {
 		await runSetup({ configPath: path.resolve(opts.config) });

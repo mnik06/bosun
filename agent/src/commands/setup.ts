@@ -3,7 +3,6 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { readConfig, type AgentConfig } from '../config/config';
-import { getBosunApiService, type McpPreset } from '../services/bosun-api.service';
 import { findBrowserExecutable, installDepsCommand, launchBrowser } from '../services/browser.service';
 import { getClaudeAuthService } from '../services/claude-auth.service';
 import { getEnvService } from '../services/env.service';
@@ -13,7 +12,6 @@ import { getMcpConfigService } from '../services/mcp-config.service';
 import { browserCachePath } from '../services/preflight.service';
 import { getPromptService } from '../services/prompt.service';
 import { setClaudeToken } from './auth';
-import { addMcpPreset } from './mcp';
 
 type StepResult = 'done' | 'already' | 'incomplete';
 
@@ -66,7 +64,7 @@ function withLocalTools(): void {
 }
 
 async function claudeStep(): Promise<StepResult> {
-	header('1/4  Claude');
+	header('1/3  Claude');
 
 	const exec = getExecService();
 	const claudeAuth = getClaudeAuthService({ exec, env: getEnvService({ baseEnv: process.env }) });
@@ -110,55 +108,6 @@ async function claudeStep(): Promise<StepResult> {
 	}
 }
 
-// Optional by nature: a machine with no MCP server beyond bosun's defaults is a
-// working machine, so declining every preset is not an unfinished step.
-async function mcpStep(config: AgentConfig): Promise<StepResult> {
-	header('2/4  MCP servers');
-
-	const mcpConfig = getMcpConfigService({ env: getEnvService({ baseEnv: process.env }) });
-	let presets: McpPreset[];
-
-	try {
-		presets = await getBosunApiService({ serverUrl: config.serverUrl }).listMcpPresets();
-	} catch (error) {
-		console.log(`✗ could not list the presets bosun offers: ${messageOf(error)}`);
-
-		return 'incomplete';
-	}
-
-	const configured = new Set(mcpConfig.listConfigured());
-	const available = presets.filter((preset) => !configured.has(preset.id));
-
-	if (configured.size > 0) {
-		console.log(`✓ configured: ${[...configured].join(', ')}`);
-	}
-
-	if (available.length === 0) {
-		console.log('✓ nothing left to add');
-
-		return 'already';
-	}
-
-	console.log('Tools a session can reach. Each asks for its credential here, in this terminal.');
-
-	let added = 0;
-
-	for (const preset of available) {
-		if (!(await confirm(`Add ${preset.id} — ${preset.description}?`))) {
-			continue;
-		}
-
-		try {
-			await addMcpPreset({ config, id: preset.id });
-			added += 1;
-		} catch (error) {
-			console.log(`✗ ${preset.id}: ${messageOf(error)}`);
-		}
-	}
-
-	return added > 0 ? 'done' : 'already';
-}
-
 async function installChromium(): Promise<boolean> {
 	if (!(await confirm('Install Chromium for this user now (npx -y playwright install chromium)?'))) {
 		return false;
@@ -176,7 +125,7 @@ async function installChromium(): Promise<boolean> {
 }
 
 async function browserStep(): Promise<StepResult> {
-	header('3/4  Browser');
+	header('2/3  Browser');
 
 	const exec = getExecService();
 	const mcpConfig = getMcpConfigService({ env: getEnvService({ baseEnv: process.env }) });
@@ -228,7 +177,7 @@ async function browserStep(): Promise<StepResult> {
 }
 
 function keyStep(): StepResult {
-	header('4/4  Machine key');
+	header('3/3  Machine key');
 
 	try {
 		const key = getInputsKeyService({}).ensure();
@@ -257,7 +206,6 @@ export async function runSetup(opts: { configPath: string }): Promise<void> {
 	const results: [string, StepResult][] = [];
 
 	results.push(['Claude', await claudeStep()]);
-	results.push(['MCP servers', await mcpStep(config)]);
 	results.push(['Browser', await browserStep()]);
 	results.push(['Machine key', keyStep()]);
 
@@ -270,6 +218,7 @@ export async function runSetup(opts: { configPath: string }): Promise<void> {
 	}
 
 	console.log('bosun picks up changes on this machine within a few seconds — nothing to refresh.');
+	console.log('Add an MCP server any time with `bosun-agent mcp add <id>` — `bosun-agent mcp list` shows what is available.');
 
 	if (config.appUrl !== undefined) {
 		console.log(`\nContinue in the browser: ${config.appUrl.replace(/\/$/, '')}/machines/${config.machineId}`);
