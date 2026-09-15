@@ -56,28 +56,27 @@ export async function notifyPlanStatus(deps: PlanNotifyDeps, opts: { plan: Plan 
 	});
 }
 
-// A no-op for every role but `assistant` and `question`: a `user`/`answer` row
-// echoes back what was already said, and an `activity` line is routine
-// progress — neither is something a person needs to be pulled away to see.
+// A no-op unless this is a `question` on a plan a live person is watching: a
+// `user`/`answer` row echoes back what was already said, an `assistant` line
+// is routine narration, and an auto-mode plan answers every question it
+// raises itself (see agent/src/planning/README.md) — none of those is an
+// actual question that needs a person's response.
 export async function notifyPlanMessage(
 	deps: PlanNotifyDeps,
 	opts: { plan: Plan; message: PlanMessage }
 ): Promise<void> {
-	if (opts.message.role !== 'assistant' && opts.message.role !== 'question') {
+	if (opts.plan.auto || opts.message.role !== 'question') {
 		return;
 	}
 
 	const recipientIds = await resolveRecipients(deps, opts.plan);
-	const body =
-		opts.message.role === 'question'
-			? (opts.message.content.questions[0]?.question ?? 'has a question for you')
-			: opts.message.content.text;
+	const body = opts.message.content.questions[0]?.question ?? 'has a question for you';
 
 	await dispatchNotification(deps, {
 		recipientIds,
 		projectId: opts.plan.projectId,
 		kind: 'plan.message',
-		title: planName(opts.plan),
+		title: `${planName(opts.plan)} needs your answer`,
 		body,
 		url: `${deps.appUrl}/plans/${opts.plan.id}`,
 		planId: opts.plan.id
