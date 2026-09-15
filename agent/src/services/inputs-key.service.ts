@@ -4,7 +4,7 @@ import os from 'os';
 import path from 'path';
 import { type SealedValue } from '../onboarding-frames';
 
-export const INPUTS_KEY_FILENAME = 'inputs.key';
+const INPUTS_KEY_FILENAME = 'inputs.key';
 
 const MODULUS_BITS = 3072;
 const AES_KEY_BYTES = 32;
@@ -126,5 +126,3 @@ export function getInputsKeyService(deps: { homeDir?: string }) {
 		}
 	};
 }
-
-export type InputsKeyService = ReturnType<typeof getInputsKeyService>;

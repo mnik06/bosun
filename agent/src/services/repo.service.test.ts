@@ -2,24 +2,17 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { git as gitFixture, identify } from '../test-support/git-fixture';
 import { getExecService } from './exec.service';
 import { getRepoService } from './repo.service';
 
 const exec = getExecService();
 
+// Local clone/push scenarios here run longer than the 15s default a plain
+// git-fixture call gets, so every call goes through the fixture with the same
+// wider timeout instead.
 async function git(cwd: string, args: string[]) {
-	const result = await exec.run('git', ['-C', cwd, ...args], { timeoutMs: 60_000 });
-
-	if (!result.ok) {
-		throw new Error(`git ${args.join(' ')}: ${result.reason}`);
-	}
-
-	return result.stdout;
-}
-
-async function identify(cwd: string) {
-	await git(cwd, ['config', 'user.email', 'a@b.c']);
-	await git(cwd, ['config', 'user.name', 'Test']);
+	return gitFixture(cwd, args, { timeoutMs: 60_000 });
 }
 
 describe('repo service', () => {

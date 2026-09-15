@@ -1,61 +1,11 @@
-import { Alert, Center, Loader, Stack, Text, TextInput } from '@mantine/core'
-import { Search } from 'lucide-react'
-import { useState } from 'react'
-
-import {
-	HISTORY_STATES,
-	matchesPlanSearch,
-	PlanRowCard,
-	resolvePlanState,
-	sortPlansByRecency,
-	usePlansQuery
-} from '~/entities/plan'
-import { toErrorMessage } from '~/shared/lib'
+import { HISTORY_STATES, PlanSearchableList, resolvePlanState } from '~/entities/plan'
 
 export function PlanHistory () {
-	const { data, isPending, error } = usePlansQuery()
-	const [search, setSearch] = useState('')
-
-	if (isPending) {
-		return (
-			<Center py="xl">
-				<Loader />
-			</Center>
-		)
-	}
-
-	if (error) {
-		return (
-			<Alert color="red" title="Could not load plans">
-				{toErrorMessage(error, 'Unknown error')}
-			</Alert>
-		)
-	}
-
-	const entries = sortPlansByRecency(
-		data.filter((entry) => HISTORY_STATES.includes(resolvePlanState(entry)) && matchesPlanSearch(entry, search))
-	)
-
 	return (
-		<Stack gap="sm">
-			<TextInput
-				placeholder="Search by number or title"
-				leftSection={<Search size={14} />}
-				value={search}
-				onChange={(event) => {
-					setSearch(event.currentTarget.value)
-				}}
-			/>
-
-			{entries.length === 0 ? (
-				<Text size="sm" c="dimmed">
-					Nothing merged, failed or cancelled{search.trim() === '' ? ' yet' : ' matches that'}.
-				</Text>
-			) : null}
-
-			{entries.map((entry) => (
-				<PlanRowCard key={entry.id} entry={entry} />
-			))}
-		</Stack>
+		<PlanSearchableList
+			filter={(entry) => HISTORY_STATES.includes(resolvePlanState(entry))}
+			emptyMessage="Nothing merged, failed or cancelled yet."
+			noMatchMessage="Nothing merged, failed or cancelled matches that."
+		/>
 	)
 }

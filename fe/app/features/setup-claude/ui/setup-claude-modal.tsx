@@ -1,35 +1,8 @@
-import { Alert, Card, Stack, Text } from '@mantine/core'
+import { Alert, Stack, Text } from '@mantine/core'
 
-import { AppModal, CopyableCommand } from '~/shared/ui'
+import { AppModal, SetupStepCard } from '~/shared/ui'
 
 const TOKEN_DOCS = 'Mints a one-year token against a Pro, Max, Team or Enterprise plan. It can only make model requests, which is all a planning session needs.'
-
-function Step ({
-	title,
-	detail,
-	label,
-	command
-}: {
-	title: string,
-	detail: string,
-	label: string,
-	command: string
-}) {
-	return (
-		<Card withBorder padding="md" radius="md">
-			<Stack gap="sm">
-				<Stack gap={4}>
-					<Text fw={600}>{title}</Text>
-					<Text size="sm" c="dimmed">
-						{detail}
-					</Text>
-				</Stack>
-
-				<CopyableCommand label={label} command={command} />
-			</Stack>
-		</Card>
-	)
-}
 
 export function SetupClaudeModal ({
 	machineName,
@@ -51,21 +24,21 @@ export function SetupClaudeModal ({
 					already shows <Text component="span" className="font-mono">claude</Text> green.
 				</Text>
 
-				<Step
+				<SetupStepCard
 					title="1. Install Claude Code"
 					detail="Installs the CLI into ~/.local/bin. It brings everything it needs with it."
 					label={onMachine}
 					command="curl -fsSL https://claude.ai/install.sh | bash"
 				/>
 
-				<Step
+				<SetupStepCard
 					title="2. Mint a token"
 					detail={`This one needs a browser, so run it where you are — not on ${machineName}. ${TOKEN_DOCS}`}
 					label="On your own machine"
 					command="claude setup-token"
 				/>
 
-				<Step
+				<SetupStepCard
 					title="3. Paste it in"
 					detail="Prompts with echo off, makes one real API call to check the token, and only then writes it to ~/.bosun/env."
 					label={onMachine}

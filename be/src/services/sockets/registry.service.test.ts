@@ -13,7 +13,7 @@ function fakeSocket(readyState = OPEN) {
 	};
 }
 
-const message: UiMsg = { type: 'machine.pong', machineId: 'm_1', id: 'cmd_1', rttMs: 12 };
+const message: UiMsg = { type: 'machine.deleted', machineId: 'm_1' };
 
 let registry: SocketRegistry;
 let alice: ReturnType<typeof fakeSocket>;

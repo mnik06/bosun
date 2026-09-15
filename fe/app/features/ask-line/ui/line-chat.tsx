@@ -10,7 +10,7 @@ import {
 	type RepositoryMessage
 } from '~/entities/repository'
 import { apiClient } from '~/shared/api'
-import { notifyError } from '~/shared/lib'
+import { notifyError, submitOnEnter } from '~/shared/lib'
 import { MarkdownBlock } from '~/shared/ui'
 
 function Bubble ({ message }: { message: RepositoryMessage }) {
@@ -93,12 +93,7 @@ export function LineChat ({ repositoryId }: { repositoryId: string }) {
 					onChange={(event) => {
 						setQuestion(event.currentTarget.value)
 					}}
-					onKeyDown={(event) => {
-						if (event.key === 'Enter' && !event.shiftKey) {
-							event.preventDefault()
-							send()
-						}
-					}}
+					onKeyDown={submitOnEnter(send)}
 				/>
 
 				<ActionIcon

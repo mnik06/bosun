@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { ASK_DEFINITION } from '../../sessions/ask';
-import { createAskTool, textToolResult, type PendingQuestion } from '../../sessions/mcp-server';
+import { createAskTool, mcpToolDefinition, textToolResult, type PendingQuestion } from '../../sessions/mcp-server';
 import { type PlanQuestion } from '../../protocol';
 import { type BosunApiService } from '../../services/bosun-api.service';
 import { type StackUpResult } from '../../services/stack.service';
@@ -8,12 +8,12 @@ import { type StackUpResult } from '../../services/stack.service';
 // The same view planning had. A bullet is executed with only its own plan in
 // front of it, so when it hits something a sibling plan owns, this is how it
 // finds out rather than guessing or building it twice.
-const LIST_PLANS_DEFINITION = {
+const LIST_PLANS_DEFINITION = mcpToolDefinition({
 	name: 'list_plans',
 	description:
 		'List every plan written for this repository — number, title, state, its tracer bullets, and for approved plans not yet merged the footprint of each bullet (the schema, contracts and modules it creates or changes). Use it when your work touches something you suspect another plan owns, so you use it rather than duplicating or pre-empting it.',
-	inputSchema: z.toJSONSchema(z.object({}), { target: 'draft-7' })
-};
+	schema: z.object({})
+});
 
 export const RecordDecisionArgsSchema = z.object({
 	fork: z.string().min(1),
@@ -23,12 +23,12 @@ export const RecordDecisionArgsSchema = z.object({
 	reversing: z.string().nullable().optional()
 });
 
-const RECORD_DECISION_DEFINITION = {
+const RECORD_DECISION_DEFINITION = mcpToolDefinition({
 	name: 'record_decision',
 	description:
 		'Record a fork the plan left open and how you resolved it. Goes on the plan, is shown in the browser as it lands, and is carried into the pull request verbatim. Required for: a new shared module, a new table or column or migration, a new endpoint or a changed request/response shape, a new dependency, a change spanning more than five files, an acceptance criterion that turns out unbuildable or already true, or a choice between two viable implementations the plan named neither of.',
-	inputSchema: z.toJSONSchema(RecordDecisionArgsSchema, { target: 'draft-7' })
-};
+	schema: RecordDecisionArgsSchema
+});
 
 export const MarkAcArgsSchema = z.object({ code: z.string().min(1) });
 
@@ -40,29 +40,29 @@ export const BlockAcArgsSchema = z.object({
 // The escape hatch that keeps the gate honest. Without it a criterion nobody
 // could drive left the session two options — claim it passed, or fail the whole
 // branch — and both are worse than saying so.
-const BLOCK_AC_DEFINITION = {
+const BLOCK_AC_DEFINITION = mcpToolDefinition({
 	name: 'mark_ac_blocked',
 	description:
 		'Record that an acceptance criterion could not be driven, and why — the app would not start, the journey needs data that does not exist, the feature is unreachable from the interface. Use it only after trying: it is not a way to skip work, and the reason is carried verbatim into the pull request. A criterion you drove and watched fail is a finding, not a blocker.',
-	inputSchema: z.toJSONSchema(BlockAcArgsSchema, { target: 'draft-7' })
-};
+	schema: BlockAcArgsSchema
+});
 
 // Two tools rather than one with a flag: which of the two columns a session may
 // tick is decided by the session it is, and a flag is something a model can get
 // wrong. A build bullet cannot reach `mark_ac_verified` at all.
-const MARK_IMPLEMENTED_DEFINITION = {
+const MARK_IMPLEMENTED_DEFINITION = mcpToolDefinition({
 	name: 'mark_ac_implemented',
 	description:
 		'Tick one acceptance criterion as implemented, by its code. Do it the moment the code that satisfies it is written and its feedback loop is green — not in a batch at the end. This bullet cannot finish while one of the criteria it claims is unticked.',
-	inputSchema: z.toJSONSchema(MarkAcArgsSchema, { target: 'draft-7' })
-};
+	schema: MarkAcArgsSchema
+});
 
-const MARK_VERIFIED_DEFINITION = {
+const MARK_VERIFIED_DEFINITION = mcpToolDefinition({
 	name: 'mark_ac_verified',
 	description:
 		'Tick one acceptance criterion as verified, by its code. Call it only after you have watched it hold in the running product — the journey driven, the state reached, the result seen.',
-	inputSchema: z.toJSONSchema(MarkAcArgsSchema, { target: 'draft-7' })
-};
+	schema: MarkAcArgsSchema
+});
 
 export const ReportFindingArgsSchema = z.object({
 	acCode: z.string().min(1).nullable().optional().describe('the criterion this finding fails, for kind "criterion"'),
@@ -77,12 +77,12 @@ export const ReportFindingArgsSchema = z.object({
 // A finding is a row, not a line in a report: the fix session is handed exactly
 // these, the re-check drives exactly the criteria they name, and the pull request
 // lists the ones left.
-const REPORT_FINDING_DEFINITION = {
+const REPORT_FINDING_DEFINITION = mcpToolDefinition({
 	name: 'report_finding',
 	description:
 		'Record something broken you saw in the running product: a criterion that fails (kind "criterion" with its acCode), a console error, a failed request, or a visual defect. Each one is handed to the fix session as written, so the reproduction must stand on its own.',
-	inputSchema: z.toJSONSchema(ReportFindingArgsSchema, { target: 'draft-7' })
-};
+	schema: ReportFindingArgsSchema
+});
 
 export const ResolveFindingArgsSchema = z.object({
 	findingId: z.string().min(1),
@@ -90,29 +90,29 @@ export const ResolveFindingArgsSchema = z.object({
 	note: z.string().min(1).describe('what changed, or why it was left')
 });
 
-const RESOLVE_FINDING_DEFINITION = {
+const RESOLVE_FINDING_DEFINITION = mcpToolDefinition({
 	name: 'resolve_finding',
 	description:
 		'Account for one finding the drive reported, by its id: "fixed" with what changed, or "left" with the reason. Every finding must be resolved before this session ends; a left one goes into the pull request as a known gap.',
-	inputSchema: z.toJSONSchema(ResolveFindingArgsSchema, { target: 'draft-7' })
-};
+	schema: ResolveFindingArgsSchema
+});
 
 export const StackUpArgsSchema = z.object({ apps: z.array(z.string()).optional() });
 
 // The agent starts the processes so that starting the stack means the same thing
 // in every session and on every machine; the session only decides when.
-const STACK_UP_DEFINITION = {
+const STACK_UP_DEFINITION = mcpToolDefinition({
 	name: 'stack_up',
 	description:
 		'Start this project\'s apps from .bosun/project.yaml — all of them, or the named ones with their dependencies — in dependency order, each on its own port in your range, with the other apps\' URLs wired into its environment. Returns only once every app answers its readiness check, with each app\'s URL and log file. On a failure it returns the app, the reason and the tail of its log, and stops what it started. Never start an app any other way. Call stack_down the moment you no longer need it.',
-	inputSchema: z.toJSONSchema(StackUpArgsSchema, { target: 'draft-7' })
-};
+	schema: StackUpArgsSchema
+});
 
-const STACK_DOWN_DEFINITION = {
+const STACK_DOWN_DEFINITION = mcpToolDefinition({
 	name: 'stack_down',
 	description: 'Stop every app stack_up started in this session. Call it before running typecheck, lint or tests: a running stack holds memory the loop needs.',
-	inputSchema: z.toJSONSchema(z.object({}), { target: 'draft-7' })
-};
+	schema: z.object({})
+});
 
 export type ExecutionPhase = 'build' | 'drive' | 'recheck' | 'fix';
 

@@ -1,7 +1,7 @@
 import { type AgentConfig } from '../config/config';
 import { getBosunApiService, type McpPreset } from '../services/bosun-api.service';
 import { getEnvService } from '../services/env.service';
-import { expandVariables, getMcpConfigService } from '../services/mcp-config.service';
+import { getMcpConfigService } from '../services/mcp-config.service';
 import { getMcpProbeService } from '../services/mcp-probe.service';
 import { getPromptService } from '../services/prompt.service';
 
@@ -228,8 +228,6 @@ export function removeMcpServer(opts: { name: string }): void {
 	console.log(`✓ removed "${opts.name}". Any token it used is still in ${env.envPath}.`);
 	console.log('Hit Refresh on this machine in bosun to pick it up.');
 }
-
-export { expandVariables };
 
 export async function checkMcpServers(): Promise<void> {
 	const env = getEnvService({ baseEnv: process.env });

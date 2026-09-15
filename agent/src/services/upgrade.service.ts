@@ -296,5 +296,3 @@ export function getUpgradeService(deps: { exec: ExecService; homeDir?: string; e
 		}
 	};
 }
-
-export type UpgradeService = ReturnType<typeof getUpgradeService>;

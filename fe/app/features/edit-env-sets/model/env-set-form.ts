@@ -5,7 +5,7 @@ import type { PlainVar } from '~/entities/machine'
 const ENV_KEY = /^[A-Za-z_][A-Za-z0-9_]*$/
 const SINGLE_LINE = /^[^\r\n]*$/
 
-export const EnvPairSchema = z.object({
+const EnvPairSchema = z.object({
 	id: z.string(),
 	key: z.string().regex(ENV_KEY, 'Letters, digits and _, not starting with a digit'),
 	value: z.string().regex(SINGLE_LINE, 'A value must fit on one line'),

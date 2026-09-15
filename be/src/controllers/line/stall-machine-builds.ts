@@ -1,5 +1,7 @@
 import { type LineDeps } from 'src/controllers/line/line-deps';
 import { announceBuild } from 'src/controllers/line/shared/announce';
+import { type RunningJob } from 'src/repos/builds/slice-run.repo';
+import { type Integration } from 'src/types/BuildSchema';
 
 const DROPPED = 'the connection to the machine dropped while this was running';
 const RESTARTED = 'the agent on the machine restarted while this was running';
@@ -32,6 +34,15 @@ async function holdBuild(deps: LineDeps, opts: { buildId: string; reason: string
 	if (build && plan) {
 		announceBuild({ socketRegistry: deps.socketRegistry, projectId: plan.projectId, build });
 	}
+}
+
+async function liveJobsForMachine(deps: LineDeps, machineId: string): Promise<{ running: RunningJob[]; integrations: Integration[] }> {
+	const [running, integrations] = await Promise.all([
+		deps.sliceRunRepo.listRunningForMachine(machineId),
+		deps.integrationRepo.listByStatusForMachine({ machineId, statuses: ['running'] })
+	]);
+
+	return { running, integrations };
 }
 
 async function reclaimRun(deps: LineDeps, runId: string): Promise<void> {
@@ -67,10 +78,7 @@ export async function stallMachineBuilds(
 	const heldRuns = new Set(opts.heldRunIds ?? []);
 	const heldIntegrations = new Set(opts.heldIntegrationIds ?? []);
 	const agentStartedAt = opts.uptimeMs === undefined ? null : new Date(Date.now() - opts.uptimeMs);
-	const [running, integrations] = await Promise.all([
-		deps.sliceRunRepo.listRunningForMachine(opts.machineId),
-		deps.integrationRepo.listByStatusForMachine({ machineId: opts.machineId, statuses: ['running'] })
-	]);
+	const { running, integrations } = await liveJobsForMachine(deps, opts.machineId);
 
 	for (const job of running.filter((entry) => !heldRuns.has(entry.runId))) {
 		const run = await deps.sliceRunRepo.getById(job.runId);
@@ -110,10 +118,7 @@ export async function pauseMachineBuilds(deps: LineDeps, opts: { machineId: stri
 		return;
 	}
 
-	const [running, integrations] = await Promise.all([
-		deps.sliceRunRepo.listRunningForMachine(opts.machineId),
-		deps.integrationRepo.listByStatusForMachine({ machineId: opts.machineId, statuses: ['running'] })
-	]);
+	const { running, integrations } = await liveJobsForMachine(deps, opts.machineId);
 
 	for (const job of running) {
 		await reclaimRun(deps, job.runId);

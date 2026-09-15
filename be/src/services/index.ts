@@ -12,7 +12,6 @@ import { getRunActivityService } from 'src/services/runs/run-activity.service';
 import { getDisconnectGraceService } from 'src/services/sockets/disconnect-grace.service';
 import { getMachineMemoryService } from 'src/services/sockets/machine-memory.service';
 import { getPendingEnvRequestsService } from 'src/services/sockets/pending-env-requests.service';
-import { getPendingPingsService } from 'src/services/sockets/pending-pings.service';
 import { getPendingUpgradesService } from 'src/services/sockets/pending-upgrades.service';
 import { getSocketRegistry } from 'src/services/sockets/registry.service';
 import { getTicketService } from 'src/services/tickets/ticket.service';
@@ -42,7 +41,6 @@ export function getServices(opts: { env: Env }) {
 		machineMemory: getMachineMemoryService(),
 		mcpPresets: getMcpPresetService(),
 		pendingEnvRequests: getPendingEnvRequestsService(),
-		pendingPings: getPendingPingsService(),
 		pendingUpgrades: getPendingUpgradesService(),
 		planTextService: getPlanTextService(),
 		runActivity: getRunActivityService(),

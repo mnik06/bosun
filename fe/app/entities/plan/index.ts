@@ -71,5 +71,6 @@ export { PlansSocketProvider, useIntegrationActivity, useRunActivity } from './m
 export { usePlanStream, type PlanStream } from './model/use-plan-stream'
 export { AnsweredQuestion } from './ui/answered-question'
 export { PlanRowCard } from './ui/plan-row-card'
+export { PlanSearchableList } from './ui/plan-searchable-list'
 export { PlanStatusBadge } from './ui/plan-status-badge'
 export { RunRow } from './ui/run-row'

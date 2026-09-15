@@ -1,4 +1,5 @@
 import { HttpError } from 'src/api/errors/HttpError';
+import { announceMachine } from 'src/controllers/machines/shared/announce';
 import { type MachineRepo } from 'src/repos/machines/machine.repo';
 import { type SocketRegistry } from 'src/services/sockets/registry.service';
 import { type Machine } from 'src/types/MachineSchema';
@@ -21,10 +22,7 @@ export async function saveProjectProfile(opts: {
 		throw new HttpError(404, 'Machine not found');
 	}
 
-	opts.socketRegistry.broadcastToUi({
-		projectId: opts.projectId,
-		message: { type: 'machine.updated', machine }
-	});
+	announceMachine({ socketRegistry: opts.socketRegistry, machine });
 
 	return machine;
 }

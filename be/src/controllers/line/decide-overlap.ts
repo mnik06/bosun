@@ -3,6 +3,7 @@ import { type LineDeps } from 'src/controllers/line/line-deps';
 import { scheduleRepository } from 'src/controllers/line/schedule';
 import { announceBuild, announcePlanChanged } from 'src/controllers/line/shared/announce';
 import { consumeInstead } from 'src/controllers/line/shared/detect-dependencies';
+import { resumeNeedsYouBuild } from 'src/controllers/line/shared/resume-needs-you-build';
 import { sayToPlan } from 'src/controllers/plans/say-to-plan';
 import { type Build, type OverlapChoice, type OverlapDecision } from 'src/types/BuildSchema';
 import { contractKey, schemaKey, type Footprint } from 'src/types/FootprintSchema';
@@ -157,16 +158,16 @@ async function rename(
 	});
 }
 
+// Only when every overlap on the plan has been decided: a build still waiting on
+// another one must not be resumed early just because this one cleared.
 async function resumeWhenDecided(deps: LineDeps, opts: { plan: Plan; build: Build | null }): Promise<void> {
 	const { plan, build } = opts;
 	const open = (await deps.overlapDecisionRepo.listForPlan(plan.id)).filter((entry) => entry.chosen === null);
 
-	if (build && open.length === 0 && build.status === 'needs_you' && build.needsYouReason === 'overlap') {
-		const resumed = await deps.buildRepo.update({ id: build.id, status: 'scheduled', needsYouReason: null, failureReason: null });
+	if (build && open.length === 0) {
+		await resumeNeedsYouBuild(deps, { build, plan, reason: 'overlap' });
 
-		if (resumed) {
-			announceBuild({ socketRegistry: deps.socketRegistry, projectId: plan.projectId, build: resumed });
-		}
+		return;
 	}
 
 	announcePlanChanged({ socketRegistry: deps.socketRegistry, projectId: plan.projectId, planId: plan.id });

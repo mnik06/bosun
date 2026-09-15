@@ -80,7 +80,7 @@ function settleReply(opts: {
 	fastify: FastifyInstance;
 	machineId: string;
 	projectId: string;
-	msg: Extract<AgentMsg, { type: 'pong' | 'upgrade.declined' }> | EnvReplyFrame;
+	msg: Extract<AgentMsg, { type: 'upgrade.declined' }> | EnvReplyFrame;
 	log: FastifyBaseLogger;
 }): void {
 	const { msg } = opts;
@@ -91,24 +91,7 @@ function settleReply(opts: {
 		return;
 	}
 
-	if (isEnvReplyFrame(msg)) {
-		settleEnvReply({ fastify: opts.fastify, machineId: opts.machineId, msg });
-
-		return;
-	}
-
-	const rttMs = opts.fastify.services.pendingPings.resolve({
-		commandId: msg.id,
-		machineId: opts.machineId,
-		at: Date.now()
-	});
-
-	if (rttMs !== null) {
-		opts.fastify.services.socketRegistry.broadcastToUi({
-			projectId: opts.projectId,
-			message: { type: 'machine.pong', machineId: opts.machineId, id: msg.id, rttMs }
-		});
-	}
+	settleEnvReply({ fastify: opts.fastify, machineId: opts.machineId, msg });
 }
 
 async function handleRepositoryFrame(opts: {
@@ -201,7 +184,11 @@ export async function handleAgentFrame(opts: {
 }): Promise<void> {
 	const { msg } = opts;
 
-	if (msg.type === 'pong' || msg.type === 'upgrade.declined' || isEnvReplyFrame(msg)) {
+	if (msg.type === 'pong') {
+		return;
+	}
+
+	if (msg.type === 'upgrade.declined' || isEnvReplyFrame(msg)) {
 		settleReply({ ...opts, msg });
 
 		return;

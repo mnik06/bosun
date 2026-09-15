@@ -11,8 +11,6 @@ export const PROJECT_CONFIG_PATH = '.bosun/project.yaml';
 // A build owns ten ports and an app's port is its position in `apps`.
 export const MAX_APPS = 10;
 
-export const DEFAULT_READY_TIMEOUT_SECONDS = 90;
-
 const MAX_SOURCE_CHARS = 100_000;
 
 const APP_NAME = /^[a-z][a-z0-9-]{0,30}$/;
@@ -254,8 +252,6 @@ export const ProjectConfigSchema = BaseSchema.superRefine((config, ctx) => {
 });
 
 export type ProjectConfig = z.infer<typeof ProjectConfigSchema>;
-
-export type ProjectConfigApp = ProjectConfig['apps'][string];
 
 export interface ConfigIssue {
 	path: string;

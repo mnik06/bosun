@@ -14,5 +14,3 @@ export function getInstallerService() {
 		}
 	};
 }
-
-export type InstallerService = ReturnType<typeof getInstallerService>;

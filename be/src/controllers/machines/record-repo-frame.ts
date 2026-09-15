@@ -1,3 +1,4 @@
+import { announceMachine } from 'src/controllers/machines/shared/announce';
 import { announceRepository } from 'src/controllers/repositories/shared/announce-repository';
 import { type RepositoryRepo } from 'src/repos/github/repository.repo';
 import { type MachineRepo } from 'src/repos/machines/machine.repo';
@@ -23,7 +24,7 @@ export async function recordRepoFrame(opts: {
 			return;
 		}
 
-		opts.socketRegistry.broadcastToUi({ projectId: opts.projectId, message: { type: 'machine.updated', machine: cleared } });
+		announceMachine({ socketRegistry: opts.socketRegistry, machine: cleared });
 		opts.socketRegistry.broadcastToUi({
 			projectId: opts.projectId,
 			message: {

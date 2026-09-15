@@ -38,8 +38,6 @@ export const ConsumedPieceSchema = z.object({
 	item: z.string().trim().min(1).max(500)
 });
 
-export type ConsumedPiece = z.infer<typeof ConsumedPieceSchema>;
-
 export const FootprintSchema = z.object({
 	schema: z.array(SchemaChangeSchema).max(50).default([]),
 	contracts: z.array(ContractChangeSchema).max(50).default([]),
@@ -66,7 +64,7 @@ function normalizeIdentifier(value: string): string {
 }
 
 // `/users/:id`, `/users/{id}` and `/users/<id>` are the same route.
-export function normalizeContractPath(path: string): string {
+function normalizeContractPath(path: string): string {
 	const trimmed = path.trim().replace(/\/+$/, '') || '/';
 
 	return trimmed
@@ -75,7 +73,7 @@ export function normalizeContractPath(path: string): string {
 		.join('/');
 }
 
-export function normalizeDefinition(definition: string): string {
+function normalizeDefinition(definition: string): string {
 	return definition
 		.trim()
 		.toLowerCase()
@@ -94,7 +92,7 @@ export function contractKey(change: Pick<ContractChange, 'method' | 'path'>): st
 	return `contract:${change.method.trim().toUpperCase()} ${normalizeContractPath(change.path)}`;
 }
 
-export function moduleKey(change: Pick<ModuleChange, 'path' | 'symbol'>): string {
+function moduleKey(change: Pick<ModuleChange, 'path' | 'symbol'>): string {
 	const path = change.path.trim().replace(/^\.\//, '');
 
 	return change.symbol === undefined ? `module:${path}` : `module:${path}#${change.symbol.trim()}`;

@@ -8,7 +8,7 @@ export interface VarsGroup {
 	missing: number
 }
 
-export interface EnvGroup extends VarsGroup {
+interface EnvGroup extends VarsGroup {
 	path: string
 	updatedAt: string | null
 }

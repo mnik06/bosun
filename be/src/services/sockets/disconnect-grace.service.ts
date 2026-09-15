@@ -51,5 +51,3 @@ export function getDisconnectGraceService(deps: { graceMs?: number } = {}) {
 		}
 	};
 }
-
-export type DisconnectGraceService = ReturnType<typeof getDisconnectGraceService>;

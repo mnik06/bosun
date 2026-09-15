@@ -48,5 +48,3 @@ export function getMcpPresetService() {
 		}
 	};
 }
-
-export type McpPresetService = ReturnType<typeof getMcpPresetService>;

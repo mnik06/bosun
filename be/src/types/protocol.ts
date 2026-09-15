@@ -336,6 +336,4 @@ export const ServerMsgSchema = z.discriminatedUnion('type', [
 
 export type ServerMsg = z.infer<typeof ServerMsgSchema>;
 
-export type ExecStart = z.infer<typeof ExecStartMsgSchema>;
-
-export { UiMsgSchema, UiCommandSchema, type UiMsg, type UiCommand } from 'src/types/ui-protocol';
+export { UiMsgSchema, UiCommandSchema, type UiMsg } from 'src/types/ui-protocol';

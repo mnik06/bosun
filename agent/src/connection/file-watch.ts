@@ -6,7 +6,7 @@ import fs from 'fs';
 const WATCHED = new Set(['env', 'mcp.json', 'project-env.json']);
 const DEBOUNCE_MS = 1_000;
 
-export function isWatchedChange(filename: string | null): boolean {
+function isWatchedChange(filename: string | null): boolean {
 	if (filename === null) {
 		return true;
 	}

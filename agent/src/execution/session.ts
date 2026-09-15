@@ -14,6 +14,7 @@ import { describeApplied, envFileFor } from '../services/project-env.service';
 import { runShell } from '../services/setup-steps.service';
 import { startSessionMcpServer, type SessionMcpServer } from '../sessions/mcp-server';
 import { spawnClaudeSession, type ClaudeSession, type SessionExit } from '../sessions/process';
+import { createStderrTail, logDroppedFrame, reportStartFailure } from '../sessions/turn-support';
 import { commitMessageFor, mergeBranches } from './commit';
 import {
 	createExecutionDispatch,
@@ -536,7 +537,7 @@ export function createExecutionSessions(opts: {
 		opts.send({ type: 'exec.activity', runId: msg.runId, label: 'Starting the session' });
 
 		const activity = createActivityTracker();
-		let stderr = '';
+		const stderr = createStderrTail(STDERR_KEPT_CHARS);
 		const parser = createStreamParser({
 			onEvent: (event) => {
 				if (event.kind === 'text') {
@@ -558,9 +559,7 @@ export function createExecutionSessions(opts: {
 
 				event.ok ? void finish(msg) : fail(msg.runId, event.message);
 			},
-			onDropped: (line) => {
-				console.error(`dropped unrecognised claude frame: ${line.slice(0, 200)}`);
-			}
+			onDropped: logDroppedFrame
 		});
 
 		run.process = spawnClaudeSession({
@@ -599,7 +598,7 @@ export function createExecutionSessions(opts: {
 				parser.push(chunk);
 			},
 			onStderr: (chunk) => {
-				stderr = `${stderr}${chunk}`.slice(-STDERR_KEPT_CHARS);
+				stderr.push(chunk);
 				console.error(`[${msg.runId}] ${chunk.trimEnd()}`);
 			},
 			onExit: (code, exit) => {
@@ -611,7 +610,7 @@ export function createExecutionSessions(opts: {
 
 				fail(
 					msg.runId,
-					exitMessage({ code, exit, stderr, limitBytes: scope?.memoryMaxBytes ?? null })
+					exitMessage({ code, exit, stderr: stderr.value(), limitBytes: scope?.memoryMaxBytes ?? null })
 				);
 			}
 		});
@@ -640,16 +639,15 @@ export function createExecutionSessions(opts: {
 
 			runs.set(msg.runId, run);
 
-			try {
-				await startProcess(msg, run);
-			} catch (error) {
-				teardown(msg.runId);
-				opts.send({
-					type: 'exec.error',
-					runId: msg.runId,
-					message: error instanceof Error ? error.message : 'could not start the session'
-				});
-			}
+			await reportStartFailure({
+				attempt: () => startProcess(msg, run),
+				teardown: () => {
+					teardown(msg.runId);
+				},
+				send: (message) => {
+					opts.send({ type: 'exec.error', runId: msg.runId, message });
+				}
+			});
 		},
 
 		answer(payload): void {

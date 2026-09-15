@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { textToolResult, type SessionDispatchFactory } from '../../sessions/mcp-server';
+import { mcpToolDefinition, textToolResult, type SessionDispatchFactory } from '../../sessions/mcp-server';
 import { type BosunApiService } from '../../services/bosun-api.service';
 
 export const ReportStepArgsSchema = z.object({
@@ -43,37 +43,29 @@ const PublishRespSchema = z.union([
 	z.object({ ok: z.literal(false), issues: z.array(z.object({ path: z.string(), message: z.string() })) })
 ]);
 
-function definition(opts: { name: string; description: string; schema: z.ZodType }) {
-	return {
-		name: opts.name,
-		description: opts.description,
-		inputSchema: z.toJSONSchema(opts.schema, { target: 'draft-7' })
-	};
-}
-
 // No `bosun_ask`, deliberately: discovery depends on no answer mid-way. What it
 // cannot find it lists as a requirement, and what it has to guess it records as
 // an assumption, so the operator makes one visit at the end instead of a vigil.
 export const DISCOVERY_DEFINITIONS = [
-	definition({
+	mcpToolDefinition({
 		name: 'report_step',
 		description:
 			'Add one progress line to the onboarding report the operator sees in the browser: what you are looking at or running now, and how it went. Short labels; put command output that matters in detail. Set progress to your honest estimate of how far through discovery you are, 0 to 1 — roughly 0.2 once you know the packages and apps, 0.5 once the installs ran, 0.8 when the config is published. It only ever moves forward.',
 		schema: ReportStepArgsSchema
 	}),
-	definition({
+	mcpToolDefinition({
 		name: 'publish_config',
 		description:
 			'Publish the whole `.bosun/project.yaml` you have written, as YAML. Bosun validates it: when it is refused you get every field that is wrong and must fix them and publish again. Publishing again replaces what you published before. Discovery fails unless a publish succeeds.',
 		schema: PublishConfigArgsSchema
 	}),
-	definition({
+	mcpToolDefinition({
 		name: 'report_requirement',
 		description:
 			'List one input only the operator can give: an env key a package reads (kind env, with the path of the folder whose .env holds it), a secret a session needs in its environment such as a test-account password (kind secret), or whether this machine may apply migrations (kind policy, key applyMigrations). Say why it is needed and cite the file that told you. Set optional to true when the project starts and works without it — telemetry, a feature that switches off, a value with a default; verify waits for every input that is not optional.',
 		schema: ReportRequirementArgsSchema
 	}),
-	definition({
+	mcpToolDefinition({
 		name: 'record_assumption',
 		description:
 			'Record something you had to guess — which script is the real start command, which of two databases is meant. One plain sentence (at most 240 characters) saying what you assumed, and evidence naming the file or files it came from (at most 120 characters, no quotes from them). The operator skims these before trusting the config.',
@@ -84,7 +76,7 @@ export const DISCOVERY_DEFINITIONS = [
 export const DISCOVERY_MCP_TOOLS = DISCOVERY_DEFINITIONS.map((entry) => `mcp__bosun__${entry.name}`);
 
 export const SIGN_IN_DEFINITIONS = [
-	definition({
+	mcpToolDefinition({
 		name: 'report_sign_in',
 		description:
 			'Report whether you signed in as one test account and reached a page past the sign-in screen. Call it once per account, including the ones that failed, with what you saw.',

@@ -2,6 +2,7 @@ import { HttpError } from 'src/api/errors/HttpError';
 import { listAvailableRepositories } from 'src/controllers/github/list-available-repositories';
 import { toGithubHttpError } from 'src/controllers/github/shared/github-errors';
 import { getMachine } from 'src/controllers/machines/get-machine';
+import { announceMachine } from 'src/controllers/machines/shared/announce';
 import { announceRepository } from 'src/controllers/repositories/shared/announce-repository';
 import { type GithubInstallationRepo } from 'src/repos/github/github-installation.repo';
 import { type RepositoryRepo } from 'src/repos/github/repository.repo';
@@ -150,6 +151,6 @@ export async function attachRepository(opts: {
 	}
 
 	if (attached) {
-		opts.socketRegistry.broadcastToUi({ projectId: opts.projectId, message: { type: 'machine.updated', machine: attached } });
+		announceMachine({ socketRegistry: opts.socketRegistry, machine: attached });
 	}
 }

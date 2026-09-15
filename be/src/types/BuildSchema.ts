@@ -131,8 +131,6 @@ export const SliceRunDetailSchema = SliceRunSchema.extend({
 	activity: z.string().nullable()
 });
 
-export type SliceRunDetail = z.infer<typeof SliceRunDetailSchema>;
-
 export const IntegrationTriggerSchema = z.enum(['built', 'base_moved', 'provider_moved', 'retarget']);
 
 export type IntegrationTrigger = z.infer<typeof IntegrationTriggerSchema>;

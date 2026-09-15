@@ -46,10 +46,6 @@ export const PlanAnswerSchema = z.object({ selected: z.array(z.string()).min(1) 
 
 export type PlanAnswer = z.infer<typeof PlanAnswerSchema>;
 
-export const PlanMessageRoleSchema = z.enum(['user', 'assistant', 'activity', 'question', 'answer']);
-
-export type PlanMessageRole = z.infer<typeof PlanMessageRoleSchema>;
-
 const messageBase = {
 	id: z.string(),
 	planId: z.string(),
@@ -88,6 +84,8 @@ export const PlanMessageSchema = z.discriminatedUnion('role', [
 export type PlanMessage = z.infer<typeof PlanMessageSchema>;
 
 export type PlanMessageContent = PlanMessage['content'];
+
+export type PlanMessageRole = PlanMessage['role'];
 
 export const AcSchema = z.object({
 	id: z.string(),

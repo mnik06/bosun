@@ -10,6 +10,7 @@ import {
 	SliceRunDetailSchema,
 	VerifyFindingSchema
 } from 'src/types/BuildSchema';
+import { PlanCriteriaSchema } from 'src/types/build-frames';
 import { FootprintSchema } from 'src/types/FootprintSchema';
 import {
 	AcSchema,
@@ -136,13 +137,7 @@ export const AgentMachinePlansRespSchema = z.array(
 	})
 );
 
-export const AgentPlanCriteriaRespSchema = z.array(
-	z.object({
-		planNumber: z.number().int(),
-		title: z.string(),
-		acs: z.array(z.object({ code: z.string(), text: z.string() }))
-	})
-);
+export const AgentPlanCriteriaRespSchema = z.array(PlanCriteriaSchema);
 
 export const AgentBlockersRespSchema = z.object({ blockedBy: z.array(z.number().int()) });
 

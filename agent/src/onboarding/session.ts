@@ -16,6 +16,7 @@ import { runShell } from '../services/setup-steps.service';
 import { appPorts, renderTemplate } from '../services/stack.service';
 import { startSessionMcpServer, type SessionDispatchFactory, type SessionMcpServer } from '../sessions/mcp-server';
 import { spawnClaudeSession, type ClaudeSession } from '../sessions/process';
+import { createStderrTail, logDroppedFrame } from '../sessions/turn-support';
 import {
 	createDiscoveryDispatch,
 	createSignInDispatch,
@@ -25,7 +26,7 @@ import {
 	SIGN_IN_MCP_TOOLS
 } from './mcp/tools';
 
-export const ONBOARDING_DIRNAME = 'onboarding';
+const ONBOARDING_DIRNAME = 'onboarding';
 
 const DETAIL_CHARS = 1_500;
 const STDERR_KEPT_CHARS = 500;
@@ -246,7 +247,7 @@ export function createOnboardingSessions(opts: { services: Services; send: (mess
 
 		return new Promise<Outcome>((resolve) => {
 			let settled = false;
-			let stderr = '';
+			const stderr = createStderrTail(STDERR_KEPT_CHARS);
 			const settle = (outcome: Outcome) => {
 				if (!settled) {
 					settled = true;
@@ -271,9 +272,7 @@ export function createOnboardingSessions(opts: { services: Services; send: (mess
 						settle(outcome);
 					}
 				},
-				onDropped: (line) => {
-					console.error(`dropped unrecognised claude frame: ${line.slice(0, 200)}`);
-				}
+				onDropped: logDroppedFrame
 			});
 
 			opts2.run.process = spawnClaudeSession({
@@ -289,12 +288,12 @@ export function createOnboardingSessions(opts: { services: Services; send: (mess
 					parser.push(chunk);
 				},
 				onStderr: (chunk) => {
-					stderr = `${stderr}${chunk}`.slice(-STDERR_KEPT_CHARS);
+					stderr.push(chunk);
 					console.error(`[${opts2.runId}] ${chunk.trimEnd()}`);
 				},
 				onExit: (code) => {
 					parser.flush();
-					settle({ ok: false, message: stderr.trim() || `claude exited with code ${code ?? 'unknown'}` });
+					settle({ ok: false, message: stderr.value().trim() || `claude exited with code ${code ?? 'unknown'}` });
 				}
 			});
 		});
