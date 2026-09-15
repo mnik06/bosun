@@ -10,6 +10,9 @@ export default [
 			route('github/callback', 'views/github-callback/github-callback-page.tsx'),
 			route('members', 'views/members/members-page.tsx')
 		]),
+		layout('views/app-owner-layout/app-owner-layout.tsx', [
+			route('projects', 'views/projects/projects-page.tsx')
+		]),
 		route('plans', 'views/plans/plans-page.tsx'),
 		route('plans/:planId', 'views/plan-detail/plan-page.tsx')
 	])
