@@ -463,6 +463,7 @@ export function createPlanningSessions(opts: {
 					planId: payload.planId,
 					auto: payload.auto,
 					requireGrill: !payload.auto,
+					requireCoverage: true,
 					bosunApi: opts.services.bosunApi,
 					onPublished: onPublished(payload.planId),
 					onGrilled: onGrilled(payload.planId),
@@ -528,6 +529,7 @@ export function createPlanningSessions(opts: {
 					// sessions.
 					auto: payload.plan.auto,
 					requireGrill: false,
+					requireCoverage: false,
 					bosunApi: opts.services.bosunApi,
 					onPublished: onPublished(payload.planId),
 					onGrilled: onGrilled(payload.planId),

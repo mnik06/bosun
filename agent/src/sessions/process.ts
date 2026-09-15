@@ -17,6 +17,12 @@ import {
 // grill both come from.
 const TOOL_TIMEOUT_MS = 24 * 60 * 60 * 1000;
 const STARTUP_TIMEOUT_MS = 30 * 1000;
+
+// A tracker issue fetched with every field — the only fetch that includes the
+// custom fields acceptance criteria live in — runs past the CLI's 25,000-token
+// default, and past it the result is swapped for a file path the session has to
+// read back in pieces, which is where half a ticket's criteria went missing.
+const MCP_OUTPUT_TOKENS = 100_000;
 const SIGKILL_GRACE_MS = 5_000;
 
 // Often enough to read a kill while the scope still exists. It is removed with
@@ -120,6 +126,7 @@ export function spawnClaudeSession(opts: {
 			...opts.env,
 			MCP_TOOL_TIMEOUT: String(TOOL_TIMEOUT_MS),
 			MCP_TIMEOUT: String(STARTUP_TIMEOUT_MS),
+			MAX_MCP_OUTPUT_TOKENS: String(MCP_OUTPUT_TOKENS),
 			// In print mode a sub-agent runs in the background unless the model asks
 			// otherwise, and a session that ends its turn waiting on one is settled at
 			// that `result` — the reviewer's findings, and every tick after them, never
