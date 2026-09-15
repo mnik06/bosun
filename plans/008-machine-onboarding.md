@@ -49,7 +49,7 @@ happens in the browser, with no Claude or MCP credential ever leaving the machin
 
 **The setup wizard**
 
-- [ ] **AC-6** — `bosun-agent setup` walks the Claude token, MCP presets and the browser build in order, and skips each step that is already satisfied, so re-running it is always safe.
+- [ ] **AC-6** — `bosun-agent setup` walks the Claude token and the browser build in order, and skips each step that is already satisfied, so re-running it is always safe.
 - [ ] **AC-7** — The browser step launches the installed Chromium headless once, and a missing shared library fails the step with the library's name.
 - [ ] **AC-8** — No step of the wizard sends a credential value to the backend.
 - [ ] **AC-9** — A change to `~/.bosun/env`, `~/.bosun/mcp.json` or the env store reaches the browser as a fresh preflight within 5 seconds, with no Refresh.
