@@ -20,16 +20,13 @@ import { summaryPrompt } from '../prompts/summary';
 import { createSummarySessions } from '../summary/session';
 import { type AgentMsg } from '../protocol';
 import { type Services } from '../services/index';
+import { sleep } from '../utils';
 import { AGENT_VERSION } from '../version';
 
 // A refused upgrade carrying a well-formed key means the credential was
 // destroyed on purpose. Retrying cannot fix it, and retrying forever is how a
 // deleted machine turns into a process that reconnects until someone notices.
 class RevokedError extends Error {}
-
-async function sleep(ms: number): Promise<void> {
-	return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 function socketUrl(serverUrl: string): string {
 	const url = new URL(serverUrl);

@@ -1,3 +1,5 @@
+import { HttpError } from 'src/api/errors/HttpError';
+
 const BEARER_PREFIX = 'Bearer ';
 
 export function readBearerToken(authorization?: string): string | null {
@@ -23,6 +25,20 @@ export function compareVersions(a: string, b: string): number {
 	}
 
 	return 0;
+}
+
+// 404 rather than a bare undefined: a repo's "owned by this project" lookup
+// answering nothing means either the row does not exist or it belongs to someone
+// else, and both are reported the same way so guessing an id cannot be used to
+// find out which.
+export async function orNotFound<T>(promise: Promise<T | null | undefined>, message: string): Promise<T> {
+	const row = await promise;
+
+	if (!row) {
+		throw new HttpError(404, message);
+	}
+
+	return row;
 }
 
 export function findDuplicate(values: string[]): string | null {

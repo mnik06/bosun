@@ -1,31 +1,6 @@
-import { Alert, Card, Stack, Text } from '@mantine/core'
+import { Alert, Stack, Text } from '@mantine/core'
 
-import { AppModal, CopyableCommand } from '~/shared/ui'
-
-function Step ({
-	title,
-	detail,
-	command
-}: {
-	title: string,
-	detail: string,
-	command: string
-}) {
-	return (
-		<Card withBorder padding="md" radius="md">
-			<Stack gap="sm">
-				<Stack gap={4}>
-					<Text fw={600}>{title}</Text>
-					<Text size="sm" c="dimmed">
-						{detail}
-					</Text>
-				</Stack>
-
-				<CopyableCommand label="Run on the machine" command={command} />
-			</Stack>
-		</Card>
-	)
-}
+import { AppModal, SetupStepCard } from '~/shared/ui'
 
 export function SetupGithubModal ({
 	machineName,
@@ -45,19 +20,19 @@ export function SetupGithubModal ({
 					needs no <strong>gh</strong> at all.
 				</Text>
 
-				<Step
+				<SetupStepCard
 					title="1. Install gh"
 					detail="Debian and Ubuntu. On another distribution use its package manager, or the tarball from cli.github.com."
 					command="sudo apt update && sudo apt install -y gh"
 				/>
 
-				<Step
+				<SetupStepCard
 					title="2. Sign in"
 					detail="Prints a one-time code and a URL. Open the URL on the machine you are sitting at, paste the code — no browser is needed on the VPS."
 					command="gh auth login"
 				/>
 
-				<Step
+				<SetupStepCard
 					title="3. Let git use that login"
 					detail="Installs gh as git's credential helper, which is what makes the push work rather than prompting for a password nobody is there to type."
 					command="gh auth setup-git"

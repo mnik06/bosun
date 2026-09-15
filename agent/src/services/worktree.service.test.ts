@@ -2,21 +2,12 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { git } from '../test-support/git-fixture';
 import { getExecService } from './exec.service';
 import { getRepoService } from './repo.service';
 import { getWorktreeService } from './worktree.service';
 
 const exec = getExecService();
-
-async function git(cwd: string, args: string[]) {
-	const result = await exec.run('git', ['-C', cwd, ...args], {});
-
-	if (!result.ok) {
-		throw new Error(`git ${args.join(' ')}: ${result.reason}`);
-	}
-
-	return result.stdout;
-}
 
 describe('worktree service', () => {
 	let home: string;

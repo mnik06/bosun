@@ -181,5 +181,3 @@ export function getMcpProbeService() {
 		}
 	};
 }
-
-export type McpProbeService = ReturnType<typeof getMcpProbeService>;

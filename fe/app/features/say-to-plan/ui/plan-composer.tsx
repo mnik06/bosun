@@ -3,6 +3,7 @@ import { SendHorizontal } from 'lucide-react'
 import { useState } from 'react'
 
 import { useSayToPlan } from '~/features/say-to-plan/api/use-say-to-plan'
+import { submitOnEnter } from '~/shared/lib'
 
 export function PlanComposer ({
 	planId,
@@ -61,14 +62,7 @@ export function PlanComposer ({
 					onChange={(event) => {
 						setText(event.currentTarget.value)
 					}}
-					onKeyDown={(event) => {
-						// Enter sends, shift+enter breaks the line: the box is a chat input
-						// first and a text editor second.
-						if (event.key === 'Enter' && !event.shiftKey) {
-							event.preventDefault()
-							send()
-						}
-					}}
+					onKeyDown={submitOnEnter(send)}
 				/>
 
 				<ActionIcon

@@ -339,5 +339,3 @@ export function getPreflightService(deps: {
 		}
 	};
 }
-
-export type PreflightService = ReturnType<typeof getPreflightService>;

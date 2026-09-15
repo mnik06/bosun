@@ -4,6 +4,7 @@ import { type AgentMsg, type LineAsk } from '../protocol';
 import { type Services } from '../services/index';
 import { startSessionMcpServer, type SessionMcpServer } from '../sessions/mcp-server';
 import { spawnClaudeSession, type ClaudeSession } from '../sessions/process';
+import { createStderrTail, logDroppedFrame, reportStartFailure } from '../sessions/turn-support';
 
 const STDERR_KEPT_CHARS = 500;
 
@@ -82,7 +83,7 @@ export function createAskSessions(opts: {
 
 		asks.set(msg.askId, ask);
 
-		let stderr = '';
+		const stderr = createStderrTail(STDERR_KEPT_CHARS);
 		const parser = createStreamParser({
 			onEvent: (event) => {
 				if (event.kind === 'text') {
@@ -118,9 +119,7 @@ export function createAskSessions(opts: {
 						}
 				);
 			},
-			onDropped: (line) => {
-				console.error(`dropped unrecognised claude frame: ${line.slice(0, 200)}`);
-			}
+			onDropped: logDroppedFrame
 		});
 
 		ask.process = spawnClaudeSession({
@@ -138,7 +137,7 @@ export function createAskSessions(opts: {
 				parser.push(chunk);
 			},
 			onStderr: (chunk) => {
-				stderr = `${stderr}${chunk}`.slice(-STDERR_KEPT_CHARS);
+				stderr.push(chunk);
 			},
 			onExit: (code) => {
 				parser.flush();
@@ -148,7 +147,7 @@ export function createAskSessions(opts: {
 					type: 'line.answer.error',
 					repositoryId: msg.repositoryId,
 					askId: msg.askId,
-					message: stderr.trim() || `claude exited with code ${code ?? 'unknown'}`
+					message: stderr.value().trim() || `claude exited with code ${code ?? 'unknown'}`
 				});
 			}
 		});
@@ -160,17 +159,20 @@ export function createAskSessions(opts: {
 				return;
 			}
 
-			try {
-				await start(msg);
-			} catch (error) {
-				teardown(msg.askId);
-				opts.send({
-					type: 'line.answer.error',
-					repositoryId: msg.repositoryId,
-					askId: msg.askId,
-					message: error instanceof Error ? error.message : 'could not start the session'
-				});
-			}
+			await reportStartFailure({
+				attempt: () => start(msg),
+				teardown: () => {
+					teardown(msg.askId);
+				},
+				send: (message) => {
+					opts.send({
+						type: 'line.answer.error',
+						repositoryId: msg.repositoryId,
+						askId: msg.askId,
+						message
+					});
+				}
+			});
 		},
 
 		// A question whose socket is gone has nowhere to send its answer, and the

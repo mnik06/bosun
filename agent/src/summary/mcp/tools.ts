@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { textToolResult, type PendingQuestion } from '../../sessions/mcp-server';
+import { mcpToolDefinition, textToolResult, type PendingQuestion } from '../../sessions/mcp-server';
 import { type BosunApiService } from '../../services/bosun-api.service';
 
 export const PublishSummaryArgsSchema = z.object({
@@ -22,12 +22,12 @@ export const PublishSummaryArgsSchema = z.object({
 });
 
 export const SUMMARY_TOOL_DEFINITIONS = [
-	{
+	mcpToolDefinition({
 		name: 'publish_summary',
 		description:
 			'Publish the map of this branch: a one-paragraph headline, then the areas it touched, each with why it matters and the handful of files a reviewer would be lost without. Ranked, not complete — leave out anything somebody could infer. Call it exactly once, at the end.',
-		inputSchema: z.toJSONSchema(PublishSummaryArgsSchema, { target: 'draft-7' })
-	}
+		schema: PublishSummaryArgsSchema
+	})
 ];
 
 export function createSummaryDispatch(opts: { planId: string; bosunApi: BosunApiService }) {

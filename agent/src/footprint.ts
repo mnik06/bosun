@@ -52,5 +52,3 @@ export const FootprintSchema = z.object({
 	modules: z.array(ModuleChangeSchema).max(100).default([]),
 	consumes: z.array(ConsumedPieceSchema).max(50).default([]).describe('pieces of another approved plan this bullet uses instead of building its own copy')
 });
-
-export type Footprint = z.infer<typeof FootprintSchema>;

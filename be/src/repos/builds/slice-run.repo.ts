@@ -31,10 +31,10 @@ const columns = {
 	finishedAt: sliceRuns.finishedAt
 };
 
-// Exported so the statement can be asserted without a database. One worktree holds
-// one session, and a bullet, a verify phase and an integration all run in the
-// build's worktree — so nothing starts beside anything else of the same build.
-export function nothingRunningForBuild(buildId: string) {
+// One worktree holds one session, and a bullet, a verify phase and an integration
+// all run in the build's worktree — so nothing starts beside anything else of the
+// same build.
+function nothingRunningForBuild(buildId: string) {
 	return sql`not exists (select 1 from ${sliceRuns} where build_id = ${buildId} and status = 'running') and not exists (select 1 from ${integrations} where build_id = ${buildId} and status = 'running')`;
 }
 

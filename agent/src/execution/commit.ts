@@ -398,5 +398,3 @@ export function getCommitService(deps: { exec: ExecService }) {
 		}
 	};
 }
-
-export type CommitService = ReturnType<typeof getCommitService>;

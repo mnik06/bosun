@@ -1,17 +1,17 @@
 import { z } from 'zod';
-import { textToolResult, type PendingQuestion } from '../../sessions/mcp-server';
+import { mcpToolDefinition, textToolResult, type PendingQuestion } from '../../sessions/mcp-server';
 
 export const GiveUpArgsSchema = z.object({
 	reason: z.string().min(1).describe('what you could not reconcile, naming the files and the two intents that collide')
 });
 
 export const CONFLICT_DEFINITIONS = [
-	{
+	mcpToolDefinition({
 		name: 'give_up',
 		description:
 			'Stop without resolving: the two sides cannot both hold, or resolving would mean deciding something only a person can. The integration is abandoned, the branch is left as it was, and your reason goes to the person who has to decide. Call it instead of guessing.',
-		inputSchema: z.toJSONSchema(GiveUpArgsSchema, { target: 'draft-7' })
-	}
+		schema: GiveUpArgsSchema
+	})
 ];
 
 export const CONFLICT_MCP_TOOLS = ['mcp__bosun__give_up'];

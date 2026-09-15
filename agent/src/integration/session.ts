@@ -18,6 +18,7 @@ import { envFileFor } from '../services/project-env.service';
 import { runShell } from '../services/setup-steps.service';
 import { startSessionMcpServer, type SessionMcpServer } from '../sessions/mcp-server';
 import { spawnClaudeSession, type ClaudeSession } from '../sessions/process';
+import { createStderrTail } from '../sessions/turn-support';
 import { getIntegrationGit, type IntegrationGit } from './git';
 import { CONFLICT_DEFINITIONS, CONFLICT_MCP_TOOLS, createConflictDispatch } from './mcp/tools';
 
@@ -102,7 +103,7 @@ export function createIntegrationSessions(opts: { services: Services; send: (mes
 
 		try {
 			return await new Promise((resolve) => {
-				let stderr = '';
+				const stderr = createStderrTail(STDERR_KEPT_CHARS);
 				const parser = createStreamParser({
 					onEvent: (event) => {
 						if (event.kind === 'tool') {
@@ -133,11 +134,11 @@ export function createIntegrationSessions(opts: { services: Services; send: (mes
 						parser.push(chunk);
 					},
 					onStderr: (chunk) => {
-						stderr = `${stderr}${chunk}`.slice(-STDERR_KEPT_CHARS);
+						stderr.push(chunk);
 					},
 					onExit: (code) => {
 						parser.flush();
-						resolve({ ok: false, message: stderr.trim() || `claude exited with code ${code ?? 'unknown'}` });
+						resolve({ ok: false, message: stderr.value().trim() || `claude exited with code ${code ?? 'unknown'}` });
 					}
 				});
 			});

@@ -11,8 +11,6 @@ export const McpRequirementSchema = z.object({
 	secret: z.boolean().optional()
 });
 
-export type McpRequirement = z.infer<typeof McpRequirementSchema>;
-
 const HttpServerSchema = z.object({
 	type: z.literal('http'),
 	url: z.string().min(1),
@@ -35,8 +33,6 @@ export const McpServerDefSchema = z.discriminatedUnion('type', [
 	StdioServerSchema
 ]);
 
-export type McpServerDef = z.infer<typeof McpServerDefSchema>;
-
 // HTTP Basic is common enough among third-party servers to name, and it is the
 // one shape `${VAR}` substitution cannot express: the header carries
 // base64(user:secret), and no amount of variable expansion will encode it. The
@@ -46,8 +42,6 @@ export const McpBasicAuthSchema = z.object({
 	secret: z.string().min(1),
 	into: z.string().min(1)
 });
-
-export type McpBasicAuth = z.infer<typeof McpBasicAuthSchema>;
 
 export const McpPresetSchema = z.object({
 	id: z.string().min(1),

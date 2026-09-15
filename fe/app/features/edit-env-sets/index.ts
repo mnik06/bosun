@@ -1,7 +1,7 @@
 export { useDeleteEnvSet } from './api/use-delete-env-set'
 export { useSaveVars } from './api/use-save-vars'
 export { envFilePath } from './lib/env-file-path'
-export { type RequiredVar, type VarsTarget } from './model/env-set-form'
+export { type RequiredVar } from './model/env-set-form'
 export { EnvSetModal } from './ui/env-set-modal'
 export { EnvSetsPanel } from './ui/env-sets-panel'
 export { VarsEditor } from './ui/vars-editor'

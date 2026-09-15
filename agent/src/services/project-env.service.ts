@@ -4,7 +4,7 @@ import path from 'path';
 import { z } from 'zod';
 import { type EnvSetSummary, type EnvVarInput } from '../protocol';
 
-export const PROJECT_ENV_FILENAME = 'project-env.json';
+const PROJECT_ENV_FILENAME = 'project-env.json';
 
 const KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const SEGMENT_PATTERN = /^[A-Za-z0-9._-]+$/;

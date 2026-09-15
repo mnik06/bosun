@@ -114,5 +114,3 @@ export const MachinePolicySchema = z.object({
 });
 
 export type MachinePolicy = z.infer<typeof MachinePolicySchema>;
-
-export const DEFAULT_MACHINE_POLICY: MachinePolicy = { applyMigrations: true, confirmed: false };

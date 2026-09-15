@@ -2,6 +2,7 @@ import { HttpError } from 'src/api/errors/HttpError';
 import { type LineDeps } from 'src/controllers/line/line-deps';
 import { announcePlanChanged } from 'src/controllers/line/shared/announce';
 import { type Build, type VerifyFinding } from 'src/types/BuildSchema';
+import { type PlanCriteria } from 'src/types/build-frames';
 
 async function machineBuild(deps: LineDeps, opts: { buildId: string; machineId: string }): Promise<Build> {
 	const build = await deps.buildRepo.getById(opts.buildId);
@@ -91,7 +92,7 @@ export async function resolveFinding(
 export async function listPlanCriteria(
 	deps: LineDeps,
 	opts: { machineId: string; numbers: number[] }
-): Promise<{ planNumber: number; title: string; acs: { code: string; text: string }[] }[]> {
+): Promise<PlanCriteria[]> {
 	const machine = await deps.machineRepo.getById(opts.machineId);
 
 	if (!machine) {

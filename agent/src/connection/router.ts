@@ -196,11 +196,6 @@ async function routeBuildFrame(
 // somebody remembered to add a case for it.
 export async function routeServerFrame(deps: RouterDeps, msg: ServerMsg): Promise<void> {
 	switch (msg.type) {
-		case 'ping':
-			deps.socket.send(JSON.stringify({ type: 'pong', id: msg.id, at: Date.now() }));
-
-			return;
-
 		case 'refresh':
 			await deps.announce('refresh');
 

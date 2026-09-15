@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { ASK_DEFINITION } from '../../sessions/ask';
 import {
 	createAskTool,
+	mcpToolDefinition,
 	textToolResult,
 	type PendingQuestion
 } from '../../sessions/mcp-server';
@@ -57,18 +58,14 @@ export const TOOL_SCHEMAS = {
 	publish_plan: PublishPlanArgsSchema
 } as const;
 
-export type ToolName = keyof typeof TOOL_SCHEMAS;
-
 // Derived from the Zod schemas rather than written out beside them. Hand-keeping
 // two declarations of the same shape in sync is a drift the model only discovers
 // by calling a tool with arguments the parser then rejects.
 export const TOOL_DEFINITIONS = [
 	ASK_DEFINITION,
-	...Object.entries(TOOL_SCHEMAS).map(([name, schema]) => ({
-		name,
-		description: DESCRIPTIONS[name]!,
-		inputSchema: z.toJSONSchema(schema, { target: 'draft-7' })
-	}))
+	...Object.entries(TOOL_SCHEMAS).map(([name, schema]) =>
+		mcpToolDefinition({ name, description: DESCRIPTIONS[name]!, schema })
+	)
 ];
 
 // The one thing a session cannot be trusted to enforce on itself. A turn that

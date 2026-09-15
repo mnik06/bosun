@@ -162,5 +162,3 @@ export function getPromptService(deps: {
 		}
 	};
 }
-
-export type PromptService = ReturnType<typeof getPromptService>;

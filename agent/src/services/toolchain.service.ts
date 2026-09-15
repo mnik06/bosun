@@ -4,7 +4,7 @@ import os from 'os';
 import path from 'path';
 import { type ExecService } from './exec.service';
 
-export const TOOLCHAINS_DIRNAME = 'toolchains';
+const TOOLCHAINS_DIRNAME = 'toolchains';
 
 const DOWNLOAD_TIMEOUT_MS = 300_000;
 const EXTRACT_TIMEOUT_MS = 300_000;
@@ -371,5 +371,3 @@ export function getToolchainService(deps: {
 		}
 	};
 }
-
-export type ToolchainService = ReturnType<typeof getToolchainService>;

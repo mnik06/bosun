@@ -1,44 +1,15 @@
 import { FastifyPluginAsync } from 'fastify';
 import { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { MachineIdParamsSchema } from 'src/api/routes/schemas/machines/MachineIdParamsSchema';
-import { PingMachineRespSchema } from 'src/api/routes/schemas/machines/PingMachineRespSchema';
 import { RefreshMachineReqSchema } from 'src/api/routes/schemas/machines/RefreshMachineReqSchema';
 import { RefreshMachineRespSchema } from 'src/api/routes/schemas/machines/RefreshMachineRespSchema';
 import { getMachine } from 'src/controllers/machines/get-machine';
-import { pingMachine } from 'src/controllers/machines/ping-machine';
 import { refreshMachine } from 'src/controllers/machines/refresh-machine';
 import { setMachinePaused } from 'src/controllers/machines/set-machine-paused';
 import { MachineSchema } from 'src/types/MachineSchema';
 
 const routes: FastifyPluginAsync = async function (f) {
 	const fastify = f.withTypeProvider<ZodTypeProvider>();
-
-	fastify.post(
-		'/:id/ping',
-		{
-			preValidation: fastify.requireLeader,
-			schema: {
-				params: MachineIdParamsSchema,
-				response: { 202: PingMachineRespSchema }
-			}
-		},
-		async (req, reply) => {
-			const machine = await getMachine({
-				machineRepo: fastify.repos.machineRepo,
-				id: req.params.id,
-				projectId: req.membership!.projectId
-			});
-
-			return reply.status(202).send(
-				pingMachine({
-					idService: fastify.services.idService,
-					pendingPings: fastify.services.pendingPings,
-					socketRegistry: fastify.services.socketRegistry,
-					machine
-				})
-			);
-		}
-	);
 
 	fastify.post(
 		'/:id/refresh',

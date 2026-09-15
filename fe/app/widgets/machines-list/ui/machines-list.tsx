@@ -1,27 +1,19 @@
-import { Alert, Center, Loader, Stack, Text } from '@mantine/core'
+import { Stack, Text } from '@mantine/core'
 import type { ReactNode } from 'react'
 
 import { useMachinesQuery, type Machine } from '~/entities/machine'
-import { toErrorMessage } from '~/shared/lib'
+import { QueryErrorAlert, SectionLoader } from '~/shared/ui'
 import { MachineCard } from '~/widgets/machines-list/ui/machine-card'
 
 export function MachinesList ({ renderBadge }: { renderBadge?: (machine: Machine) => ReactNode }) {
 	const { data, isPending, error } = useMachinesQuery()
 
 	if (isPending) {
-		return (
-			<Center py="xl">
-				<Loader />
-			</Center>
-		)
+		return <SectionLoader />
 	}
 
 	if (error) {
-		return (
-			<Alert color="red" title="Could not load machines">
-				{toErrorMessage(error, 'Unknown error')}
-			</Alert>
-		)
+		return <QueryErrorAlert title="Could not load machines" error={error} />
 	}
 
 	if (data.length === 0) {

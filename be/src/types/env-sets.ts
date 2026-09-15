@@ -21,8 +21,6 @@ export const SealedValueSchema = z.object({
 	ciphertext: z.string().min(1).max(60_000)
 });
 
-export type SealedValue = z.infer<typeof SealedValueSchema>;
-
 // A null value keeps what the machine already stores for that key: the browser
 // never reads a value back, so changing one key would otherwise mean retyping
 // every other secret in the set.

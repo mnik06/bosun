@@ -2,7 +2,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
-export const ENV_FILENAME = 'env';
+const ENV_FILENAME = 'env';
 
 // systemd resolves `Environment=PATH=` at install time from the shell that ran
 // the installer, which is what lets the service find node, claude and git at all.

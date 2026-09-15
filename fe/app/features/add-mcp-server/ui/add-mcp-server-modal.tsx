@@ -1,26 +1,17 @@
-import { Alert, Card, Center, Loader, Stack, Text } from '@mantine/core'
+import { Alert, Card, Stack, Text } from '@mantine/core'
 
 import { McpPresetSummary, useMcpPresetsQuery } from '~/entities/mcp-preset'
-import { toErrorMessage } from '~/shared/lib'
-import { AppModal, CopyableCommand } from '~/shared/ui'
+import { AppModal, CopyableCommand, QueryErrorAlert, SectionLoader } from '~/shared/ui'
 
 function PresetList ({ machineName }: { machineName: string }) {
 	const { data, isPending, error } = useMcpPresetsQuery({ enabled: true })
 
 	if (isPending) {
-		return (
-			<Center py="xl">
-				<Loader />
-			</Center>
-		)
+		return <SectionLoader />
 	}
 
 	if (error) {
-		return (
-			<Alert color="red" title="Could not load the catalogue">
-				{toErrorMessage(error, 'Unknown error')}
-			</Alert>
-		)
+		return <QueryErrorAlert title="Could not load the catalogue" error={error} />
 	}
 
 	if (data.length === 0) {

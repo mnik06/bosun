@@ -1,22 +1,12 @@
 import fs from 'fs';
-import os from 'os';
 import path from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { getExecService } from '../services/exec.service';
+import { bootstrapBareRemote, git, identify } from '../test-support/git-fixture';
 import { getIntegrationGit, planNumbersIn } from './git';
 
 const exec = getExecService();
 const MIGRATIONS = 'be/drizzle-out/**';
-
-async function git(cwd: string, args: string[]) {
-	const result = await exec.run('git', ['-C', cwd, ...args], {});
-
-	if (!result.ok) {
-		throw new Error(`git ${args.join(' ')}: ${result.reason}`);
-	}
-
-	return result.stdout;
-}
 
 describe('planNumbersIn', () => {
 	it('reads every plan a history names, once', () => {
@@ -31,11 +21,6 @@ describe('integration git', () => {
 	let root: string;
 	let worktree: string;
 	let other: string;
-
-	async function identify(cwd: string) {
-		await git(cwd, ['config', 'user.email', 'a@b.c']);
-		await git(cwd, ['config', 'user.name', 'Test']);
-	}
 
 	function write(cwd: string, file: string, content: string) {
 		fs.mkdirSync(path.dirname(path.join(cwd, file)), { recursive: true });
@@ -52,14 +37,8 @@ describe('integration git', () => {
 	}
 
 	beforeEach(async () => {
-		root = fs.mkdtempSync(path.join(os.tmpdir(), 'bosun-integrate-'));
-		worktree = path.join(root, 'worktree');
-		other = path.join(root, 'other');
+		({ root, worktree, other } = await bootstrapBareRemote('bosun-integrate-'));
 
-		await git(root, ['init', '--bare', '-b', 'main', 'remote.git']);
-		await git(root, ['init', '-b', 'main', 'worktree']);
-		await identify(worktree);
-		await git(worktree, ['remote', 'add', 'origin', path.join(root, 'remote.git')]);
 		await commit(worktree, {
 			'be/schema.ts': 'export const tables = [];\n',
 			'be/drizzle-out/0001_init.sql': 'create table users ();\n',

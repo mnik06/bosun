@@ -6,7 +6,7 @@ export {
 	useMachinesQuery
 } from './api/machine.queries'
 export { patchMachineCapacity, putEnvSet, putMachinePolicy, putSessionSecrets } from './api/machine.writes'
-export { machineKind, type MachineKind } from './lib/machine-kind'
+export { machineKind } from './lib/machine-kind'
 export {
 	AGENT_TOO_OLD_FOR_INPUTS,
 	sealVars,
@@ -19,7 +19,6 @@ export {
 	type EnvSetSummary,
 	MachineListSchema,
 	MachinePolicySchema,
-	type MachinePolicy,
 	MachineSchema,
 	MachineStatusSchema,
 	PreflightCheckSchema,
@@ -31,11 +30,9 @@ export {
 } from './model/machine'
 export {
 	MachinesSocketProvider,
-	useLastPong,
 	useUpgradeDecline,
 	useUpgradingTo,
-	type UpgradeDecline,
-	type PongResult
+	type UpgradeDecline
 } from './model/machines-socket'
 export { UiMsgSchema, type UiMsg } from './model/ui-message'
 export { MachineStatusDot } from './ui/machine-status-dot'

@@ -8,11 +8,14 @@ import { Page } from '~/shared/ui'
 import { LineChatDrawer } from '~/widgets/line-chat-drawer'
 import { PlanBoard } from '~/widgets/plan-board'
 import { PlanHistory } from '~/widgets/plan-history'
+import { PlanList } from '~/widgets/plan-list'
+
+type PlansView = 'board' | 'list' | 'history'
 
 export default function PlansPage () {
 	const [creating, { open: openCreate, close: closeCreate }] = useDisclosure(false)
 	const [chatting, { open: openChat, close: closeChat }] = useDisclosure(false)
-	const [view, setView] = useState<'board' | 'history'>('board')
+	const [view, setView] = useState<PlansView>('board')
 
 	return (
 		<Page
@@ -25,10 +28,11 @@ export default function PlansPage () {
 						value={view}
 						data={[
 							{ value: 'board', label: 'Board' },
+							{ value: 'list', label: 'List' },
 							{ value: 'history', label: 'History' }
 						]}
 						onChange={(value) => {
-							setView(value === 'history' ? 'history' : 'board')
+							setView(value === 'list' || value === 'history' ? value : 'board')
 						}}
 					/>
 					<Button variant="subtle" size="xs" leftSection={<MessagesSquare size={14} />} onClick={openChat}>
@@ -40,7 +44,9 @@ export default function PlansPage () {
 				</Group>
 			}
 		>
-			{view === 'board' ? <PlanBoard /> : <PlanHistory />}
+			{view === 'board' ? <PlanBoard /> : null}
+			{view === 'list' ? <PlanList /> : null}
+			{view === 'history' ? <PlanHistory /> : null}
 
 			<NewPlanModal opened={creating} onClose={closeCreate} />
 			<LineChatDrawer opened={chatting} onClose={closeChat} />

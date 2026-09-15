@@ -3,9 +3,10 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { DEFAULT_READY_TIMEOUT_SECONDS, type ProjectConfig } from '../project-config';
+import { sleep } from '../utils';
 import { scopedCommand, type MemoryService } from './memory.service';
 
-export const STACK_LOGS_DIRNAME = 'logs';
+const STACK_LOGS_DIRNAME = 'logs';
 
 const PLACEHOLDER = /\{(port|url)(?:\.([^}]*))?\}/g;
 const POLL_MS = 1_000;
@@ -111,10 +112,6 @@ export function logTail(file: string): string {
 	} catch {
 		return '';
 	}
-}
-
-async function sleep(ms: number): Promise<void> {
-	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function signalGroup(child: ChildProcess, signal: NodeJS.Signals): void {
@@ -371,5 +368,3 @@ export function getStackService(deps: { memory: MemoryService; homeDir?: string 
 		}
 	};
 }
-
-export type StackService = ReturnType<typeof getStackService>;

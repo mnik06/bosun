@@ -27,8 +27,6 @@ const McpRequirementSchema = z.object({
 	secret: z.boolean().optional()
 });
 
-export type McpRequirement = z.infer<typeof McpRequirementSchema>;
-
 const McpBasicAuthSchema = z.object({
 	user: z.string(),
 	secret: z.string(),

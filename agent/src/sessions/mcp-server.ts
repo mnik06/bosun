@@ -207,6 +207,17 @@ export function textToolResult(text: string, isError = false) {
 	return textResult(text, isError);
 }
 
+// Every MCP tool definition on the wire is a name, a description and a
+// JSON-schema `inputSchema` derived from the same Zod schema the dispatch
+// parses arguments with, so the two can never drift apart.
+export function mcpToolDefinition(opts: { name: string; description: string; schema: z.ZodType }) {
+	return {
+		name: opts.name,
+		description: opts.description,
+		inputSchema: z.toJSONSchema(opts.schema, { target: 'draft-7' })
+	};
+}
+
 async function handleRpc(opts: {
 	message: {
 		method?: string;
@@ -258,10 +269,6 @@ function writeConfigFile(opts: { sessionId: string; config: unknown }): string {
 	fs.chmodSync(configPath, 0o600);
 
 	return configPath;
-}
-
-export interface PendingQuestions {
-	pending: Map<string, PendingQuestion>;
 }
 
 // Built by the caller from `pending`, which is why the map is handed in rather

@@ -8,13 +8,6 @@ export const MachineUpdatedMsgSchema = z.object({
 	machine: MachineSchema
 })
 
-export const MachinePongMsgSchema = z.object({
-	type: z.literal('machine.pong'),
-	machineId: z.string(),
-	id: z.string(),
-	rttMs: z.number()
-})
-
 export const MachineDeletedMsgSchema = z.object({
 	type: z.literal('machine.deleted'),
 	machineId: z.string()
@@ -57,7 +50,6 @@ export const OnboardingUpdatedMsgSchema = z.object({
 
 export const UiMsgSchema = z.discriminatedUnion('type', [
 	MachineUpdatedMsgSchema,
-	MachinePongMsgSchema,
 	MachineDeletedMsgSchema,
 	MachineUpgradingMsgSchema,
 	MachineUpgradeDeclinedMsgSchema,

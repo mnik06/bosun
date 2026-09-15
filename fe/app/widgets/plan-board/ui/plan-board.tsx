@@ -1,10 +1,11 @@
-import { Accordion, Alert, Badge, Center, Group, Loader, Stack, Text } from '@mantine/core'
+import { Accordion, Alert, Badge, Group, Stack, Text } from '@mantine/core'
 import { useMediaQuery } from '@mantine/hooks'
 import { useState } from 'react'
 
 import { BOARD_COLUMNS, useLineQuery, usePlansQuery, type BoardColumn, type PlanListEntry } from '~/entities/plan'
 import { useReorderLine } from '~/features/reorder-line'
 import { toErrorMessage } from '~/shared/lib'
+import { SectionLoader } from '~/shared/ui'
 import { groupByColumn, reorderedLine } from '~/widgets/plan-board/lib/columns'
 import { BoardCard } from '~/widgets/plan-board/ui/board-card'
 import { CapacityStrip } from '~/widgets/plan-board/ui/capacity-strip'
@@ -21,11 +22,7 @@ export function PlanBoard () {
 	const wide = useMediaQuery('(width >= 48em)', true, { getInitialValueInEffect: false })
 
 	if (plans.isPending) {
-		return (
-			<Center py="xl">
-				<Loader />
-			</Center>
-		)
+		return <SectionLoader />
 	}
 
 	if (plans.error) {

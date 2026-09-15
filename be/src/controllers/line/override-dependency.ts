@@ -1,8 +1,7 @@
 import { HttpError } from 'src/api/errors/HttpError';
 import { type LineDeps } from 'src/controllers/line/line-deps';
-import { scheduleRepository } from 'src/controllers/line/schedule';
-import { announceBuild, announcePlanChanged } from 'src/controllers/line/shared/announce';
 import { getOwnedBuild } from 'src/controllers/line/shared/build-access';
+import { resumeNeedsYouBuild } from 'src/controllers/line/shared/resume-needs-you-build';
 
 // "Run anyway": a person removes a dependency, and who removed it is recorded
 // beside it. A plan stopped because its provider failed starts moving again.
@@ -17,14 +16,5 @@ export async function overrideDependency(
 		throw new HttpError(404, 'Dependency not found, or already removed');
 	}
 
-	if (build.status === 'needs_you' && build.needsYouReason === 'provider_failed') {
-		const resumed = await deps.buildRepo.update({ id: build.id, status: 'scheduled', needsYouReason: null, failureReason: null });
-
-		if (resumed) {
-			announceBuild({ socketRegistry: deps.socketRegistry, projectId: plan.projectId, build: resumed });
-		}
-	}
-
-	announcePlanChanged({ socketRegistry: deps.socketRegistry, projectId: plan.projectId, planId: plan.id });
-	await scheduleRepository(deps, { repositoryId: build.repositoryId });
+	await resumeNeedsYouBuild(deps, { build, plan, reason: 'provider_failed' });
 }

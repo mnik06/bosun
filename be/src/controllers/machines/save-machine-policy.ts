@@ -1,4 +1,5 @@
 import { HttpError } from 'src/api/errors/HttpError';
+import { announceMachine } from 'src/controllers/machines/shared/announce';
 import { type OnboardingDeps } from 'src/controllers/onboarding/onboarding-deps';
 import { maybeStartVerify } from 'src/controllers/onboarding/shared/start-verify';
 import { type Machine } from 'src/types/MachineSchema';
@@ -20,7 +21,7 @@ export async function saveMachinePolicy(
 		throw new HttpError(404, 'Machine not found');
 	}
 
-	deps.socketRegistry.broadcastToUi({ projectId: opts.projectId, message: { type: 'machine.updated', machine } });
+	announceMachine({ socketRegistry: deps.socketRegistry, machine });
 	await maybeStartVerify(deps, { machineId: machine.id });
 
 	return machine;

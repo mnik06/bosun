@@ -3,7 +3,7 @@ import os from 'os';
 import path from 'path';
 import { type ExecService } from './exec.service';
 
-export const READ_TREE_DIRNAME = 'read-tree';
+const READ_TREE_DIRNAME = 'read-tree';
 
 const FETCH_TIMEOUT_MS = 180_000;
 
