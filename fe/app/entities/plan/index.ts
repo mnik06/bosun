@@ -10,6 +10,7 @@ export {
 	refreshNeedsYou,
 	refreshPlanDetail
 } from './lib/plan-cache'
+export { showsNeedsYouPanel } from './lib/needs-you-panel'
 export { findPendingQuestion, type PendingQuestion } from './lib/pending-question'
 export { planLabel } from './lib/plan-label'
 export { matchesPlanSearch, sortPlansByRecency } from './lib/plan-search'

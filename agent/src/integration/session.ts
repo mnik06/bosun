@@ -429,6 +429,18 @@ export function createIntegrationSessions(opts: { services: Services; send: (mes
 
 		checkpoint();
 
+		const regenerated = config === null
+			? { ok: true as const, regenerated: [] }
+			: await regenerate({ git, msg, config, env: environment.env, keepOut });
+
+		if ('kind' in regenerated) {
+			return regenerated;
+		}
+
+		// After regenerate, never before: a lockfile under a `regenerate` path is
+		// still the target's copy until its rule runs, and a frozen install against
+		// that copy and the branch's own manifest refuses every dependency the branch
+		// added.
 		if (config !== null) {
 			const setup = await services.setupSteps.rerunChanged({
 				key: path.basename(msg.worktreePath),
@@ -441,14 +453,6 @@ export function createIntegrationSessions(opts: { services: Services; send: (mes
 			if (!setup.ok) {
 				return needsYou('error', setup.message);
 			}
-		}
-
-		const regenerated = config === null
-			? { ok: true as const, regenerated: [] }
-			: await regenerate({ git, msg, config, env: environment.env, keepOut });
-
-		if ('kind' in regenerated) {
-			return regenerated;
 		}
 
 		const committed = await services.commit.commitAll({

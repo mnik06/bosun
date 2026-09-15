@@ -16,7 +16,8 @@
 config names, when `build.worktree.ensure` creates a build's worktree and cuts its branch. The first
 step that fails fails the build with the step's name and the tail of its output. Before every bullet, a step with `rerunWhen` runs again when the content of any listed file
 differs from what it was the last time the step succeeded — and so does an integration, after its merge
-and before its regenerate commands and checks.
+and regenerate commands and before its checks. After regenerate, because until a lockfile's rule runs it
+is still the target's copy, which a frozen install refuses against the branch's own manifest.
 
 **A machine with no repository** keeps its one setup command, with the same two properties: a failure
 fails the bullet, and the command re-runs before a bullet when any tracked lockfile (`git ls-files`

@@ -1,6 +1,7 @@
 import { Alert, Button, Select, Stack, Switch, Textarea } from '@mantine/core'
 import { useForm } from '@mantine/form'
 import { zod4Resolver } from 'mantine-form-zod-resolver'
+import { useEffect } from 'react'
 import { useNavigate } from 'react-router'
 
 import { machineKind, useMachinesQuery } from '~/entities/machine'
@@ -20,7 +21,7 @@ export function NewPlanModal ({ opened, onClose }: { opened: boolean, onClose: (
 
 	const form = useForm<CreatePlanForm>({
 		mode: 'uncontrolled',
-		initialValues: { machineId: '', input: '', verifyInUi: true, auto: false, afk: false },
+		initialValues: { machineId: '', input: '', verifyInUi: true, auto: false, afk: true },
 		validate: zod4Resolver(CreatePlanFormSchema)
 	})
 
@@ -32,6 +33,15 @@ export function NewPlanModal ({ opened, onClose }: { opened: boolean, onClose: (
 			value: machine.id,
 			label: machinePickerLabel({ machine, repositories: repositories.data })
 		}))
+	const firstMachineId = options[0]?.value
+
+	// An effect rather than an initial value: the machines arrive after the form is
+	// built, and a reset on close empties the pick again for the next open.
+	useEffect(() => {
+		if (opened && firstMachineId !== undefined && form.getValues().machineId === '') {
+			form.setFieldValue('machineId', firstMachineId)
+		}
+	}, [opened, firstMachineId, form])
 
 	const close = () => {
 		form.reset()
@@ -98,9 +108,11 @@ export function NewPlanModal ({ opened, onClose }: { opened: boolean, onClose: (
 						{...form.getInputProps('afk', { type: 'checkbox' })}
 					/>
 
-					<Button type="submit" loading={createPlan.isPending} disabled={options.length === 0}>
-						Start grilling
-					</Button>
+					<div className="sticky bottom-0 bg-[var(--mantine-color-body)] py-2">
+						<Button type="submit" fullWidth loading={createPlan.isPending} disabled={options.length === 0}>
+							Start grilling
+						</Button>
+					</div>
 				</Stack>
 			</form>
 		</AppModal>

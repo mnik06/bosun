@@ -1,6 +1,6 @@
 import { Alert, Group, Stack, Text } from '@mantine/core'
 
-import type { NeedsYouReason, PlanDetail } from '~/entities/plan'
+import { showsNeedsYouPanel, type NeedsYouReason, type PlanDetail } from '~/entities/plan'
 import { RunQuestionPanel } from '~/features/answer-run'
 import { BuildActionButton, RecheckChoice } from '~/features/control-build'
 import { OverlapDecisionPanel } from '~/features/decide-overlap'
@@ -15,7 +15,7 @@ const REASON_TITLE: Record<Exclude<NeedsYouReason, 'overlap' | 'integration'>, s
 function NeedsYou ({ detail }: { detail: PlanDetail }) {
 	const { build } = detail
 
-	if (build?.status !== 'needs_you' || build.needsYouReason === null || build.needsYouReason === 'overlap') {
+	if (!showsNeedsYouPanel(build)) {
 		return null
 	}
 
