@@ -175,6 +175,12 @@ async function settleHello(opts: {
 	await stallMachinePlans({
 		planRepo: fastify.repos.planRepo,
 		planTextService: fastify.services.planTextService,
+		notificationRepo: fastify.repos.notificationRepo,
+		pushSubscriptionRepo: fastify.repos.pushSubscriptionRepo,
+		projectMemberRepo: fastify.repos.projectMemberRepo,
+		idService: fastify.services.idService,
+		webPush: fastify.services.webPush,
+		appUrl: fastify.env.PUBLIC_APP_URL,
 		socketRegistry,
 		machineId: machine.id,
 		connectedAt: opts.connectedAt,

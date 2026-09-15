@@ -135,6 +135,12 @@ export async function buildServer(): Promise<FastifyInstance> {
 	const stopSweep = startStalePlanSweep({
 		planRepo: server.repos.planRepo,
 		planTextService: server.services.planTextService,
+		notificationRepo: server.repos.notificationRepo,
+		pushSubscriptionRepo: server.repos.pushSubscriptionRepo,
+		projectMemberRepo: server.repos.projectMemberRepo,
+		idService: server.services.idService,
+		webPush: server.services.webPush,
+		appUrl: env.PUBLIC_APP_URL,
 		socketRegistry: server.services.socketRegistry,
 		log: server.log
 	});

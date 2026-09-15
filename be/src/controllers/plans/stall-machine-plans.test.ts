@@ -1,9 +1,21 @@
 import { describe, expect, it, vi } from 'vitest';
 import { stallMachinePlans } from 'src/controllers/plans/stall-machine-plans';
+import { type PlanNotifyDeps } from 'src/controllers/plans/shared/notify';
 import { type PlanRepo } from 'src/repos/plans/plan.repo';
 import { type PlanTextService } from 'src/services/plans/plan-text.service';
 import { type SocketRegistry } from 'src/services/sockets/registry.service';
 import { type Plan } from 'src/types/PlanSchema';
+
+// `failMany` always resolves `[]` below, so `stallMachinePlans` never reaches
+// the notify branch — these are never touched, only present to satisfy the type.
+const notNotified = {
+	notificationRepo: {},
+	pushSubscriptionRepo: {},
+	projectMemberRepo: {},
+	webPush: {},
+	idService: {},
+	appUrl: 'https://app.test'
+} as unknown as PlanNotifyDeps;
 
 const CONNECTED_AT = new Date('2026-01-01T12:00:00.000Z');
 
@@ -31,6 +43,7 @@ function build(opts: { running: Plan[]; heldPlanIds?: string[] }) {
 		sendToAgent,
 		run: async () =>
 			stallMachinePlans({
+				...notNotified,
 				planRepo: {
 					listPlanningOnMachine: vi.fn().mockResolvedValue(opts.running),
 					failMany
