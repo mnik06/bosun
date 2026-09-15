@@ -502,6 +502,8 @@ Drafting    Needs approval  Scheduled         Building        Verifying     In r
 - A needs-you card links to its plan, where the decision is made. An overlap decision belongs to the plan
   being approved, not to the one it collides with.
 - The capacity strip shows, per machine, build memory in use and what holds the verify lane.
+- A lifecycle-stage column with no plans in it is not shown at all — a wide board with two active
+  plans three stages apart shows two columns, not two columns and three empty ones.
 - **History** lists merged, failed and cancelled plans. It replaces today's plans list, which would
   otherwise show the same rows as the board.
 - Repository chat — today's queue chat — opens as a drawer from the board.
@@ -510,7 +512,8 @@ Drafting    Needs approval  Scheduled         Building        Verifying     In r
 integration in the project, each linking to its plan. With actions only on plan pages, this is what
 brings a person to the one that is waiting.
 
-**Phones.** Plan tabs scroll sideways, and the board's columns become collapsible sections with counts.
+**Phones.** Plan tabs scroll sideways, and the board's columns become collapsible sections with
+counts — an empty section isn't listed at all, same as on the wide board.
 
 ### Removed
 
