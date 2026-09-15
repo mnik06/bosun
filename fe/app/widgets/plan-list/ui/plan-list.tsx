@@ -2,17 +2,10 @@ import { Alert, Center, Loader, Stack, Text, TextInput } from '@mantine/core'
 import { Search } from 'lucide-react'
 import { useState } from 'react'
 
-import {
-	HISTORY_STATES,
-	matchesPlanSearch,
-	PlanRowCard,
-	resolvePlanState,
-	sortPlansByRecency,
-	usePlansQuery
-} from '~/entities/plan'
+import { matchesPlanSearch, PlanRowCard, sortPlansByRecency, usePlansQuery } from '~/entities/plan'
 import { toErrorMessage } from '~/shared/lib'
 
-export function PlanHistory () {
+export function PlanList () {
 	const { data, isPending, error } = usePlansQuery()
 	const [search, setSearch] = useState('')
 
@@ -32,9 +25,7 @@ export function PlanHistory () {
 		)
 	}
 
-	const entries = sortPlansByRecency(
-		data.filter((entry) => HISTORY_STATES.includes(resolvePlanState(entry)) && matchesPlanSearch(entry, search))
-	)
+	const entries = sortPlansByRecency(data.filter((entry) => matchesPlanSearch(entry, search)))
 
 	return (
 		<Stack gap="sm">
@@ -49,7 +40,7 @@ export function PlanHistory () {
 
 			{entries.length === 0 ? (
 				<Text size="sm" c="dimmed">
-					Nothing merged, failed or cancelled{search.trim() === '' ? ' yet' : ' matches that'}.
+					{data.length === 0 ? 'No plans yet.' : 'No plans match that search.'}
 				</Text>
 			) : null}
 
