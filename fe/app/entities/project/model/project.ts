@@ -4,6 +4,8 @@ export const ProjectRoleSchema = z.enum(['leader', 'developer'])
 
 export type ProjectRole = z.infer<typeof ProjectRoleSchema>
 
+export const ProjectNameSchema = z.string().trim().min(1, 'Give the project a name').max(80)
+
 export const ProjectSchema = z.object({
 	id: z.string(),
 	name: z.string(),
