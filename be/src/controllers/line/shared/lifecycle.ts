@@ -1,5 +1,6 @@
 import { type LineDeps } from 'src/controllers/line/line-deps';
 import { announceBuild, announcePlanChanged } from 'src/controllers/line/shared/announce';
+import { recheckDependencyRelease } from 'src/controllers/line/shared/dependency-release';
 import {
 	BUILD_SLOT_STATUSES,
 	hasRunningJob,
@@ -49,6 +50,13 @@ export async function completeBuilding(deps: LineDeps, opts: { build: Build; pla
 	const updated = (await deps.buildRepo.update({ id: opts.build.id, status: 'integrating', builtAt: opts.build.builtAt ?? new Date() })) ?? opts.build;
 
 	await announce(deps, { build: updated, plan: opts.plan });
+
+	if (opts.build.builtAt === null && updated.builtAt !== null) {
+		await recheckDependencyRelease(deps, {
+			providerPlanId: updated.planId,
+			revert: (current) => ({ ...current, build: current.build && { ...current.build, builtAt: null } })
+		});
+	}
 
 	return updated;
 }

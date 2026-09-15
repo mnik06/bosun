@@ -70,3 +70,21 @@ export async function notifyBuildStatus(deps: BuildNotifyDeps, opts: { plan: Pla
 		planId: opts.plan.id
 	});
 }
+
+// Every dependency a plan was waiting on just became released. Same recipient
+// rule as every other build-scoped trigger: the plan's own creator, or every
+// leader when the plan carries no attribution.
+export async function notifyPlanUnblocked(deps: BuildNotifyDeps, opts: { plan: Plan }): Promise<void> {
+	const recipientIds = await resolveRecipients(deps, opts.plan);
+	const name = planName(opts.plan);
+
+	await dispatchNotification(deps, {
+		recipientIds,
+		projectId: opts.plan.projectId,
+		kind: 'plan.unblocked',
+		title: 'Unblocked',
+		body: `${name} is unblocked`,
+		url: `${deps.appUrl}/plans/${opts.plan.id}`,
+		planId: opts.plan.id
+	});
+}

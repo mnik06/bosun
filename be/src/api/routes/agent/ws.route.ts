@@ -6,6 +6,7 @@ import { markMachineOffline } from 'src/controllers/machines/mark-machine-offlin
 import { markMachineOnline } from 'src/controllers/machines/mark-machine-online';
 import { reconcileRepository } from 'src/controllers/machines/reconcile-repository';
 import { saveMachinePreflight } from 'src/controllers/machines/save-machine-preflight';
+import { machineOfflineDeps, notifyMachineOffline } from 'src/controllers/machines/shared/notify-offline';
 import { lineDeps } from 'src/controllers/line/line-deps';
 import { scheduleMachine } from 'src/controllers/line/schedule';
 import { resendWorktrees } from 'src/controllers/line/shared/dispatch';
@@ -323,10 +324,13 @@ function handleClose(opts: {
 	void markMachineOffline({
 		machineRepo: opts.fastify.repos.machineRepo,
 		id: opts.machineId
-	}).then((machine) => {
-		if (machine) {
-			announceUpdate({ socketRegistry, machine });
+	}).then(async (machine) => {
+		if (!machine) {
+			return;
 		}
+
+		announceUpdate({ socketRegistry, machine });
+		await notifyMachineOffline(machineOfflineDeps(opts.fastify), { machine });
 	});
 	// Not settled here. The agent keeps its `claude` processes across a reconnect,
 	// so a close says nothing about whether the bullet on this machine is still

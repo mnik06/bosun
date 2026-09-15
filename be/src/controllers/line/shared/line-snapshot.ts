@@ -35,12 +35,16 @@ function group<T>(entries: T[], key: (entry: T) => string): Map<string, T[]> {
 	return grouped;
 }
 
-async function outsideProviders(
+// A provider's state built from its latest build, wherever the caller only has
+// its plan id — a repository's own snapshot already has this for a build within
+// it, but a dependency can point outside the repository, or the recheck that
+// follows a build write needs one provider's state on its own.
+export async function loadProviderStates(
 	deps: LineDeps,
 	opts: { planIds: string[] }
-): Promise<ProviderState[]> {
+): Promise<Map<string, ProviderState>> {
 	if (opts.planIds.length === 0) {
-		return [];
+		return new Map();
 	}
 
 	const [plans, latest] = await Promise.all([
@@ -49,11 +53,13 @@ async function outsideProviders(
 	]);
 	const runs = group(await deps.sliceRunRepo.listForBuilds([...latest.values()].map((build) => build.id)), (run) => run.buildId);
 
-	return plans.map((plan) => {
-		const build = latest.get(plan.id) ?? null;
+	return new Map(
+		plans.map((plan) => {
+			const build = latest.get(plan.id) ?? null;
 
-		return { planId: plan.id, number: plan.number, title: plan.title, build, runs: build ? runs.get(build.id) ?? [] : [] };
-	});
+			return [plan.id, { planId: plan.id, number: plan.number, title: plan.title, build, runs: build ? runs.get(build.id) ?? [] : [] }];
+		})
+	);
 }
 
 // One read of a repository's line, taken fresh for every scheduling decision. It is
@@ -105,8 +111,8 @@ export async function loadRepositorySnapshot(
 	);
 	const outside = [...new Set(dependencies.map((dependency) => dependency.providerPlanId))].filter((id) => !providers.has(id));
 
-	for (const provider of await outsideProviders(deps, { planIds: outside })) {
-		providers.set(provider.planId, provider);
+	for (const [planId, provider] of await loadProviderStates(deps, { planIds: outside })) {
+		providers.set(planId, provider);
 	}
 
 	return { repository, states, providers };

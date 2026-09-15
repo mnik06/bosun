@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 import { type DbOrTx } from 'src/services/drizzle/drizzle.service';
 import { onboardingRuns } from 'src/services/drizzle/schema';
 import {
@@ -111,6 +111,18 @@ export function getOnboardingRunRepo(db: DbOrTx) {
 				.where(
 					and(eq(onboardingRuns.machineId, machineId), inArray(onboardingRuns.status, ACTIVE_ONBOARDING_STATUSES))
 				);
+
+			return rows.map((row) => OnboardingRunSchema.parse(row));
+		},
+
+		// Broader than `listActiveForMachine`: a run stuck on `needs_input` has not
+		// finished either, and a machine going offline under it is exactly what a
+		// leader needs to hear about.
+		async listUnfinishedForMachine(machineId: string): Promise<OnboardingRun[]> {
+			const rows = await db
+				.select(columns)
+				.from(onboardingRuns)
+				.where(and(eq(onboardingRuns.machineId, machineId), isNull(onboardingRuns.finishedAt)));
 
 			return rows.map((row) => OnboardingRunSchema.parse(row));
 		},

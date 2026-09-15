@@ -2,6 +2,7 @@ import { type LineDeps } from 'src/controllers/line/line-deps';
 import { scheduleRepository } from 'src/controllers/line/schedule';
 import { bulletGateFailure, driveGateFailure, fixGateFailure } from 'src/controllers/line/shared/ac-gate';
 import { announceBuild, announceNeedsYou, announcePlanChanged } from 'src/controllers/line/shared/announce';
+import { recheckDependencyRelease } from 'src/controllers/line/shared/dependency-release';
 import { settleBuild } from 'src/controllers/line/shared/lifecycle';
 import { notifyDependents } from 'src/controllers/line/shared/merge';
 import { notifyBuildStatus } from 'src/controllers/line/shared/notify';
@@ -180,6 +181,16 @@ async function recordDone(deps: LineDeps, opts: { located: Located; frame: DoneF
 		report: frame.report,
 		finishedAt: new Date()
 	});
+
+	// Only a bullet's own landing can release a dependency on it — `landed()`
+	// only ever counts a `phase === null` run — so a drive/fix/recheck run done
+	// has nothing to recheck.
+	if (located.run.phase === null) {
+		await recheckDependencyRelease(deps, {
+			providerPlanId: located.build.planId,
+			revert: (current) => ({ ...current, runs: current.runs.filter((run) => run.id !== located.run.id) })
+		});
+	}
 
 	if (!(await afterDone(deps, opts))) {
 		await settleBuild(deps, { buildId: located.build.id });
