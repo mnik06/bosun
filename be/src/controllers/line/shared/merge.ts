@@ -1,6 +1,8 @@
 import { type LineDeps } from 'src/controllers/line/line-deps';
 import { announceBuild } from 'src/controllers/line/shared/announce';
+import { recheckDependencyRelease } from 'src/controllers/line/shared/dependency-release';
 import { queueIntegration, removeWorktree, stopRunningJobs } from 'src/controllers/line/shared/lifecycle';
+import { notifyBuildStatus } from 'src/controllers/line/shared/notify';
 import { GithubError } from 'src/services/github/github-app.service';
 import { UNMERGED_BUILT_STATUSES, type Build } from 'src/types/BuildSchema';
 
@@ -79,6 +81,11 @@ export async function markMerged(deps: LineDeps, opts: { build: Build }): Promis
 
 	removeWorktree(deps, { build: merged });
 	announceBuild({ socketRegistry: deps.socketRegistry, projectId: plan.projectId, build: merged });
+	await notifyBuildStatus(deps, { plan, build: merged });
+	await recheckDependencyRelease(deps, {
+		providerPlanId: merged.planId,
+		revert: (current) => ({ ...current, build: current.build && { ...current.build, status: opts.build.status } })
+	});
 
 	for (const dependent of await dependentBuilds(deps, opts.build)) {
 		if (dependent.baseBranch !== opts.build.branch || !installation) {

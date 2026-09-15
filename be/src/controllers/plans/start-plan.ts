@@ -1,29 +1,28 @@
 import { announcePlan } from 'src/controllers/plans/shared/plan-broadcast';
 import { requireHost } from 'src/controllers/plans/shared/plan-hosting';
+import { notifyPlanStatus, type PlanNotifyDeps } from 'src/controllers/plans/shared/notify';
 import { configDraftFor } from 'src/controllers/repositories/shared/config-draft';
 import { type RepositoryRepo } from 'src/repos/github/repository.repo';
 import { type MachineRepo } from 'src/repos/machines/machine.repo';
 import { type PlanMessageRepo } from 'src/repos/plans/plan-message.repo';
 import { type PlanRepo } from 'src/repos/plans/plan.repo';
-import { type IdService } from 'src/services/ids/id.service';
-import { type SocketRegistry } from 'src/services/sockets/registry.service';
 import { type Plan } from 'src/types/PlanSchema';
 
-export async function startPlan(opts: {
-	planRepo: PlanRepo;
-	planMessageRepo: PlanMessageRepo;
-	machineRepo: MachineRepo;
-	repositoryRepo: RepositoryRepo;
-	idService: IdService;
-	socketRegistry: SocketRegistry;
-	projectId: string;
-	createdByUserId: string;
-	machineId: string;
-	input: string;
-	verifyInUi: boolean;
-	auto: boolean;
-	afk: boolean;
-}): Promise<Plan> {
+export async function startPlan(
+	opts: PlanNotifyDeps & {
+		planRepo: PlanRepo;
+		planMessageRepo: PlanMessageRepo;
+		machineRepo: MachineRepo;
+		repositoryRepo: RepositoryRepo;
+		projectId: string;
+		createdByUserId: string;
+		machineId: string;
+		input: string;
+		verifyInUi: boolean;
+		auto: boolean;
+		afk: boolean;
+	}
+): Promise<Plan> {
 	const machine = await requireHost({
 		machineRepo: opts.machineRepo,
 		socketRegistry: opts.socketRegistry,
@@ -71,6 +70,10 @@ export async function startPlan(opts: {
 		});
 
 		announcePlan({ socketRegistry: opts.socketRegistry, plan: failed ?? plan });
+
+		if (failed) {
+			await notifyPlanStatus(opts, { plan: failed });
+		}
 
 		return failed ?? plan;
 	}

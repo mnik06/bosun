@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { finishPlan } from 'src/controllers/plans/finish-plan';
+import { type PlanNotifyDeps } from 'src/controllers/plans/shared/notify';
 import { type AcRepo } from 'src/repos/plans/ac.repo';
 import { type PlanRepo } from 'src/repos/plans/plan.repo';
 import { getSocketRegistry } from 'src/services/sockets/registry.service';
@@ -20,6 +21,17 @@ function plan(overrides: Partial<Plan> = {}): Plan {
 	};
 }
 
+// `update` always resolves null here, so `finishPlan` never reaches the
+// notify branch — these are never touched, only present to satisfy the type.
+const notNotified = {
+	notificationRepo: {},
+	pushSubscriptionRepo: {},
+	projectMemberRepo: {},
+	webPush: {},
+	idService: {},
+	appUrl: 'https://app.test'
+} as unknown as PlanNotifyDeps;
+
 function build(opts: { plan: Plan; unassigned: Ac[] }) {
 	const update = vi.fn().mockResolvedValue(null);
 
@@ -27,6 +39,7 @@ function build(opts: { plan: Plan; unassigned: Ac[] }) {
 		update,
 		run: async () =>
 			finishPlan({
+				...notNotified,
 				planRepo: { update } as unknown as PlanRepo,
 				acRepo: {
 					listUnassigned: vi.fn().mockResolvedValue(opts.unassigned)

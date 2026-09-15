@@ -129,6 +129,41 @@ describe('hanging up on a deleted project', () => {
 	});
 });
 
+describe('per-user fan-out', () => {
+	// A notification is a person's own, so this is the one send that has to key
+	// on the socket owner rather than the project — reaching bob with alice's
+	// notification is the same class of leak `broadcastToUi` exists to avoid.
+	it('delivers only to the named user\'s sockets on that project', () => {
+		registry.sendToUiUser({ projectId: 'prj_1', userId: 'u_alice', message });
+
+		expect(alice.send).toHaveBeenCalledWith(JSON.stringify(message));
+		expect(bob.send).not.toHaveBeenCalled();
+	});
+
+	it('delivers to every tab that user has open', () => {
+		const secondTab = fakeSocket();
+
+		registry.addUiSocket({ projectId: 'prj_1', userId: 'u_alice', socket: secondTab });
+		registry.sendToUiUser({ projectId: 'prj_1', userId: 'u_alice', message });
+
+		expect(alice.send).toHaveBeenCalledOnce();
+		expect(secondTab.send).toHaveBeenCalledOnce();
+	});
+
+	it('does nothing for a user with no socket on that project', () => {
+		expect(() => registry.sendToUiUser({ projectId: 'prj_1', userId: 'u_nobody', message })).not.toThrow();
+		expect(alice.send).not.toHaveBeenCalled();
+		expect(bob.send).not.toHaveBeenCalled();
+	});
+
+	it('does not reach the same user\'s socket on another project', () => {
+		registry.sendToUiUser({ projectId: 'prj_2', userId: 'u_alice', message });
+
+		expect(alice.send).not.toHaveBeenCalled();
+		expect(outsider.send).not.toHaveBeenCalled();
+	});
+});
+
 const planMessage: UiMsg = { type: 'plan.activity', planId: 'p_1', label: 'Reading 3 files' };
 
 describe('per-plan fan-out', () => {

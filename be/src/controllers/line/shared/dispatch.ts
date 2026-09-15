@@ -3,6 +3,7 @@ import { announceBuild, announcePlanChanged } from 'src/controllers/line/shared/
 import { providerBranches, startingPoint, type ProviderState } from 'src/controllers/line/shared/dependencies';
 import { worktreeSlug } from 'src/controllers/line/shared/lifecycle';
 import { type BuildState } from 'src/controllers/line/shared/line-snapshot';
+import { notifyBuildStatus } from 'src/controllers/line/shared/notify';
 import {
 	type Build,
 	type BuildStatus,
@@ -155,7 +156,11 @@ export async function dispatchRun(
 
 	if (frame === null) {
 		await deps.sliceRunRepo.update({ id: claimed.id, status: 'failed', failureReason: 'the plan, its bullet or its worktree is gone', finishedAt: new Date() });
-		await deps.buildRepo.update({ id: build.id, status: 'failed', failureReason: 'the plan, its bullet or its worktree is gone', finishedAt: new Date() });
+		const failed = await deps.buildRepo.update({ id: build.id, status: 'failed', failureReason: 'the plan, its bullet or its worktree is gone', finishedAt: new Date() });
+
+		if (failed) {
+			await notifyBuildStatus(deps, { plan, build: failed });
+		}
 
 		return true;
 	}

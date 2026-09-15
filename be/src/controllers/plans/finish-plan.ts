@@ -1,7 +1,7 @@
 import { announcePlan } from 'src/controllers/plans/shared/plan-broadcast';
+import { notifyPlanStatus, type PlanNotifyDeps } from 'src/controllers/plans/shared/notify';
 import { type AcRepo } from 'src/repos/plans/ac.repo';
 import { type PlanRepo } from 'src/repos/plans/plan.repo';
-import { type SocketRegistry } from 'src/services/sockets/registry.service';
 import { type Plan } from 'src/types/PlanSchema';
 
 // The session claiming it is finished is not the same as the plan being usable,
@@ -21,12 +21,13 @@ async function completionFailure(opts: { acRepo: AcRepo; plan: Plan }): Promise<
 	return null;
 }
 
-export async function finishPlan(opts: {
-	planRepo: PlanRepo;
-	acRepo: AcRepo;
-	socketRegistry: SocketRegistry;
-	plan: Plan;
-}): Promise<Plan | null> {
+export async function finishPlan(
+	opts: PlanNotifyDeps & {
+		planRepo: PlanRepo;
+		acRepo: AcRepo;
+		plan: Plan;
+	}
+): Promise<Plan | null> {
 	const failure = await completionFailure(opts);
 	const updated = await opts.planRepo.update({
 		id: opts.plan.id,
@@ -36,6 +37,7 @@ export async function finishPlan(opts: {
 
 	if (updated) {
 		announcePlan({ socketRegistry: opts.socketRegistry, plan: updated });
+		await notifyPlanStatus(opts, { plan: updated });
 	}
 
 	return updated;

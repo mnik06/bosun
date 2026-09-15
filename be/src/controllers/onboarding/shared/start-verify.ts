@@ -1,5 +1,6 @@
 import { type OnboardingDeps } from 'src/controllers/onboarding/onboarding-deps';
 import { missingRequirements } from 'src/controllers/onboarding/shared/requirements';
+import { notifyOnboardingStatus } from 'src/controllers/onboarding/shared/notify';
 import {
 	announceOnboarding,
 	onboardingAdmission,
@@ -62,5 +63,6 @@ export async function maybeStartVerify(deps: OnboardingDeps, opts: { machineId: 
 
 	if (settled) {
 		announceOnboarding({ socketRegistry: deps.socketRegistry, projectId: machine.projectId, run: settled });
+		await notifyOnboardingStatus(deps, { projectId: machine.projectId, run: settled });
 	}
 }

@@ -1,7 +1,7 @@
 import { announcePlan } from 'src/controllers/plans/shared/plan-broadcast';
+import { notifyPlanStatus, type PlanNotifyDeps } from 'src/controllers/plans/shared/notify';
 import { type PlanRepo } from 'src/repos/plans/plan.repo';
 import { type PlanTextService } from 'src/services/plans/plan-text.service';
-import { type SocketRegistry } from 'src/services/sockets/registry.service';
 
 const RESTARTED = 'the agent restarted while this session was running';
 
@@ -19,16 +19,17 @@ const RESTARTED = 'the agent restarted while this session was running';
 //
 // An agent too old to send `planIds` holds nothing across a reconnect, so the
 // empty default is not a fallback — it is the truth for those agents.
-export async function stallMachinePlans(opts: {
-	planRepo: PlanRepo;
-	planTextService: PlanTextService;
-	socketRegistry: SocketRegistry;
-	machineId: string;
-	// When this socket was registered. A plan created after it was dispatched over
-	// it, and may not have reached the agent's map before `hello` was assembled.
-	connectedAt: Date;
-	heldPlanIds?: string[];
-}): Promise<void> {
+export async function stallMachinePlans(
+	opts: PlanNotifyDeps & {
+		planRepo: PlanRepo;
+		planTextService: PlanTextService;
+		machineId: string;
+		// When this socket was registered. A plan created after it was dispatched over
+		// it, and may not have reached the agent's map before `hello` was assembled.
+		connectedAt: Date;
+		heldPlanIds?: string[];
+	}
+): Promise<void> {
 	const held = new Set(opts.heldPlanIds ?? []);
 	const running = await opts.planRepo.listPlanningOnMachine(opts.machineId);
 	const stranded = running.filter(
@@ -44,6 +45,7 @@ export async function stallMachinePlans(opts: {
 		for (const plan of failed) {
 			opts.planTextService.drop(plan.id);
 			announcePlan({ socketRegistry: opts.socketRegistry, plan });
+			await notifyPlanStatus(opts, { plan });
 		}
 	}
 

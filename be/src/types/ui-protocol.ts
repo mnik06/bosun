@@ -9,6 +9,7 @@ import {
 	PlanSchema,
 	SliceSchema
 } from 'src/types/PlanSchema';
+import { NotificationSchema } from 'src/types/NotificationSchema';
 import { RepositorySchema } from 'src/types/RepositorySchema';
 import {
 	PlanActivityMsgSchema,
@@ -169,6 +170,13 @@ export const RepositoryAnswerMsgSchema = z.object({
 	delta: z.string()
 });
 
+// Sent only to the recipient's own sockets via `sendToUiUser` — never broadcast
+// project-wide, which would show one member's notification on another's screen.
+export const NotificationCreatedMsgSchema = z.object({
+	type: z.literal('notification.created'),
+	notification: NotificationSchema
+});
+
 export const UiMsgSchema = z.discriminatedUnion('type', [
 	MachineUpdatedMsgSchema,
 	MachineDeletedMsgSchema,
@@ -197,7 +205,8 @@ export const UiMsgSchema = z.discriminatedUnion('type', [
 	IntegrationActivityMsgSchema,
 	PlanDecisionMsgSchema,
 	RepositoryMessageMsgSchema,
-	RepositoryAnswerMsgSchema
+	RepositoryAnswerMsgSchema,
+	NotificationCreatedMsgSchema
 ]);
 
 export type UiMsg = z.infer<typeof UiMsgSchema>;

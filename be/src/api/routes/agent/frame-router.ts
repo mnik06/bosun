@@ -207,15 +207,20 @@ export async function handleAgentFrame(opts: {
 	}
 
 	if (isPlanFrame(msg)) {
-		const { socketRegistry, idService, planTextService } = opts.fastify.services;
+		const { socketRegistry, idService, planTextService, webPush } = opts.fastify.services;
 
 		await recordPlanFrame({
 			planRepo: opts.fastify.repos.planRepo,
 			planMessageRepo: opts.fastify.repos.planMessageRepo,
 			acRepo: opts.fastify.repos.acRepo,
+			notificationRepo: opts.fastify.repos.notificationRepo,
+			pushSubscriptionRepo: opts.fastify.repos.pushSubscriptionRepo,
+			projectMemberRepo: opts.fastify.repos.projectMemberRepo,
 			idService,
 			planTextService,
 			socketRegistry,
+			webPush,
+			appUrl: opts.fastify.env.PUBLIC_APP_URL,
 			machineId: opts.machineId,
 			frame: msg
 		});

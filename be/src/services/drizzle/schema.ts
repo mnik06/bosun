@@ -50,6 +50,7 @@ import {
 	type SliceRunStatus
 } from 'src/types/BuildSchema';
 import { type Footprint } from 'src/types/FootprintSchema';
+import { type NotificationKind } from 'src/types/NotificationSchema';
 
 export const users = pgTable('users', {
 	id: text().primaryKey(),
@@ -527,6 +528,53 @@ export const repositoryMessages = pgTable(
 		createdAt: timestamp({ withTimezone: true }).notNull().defaultNow()
 	},
 	(table) => [index('repository_messages_repository_id_idx').on(table.repositoryId)]
+);
+
+// A browser's Web Push endpoint. One per browser install, not per project: a
+// subscription has no project of its own and covers every project the person
+// belongs to.
+export const pushSubscriptions = pgTable(
+	'push_subscriptions',
+	{
+		id: text().primaryKey(),
+		userId: text()
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		endpoint: text().notNull().unique(),
+		p256dh: text().notNull(),
+		auth: text().notNull(),
+		createdAt: timestamp({ withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [index('push_subscriptions_user_id_idx').on(table.userId)]
+);
+
+// The persisted record a push is delivered on top of. The system of record: the
+// board badge, the needs-you bell and click-to-read are all read from this table,
+// and a push notification is a delivery mechanism for the row, not the other way
+// round.
+export const notifications = pgTable(
+	'notifications',
+	{
+		id: text().primaryKey(),
+		userId: text()
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		projectId: text()
+			.notNull()
+			.references(() => projects.id, { onDelete: 'cascade' }),
+		kind: text().$type<NotificationKind>().notNull(),
+		title: text().notNull(),
+		body: text().notNull(),
+		url: text().notNull(),
+		planId: text().references(() => plans.id, { onDelete: 'cascade' }),
+		machineId: text().references(() => machines.id, { onDelete: 'cascade' }),
+		sentAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+		readAt: timestamp({ withTimezone: true })
+	},
+	(table) => [
+		index('notifications_user_project_idx').on(table.userId, table.projectId),
+		index('notifications_user_plan_idx').on(table.userId, table.planId)
+	]
 );
 
 // The forks a plan could not settle, resolved while executing it. Kept as rows

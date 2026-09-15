@@ -1,7 +1,7 @@
 import { announcePlan } from 'src/controllers/plans/shared/plan-broadcast';
+import { notifyPlanStatus, type PlanNotifyDeps } from 'src/controllers/plans/shared/notify';
 import { type PlanRepo } from 'src/repos/plans/plan.repo';
 import { type PlanTextService } from 'src/services/plans/plan-text.service';
-import { type SocketRegistry } from 'src/services/sockets/registry.service';
 
 // The agent's own cap on a planning session. Kept the same on purpose: this is
 // the case where the agent cannot report hitting it.
@@ -9,10 +9,9 @@ const SESSION_MAX_MS = 24 * 60 * 60 * 1000;
 const SWEEP_MS = 10 * 60 * 1000;
 const REASON = 'the machine has been unreachable since this session started';
 
-interface Deps {
+interface Deps extends PlanNotifyDeps {
 	planRepo: PlanRepo;
 	planTextService: PlanTextService;
-	socketRegistry: SocketRegistry;
 	log: { error: (context: object, message: string) => void };
 }
 
@@ -33,6 +32,7 @@ async function sweep(deps: Deps): Promise<void> {
 	for (const plan of failed) {
 		deps.planTextService.drop(plan.id);
 		announcePlan({ socketRegistry: deps.socketRegistry, plan });
+		await notifyPlanStatus(deps, { plan });
 	}
 }
 

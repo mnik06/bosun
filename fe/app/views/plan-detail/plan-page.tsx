@@ -1,5 +1,5 @@
 import { Tabs, Text } from '@mantine/core'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router'
 
 import {
@@ -13,6 +13,7 @@ import {
 	type PlanStream,
 	type PlanTab
 } from '~/entities/plan'
+import { useMarkPlanNotificationsRead } from '~/features/mark-notification-read'
 import { QueryErrorAlert, SectionLoader } from '~/shared/ui'
 import { PlanArtifact } from '~/widgets/plan-artifact'
 import { PlanChanges } from '~/widgets/plan-changes'
@@ -72,7 +73,15 @@ export default function PlanPage ({ params }: Route.ComponentProps) {
 	const { planId } = params
 	const { data, isPending, error } = usePlanQuery(planId)
 	const stream = usePlanStream(planId)
+	const { mutate: markPlanNotificationsRead } = useMarkPlanNotificationsRead()
 	const [searchParams] = useSearchParams()
+
+	// Opening a plan is what clears its board badge: any notification logged for
+	// it up to this point is read the moment its page is on screen, not only when
+	// somebody clicks through the bell.
+	useEffect(() => {
+		markPlanNotificationsRead(planId)
+	}, [planId, markPlanNotificationsRead])
 	// Seeded from the URL, not bound to it: a pull request bosun opened links
 	// straight at a tab, and the tabs are otherwise a local control whose every
 	// click has no business in the history stack.

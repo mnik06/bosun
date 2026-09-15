@@ -2,6 +2,7 @@ import { type WebSocket } from '@fastify/websocket';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { HttpError } from 'src/api/errors/HttpError';
 import { startPlan } from 'src/controllers/plans/start-plan';
+import { type PlanNotifyDeps } from 'src/controllers/plans/shared/notify';
 import { type MachineRepo } from 'src/repos/machines/machine.repo';
 import { type PlanMessageRepo } from 'src/repos/plans/plan-message.repo';
 import { type PlanRepo } from 'src/repos/plans/plan.repo';
@@ -10,6 +11,17 @@ import { getSocketRegistry, type SocketRegistry } from 'src/services/sockets/reg
 import { type Machine, type MachineStatus, type PreflightCheck } from 'src/types/MachineSchema';
 
 const OPEN = 1;
+
+// Every case here either throws before dispatch or dispatches successfully,
+// so `startPlan` never reaches the notify branch — these are never touched,
+// only present to satisfy the type.
+const notNotified = {
+	notificationRepo: {},
+	pushSubscriptionRepo: {},
+	projectMemberRepo: {},
+	webPush: {},
+	appUrl: 'https://app.test'
+} as unknown as PlanNotifyDeps;
 
 const GREEN: PreflightCheck[] = [{ name: 'claude', ok: true }];
 
@@ -44,6 +56,7 @@ function build(found: Machine | null) {
 		update,
 		run: async () =>
 			startPlan({
+				...notNotified,
 				planRepo: { create, update } as unknown as PlanRepo,
 				planMessageRepo: { append } as unknown as PlanMessageRepo,
 				machineRepo: { getOwnedById: vi.fn().mockResolvedValue(found) } as unknown as MachineRepo,

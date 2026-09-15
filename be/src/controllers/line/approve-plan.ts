@@ -8,6 +8,7 @@ import {
 	type Detection,
 	type ProviderPlan
 } from 'src/controllers/line/shared/detect-dependencies';
+import { notifyBuildStatus } from 'src/controllers/line/shared/notify';
 import { overlapViews } from 'src/controllers/line/shared/overlap-views';
 import { getOwnedPlan } from 'src/controllers/plans/shared/plan-access';
 import { announcePlan } from 'src/controllers/plans/shared/plan-broadcast';
@@ -150,6 +151,7 @@ export async function approvePlan(
 	announcePlan({ socketRegistry: deps.socketRegistry, plan: approved });
 	announceBuild({ socketRegistry: deps.socketRegistry, projectId: plan.projectId, build });
 	announcePlanChanged({ socketRegistry: deps.socketRegistry, projectId: plan.projectId, planId: plan.id });
+	await notifyBuildStatus(deps, { plan: approved, build });
 	await scheduleRepository(deps, { repositoryId: build.repositoryId });
 
 	return {
