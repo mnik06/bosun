@@ -37,6 +37,7 @@ export function PlanBoard () {
 	}
 
 	const groups = groupByColumn(plans.data)
+	const visibleColumns = BOARD_COLUMNS.filter((column) => groups[column.value].length > 0)
 
 	const drop = (target: PlanListEntry) => {
 		const reordered = dragged === null ? null : reorderedLine({ scheduled: groups.scheduled, draggedPlanId: dragged, target })
@@ -78,8 +79,8 @@ export function PlanBoard () {
 
 			{wide ? (
 				<div className="flex gap-3 overflow-x-auto pb-2">
-					{BOARD_COLUMNS.map((column) => (
-						<Stack key={column.value} gap="xs" className="w-60 min-w-60 grow">
+					{visibleColumns.map((column) => (
+						<Stack key={column.value} gap="xs" className="w-60 min-w-60">
 							<Group gap="xs">
 								<Text size="sm" fw={600}>
 									{column.label}
@@ -93,8 +94,8 @@ export function PlanBoard () {
 					))}
 				</div>
 			) : (
-				<Accordion multiple variant="separated" defaultValue={BOARD_COLUMNS.filter((column) => groups[column.value].length > 0).map((column) => column.value)}>
-					{BOARD_COLUMNS.map((column) => (
+				<Accordion multiple variant="separated" defaultValue={visibleColumns.map((column) => column.value)}>
+					{visibleColumns.map((column) => (
 						<Accordion.Item key={column.value} value={column.value}>
 							<Accordion.Control>
 								<Group gap="xs">
