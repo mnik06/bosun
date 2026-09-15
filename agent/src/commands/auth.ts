@@ -1,6 +1,7 @@
 import {
 	describeToken,
 	getClaudeAuthService,
+	isCompleteToken,
 	CLAUDE_TOKEN_VARIABLE
 } from '../services/claude-auth.service';
 import { getEnvService } from '../services/env.service';
@@ -11,7 +12,7 @@ const SETUP_HINT =
 	'Run `claude setup-token` on your own machine — it needs a browser, this one does not have to.';
 
 const PASTE_HINT =
-	'Paste the token, then press Enter on an empty line. A token copied off a wrapped terminal line spans more than one — paste all of it.';
+	'Paste the token and press Enter — that submits it. A token copied off a wrapped terminal line spans more than one row; paste all of it, then press Enter again on an empty line if it does not submit on its own.';
 
 function build() {
 	const exec = getExecService();
@@ -29,7 +30,7 @@ export async function setClaudeToken(): Promise<void> {
 	console.log('');
 
 	try {
-		const token = await prompt.secretBlock('Claude token');
+		const token = await prompt.secretBlock('Claude token', { isComplete: isCompleteToken });
 
 		if (!token) {
 			throw new Error('nothing entered — no credential was written');

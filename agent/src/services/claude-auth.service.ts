@@ -20,6 +20,19 @@ const TOKEN_PREFIX = 'sk-ant-oat01-';
 // alone rather than quoted back in full.
 const REVEALABLE_LENGTH = TOKEN_PREFIX.length + 8;
 
+// A real token `claude setup-token` mints runs well over a hundred characters, so
+// this only has to be long enough that a single wrapped row — a fragment that
+// happens to start with the prefix but is really the first line of a taller paste
+// — could not pass it by coincidence.
+const MIN_COMPLETE_TOKEN_LENGTH = TOKEN_PREFIX.length + 60;
+
+// Used to auto-submit a pasted token without waiting on a second, blank-line
+// Enter. Deliberately conservative: false negatives just fall back to the old
+// blank-line prompt, but a false positive would submit a truncated fragment.
+export function isCompleteToken(value: string): boolean {
+	return value.startsWith(TOKEN_PREFIX) && value.length >= MIN_COMPLETE_TOKEN_LENGTH;
+}
+
 // A verify and a session get the same environment: a box with a stale
 // ANTHROPIC_API_KEY on it would otherwise fail the check with a message naming
 // the token, which is the one thing on the box that was fine.
