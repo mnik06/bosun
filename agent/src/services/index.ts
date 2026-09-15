@@ -2,6 +2,7 @@ import { getBosunApiService } from './bosun-api.service';
 import { getClaudeAuthService } from './claude-auth.service';
 import { getEnvService } from './env.service';
 import { getExecService } from './exec.service';
+import { withSerializedFetches } from './git-fetch-queue';
 import { getCommitService } from '../execution/commit';
 import { getInputsKeyService } from './inputs-key.service';
 import { getMcpConfigService } from './mcp-config.service';
@@ -21,7 +22,7 @@ import { getWorktreeService } from './worktree.service';
 import { defaultConfigPath, type AgentConfig } from '../config/config';
 
 export function getServices(opts: { config: AgentConfig; configPath: string; env: NodeJS.ProcessEnv }) {
-	const exec = getExecService();
+	const exec = withSerializedFetches(getExecService());
 	const env = getEnvService({ baseEnv: opts.env });
 	const claudeAuth = getClaudeAuthService({ exec, env });
 	const mcpConfig = getMcpConfigService({ env });
