@@ -91,7 +91,7 @@ function promptFor(opts: {
 	}
 
 	if (mode === 'fix') {
-		return fixPrompt({ ...shared, findings: msg.findings });
+		return fixPrompt({ ...shared, findings: msg.findings, fixAgain: msg.recheckCodes.length > 0 });
 	}
 
 	return executionPrompt({

@@ -6,7 +6,7 @@ export const PLAN_STATE_LABEL: Record<PlanState, { label: string, color: string 
 	scheduled: { label: 'scheduled', color: 'gray' },
 	held: { label: 'held', color: 'yellow' },
 	building: { label: 'building', color: 'blue' },
-	integrating: { label: 'integrating', color: 'cyan' },
+	integrating: { label: 'syncing', color: 'cyan' },
 	verifying: { label: 'verifying', color: 'indigo' },
 	in_review: { label: 'in review', color: 'green' },
 	merged: { label: 'merged', color: 'teal' },

@@ -516,7 +516,7 @@ export function createIntegrationSessions(opts: { services: Services; send: (mes
 			try {
 				outcome = await integrate(msg, entry);
 			} catch (error) {
-				outcome = error instanceof Cancelled ? null : needsYou('error', error instanceof Error ? error.message : 'the integration failed');
+				outcome = error instanceof Cancelled ? null : needsYou('error', error instanceof Error ? error.message : 'the sync failed');
 			}
 
 			release(entry);

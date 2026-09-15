@@ -123,7 +123,7 @@ async function execStartFrame(
 				reproduction: finding.reproduction,
 				severity: finding.severity
 			})),
-		recheckCodes: opts.run.phase === 'recheck' ? scope ?? [] : [],
+		recheckCodes: opts.run.phase === 'recheck' || opts.run.phase === 'fix' ? scope ?? [] : [],
 		memoryMaxBytes: opts.memoryMaxBytes
 	};
 }

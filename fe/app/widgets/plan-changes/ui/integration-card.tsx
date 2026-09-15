@@ -3,11 +3,17 @@ import { Badge, Card, Code, Group, Loader, Stack, Text } from '@mantine/core'
 import { useIntegrationActivity, type Integration } from '~/entities/plan'
 import { formatRelativeTime } from '~/shared/lib'
 
-const TRIGGER_LABEL: Record<Integration['trigger'], string> = {
-	built: 'After building',
-	base_moved: 'The base branch moved',
-	provider_moved: 'The plan it stacks on moved',
-	retarget: 'The plan it stacked on merged'
+function triggerLabel (integration: Integration): string {
+	switch (integration.trigger) {
+		case 'built':
+			return 'After building'
+		case 'base_moved':
+			return `${integration.onto} moved`
+		case 'provider_moved':
+			return 'The plan it stacks on moved'
+		case 'retarget':
+			return 'The plan it stacked on merged'
+	}
 }
 
 const STATUS_COLOR: Record<Integration['status'], string> = {
@@ -67,10 +73,10 @@ export function IntegrationCard ({ integration }: { integration: Integration }) 
 				<Group justify="space-between" gap="xs">
 					<Group gap="xs">
 						<Text size="sm" fw={600}>
-							{TRIGGER_LABEL[integration.trigger]}
+							{triggerLabel(integration)}
 						</Text>
 						<Text size="xs" c="dimmed" className="font-mono">
-							onto {integration.onto}
+							with {integration.onto}
 							{integration.ontoSha === null ? '' : ` @ ${integration.ontoSha.slice(0, 8)}`}
 						</Text>
 					</Group>
@@ -93,7 +99,7 @@ export function IntegrationCard ({ integration }: { integration: Integration }) 
 					<Group gap="xs">
 						<Loader size={12} />
 						<Text size="xs" c="dimmed">
-							{activity ?? 'Integrating…'}
+							{activity ?? 'Syncing…'}
 						</Text>
 					</Group>
 				) : null}

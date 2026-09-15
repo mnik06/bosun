@@ -289,7 +289,8 @@ export const ExecStartMsgSchema = z.object({
 		.nullable(),
 	// A fix session's findings.
 	findings: z.array(ExecFindingSchema),
-	// The criteria a re-check drives.
+	// The criteria a re-check drives, or a fix-again session is limited to. Empty on
+	// a first fix, which is how that session knows the codebase sweep is still its job.
 	recheckCodes: z.array(z.string()),
 	// The most memory this session may use: the same number it was admitted
 	// against, so the limits of everything running fit the machine.

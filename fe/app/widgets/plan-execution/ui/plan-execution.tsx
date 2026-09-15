@@ -21,7 +21,7 @@ function IntegratingLine ({ detail }: { detail: PlanDetail }) {
 		<Group gap="xs">
 			<Loader size={12} />
 			<Text size="sm" c="dimmed">
-				Integrating onto {running.onto}: {activity[running.id] ?? 'starting'}
+				Syncing with {running.onto}: {activity[running.id] ?? 'starting'}
 			</Text>
 		</Group>
 	)
@@ -51,7 +51,7 @@ export function PlanExecution ({ detail }: { detail: PlanDetail }) {
 		<Stack gap="lg">
 			<Stepper active={step} size="xs" allowNextStepsSelect={false}>
 				<Stepper.Step label="Build" />
-				<Stepper.Step label="Integrate" />
+				<Stepper.Step label="Sync" />
 				<Stepper.Step label="Verify" />
 				<Stepper.Step label="Review" />
 			</Stepper>

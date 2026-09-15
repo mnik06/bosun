@@ -7,7 +7,7 @@ import { planLabel, useNeedsYouQuery, type NeedsYouItem } from '~/entities/plan'
 const KIND_LABEL: Record<NeedsYouItem['kind'], string> = {
 	question: 'Question',
 	overlap: 'Overlap decision',
-	integration: 'Unresolved integration',
+	integration: 'Sync failed',
 	checks: 'Checks still red',
 	provider_failed: 'The plan it needs failed',
 	recheck_failed: 'Failed its re-check',

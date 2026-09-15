@@ -294,9 +294,14 @@ Tools: `mark_ac_verified`, `mark_ac_blocked`, `report_finding`. `stack_down`, ex
 Findings — a failed criterion, a console error, a failed request, a visual defect — are rows with a
 written reproduction.
 
-**Fix** — in a build slot. Given the findings, it runs the review, dead-code and duplication agents
-(today's B, C and D, which never needed the stack), groups and fixes, runs the loop at most twice,
-resolves each finding as fixed or left with a reason, and commits.
+**Fix** — in a build slot. Given the findings, it runs the repository's dead-code and duplication tools
+once itself, then the review agent over the plan's diff and the dead-code and duplication agents over
+the **whole codebase** (today's B, C and D, which never needed the stack). C and D carry their method in
+their briefs verbatim — reachability from production entrypoints and dataflow for fields, duplication
+by responsibility rather than by token — and every candidate clears gates before it is reported. It
+fixes the drive's findings and every certain removal and merge wherever it sits, groups the work, runs
+the loop at most twice, resolves each finding as fixed or left with a reason, and commits. A fix-again
+session skips the sweep: the first fix already committed it.
 
 Today's verify session already hands off between these halves: it never looks at the browser itself, it
 reads Agent A's report and fixes from that. The split makes the handoff a table, and gives the lane back

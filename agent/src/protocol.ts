@@ -448,6 +448,8 @@ export const ExecStartMsgSchema = z.object({
 		.object({ questions: z.array(PlanQuestionSchema), answers: z.array(PlanAnswerSchema) })
 		.nullable(),
 	findings: z.array(ExecFindingSchema),
+	// The criteria a re-check drives, or a fix-again session is limited to. Empty on
+	// a first fix, which is how that session knows the codebase sweep is still its job.
 	recheckCodes: z.array(z.string()),
 	// The most memory this session may use, chosen by the scheduler so the limits
 	// of everything running fit the machine. Null when the machine has not

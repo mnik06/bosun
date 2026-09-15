@@ -5,8 +5,7 @@ import { RunQuestionPanel } from '~/features/answer-run'
 import { BuildActionButton, RecheckChoice } from '~/features/control-build'
 import { OverlapDecisionPanel } from '~/features/decide-overlap'
 
-const REASON_TITLE: Record<Exclude<NeedsYouReason, 'overlap'>, string> = {
-	integration: 'Integration could not finish',
+const REASON_TITLE: Record<Exclude<NeedsYouReason, 'overlap' | 'integration'>, string> = {
 	checks: 'The checks are still red after one repair',
 	provider_failed: 'A plan this one needs failed',
 	recheck_failed: 'A criterion still fails after its fix',
@@ -29,7 +28,15 @@ function NeedsYou ({ detail }: { detail: PlanDetail }) {
 	]
 
 	return (
-		<Alert color="orange" variant="light" title={REASON_TITLE[build.needsYouReason]}>
+		<Alert
+			color="orange"
+			variant="light"
+			title={
+				build.needsYouReason === 'integration'
+					? `Sync with ${build.baseBranch ?? 'its base'} failed`
+					: REASON_TITLE[build.needsYouReason]
+			}
+		>
 			<Stack gap="xs">
 				{build.failureReason === null ? null : (
 					<Text size="sm" className="whitespace-pre-wrap">
@@ -51,7 +58,10 @@ function NeedsYou ({ detail }: { detail: PlanDetail }) {
 }
 
 // Above the tabs and never inside one: a question or a decision one tab away is one
-// that gets missed. Capped so a long list of options cannot squeeze the tabs away.
+// that gets missed. Capped so a long list of options cannot squeeze the tabs away —
+// against the viewport, because a percentage resolves against the header this sits
+// in, which is only as tall as the panels, and the panels then clip their own
+// buttons. Nothing inside shrinks: past the cap the stack scrolls.
 export function PlanPanels ({ detail }: { detail: PlanDetail }) {
 	const openOverlaps = detail.overlapDecisions.some((decision) => decision.chosen === null)
 	const stopped = detail.build?.status === 'needs_you'
@@ -61,7 +71,7 @@ export function PlanPanels ({ detail }: { detail: PlanDetail }) {
 	}
 
 	return (
-		<div className="flex max-h-2/5 shrink-0 flex-col gap-2 overflow-y-auto">
+		<div className="flex max-h-[40vh] shrink-0 flex-col gap-2 overflow-y-auto [&>*]:shrink-0">
 			{detail.pendingQuestion === null ? null : (
 				<RunQuestionPanel planId={detail.plan.id} pending={detail.pendingQuestion} />
 			)}

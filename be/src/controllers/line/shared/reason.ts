@@ -4,7 +4,7 @@ import { type BuildStatus, type NeedsYouReason } from 'src/types/BuildSchema';
 
 const NEEDS_YOU: Record<NeedsYouReason, string> = {
 	overlap: 'needs you: an overlap decision',
-	integration: 'needs you: a conflict bosun could not resolve',
+	integration: 'needs you: a sync failed',
 	checks: 'needs you: checks still red after a repair',
 	provider_failed: 'needs you: a plan it waits on stopped',
 	recheck_failed: 'needs you: a criterion failed its re-check',
@@ -77,7 +77,7 @@ export function describeReason(opts: { state: BuildState; snapshot: RepositorySn
 	case 'building':
 		return building(state);
 	case 'integrating':
-		return `integrating onto ${state.integrations.find((integration) => integration.status !== 'done')?.onto ?? build.baseBranch ?? 'its base'}`;
+		return `syncing with ${state.integrations.find((integration) => integration.status !== 'done')?.onto ?? build.baseBranch ?? 'its base'}`;
 	case 'waiting_verify':
 		return waitingVerify(state, opts.verifyLine);
 	case 'in_review':

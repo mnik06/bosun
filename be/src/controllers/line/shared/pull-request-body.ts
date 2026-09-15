@@ -126,7 +126,7 @@ function integrationLine(integration: Integration): string {
 function integrationsSection(integrations: Integration[]): string {
 	const done = integrations.filter((integration) => integration.status === 'done');
 
-	return done.length === 0 ? '' : `## Integrations\n\n${done.slice(-MAX_LISTED).map(integrationLine).join('\n')}`;
+	return done.length === 0 ? '' : `## Syncs\n\n${done.slice(-MAX_LISTED).map(integrationLine).join('\n')}`;
 }
 
 export function pullRequestBody(opts: {

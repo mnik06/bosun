@@ -25,7 +25,7 @@ function PullRequest ({ detail }: { detail: PlanDetail }) {
 
 				{build.prUrl === null ? (
 					<Text size="sm" c="dimmed">
-						Opened once the plan has built, integrated and verified.
+						Opened once the plan has built, synced and verified.
 					</Text>
 				) : (
 					<Anchor href={build.prUrl} target="_blank" rel="noreferrer" size="sm">
@@ -84,12 +84,12 @@ export function PlanChanges ({ detail }: { detail: PlanDetail }) {
 
 			<Stack gap="xs">
 				<Text size="xs" c="dimmed">
-					Integrations
+					Syncs
 				</Text>
 				{integrations.length === 0 ? (
 					<Text size="sm" c="dimmed">
-						None yet. The branch is merged with its base when it finishes building, and again whenever
-						the base or the plan it stacks on moves.
+						None yet. The branch syncs with its base when it finishes building, and again whenever the
+						base or the plan it stacks on moves.
 					</Text>
 				) : (
 					integrations.map((integration) => (
