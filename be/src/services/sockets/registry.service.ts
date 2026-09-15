@@ -168,6 +168,15 @@ export function getSocketRegistry() {
 					socket.terminate();
 				}
 			}
+		},
+
+		// A deleted project's row is gone, but a member's socket is not — there is no
+		// per-frame recheck, so every socket keyed to this project must be hung up
+		// explicitly rather than left to notice on its own.
+		closeUiSocketsForProject(opts: { projectId: string }): void {
+			for (const socket of uiSockets.get(opts.projectId) ?? []) {
+				socket.terminate();
+			}
 		}
 	};
 }

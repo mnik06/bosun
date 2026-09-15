@@ -112,6 +112,23 @@ describe('hanging up on a removed member', () => {
 	});
 });
 
+// A deleted project leaves no membership to check, so every socket keyed to it
+// is terminated regardless of who opened it — unlike closeUiSocketsForMember,
+// there is no owner to filter by.
+describe('hanging up on a deleted project', () => {
+	it('terminates every socket on that project regardless of owner', () => {
+		registry.closeUiSocketsForProject({ projectId: 'prj_1' });
+
+		expect(alice.terminate).toHaveBeenCalledOnce();
+		expect(bob.terminate).toHaveBeenCalledOnce();
+		expect(outsider.terminate).not.toHaveBeenCalled();
+	});
+
+	it('does nothing for a project with no sockets', () => {
+		expect(() => registry.closeUiSocketsForProject({ projectId: 'prj_nobody' })).not.toThrow();
+	});
+});
+
 const planMessage: UiMsg = { type: 'plan.activity', planId: 'p_1', label: 'Reading 3 files' };
 
 describe('per-plan fan-out', () => {

@@ -2,12 +2,14 @@ import { AppShell, NavLink } from '@mantine/core'
 import { Link, useLocation } from 'react-router'
 
 import { useActiveProject } from '~/entities/project'
+import { useMeQuery } from '~/entities/session'
 import { isNavLinkActive, visibleNavLinks } from '~/widgets/app-nav/lib/nav-links'
 
 export function AppNav () {
 	const { pathname } = useLocation()
 	const { isLeader } = useActiveProject()
-	const links = visibleNavLinks(isLeader)
+	const { data: me } = useMeQuery()
+	const links = visibleNavLinks({ isLeader, isAppOwner: me?.isAppOwner ?? false })
 
 	// The rail keeps its collapsed width in the layout and only the element grows
 	// on hover, so the expanded labels float over the page instead of shoving it.

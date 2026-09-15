@@ -1,7 +1,9 @@
 import { z } from 'zod'
 
+import { ProjectNameSchema } from '~/entities/project'
+
 export const CreateProjectFormSchema = z.object({
-	name: z.string().trim().min(1, 'Give the project a name').max(80)
+	name: ProjectNameSchema
 })
 
 export type CreateProjectForm = z.infer<typeof CreateProjectFormSchema>

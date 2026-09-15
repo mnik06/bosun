@@ -2,6 +2,7 @@ import clsx from 'clsx'
 import { Link, useLocation } from 'react-router'
 
 import { useActiveProject } from '~/entities/project'
+import { useMeQuery } from '~/entities/session'
 import { isNavLinkActive, visibleNavLinks } from '~/widgets/app-nav/lib/nav-links'
 
 // Fixed to the viewport rather than placed in the AppShell footer: the plan page
@@ -10,7 +11,8 @@ import { isNavLinkActive, visibleNavLinks } from '~/widgets/app-nav/lib/nav-link
 export function MobileNav () {
 	const { pathname } = useLocation()
 	const { isLeader } = useActiveProject()
-	const links = visibleNavLinks(isLeader)
+	const { data: me } = useMeQuery()
+	const links = visibleNavLinks({ isLeader, isAppOwner: me?.isAppOwner ?? false })
 
 	return (
 		<nav

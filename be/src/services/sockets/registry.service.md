@@ -37,6 +37,11 @@ retains one empty `Set` per project that has ever had a tab open, for the life o
 only thing between an ex-member and the project's traffic. This is what the `Map<WebSocket, userId>`
 exists for; nothing else reads it, and fan-out never consults it.
 
+A socket also outlives the project itself: `deleteProject` calls `closeUiSocketsForProject` after the
+delete commits, for the same reason and at the same place in the sequence, but it terminates every
+socket keyed to that project rather than filtering by owner — there is no membership left to check,
+and no member of a deleted project should keep a connection to it.
+
 The agent map is untouched by any of this. It is keyed by machine id, which is already unique per
 project, and agents have no notion of users or roles.
 
@@ -125,6 +130,9 @@ derived from the run rather than trusted, the same as every other frame that nam
 - **An ex-member still sees frames.** `closeUiSocketsForMember` did not run, or ran before the
   membership delete committed and the transaction then rolled back. The hang-up belongs after the
   commit for exactly that reason.
+- **A member of a deleted project still holds a socket.** `closeUiSocketsForProject` did not run, or
+  ran before the project delete committed. Same ordering rule as `closeUiSocketsForMember`, applied to
+  the whole project rather than one member.
 - **A machine is registered but its row is gone.** Deleting a project cascades to its machines while
   their agent sockets are still open, leaving a connection that is authenticated against a row that
   no longer exists. The agent route evicts it: any repo write that comes back with no row means the

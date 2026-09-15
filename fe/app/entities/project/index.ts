@@ -11,6 +11,7 @@ export {
 	ProjectListSchema,
 	ProjectMemberListSchema,
 	ProjectMemberSchema,
+	ProjectNameSchema,
 	ProjectRoleSchema,
 	ProjectSchema,
 	type CreatedMember,
