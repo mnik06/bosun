@@ -63,6 +63,7 @@ const routes: FastifyPluginAsync = async function (f) {
 		async (req, reply) => {
 			await deleteProject({
 				projectRepo: fastify.repos.projectRepo,
+				socketRegistry: fastify.services.socketRegistry,
 				id: req.params.projectId
 			});
 
