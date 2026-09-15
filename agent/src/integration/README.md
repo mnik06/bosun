@@ -30,9 +30,12 @@ conflict to a `claude` session.
    other plan's feature silently goes. It may edit, read and run; it may not use git, and its credential
    helper is cleared so it cannot push. It ends resolved, or with `give_up`. "Resolved" is decided here,
    not by the session: no conflict marker may remain in any file it was given.
-6. **Setup re-runs for changed lockfiles, then each `regenerate` command runs in order.** The tree is
+6. **Each `regenerate` command runs in order, then setup re-runs for changed lockfiles.** The tree is
    staged before each command, so what the command changed is exactly what is left unstaged — which is
-   what the pull request lists as regenerated, rather than every file the merge brought in.
+   what the pull request lists as regenerated, rather than every file the merge brought in. Setup comes
+   second because step 3 leaves a regenerated lockfile at the target's copy: the other way round, a
+   frozen install met the branch's manifest with the target's lockfile and refused every dependency the
+   branch had added. A regenerate command therefore runs on the dependencies the worktree already has.
 7. **Commit, then the checks.** Red gets one repair from the same kind of session, then the checks run
    again. Still red is needs you.
 8. **Push last.** Nothing is pushed while a check is red.

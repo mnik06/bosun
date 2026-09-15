@@ -59,5 +59,3 @@ export function getSkillsService(deps: { repoPath: string | (() => string | null
 		}
 	};
 }
-
-export type SkillsService = ReturnType<typeof getSkillsService>;

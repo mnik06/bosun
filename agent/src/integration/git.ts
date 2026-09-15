@@ -15,11 +15,11 @@ function lines(stdout: string): string[] {
 	return stdout.split('\n').map((line) => line.trim()).filter(Boolean);
 }
 
-export function globPathspecs(globs: string[]): string[] {
+function globPathspecs(globs: string[]): string[] {
 	return globs.map((glob) => `:(glob)${glob}`);
 }
 
-export function clipDiff(diff: string): string {
+function clipDiff(diff: string): string {
 	return diff.length <= DIFF_KEPT_CHARS ? diff : `${diff.slice(0, DIFF_KEPT_CHARS)}\n… (clipped)`;
 }
 

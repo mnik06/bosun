@@ -1,4 +1,4 @@
-import { Alert, Badge, Card, Center, Code, Group, Loader, Stack, Text } from '@mantine/core'
+import { Alert, Badge, Card, Code, Group, Stack, Text } from '@mantine/core'
 
 import type { Machine } from '~/entities/machine'
 import {
@@ -11,6 +11,7 @@ import { ConfigDraftEditor } from '~/features/edit-config-draft'
 import { OpenPullRequestButton } from '~/features/open-onboarding-pr'
 import { AutoResolveSwitch } from '~/features/toggle-auto-resolve'
 import { toErrorMessage } from '~/shared/lib'
+import { SectionLoader } from '~/shared/ui'
 
 function ConfigHeader ({ config, fullName }: { config: Config, fullName: string }) {
 	const differs = config.file !== null && config.draft !== null && config.draft !== config.file
@@ -55,11 +56,7 @@ function ConfigPane ({ machineId, repositoryId }: { machineId: string, repositor
 	const fullName = repository?.fullName ?? 'this repository'
 
 	if (config.isPending) {
-		return (
-			<Center py="xl">
-				<Loader />
-			</Center>
-		)
+		return <SectionLoader />
 	}
 
 	if (config.isError) {

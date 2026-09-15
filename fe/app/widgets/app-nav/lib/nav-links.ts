@@ -11,7 +11,7 @@ interface NavLinkSpec {
 
 // `prefixes` rather than the href alone: the machines tab lives at `/`, so
 // matching on the href would drop the highlight the moment you open a machine.
-export const NAV_LINKS: NavLinkSpec[] = [
+const NAV_LINKS: NavLinkSpec[] = [
 	{ to: '/plans', label: 'Plans', icon: ListTodo, prefixes: ['/plans'], leaderOnly: false, appOwnerOnly: false },
 	{ to: '/', label: 'Machines', icon: Server, prefixes: ['/machines'], leaderOnly: true, appOwnerOnly: false },
 	{ to: '/members', label: 'Members', icon: Users, prefixes: ['/members'], leaderOnly: true, appOwnerOnly: false },

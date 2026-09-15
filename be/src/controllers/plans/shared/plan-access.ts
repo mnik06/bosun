@@ -1,6 +1,6 @@
-import { HttpError } from 'src/api/errors/HttpError';
 import { type PlanRepo } from 'src/repos/plans/plan.repo';
 import { type Plan } from 'src/types/PlanSchema';
+import { orNotFound } from 'src/utils/general';
 
 // 404 rather than 403 for somebody else's plan, matching machines: a 403
 // confirms the row exists, which is what turns id guessing into discovery.
@@ -9,13 +9,7 @@ export async function getOwnedPlan(opts: {
 	id: string;
 	projectId: string;
 }): Promise<Plan> {
-	const plan = await opts.planRepo.getOwnedById({ id: opts.id, projectId: opts.projectId });
-
-	if (!plan) {
-		throw new HttpError(404, 'Plan not found');
-	}
-
-	return plan;
+	return orNotFound(opts.planRepo.getOwnedById({ id: opts.id, projectId: opts.projectId }), 'Plan not found');
 }
 
 export async function getMachinePlan(opts: {
@@ -23,11 +17,5 @@ export async function getMachinePlan(opts: {
 	id: string;
 	machineId: string;
 }): Promise<Plan> {
-	const plan = await opts.planRepo.getByIdForMachine({ id: opts.id, machineId: opts.machineId });
-
-	if (!plan) {
-		throw new HttpError(404, 'Plan not found');
-	}
-
-	return plan;
+	return orNotFound(opts.planRepo.getByIdForMachine({ id: opts.id, machineId: opts.machineId }), 'Plan not found');
 }

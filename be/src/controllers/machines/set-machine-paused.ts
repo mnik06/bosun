@@ -1,4 +1,5 @@
 import { HttpError } from 'src/api/errors/HttpError';
+import { announceMachine } from 'src/controllers/machines/shared/announce';
 import { type MachineRepo } from 'src/repos/machines/machine.repo';
 import { type SocketRegistry } from 'src/services/sockets/registry.service';
 import { type Machine } from 'src/types/MachineSchema';
@@ -39,10 +40,7 @@ export async function setMachinePaused(opts: {
 		machineId: machine.id,
 		message: { type: opts.paused ? 'pause' : 'resume' }
 	});
-	opts.socketRegistry.broadcastToUi({
-		projectId: machine.projectId,
-		message: { type: 'machine.updated', machine }
-	});
+	announceMachine({ socketRegistry: opts.socketRegistry, machine });
 
 	return machine;
 }

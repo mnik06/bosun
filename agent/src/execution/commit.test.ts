@@ -3,19 +3,10 @@ import os from 'os';
 import path from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { getExecService } from '../services/exec.service';
+import { bootstrapBareRemote, git, identify } from '../test-support/git-fixture';
 import { commitMessageFor, getCommitService, isNothingToCommit, mergeBranches } from './commit';
 
 const exec = getExecService();
-
-async function git(cwd: string, args: string[]) {
-	const result = await exec.run('git', ['-C', cwd, ...args], {});
-
-	if (!result.ok) {
-		throw new Error(`git ${args.join(' ')}: ${result.reason}`);
-	}
-
-	return result.stdout;
-}
 
 describe('isNothingToCommit', () => {
 	it.each([
@@ -171,11 +162,6 @@ describe('the plan branch on the remote', () => {
 	let worktree: string;
 	let other: string;
 
-	async function identify(cwd: string) {
-		await git(cwd, ['config', 'user.email', 'a@b.c']);
-		await git(cwd, ['config', 'user.name', 'Test']);
-	}
-
 	async function commitFile(cwd: string, file: string, content: string) {
 		fs.writeFileSync(path.join(cwd, file), content);
 		await git(cwd, ['add', '-A']);
@@ -183,14 +169,8 @@ describe('the plan branch on the remote', () => {
 	}
 
 	beforeEach(async () => {
-		root = fs.mkdtempSync(path.join(os.tmpdir(), 'bosun-sync-'));
-		worktree = path.join(root, 'worktree');
-		other = path.join(root, 'other');
+		({ root, worktree, other } = await bootstrapBareRemote('bosun-sync-'));
 
-		await git(root, ['init', '--bare', '-b', 'main', 'remote.git']);
-		await git(root, ['init', '-b', 'main', 'worktree']);
-		await identify(worktree);
-		await git(worktree, ['remote', 'add', 'origin', path.join(root, 'remote.git')]);
 		await commitFile(worktree, 'base.txt', 'base\n');
 		await git(worktree, ['push', '-u', 'origin', 'main']);
 	});
@@ -280,11 +260,6 @@ describe('a stacked plan', () => {
 	let worktree: string;
 	let other: string;
 
-	async function identify(cwd: string) {
-		await git(cwd, ['config', 'user.email', 'a@b.c']);
-		await git(cwd, ['config', 'user.name', 'Test']);
-	}
-
 	async function commitFile(cwd: string, file: string, content: string) {
 		fs.writeFileSync(path.join(cwd, file), content);
 		await git(cwd, ['add', '-A']);
@@ -292,14 +267,8 @@ describe('a stacked plan', () => {
 	}
 
 	beforeEach(async () => {
-		root = fs.mkdtempSync(path.join(os.tmpdir(), 'bosun-stack-'));
-		worktree = path.join(root, 'worktree');
-		other = path.join(root, 'other');
+		({ root, worktree, other } = await bootstrapBareRemote('bosun-stack-'));
 
-		await git(root, ['init', '--bare', '-b', 'main', 'remote.git']);
-		await git(root, ['init', '-b', 'main', 'worktree']);
-		await identify(worktree);
-		await git(worktree, ['remote', 'add', 'origin', path.join(root, 'remote.git')]);
 		await commitFile(worktree, 'base.txt', 'base\n');
 		await git(worktree, ['push', '-u', 'origin', 'main']);
 		await git(root, ['clone', path.join(root, 'remote.git'), 'other']);

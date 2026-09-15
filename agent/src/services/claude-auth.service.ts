@@ -7,7 +7,7 @@ export const CLAUDE_TOKEN_VARIABLE = 'CLAUDE_CODE_OAUTH_TOKEN';
 // Claude Code applies its own precedence between this and the token, so a stray
 // key left on the box could otherwise decide which account a session bills to.
 // Stripped rather than merely ignored here.
-export const CONFLICTING_VARIABLES = ['ANTHROPIC_API_KEY'];
+const CONFLICTING_VARIABLES = ['ANTHROPIC_API_KEY'];
 
 // Every OAuth token `claude setup-token` mints carries it. Not enforced, because
 // a prefix the CLI changes is not a reason for bosun to refuse a working

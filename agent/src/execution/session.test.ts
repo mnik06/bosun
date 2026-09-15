@@ -5,13 +5,18 @@ import { type Services } from '../services/index';
 
 const GIB = 1024 ** 3;
 
-vi.mock('../sessions/mcp-server', () => ({
-	startSessionMcpServer: vi.fn().mockResolvedValue({
-		configPath: '/tmp/mcp.json',
-		close: vi.fn().mockResolvedValue(undefined),
-		answer: vi.fn()
-	})
-}));
+vi.mock('../sessions/mcp-server', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('../sessions/mcp-server')>();
+
+	return {
+		...actual,
+		startSessionMcpServer: vi.fn().mockResolvedValue({
+			configPath: '/tmp/mcp.json',
+			close: vi.fn().mockResolvedValue(undefined),
+			answer: vi.fn()
+		})
+	};
+});
 
 vi.mock('../sessions/process', () => ({
 	spawnClaudeSession: vi.fn().mockReturnValue({ kill: vi.fn(), write: vi.fn() })

@@ -24,13 +24,6 @@ export const MachineUpdatedMsgSchema = z.object({
 	machine: MachineSchema
 });
 
-export const MachinePongMsgSchema = z.object({
-	type: z.literal('machine.pong'),
-	machineId: z.string(),
-	id: z.string(),
-	rttMs: z.number()
-});
-
 export const MachineDeletedMsgSchema = z.object({
 	type: z.literal('machine.deleted'),
 	machineId: z.string()
@@ -186,7 +179,6 @@ export const NotificationCreatedMsgSchema = z.object({
 
 export const UiMsgSchema = z.discriminatedUnion('type', [
 	MachineUpdatedMsgSchema,
-	MachinePongMsgSchema,
 	MachineDeletedMsgSchema,
 	MachineUpgradingMsgSchema,
 	MachineUpgradeDeclinedMsgSchema,
@@ -223,5 +215,3 @@ export const UiCommandSchema = z.discriminatedUnion('type', [
 	z.object({ type: z.literal('plan.subscribe'), planId: z.string() }),
 	z.object({ type: z.literal('plan.unsubscribe'), planId: z.string() })
 ]);
-
-export type UiCommand = z.infer<typeof UiCommandSchema>;

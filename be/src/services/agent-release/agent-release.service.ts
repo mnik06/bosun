@@ -115,5 +115,3 @@ export function getAgentReleaseService(deps: {
 		}
 	};
 }
-
-export type AgentReleaseService = ReturnType<typeof getAgentReleaseService>;

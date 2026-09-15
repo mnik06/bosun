@@ -30,7 +30,6 @@ import { FootprintSchema } from './footprint';
 import { ProjectProfileSchema } from './project-profile';
 
 export {
-	SealedValueSchema,
 	type OnboardingStart,
 	type RepoAttach,
 	type SealedValue
@@ -285,11 +284,6 @@ export const AgentMsgSchema = z.discriminatedUnion('type', [
 
 export type AgentMsg = z.infer<typeof AgentMsgSchema>;
 
-export const PingMsgSchema = z.object({
-	type: z.literal('ping'),
-	id: z.string()
-});
-
 export const RefreshMsgSchema = z.object({ type: z.literal('refresh') });
 
 export const UpgradeMsgSchema = z.object({
@@ -401,8 +395,6 @@ export type ExecFinding = z.infer<typeof ExecFindingSchema>;
 // lane, a fix in a build slot, and a re-check of what the fix repaired.
 export const RunPhaseSchema = z.enum(['drive', 'fix', 'recheck']);
 
-export type RunPhase = z.infer<typeof RunPhaseSchema>;
-
 // Everything the session needs travels in the frame. The agent holds no plan
 // state of its own, so a slice dispatched after a reconnect needs no lookup and
 // no cache that could disagree with the row the backend scheduled from.
@@ -491,7 +483,6 @@ export const EnvDeleteMsgSchema = z.object({
 });
 
 export const ServerMsgSchema = z.discriminatedUnion('type', [
-	PingMsgSchema,
 	RefreshMsgSchema,
 	UpgradeMsgSchema,
 	PauseMsgSchema,

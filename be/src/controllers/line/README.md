@@ -31,7 +31,7 @@ scheduled ─slot─► building ─last bullet─► integrating ─► waiting
                                                               │ recheck             ▼
                   in_review ◄── (no recheck / recheck passes) ── fixing ◄── waiting_verify
                      │  ▲
-      base/provider  │  └─ integration (resolved conflict after verify → drive again)
+      base/provider  │  └─ integration (stays in review, conflict resolved or not)
          moved       ▼
                   merged
 ```
@@ -90,8 +90,9 @@ build — a push and its webhook are one integration. Webhooks are the fast path
 reconcile (`github/reconcile-pull-requests.ts`) is what catches a missed merge, because a missed
 merge leaves every dependent waiting forever.
 
-After verify, an integration that resolved a conflict sends the build back for a drive; one that
-only regenerated files was proven by the checks it ran and stays in review.
+After verify, an integration stays in review whatever it did — merged, regenerated or resolved a
+conflict. Its checks ran on the result, and every resolved conflict's diff is in the pull request for
+the reviewer.
 
 ## Questions
 
@@ -118,3 +119,7 @@ run and the build goes to the front; the restarted bullet reads it in its prompt
   and throws away a warm worktree. The one exception is a verify that cannot fit otherwise, and the
   worktree is kept.
 - **Stopping a running bullet to make room.** The cost of a lost bullet is always more than the wait.
+- **A drive after a conflict resolved post-verify.** It took a plan already in review back to
+  `waiting_verify`, behind every build on the machine's lane — a sync that should take minutes held the
+  pull request for as long as the verify line was. The checks and the resolved diff in the pull request
+  are what a sync is judged by.

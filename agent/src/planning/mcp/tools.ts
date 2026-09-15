@@ -2,12 +2,14 @@ import { z } from 'zod';
 import { ASK_DEFINITION } from '../../sessions/ask';
 import {
 	createAskTool,
+	mcpToolDefinition,
 	textToolResult,
 	type PendingQuestion
 } from '../../sessions/mcp-server';
 import { FootprintSchema } from '../../footprint';
 import { type PlanAnswer, type PlanQuestion } from '../../protocol';
 import { type BosunApiService } from '../../services/bosun-api.service';
+import { CoverageEntrySchema, coverageRefusal, withCoverage } from '../coverage';
 
 export const NamePlanArgsSchema = z.object({ title: z.string().min(1) });
 
@@ -36,7 +38,11 @@ export const PublishPlanArgsSchema = z.object({
 					.describe('required on every build bullet, and absent on the verify bullet: what this bullet creates, changes and consumes')
 			})
 		)
-		.min(1)
+		.min(1),
+	coverage: z
+		.array(CoverageEntrySchema)
+		.optional()
+		.describe('the requirements ledger: one entry per requirement in the ticket and its sources, and per gap this session found, each with the criteria that deliver it or the non-goal it became. Required on a new plan; on a revision, sent only to replace the ledger')
 });
 
 const DESCRIPTIONS: Record<string, string> = {
@@ -47,7 +53,7 @@ const DESCRIPTIONS: Record<string, string> = {
 	set_blockers:
 		'Declare the plans whose whole feature this one needs before it can start — not a piece of them, which is a `consumes` entry in a bullet\'s footprint. Names them by plan number, replacing whatever was declared before; pass an empty list to clear. Bosun detects every other dependency itself from footprints when the plan is approved, so declare only what no footprint can say.',
 	publish_plan:
-		'Publish the whole plan at once: title, markdown body, every acceptance criterion and every tracer bullet with the criteria it claims, its footprint, and `foundation` on bullet 1 when it holds shared pieces. Replaces whatever was published before, so a revision re-sends the plan as it should now be rather than a diff. Every AC must be claimed by exactly one bullet, and what is already marked implemented or verified stays that way. Refused with more than six build bullets, a build bullet without a footprint, or a schema change, contract or created module outside bullet 1.'
+		'Publish the whole plan at once: title, markdown body, every acceptance criterion, every tracer bullet with the criteria it claims, its footprint, and `foundation` on bullet 1 when it holds shared pieces, and the `coverage` ledger. Replaces whatever was published before, so a revision re-sends the plan as it should now be rather than a diff. Every AC must be claimed by exactly one bullet, and what is already marked implemented or verified stays that way. Refused with more than six build bullets, a build bullet without a footprint, or a schema change, contract or created module outside bullet 1. Refused without `coverage` on a new plan, and whenever `coverage` holds a requirement no criterion delivers and no non-goal explains, or the plan holds a criterion no entry traces to. The ledger is appended to the body as its Requirements coverage section.'
 };
 
 export const TOOL_SCHEMAS = {
@@ -57,18 +63,14 @@ export const TOOL_SCHEMAS = {
 	publish_plan: PublishPlanArgsSchema
 } as const;
 
-export type ToolName = keyof typeof TOOL_SCHEMAS;
-
 // Derived from the Zod schemas rather than written out beside them. Hand-keeping
 // two declarations of the same shape in sync is a drift the model only discovers
 // by calling a tool with arguments the parser then rejects.
 export const TOOL_DEFINITIONS = [
 	ASK_DEFINITION,
-	...Object.entries(TOOL_SCHEMAS).map(([name, schema]) => ({
-		name,
-		description: DESCRIPTIONS[name]!,
-		inputSchema: z.toJSONSchema(schema, { target: 'draft-7' })
-	}))
+	...Object.entries(TOOL_SCHEMAS).map(([name, schema]) =>
+		mcpToolDefinition({ name, description: DESCRIPTIONS[name]!, schema })
+	)
 ];
 
 // The one thing a session cannot be trusted to enforce on itself. A turn that
@@ -83,12 +85,21 @@ const GRILL_REQUIRED = [
 	'Run the grill — one question at a time, with `bosun_ask` — and publish once the decisions are settled.'
 ].join(' ');
 
+// Asked of the prompt alone, a session published 22 criteria from a ticket that
+// stated 126, and nothing downstream reads the ticket again to notice.
+const COVERAGE_REQUIRED = [
+	'Refused: a new plan is published with its `coverage` ledger.',
+	'List every requirement from the ticket and its sources, and every gap you found, each with the criteria that deliver it or the non-goal it became.'
+].join(' ');
+
 export function createPlanDispatch(opts: {
 	planId: string;
 	auto: boolean;
 	// Off for a revision: the plan handed to it is already the product of a grill,
 	// and a change the person asked for in prose is not a new one.
 	requireGrill: boolean;
+	// Off for a revision too: its ledger is already in the body it was handed.
+	requireCoverage: boolean;
 	bosunApi: BosunApiService;
 	onPublished: () => void;
 	onGrilled: () => void;
@@ -142,9 +153,21 @@ export function createPlanDispatch(opts: {
 					throw new Error(GRILL_REQUIRED);
 				}
 
+				const { coverage, ...artifact } = PublishPlanArgsSchema.parse(args);
+
+				if (opts.requireCoverage && coverage === undefined) {
+					throw new Error(COVERAGE_REQUIRED);
+				}
+
+				const refusal = coverage === undefined ? null : coverageRefusal({ acCodes: artifact.acs.map((ac) => ac.code), coverage });
+
+				if (refusal !== null) {
+					throw new Error(refusal);
+				}
+
 				const saved = await opts.bosunApi.publishPlan({
 					planId: opts.planId,
-					artifact: PublishPlanArgsSchema.parse(args)
+					artifact: coverage === undefined ? artifact : { ...artifact, bodyMd: withCoverage(artifact.bodyMd, coverage) }
 				});
 
 				opts.onPublished();

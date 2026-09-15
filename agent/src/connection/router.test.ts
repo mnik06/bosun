@@ -155,14 +155,6 @@ describe('routeServerFrame', () => {
 		});
 	});
 
-	it('answers ping with a pong carrying the same id', async () => {
-		const { send, route } = build();
-
-		await route({ type: 'ping', id: 'cmd_1' });
-
-		expect(sent(send)).toEqual([expect.objectContaining({ type: 'pong', id: 'cmd_1' })]);
-	});
-
 	it.each([
 		['pause', true],
 		['resume', false]

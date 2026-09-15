@@ -49,7 +49,7 @@ project, and agents have no notion of users or roles.
 
 There is exactly one backend process (`--ha=false` on Fly, deliberately). A live socket is not state
 that can be shared — it belongs to the process holding the file descriptor — so a second instance
-would not "share" the registry, it would split it: an agent connected to instance A, a ping arriving
+would not "share" the registry, it would split it: an agent connected to instance A, a command arriving
 at instance B, and a machine that is online and unreachable at the same time.
 
 Scaling past one instance is therefore not a matter of moving this `Map` into Redis. It needs a
@@ -110,10 +110,10 @@ derived from the run rather than trusted, the same as every other frame that nam
 - **Machine flapping.** Two agent processes are running against one config file. Both authenticate,
   each connect evicts the other, and the status alternates. The config is per machine, not per
   process.
-- **Ping returns 409 for an online machine.** The row says online but the map has no socket — the
+- **A command returns 409 for an online machine.** The row says online but the map has no socket — the
   disconnect path failed to write. The map is the truth for reachability; the row is a projection of
   it.
-- **A ping reaches a machine that was just deleted.** It cannot: `deleteMachine` unregisters the
+- **A command reaches a machine that was just deleted.** It cannot: `deleteMachine` unregisters the
   socket before closing it, rather than waiting for the close event, so the entry is gone by the time
   the delete returns. Relying on the close event would leave a window in which the row does not exist
   and the socket still does.

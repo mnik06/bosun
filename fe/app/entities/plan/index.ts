@@ -10,8 +10,10 @@ export {
 	refreshNeedsYou,
 	refreshPlanDetail
 } from './lib/plan-cache'
+export { showsNeedsYouPanel } from './lib/needs-you-panel'
 export { findPendingQuestion, type PendingQuestion } from './lib/pending-question'
 export { planLabel } from './lib/plan-label'
+export { matchesPlanSearch, sortPlansByRecency } from './lib/plan-search'
 export { PLAN_STATE_LABEL, resolvePlanState, WORKING_STATES } from './lib/plan-state'
 export { defaultPlanTab, PLAN_TAB_LABEL, visiblePlanTabs, type PlanTab } from './lib/plan-tabs'
 export { machineRefreshBlock } from './lib/refresh-block'
@@ -69,5 +71,7 @@ export { PlanUiMsgSchema, type PlanUiMsg } from './model/plan-message'
 export { PlansSocketProvider, useIntegrationActivity, useRunActivity } from './model/plans-socket'
 export { usePlanStream, type PlanStream } from './model/use-plan-stream'
 export { AnsweredQuestion } from './ui/answered-question'
+export { PlanRowCard } from './ui/plan-row-card'
+export { PlanSearchableList } from './ui/plan-searchable-list'
 export { PlanStatusBadge } from './ui/plan-status-badge'
 export { RunRow } from './ui/run-row'

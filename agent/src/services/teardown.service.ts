@@ -120,5 +120,3 @@ export function getTeardownService(deps: { homeDir?: string; execPath?: string }
 		}
 	};
 }
-
-export type TeardownService = ReturnType<typeof getTeardownService>;

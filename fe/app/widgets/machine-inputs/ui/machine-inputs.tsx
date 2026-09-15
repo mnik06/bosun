@@ -1,4 +1,4 @@
-import { Alert, Badge, Card, Center, Divider, Loader, Stack, Tabs, Text } from '@mantine/core'
+import { Alert, Badge, Card, Divider, Stack, Tabs, Text } from '@mantine/core'
 import { Plus } from 'lucide-react'
 import { useState } from 'react'
 
@@ -6,6 +6,7 @@ import { AGENT_TOO_OLD_FOR_INPUTS, type Machine } from '~/entities/machine'
 import { useMachineOnboardingQuery } from '~/entities/repository'
 import { envFilePath, VarsEditor } from '~/features/edit-env-sets'
 import { MachinePolicySwitch } from '~/features/set-machine-policy'
+import { SectionLoader } from '~/shared/ui'
 import { inputGroups, type VarsGroup } from '~/widgets/machine-inputs/lib/input-groups'
 import { AddPathForm } from '~/widgets/machine-inputs/ui/add-path-form'
 
@@ -38,11 +39,7 @@ export function MachineInputs ({ machine }: { machine: Machine }) {
 	const [tab, setTab] = useState<string | null>(null)
 
 	if (onboarding.isLoading) {
-		return (
-			<Center py="xl">
-				<Loader />
-			</Center>
-		)
+		return <SectionLoader />
 	}
 
 	const groups = inputGroups({

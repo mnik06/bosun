@@ -1,6 +1,6 @@
 import { Alert, Group, Loader, Stack, Stepper, Text } from '@mantine/core'
 
-import { RunRow, useIntegrationActivity, useRunActivity, type PlanDetail, type SliceRun } from '~/entities/plan'
+import { RunRow, showsNeedsYouPanel, useIntegrationActivity, useRunActivity, type PlanDetail, type SliceRun } from '~/entities/plan'
 import { BuildActionButton } from '~/features/control-build'
 import { executionStep } from '~/widgets/plan-execution/lib/step'
 
@@ -62,7 +62,7 @@ export function PlanExecution ({ detail }: { detail: PlanDetail }) {
 				</Text>
 			)}
 
-			{build.failureReason === null ? null : (
+			{build.failureReason === null || showsNeedsYouPanel(build) ? null : (
 				<Alert color={build.status === 'failed' ? 'red' : 'orange'} variant="light">
 					<Stack gap="xs" align="start">
 						<Text size="sm" className="whitespace-pre-wrap">

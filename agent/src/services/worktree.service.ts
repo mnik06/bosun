@@ -12,7 +12,7 @@ import {
 	type RepoService
 } from './repo.service';
 
-export const WORKTREE_DIRNAME = 'worktrees';
+const WORKTREE_DIRNAME = 'worktrees';
 
 export interface WorktreeResult {
 	ok: boolean;
@@ -160,5 +160,3 @@ export function getWorktreeService(deps: {
 		}
 	};
 }
-
-export type WorktreeService = ReturnType<typeof getWorktreeService>;

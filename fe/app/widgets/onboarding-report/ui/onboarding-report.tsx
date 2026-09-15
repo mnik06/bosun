@@ -1,4 +1,4 @@
-import { Alert, Anchor, Card, Center, Collapse, Group, Loader, Progress, Stack, Text } from '@mantine/core'
+import { Alert, Anchor, Card, Collapse, Group, Progress, Stack, Text } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
 import { Link } from 'react-router'
 
@@ -17,6 +17,7 @@ import {
 import { OpenPullRequestButton } from '~/features/open-onboarding-pr'
 import { StartOnboardingButton } from '~/features/start-onboarding'
 import { formatRelativeTime } from '~/shared/lib'
+import { SectionLoader } from '~/shared/ui'
 import { displaySteps, pendingStep } from '~/widgets/onboarding-report/lib/display-steps'
 import { OnboardingSteps } from '~/widgets/onboarding-report/ui/onboarding-steps'
 
@@ -142,11 +143,7 @@ export function OnboardingReport ({ machine }: { machine: Machine }) {
 	const repositories = useRepositoriesQuery()
 
 	if (onboarding.isLoading) {
-		return (
-			<Center py="xl">
-				<Loader />
-			</Center>
-		)
+		return <SectionLoader />
 	}
 
 	if (onboarding.data == null) {

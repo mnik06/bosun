@@ -4,7 +4,7 @@ import path from 'path';
 import { z } from 'zod';
 import { type EnvService } from './env.service';
 
-export const MCP_CONFIG_FILENAME = 'mcp.json';
+const MCP_CONFIG_FILENAME = 'mcp.json';
 
 // Our own server is assembled per session and carries the loopback bearer token.
 // A user server under the same key would shadow it and take the planning tools
@@ -91,7 +91,7 @@ export function expandVariables(value: unknown, env: NodeJS.ProcessEnv): ExpandR
 
 // A `null` entry is an opt-out, not a server. Dropping it after the merge is what
 // lets ~/.bosun/mcp.json switch off a default it cannot satisfy.
-export function withDefaults(userServers: Record<string, unknown>): Record<string, unknown> {
+function withDefaults(userServers: Record<string, unknown>): Record<string, unknown> {
 	return Object.fromEntries(
 		Object.entries({ ...DEFAULT_SERVERS, ...userServers }).filter(([, server]) => server !== null)
 	);

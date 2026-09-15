@@ -1,4 +1,4 @@
-import { Alert, Center, Loader, Tabs, Text } from '@mantine/core'
+import { Tabs, Text } from '@mantine/core'
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router'
 
@@ -14,7 +14,7 @@ import {
 	type PlanTab
 } from '~/entities/plan'
 import { useMarkPlanNotificationsRead } from '~/features/mark-notification-read'
-import { toErrorMessage } from '~/shared/lib'
+import { QueryErrorAlert, SectionLoader } from '~/shared/ui'
 import { PlanArtifact } from '~/widgets/plan-artifact'
 import { PlanChanges } from '~/widgets/plan-changes'
 import { PlanChat } from '~/widgets/plan-chat'
@@ -88,19 +88,11 @@ export default function PlanPage ({ params }: Route.ComponentProps) {
 	const [tab, setTab] = useState<string | null>(searchParams.get('tab'))
 
 	if (isPending) {
-		return (
-			<Center py="xl">
-				<Loader />
-			</Center>
-		)
+		return <SectionLoader />
 	}
 
 	if (error) {
-		return (
-			<Alert color="red" title="Could not load this plan">
-				{toErrorMessage(error, 'Unknown error')}
-			</Alert>
-		)
+		return <QueryErrorAlert title="Could not load this plan" error={error} />
 	}
 
 	const tabs = visiblePlanTabs(data)

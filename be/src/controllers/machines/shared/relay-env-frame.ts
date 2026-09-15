@@ -1,5 +1,6 @@
 import { HttpError } from 'src/api/errors/HttpError';
 import { getMachine } from 'src/controllers/machines/get-machine';
+import { announceMachine } from 'src/controllers/machines/shared/announce';
 import { type MachineRepo } from 'src/repos/machines/machine.repo';
 import { type IdService } from 'src/services/ids/id.service';
 import { type PendingEnvRequestsService } from 'src/services/sockets/pending-env-requests.service';
@@ -84,10 +85,7 @@ export async function relayEnvFrame(
 		throw new HttpError(404, 'Machine not found');
 	}
 
-	deps.socketRegistry.broadcastToUi({
-		projectId: machine.projectId,
-		message: { type: 'machine.updated', machine }
-	});
+	announceMachine({ socketRegistry: deps.socketRegistry, machine });
 
 	await opts.onSaved?.(machine);
 

@@ -294,8 +294,7 @@ export async function applyMachineFrame(opts: {
 // transcript whose sequence numbers come from `max(seq) + 1`, so two overlapping
 // appends would collide on the unique index — and an answer recorded before the
 // question it answers is a transcript that cannot be replayed. Machine frames and
-// pongs stay off this queue: nothing about them is ordered, and a pong waiting
-// behind a database write is a round-trip time that measures the wrong thing.
+// pongs stay off this queue: nothing about them is ordered.
 function createFrameQueue(log: FastifyBaseLogger) {
 	let tail = Promise.resolve();
 

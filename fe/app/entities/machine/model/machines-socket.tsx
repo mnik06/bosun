@@ -8,17 +8,11 @@ import { UiMsgSchema, type UiMsg } from '~/entities/machine/model/ui-message'
 import { repositoryKeys, type Repository } from '~/entities/repository'
 import { subscribeToUiSocket } from '~/shared/api'
 
-export interface PongResult {
-	rttMs: number
-	at: number
-}
-
 // A failed upgrade reports nothing back — the agent logs it and stays on the
 // build it has — so the banner needs an end of its own or it would outlive the
 // attempt it describes.
 const UPGRADE_TIMEOUT_MS = 180_000
 
-const PongContext = createContext<Record<string, PongResult>>({})
 const UpgradeContext = createContext<Record<string, string>>({})
 
 export interface UpgradeDecline {
@@ -31,10 +25,6 @@ export interface UpgradeDecline {
 }
 
 const DeclineContext = createContext<Record<string, UpgradeDecline>>({})
-
-export function useLastPong (machineId: string): PongResult | null {
-	return useContext(PongContext)[machineId] ?? null
-}
 
 export function useUpgradingTo (machineId: string): string | null {
 	return useContext(UpgradeContext)[machineId] ?? null
@@ -115,7 +105,6 @@ function handleRepositoryMsg (queryClient: QueryClient, msg: RepositoryMsg): voi
 
 export function MachinesSocketProvider ({ children }: { children: ReactNode }) {
 	const queryClient = useQueryClient()
-	const [pongs, setPongs] = useState<Record<string, PongResult>>({})
 	const [upgrades, setUpgrades] = useState<Record<string, string>>({})
 	const [declines, setDeclines] = useState<Record<string, UpgradeDecline>>({})
 	const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>())
@@ -182,17 +171,8 @@ export function MachinesSocketProvider ({ children }: { children: ReactNode }) {
 				return
 			}
 
-			if (msg.type === 'machine.deleted') {
-				dropMachine(queryClient, msg.machineId)
-				forget(msg.machineId)
-
-				return
-			}
-
-			setPongs((previous) => ({
-				...previous,
-				[msg.machineId]: { rttMs: msg.rttMs, at: Date.now() }
-			}))
+			dropMachine(queryClient, msg.machineId)
+			forget(msg.machineId)
 		}
 
 		const unsubscribe = subscribeToUiSocket({
@@ -217,12 +197,10 @@ export function MachinesSocketProvider ({ children }: { children: ReactNode }) {
 	}, [queryClient])
 
 	return (
-		<PongContext.Provider value={pongs}>
-			<UpgradeContext.Provider value={upgrades}>
-				<DeclineContext.Provider value={declines}>
-					{children}
-				</DeclineContext.Provider>
-			</UpgradeContext.Provider>
-		</PongContext.Provider>
+		<UpgradeContext.Provider value={upgrades}>
+			<DeclineContext.Provider value={declines}>
+				{children}
+			</DeclineContext.Provider>
+		</UpgradeContext.Provider>
 	)
 }

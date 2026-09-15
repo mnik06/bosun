@@ -1,4 +1,4 @@
-import { Alert, Button, Center, Group, Loader, Stack, Text, Title } from '@mantine/core'
+import { Alert, Button, Group, Loader, Stack, Text, Title } from '@mantine/core'
 import { Download } from 'lucide-react'
 import type { ReactNode } from 'react'
 
@@ -17,7 +17,8 @@ import { PausedBanner } from '~/features/pause-machine'
 import { RefreshMachineButton, useRefreshMachine } from '~/features/refresh-machine'
 import { MachineCapacityForm } from '~/features/set-machine-capacity'
 import { SetupClaudeButton } from '~/features/setup-claude'
-import { formatRelativeTime, toErrorMessage } from '~/shared/lib'
+import { formatRelativeTime } from '~/shared/lib'
+import { QueryErrorAlert, SectionLoader } from '~/shared/ui'
 import { GitCard } from '~/widgets/machine-detail/ui/git-card'
 import { MachineActions } from '~/widgets/machine-detail/ui/machine-actions'
 import { MachineTabs } from '~/widgets/machine-detail/ui/machine-tabs'
@@ -115,19 +116,11 @@ export function MachineDetail ({
 	)
 
 	if (isPending) {
-		return (
-			<Center py="xl">
-				<Loader />
-			</Center>
-		)
+		return <SectionLoader />
 	}
 
 	if (error) {
-		return (
-			<Alert color="red" title="Could not load machine">
-				{toErrorMessage(error, 'Unknown error')}
-			</Alert>
-		)
+		return <QueryErrorAlert title="Could not load machine" error={error} />
 	}
 
 	const kind = machineKind(data)

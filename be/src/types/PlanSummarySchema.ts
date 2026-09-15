@@ -10,15 +10,11 @@ export const PlanSummaryEntrySchema = z.object({
 	note: z.string()
 });
 
-export type PlanSummaryEntry = z.infer<typeof PlanSummaryEntrySchema>;
-
 export const PlanSummaryAreaSchema = z.object({
 	name: z.string(),
 	why: z.string(),
 	entries: z.array(PlanSummaryEntrySchema)
 });
-
-export type PlanSummaryArea = z.infer<typeof PlanSummaryAreaSchema>;
 
 export const PlanSummarySchema = z.object({
 	headline: z.string(),

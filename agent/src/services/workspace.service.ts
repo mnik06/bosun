@@ -6,7 +6,7 @@ import { type RepoAttach } from '../protocol';
 import { PROJECT_CONFIG_PATH } from '../project-config';
 import { type ExecService } from './exec.service';
 
-export const REPOS_DIRNAME = 'repos';
+const REPOS_DIRNAME = 'repos';
 
 const CLONE_TIMEOUT_MS = 30 * 60 * 1000;
 

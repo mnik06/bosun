@@ -37,12 +37,6 @@ export const MachineSchema = z.object({
 	createdAt: z.date()
 });
 
-// Enrolled before plan 008: it names the operator's checkout and has no
-// repository row. Everything it does keeps going through today's path.
-export function isLegacyMachine(machine: Machine): boolean {
-	return machine.repositoryId === null && machine.repoPath !== null;
-}
-
 export type Machine = z.infer<typeof MachineSchema>;
 
 export const EnrollmentSchema = z.object({

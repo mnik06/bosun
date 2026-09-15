@@ -138,6 +138,35 @@ Counting is keyed by the label a tool renders, not by the tool's name. `Grep` an
 "searched the codebase", and separate counters made the number visibly count backwards as the two
 interleaved.
 
+## A plan is measured by what it covers
+
+Nothing downstream of planning reads the ticket again: bullets build the criteria, verify drives the
+criteria, and a requirement that never became one is never built and never missed. A session once
+published 22 criteria from a ticket stating 126, and nothing noticed. Two causes, and each has its fix.
+
+**The fetch.** A tracker's default fetch returns the summary and the description. Jira keeps acceptance
+criteria and product requirements in custom fields that fetch leaves out, so the session planned from
+an overview. The prompt asks for every field, by name, and the comments and linked issues with them.
+
+**The prompt leaned towards less** — never invent requirements, merge criteria, interview only
+high-stakes branches, cut scope past six bullets, a styling question is never a question. It now asks
+for the opposite: a ledger of every requirement in every source, gaps hunted through product, UI and
+architecture lenses, one checkable behaviour per criterion, and an audit — one subagent against the
+verbatim sources, one hunting gaps — repeated until a pass finds nothing new. Appearance is still the
+project's; what a screen does in every state is the plan's.
+
+**The ledger is enforced by the tool, not asked of the prompt.** Asking is what failed. `publish_plan`
+takes `coverage` — one entry per requirement or found gap, with the criteria that deliver it or the
+non-goal it became — and `coverage.ts` refuses a plan with a line nothing accounts for, or a criterion
+that traces to no line. The tool cannot know a requirement the session never wrote down, but writing
+them down is no longer a step it can skip, and the ledger is appended to the body as **Requirements
+coverage**, where the person can hold it against the ticket line by line. It is appended by the tool
+rather than written by the session so the section a person reads is the one that was checked. A
+revision is handed that section in the body and sends a new ledger only when it re-cuts criteria.
+
+Rejected: **fetching the ticket in the agent** and inlining it into the prompt. The agent holds no
+tracker credential — trackers are the user's MCP servers — and every tracker's field model is its own.
+
 ## Invariants
 
 - **One credential, and the conflicting one is stripped.** `CLAUDE_CODE_OAUTH_TOKEN` is the only

@@ -6,7 +6,7 @@ import path from 'path';
 import { type ExecService } from './exec.service';
 import { type ProjectConfig } from '../project-config';
 
-export const SETUP_STATE_DIRNAME = 'setup-state';
+const SETUP_STATE_DIRNAME = 'setup-state';
 
 const STEP_TIMEOUT_MS = 30 * 60 * 1000;
 const TAIL_CHARS = 4_000;
@@ -258,5 +258,3 @@ export function getSetupStepsService(deps: { exec: ExecService; homeDir?: string
 		}
 	};
 }
-
-export type SetupStepsService = ReturnType<typeof getSetupStepsService>;

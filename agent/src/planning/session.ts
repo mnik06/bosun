@@ -12,6 +12,7 @@ import {
 	type SessionMcpServer
 } from '../sessions/mcp-server';
 import { spawnClaudeSession, type ClaudeSession } from '../sessions/process';
+import { createStderrTail, logDroppedFrame, reportStartFailure } from '../sessions/turn-support';
 import { createStreamParser } from './stream-parser';
 
 // Planning reads and asks; it never writes to the repository.
@@ -330,7 +331,7 @@ export function createPlanningSessions(opts: {
 		opts.send({ type: 'plan.activity', planId, label: 'Starting the session' });
 
 		const activity = createActivityTracker();
-		let stderr = '';
+		const stderr = createStderrTail(STDERR_KEPT_CHARS);
 		const parser = createStreamParser({
 			onEvent: (event) => {
 				if (event.kind === 'text') {
@@ -351,9 +352,7 @@ export function createPlanningSessions(opts: {
 
 				event.ok ? settle(planId) : fail(planId, event.message);
 			},
-			onDropped: (line) => {
-				console.error(`dropped unrecognised claude frame: ${line.slice(0, 200)}`);
-			}
+			onDropped: logDroppedFrame
 		});
 
 		session.process = spawnClaudeSession({
@@ -367,7 +366,7 @@ export function createPlanningSessions(opts: {
 				parser.push(chunk);
 			},
 			onStderr: (chunk) => {
-				stderr = `${stderr}${chunk}`.slice(-STDERR_KEPT_CHARS);
+				stderr.push(chunk);
 				console.error(`[${planId}] ${chunk.trimEnd()}`);
 			},
 			onExit: (code) => {
@@ -388,25 +387,24 @@ export function createPlanningSessions(opts: {
 					return;
 				}
 
-				fail(planId, stderr.trim() || `claude exited with code ${code ?? 'unknown'}`);
+				fail(planId, stderr.value().trim() || `claude exited with code ${code ?? 'unknown'}`);
 			}
 		});
 	};
 
 	const spawnFor = async (payload: Parameters<typeof startProcess>[0]): Promise<void> => {
-		try {
-			await startProcess(payload);
-		} catch (error) {
+		await reportStartFailure({
+			attempt: () => startProcess(payload),
 			// Closed here as well: a start that failed before the session was
 			// registered left nothing for the teardown to find.
-			teardown(payload.planId);
-			void payload.served?.close();
-			opts.send({
-				type: 'plan.error',
-				planId: payload.planId,
-				message: error instanceof Error ? error.message : 'could not start the session'
-			});
-		}
+			teardown: () => {
+				teardown(payload.planId);
+				void payload.served?.close();
+			},
+			send: (message) => {
+				opts.send({ type: 'plan.error', planId: payload.planId, message });
+			}
+		});
 	};
 
 	// The only clock a session answers to. A settled one is torn down quietly — its
@@ -465,6 +463,7 @@ export function createPlanningSessions(opts: {
 					planId: payload.planId,
 					auto: payload.auto,
 					requireGrill: !payload.auto,
+					requireCoverage: true,
 					bosunApi: opts.services.bosunApi,
 					onPublished: onPublished(payload.planId),
 					onGrilled: onGrilled(payload.planId),
@@ -530,6 +529,7 @@ export function createPlanningSessions(opts: {
 					// sessions.
 					auto: payload.plan.auto,
 					requireGrill: false,
+					requireCoverage: false,
 					bosunApi: opts.services.bosunApi,
 					onPublished: onPublished(payload.planId),
 					onGrilled: onGrilled(payload.planId),

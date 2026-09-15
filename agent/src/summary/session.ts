@@ -3,6 +3,7 @@ import { type BuildSummarize } from '../protocol';
 import { type Services } from '../services/index';
 import { spawnClaudeSession, type ClaudeSession } from '../sessions/process';
 import { startSessionMcpServer, type SessionMcpServer } from '../sessions/mcp-server';
+import { createStderrTail } from '../sessions/turn-support';
 import { createStreamParser } from '../planning/stream-parser';
 import { createSummaryDispatch, SUMMARY_TOOL_DEFINITIONS } from './mcp/tools';
 
@@ -74,7 +75,7 @@ export function createSummarySessions(opts: {
 
 		sessions.set(msg.planId, session);
 
-		let stderr = '';
+		const stderr = createStderrTail(STDERR_KEPT_CHARS);
 		const parser = createStreamParser({
 			onEvent: (event) => {
 				if (event.kind === 'result') {
@@ -105,14 +106,14 @@ export function createSummarySessions(opts: {
 				parser.push(chunk);
 			},
 			onStderr: (chunk) => {
-				stderr = `${stderr}${chunk}`.slice(-STDERR_KEPT_CHARS);
+				stderr.push(chunk);
 			},
 			onExit: (code) => {
 				parser.flush();
 
 				if (sessions.has(msg.planId)) {
 					console.error(
-						`summary for ${msg.planId} ended without publishing: ${stderr.trim() || `exit ${code ?? 'unknown'}`}`
+						`summary for ${msg.planId} ended without publishing: ${stderr.value().trim() || `exit ${code ?? 'unknown'}`}`
 					);
 					teardown(msg.planId);
 				}

@@ -10,6 +10,7 @@ import {
 	type Integration,
 	type SliceRun
 } from 'src/types/BuildSchema';
+import { type PlanCriteria } from 'src/types/build-frames';
 import { type Machine } from 'src/types/MachineSchema';
 import { DEFAULT_PROJECT_PROFILE } from 'src/types/ProjectProfileSchema';
 import { type ServerMsg } from 'src/types/protocol';
@@ -199,6 +200,11 @@ export async function dispatchIntegration(
 
 	const moved = (await deps.buildRepo.update({ id: build.id, status: 'integrating', needsYouReason: null })) ?? build;
 	const acs = await deps.acRepo.listByPlan(plan.id);
+	const criteria: PlanCriteria = {
+		planNumber: plan.number,
+		title: plan.title ?? 'Untitled plan',
+		acs: acs.map((ac) => ({ code: ac.code, text: ac.text }))
+	};
 	const sent =
 		moved.worktreePath !== null &&
 		moved.branch !== null &&
@@ -214,11 +220,7 @@ export async function dispatchIntegration(
 				onto: claimed.onto,
 				configDraft: opts.repository.configDraft,
 				autoResolve: opts.repository.autoResolveConflicts,
-				criteria: {
-					planNumber: plan.number,
-					title: plan.title ?? 'Untitled plan',
-					acs: acs.map((ac) => ({ code: ac.code, text: ac.text }))
-				},
+				criteria,
 				portBase: moved.portBase,
 				memoryMaxBytes: opts.memoryMaxBytes
 			}
