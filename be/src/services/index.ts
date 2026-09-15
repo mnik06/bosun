@@ -7,6 +7,7 @@ import { getInstallerService } from 'src/services/installer/installer.service';
 import { getKeyService } from 'src/services/keys/key.service';
 import { getLineLockService } from 'src/services/line/line-lock.service';
 import { getMcpPresetService } from 'src/services/mcp-presets/mcp-preset.service';
+import { getWebPushService } from 'src/services/notifications/web-push.service';
 import { getPlanTextService } from 'src/services/plans/plan-text.service';
 import { getRunActivityService } from 'src/services/runs/run-activity.service';
 import { getDisconnectGraceService } from 'src/services/sockets/disconnect-grace.service';
@@ -55,7 +56,12 @@ export function getServices(opts: { env: Env }) {
 			url: opts.env.SUPABASE_URL,
 			publishableKey: opts.env.SUPABASE_PUBLISHABLE_KEY
 		}),
-		ticketService: getTicketService({ keyService })
+		ticketService: getTicketService({ keyService }),
+		webPush: getWebPushService({
+			publicKey: opts.env.VAPID_PUBLIC_KEY,
+			privateKey: opts.env.VAPID_PRIVATE_KEY,
+			subject: opts.env.VAPID_SUBJECT
+		})
 	};
 }
 

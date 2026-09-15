@@ -103,6 +103,19 @@ export function getProjectMemberRepo(db: DbOrTx) {
 		// Read inside the same transaction as the demotion or removal it guards, so
 		// two leaders standing each other down concurrently cannot both pass the
 		// check and leave the project with nobody who can manage it.
+		// Real membership rows only. An app owner resolves as a leader of every
+		// project without holding one, and is deliberately left out here: notifying
+		// them of every project's onboarding would flood an account that never
+		// opted into that project's noise.
+		async listLeaders(projectId: string): Promise<string[]> {
+			const rows = await db
+				.select({ userId: projectMembers.userId })
+				.from(projectMembers)
+				.where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.role, 'leader')));
+
+			return rows.map((row) => row.userId);
+		},
+
 		async countLeaders(projectId: string): Promise<number> {
 			const [row] = await db
 				.select({ total: count() })

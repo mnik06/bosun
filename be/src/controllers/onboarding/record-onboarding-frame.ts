@@ -1,5 +1,6 @@
 import { type OnboardingDeps } from 'src/controllers/onboarding/onboarding-deps';
 import { announceOnboarding, isActiveRun } from 'src/controllers/onboarding/shared/onboarding-runs';
+import { notifyOnboardingStatus } from 'src/controllers/onboarding/shared/notify';
 import { maybeStartVerify } from 'src/controllers/onboarding/shared/start-verify';
 import { type OnboardingRun } from 'src/types/OnboardingSchema';
 import { type AgentMsg } from 'src/types/protocol';
@@ -38,8 +39,10 @@ export async function recordOnboardingFrame(
 			failureReason: failure,
 			finishedAt: new Date()
 		});
+		const settled = failed ?? run;
 
-		announceOnboarding({ socketRegistry: deps.socketRegistry, projectId: opts.projectId, run: failed ?? run });
+		announceOnboarding({ socketRegistry: deps.socketRegistry, projectId: opts.projectId, run: settled });
+		await notifyOnboardingStatus(deps, { projectId: opts.projectId, run: settled });
 
 		return;
 	}
@@ -49,8 +52,10 @@ export async function recordOnboardingFrame(
 			? { id: run.id, status: 'needs_input', portBase: null }
 			: { id: run.id, status: 'ready', finishedAt: new Date() }
 	);
+	const settled = next ?? run;
 
-	announceOnboarding({ socketRegistry: deps.socketRegistry, projectId: opts.projectId, run: next ?? run });
+	announceOnboarding({ socketRegistry: deps.socketRegistry, projectId: opts.projectId, run: settled });
+	await notifyOnboardingStatus(deps, { projectId: opts.projectId, run: settled });
 
 	if (run.status === 'discovering') {
 		await maybeStartVerify(deps, { machineId: opts.machineId });

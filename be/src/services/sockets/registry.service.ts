@@ -159,6 +159,27 @@ export function getSocketRegistry() {
 			broadcast({ sockets: uiSockets.get(opts.projectId), message: opts.message });
 		},
 
+		// A notification is a person's own, never a project-wide broadcast: sending
+		// it to every socket on the project would show one member's notification
+		// content on another member's screen.
+		sendToUiUser(opts: { projectId: string; userId: string; message: UiMsg }): void {
+			const sockets = uiSockets.get(opts.projectId);
+
+			if (!sockets) {
+				return;
+			}
+
+			const targets = new Set<WebSocket>();
+
+			for (const socket of sockets) {
+				if (socketOwners.get(socket) === opts.userId) {
+					targets.add(socket);
+				}
+			}
+
+			broadcast({ sockets: targets, message: opts.message });
+		},
+
 		// A socket outlives the membership that authorized it, and there is no
 		// per-frame recheck. Without this an ex-member keeps receiving the project's
 		// frames until they happen to close the tab.

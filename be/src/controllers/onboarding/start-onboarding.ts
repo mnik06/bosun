@@ -6,6 +6,7 @@ import {
 	onboardingAdmission,
 	ONBOARDING_PORT_BASE
 } from 'src/controllers/onboarding/shared/onboarding-runs';
+import { notifyOnboardingStatus } from 'src/controllers/onboarding/shared/notify';
 import { maybeStartVerify } from 'src/controllers/onboarding/shared/start-verify';
 import { type Machine } from 'src/types/MachineSchema';
 import { type OnboardingPhase, type OnboardingRun } from 'src/types/OnboardingSchema';
@@ -126,6 +127,7 @@ export async function startOnboarding(
 			: await startVerify(deps, { machine, repository });
 
 	announceOnboarding({ socketRegistry: deps.socketRegistry, projectId: machine.projectId, run });
+	await notifyOnboardingStatus(deps, { projectId: machine.projectId, run });
 
 	return run;
 }

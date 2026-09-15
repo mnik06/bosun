@@ -10,6 +10,8 @@ import { getVerifyFindingRepo } from 'src/repos/builds/verify-finding.repo';
 import { getGithubInstallationRepo } from 'src/repos/github/github-installation.repo';
 import { getRepositoryRepo } from 'src/repos/github/repository.repo';
 import { getMachineRepo } from 'src/repos/machines/machine.repo';
+import { getNotificationRepo } from 'src/repos/notifications/notification.repo';
+import { getPushSubscriptionRepo } from 'src/repos/notifications/push-subscription.repo';
 import { getOnboardingRunRepo } from 'src/repos/onboarding/onboarding-run.repo';
 import { getAcRepo } from 'src/repos/plans/ac.repo';
 import { getPlanDecisionRepo } from 'src/repos/plans/plan-decision.repo';
@@ -27,6 +29,7 @@ export function getRepos(db: ReturnType<typeof getDb>) {
 		githubInstallationRepo: getGithubInstallationRepo(db),
 		integrationRepo: getIntegrationRepo(db),
 		machineRepo: getMachineRepo(db),
+		notificationRepo: getNotificationRepo(db),
 		onboardingRunRepo: getOnboardingRunRepo(db),
 		overlapDecisionRepo: getOverlapDecisionRepo(db),
 		planAmendmentRepo: getPlanAmendmentRepo(db),
@@ -36,6 +39,7 @@ export function getRepos(db: ReturnType<typeof getDb>) {
 		planRepo: getPlanRepo(db),
 		projectMemberRepo: getProjectMemberRepo(db),
 		projectRepo: getProjectRepo(db),
+		pushSubscriptionRepo: getPushSubscriptionRepo(db),
 		repositoryMessageRepo: getRepositoryMessageRepo(db),
 		repositoryRepo: getRepositoryRepo(db),
 		sliceRunRepo: getSliceRunRepo(db),

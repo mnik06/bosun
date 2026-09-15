@@ -183,6 +183,13 @@
       "when": 1789406676190,
       "tag": "0025_plan_modes_drop_hands_off",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1789483801439,
+      "tag": "0026_brave_lila_cheney",
+      "breakpoints": true
     }
   ]
 }

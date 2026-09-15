@@ -54,7 +54,15 @@ export const EnvSchema = z.object({
 	// Signs the App's `push` and `pull_request` deliveries. A delivery that does not
 	// verify is refused: an unsigned merge event would mark a plan merged and start
 	// every plan stacked on it.
-	GITHUB_WEBHOOK_SECRET: z.string().min(16, 'must be the webhook secret set on the GitHub App')
+	GITHUB_WEBHOOK_SECRET: z.string().min(16, 'must be the webhook secret set on the GitHub App'),
+	// The Web Push protocol requires every send to be signed as this application.
+	// The public half is also shipped to the browser (VITE_VAPID_PUBLIC_KEY) so a
+	// subscription can be created against the same key pair the backend signs with.
+	VAPID_PUBLIC_KEY: z.string().min(1),
+	VAPID_PRIVATE_KEY: z.string().min(1),
+	// A mailto: or https: contact URI, required by the Web Push spec so a push
+	// service can reach the sender about a misbehaving application.
+	VAPID_SUBJECT: z.string().min(1)
 });
 
 export type Env = z.infer<typeof EnvSchema>;
