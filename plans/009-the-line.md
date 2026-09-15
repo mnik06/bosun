@@ -90,7 +90,7 @@ presses Prepare, and every pull request that reaches review is mergeable with it
 - [ ] **AC-35** — Criteria the fix session repaired are driven again in the lane before the pull request opens, except on an AFK plan.
 - [ ] **AC-35b** — A criterion that still fails at re-check stops the plan on needs you with Fix again, Accept as a known gap, or Cancel. Accepting marks it blocked with the reproduction and who accepted it, and the pull request lists it under Known gaps.
 - [ ] **AC-36** — Only the lane applies migrations to a machine's dev database, resetting it before each drive. Build bullets generate migrations and apply none.
-- [ ] **AC-37** — An integration after verify that resolved a conflict queues the drive again; one that only regenerated files re-runs the checks.
+- [ ] **AC-37** — An integration after verify runs the checks and leaves the plan in review, whether it merged, regenerated files or resolved a conflict; it never queues the drive again.
 
 **Auto, AFK and migration**
 
@@ -279,8 +279,9 @@ provider merging. Webhooks (`push`, `pull_request`) are verified with `X-Hub-Sig
 reconcile reads the state of every open bosun pull request, because a webhook delivery can be missed and
 a missed merge would leave its dependents waiting forever.
 
-**After verify.** An integration that resolved a real conflict sends the build back to the verify line for
-a drive; one that only regenerated files runs the checks and stays in review.
+**After verify.** An integration runs the checks and the build stays in review, a resolved conflict
+included — its diff is in the pull request for the reviewer. Sending it back to the verify line for a
+drive took a reviewed plan out of review for as long as the line was, for what should be a quick sync.
 
 ### The verify lane
 
@@ -588,7 +589,7 @@ removed.
 ### Phase 4 — Integration
 
 Webhooks and the reconcile, `integrations`, `regenerate`, the conflict session, checks, the pull request
-section, re-verify after a resolved conflict.
+section.
 
 ### Phase 5 — The verify lane
 
@@ -602,7 +603,9 @@ the lane-owned database, and the execution prompt's migration rule.
 - **A conflict session can resolve wrongly and pass the checks.** The resolved diff is in the pull
   request, and the switch is per repository
 - **Stacked plans inherit their provider's review.** Every change requested on the provider is merged into
-  its dependents and can re-queue their verify
+  its dependents by a sync, which a dependent already in review takes on its checks, not another drive
+- **A conflict resolved after verify is never driven.** The checks and the resolved diff in the pull
+  request are all that stand behind it
 - **The lane is the bottleneck when plans finish together.** The split, lending and `verify_lanes`
   soften it; a second machine is a second lane
 - **Generators differ.** One that needs a database to generate (`prisma migrate dev`) breaks the rule that

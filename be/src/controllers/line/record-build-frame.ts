@@ -56,12 +56,13 @@ async function integrationOf(deps: LineDeps, opts: { integrationId: string; mach
 	return integration && owned ? { integration, ...owned } : null;
 }
 
-// A conflict bosun resolved after verify changes code nobody has driven, so the
-// build goes back to the verify line for a drive; one that only regenerated files
-// was proven by the checks it ran, and stays in review.
+// A sync after verify never sends the build back to the verify line, conflict
+// resolved or not: its checks ran on the result and the resolved diff is in the pull
+// request, while a drive would pull a reviewed plan out of review for as long as the
+// verify line is.
 async function recordIntegrated(deps: LineDeps, opts: { frame: IntegrateDone; located: NonNullable<Awaited<ReturnType<typeof integrationOf>>> }): Promise<void> {
 	const { frame, located } = opts;
-	const { integration, plan } = located;
+	const { integration, build, plan } = located;
 
 	await deps.integrationRepo.update({
 		id: integration.id,
@@ -73,19 +74,6 @@ async function recordIntegrated(deps: LineDeps, opts: { frame: IntegrateDone; lo
 		checks: frame.checks,
 		finishedAt: new Date()
 	});
-
-	let build = located.build;
-
-	if (integration.trigger !== 'built' && frame.resolved.length > 0 && plan.verifyInUi && build.verifiedAt !== null) {
-		const verify = (await deps.sliceRepo.listByPlan(plan.id)).find((slice) => slice.kind === 'verify');
-
-		if (verify) {
-			await deps.sliceRunRepo.createMany([
-				{ id: deps.idService.createSliceRunId(), buildId: build.id, sliceId: verify.id, ordinal: verify.ordinal, phase: 'drive' }
-			]);
-			build = (await deps.buildRepo.update({ id: build.id, verifiedAt: null })) ?? build;
-		}
-	}
 
 	if (frame.merged || frame.regenerated.some((entry) => entry.files.length > 0) || frame.resolved.length > 0) {
 		await notifyDependents(deps, { build });
