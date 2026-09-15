@@ -4,6 +4,7 @@ import { bulletGateFailure, driveGateFailure, fixGateFailure } from 'src/control
 import { announceBuild, announceNeedsYou, announcePlanChanged } from 'src/controllers/line/shared/announce';
 import { settleBuild } from 'src/controllers/line/shared/lifecycle';
 import { notifyDependents } from 'src/controllers/line/shared/merge';
+import { notifyBuildStatus } from 'src/controllers/line/shared/notify';
 import { type Build, type SliceRun } from 'src/types/BuildSchema';
 import { type Plan } from 'src/types/PlanSchema';
 import { type AgentMsg } from 'src/types/protocol';
@@ -54,6 +55,7 @@ async function failRun(deps: LineDeps, opts: { located: Located; message: string
 
 	if (failed) {
 		announceBuild({ socketRegistry: deps.socketRegistry, projectId: plan.projectId, build: failed });
+		await notifyBuildStatus(deps, { plan, build: failed });
 	}
 
 	await scheduleRepository(deps, { repositoryId: build.repositoryId });
@@ -122,6 +124,7 @@ async function stopOnFailedRecheck(deps: LineDeps, located: Located): Promise<bo
 
 	if (stopped) {
 		announceBuild({ socketRegistry: deps.socketRegistry, projectId: located.plan.projectId, build: stopped });
+		await notifyBuildStatus(deps, { plan: located.plan, build: stopped });
 	}
 
 	return true;

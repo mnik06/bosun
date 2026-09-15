@@ -2,6 +2,7 @@ import { type FastifyBaseLogger } from 'fastify';
 import { type LineDeps } from 'src/controllers/line/line-deps';
 import { scheduleMachine } from 'src/controllers/line/schedule';
 import { announceBuild } from 'src/controllers/line/shared/announce';
+import { notifyBuildStatus } from 'src/controllers/line/shared/notify';
 
 // How long a question holds its build slot. Long enough for somebody at the desk to
 // answer; short enough that one question does not keep a slot from the next plan
@@ -32,6 +33,7 @@ export async function releaseStaleQuestions(deps: LineDeps, opts: { now: Date })
 
 		if (waiting) {
 			announceBuild({ socketRegistry: deps.socketRegistry, projectId: plan.projectId, build: waiting });
+			await notifyBuildStatus(deps, { plan, build: waiting });
 		}
 
 		await scheduleMachine(deps, { machineId: build.machineId });

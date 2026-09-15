@@ -9,6 +9,7 @@ import { dispatchIntegration, dispatchRun, startBuild } from 'src/controllers/li
 import { completeBuilding, settleBuild } from 'src/controllers/line/shared/lifecycle';
 import { loadRepositorySnapshot, type BuildState, type RepositorySnapshot } from 'src/controllers/line/shared/line-snapshot';
 import { admit, holderBlocksLane, jobBytes, usableBytes, type JobClass, type MachineLoad } from 'src/controllers/line/shared/memory-budget';
+import { notifyBuildStatus } from 'src/controllers/line/shared/notify';
 import {
 	BUILD_SLOT_STATUSES,
 	hasRunningJob,
@@ -68,6 +69,7 @@ async function stopDependentsOfStoppedProviders(pass: Pass): Promise<boolean> {
 
 		if (moved) {
 			announceBuild({ socketRegistry: deps.socketRegistry, projectId: state.plan.projectId, build: moved });
+			await notifyBuildStatus(deps, { plan: state.plan, build: moved });
 
 			return true;
 		}

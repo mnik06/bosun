@@ -10,17 +10,21 @@ import { type VerifyFindingRepo } from 'src/repos/builds/verify-finding.repo';
 import { type GithubInstallationRepo } from 'src/repos/github/github-installation.repo';
 import { type RepositoryRepo } from 'src/repos/github/repository.repo';
 import { type MachineRepo } from 'src/repos/machines/machine.repo';
+import { type NotificationRepo } from 'src/repos/notifications/notification.repo';
+import { type PushSubscriptionRepo } from 'src/repos/notifications/push-subscription.repo';
 import { type OnboardingRunRepo } from 'src/repos/onboarding/onboarding-run.repo';
 import { type AcRepo } from 'src/repos/plans/ac.repo';
 import { type PlanDecisionRepo } from 'src/repos/plans/plan-decision.repo';
 import { type PlanMessageRepo } from 'src/repos/plans/plan-message.repo';
 import { type PlanRepo } from 'src/repos/plans/plan.repo';
 import { type SliceRepo } from 'src/repos/plans/slice.repo';
+import { type ProjectMemberRepo } from 'src/repos/projects/project-member.repo';
 import { type UserRepo } from 'src/repos/users/user.repo';
 import { type Db } from 'src/services/drizzle/drizzle.service';
 import { type GithubAppService } from 'src/services/github/github-app.service';
 import { type IdService } from 'src/services/ids/id.service';
 import { type LineLockService } from 'src/services/line/line-lock.service';
+import { type WebPushService } from 'src/services/notifications/web-push.service';
 import { type PlanTextService } from 'src/services/plans/plan-text.service';
 import { type RunActivityService } from 'src/services/runs/run-activity.service';
 import { type MachineMemoryService } from 'src/services/sockets/machine-memory.service';
@@ -49,14 +53,19 @@ export interface LineDeps {
 	githubInstallationRepo: GithubInstallationRepo;
 	onboardingRunRepo: OnboardingRunRepo;
 	userRepo: UserRepo;
+	projectMemberRepo: ProjectMemberRepo;
+	notificationRepo: NotificationRepo;
+	pushSubscriptionRepo: PushSubscriptionRepo;
 	idService: IdService;
 	githubApp: GithubAppService;
 	socketRegistry: SocketRegistry;
+	webPush: WebPushService;
 	runActivity: RunActivityService;
 	machineMemory: MachineMemoryService;
 	planTextService: PlanTextService;
 	lineLock: LineLockService;
-	// The web app's origin: a pull request body links back to its plan.
+	// The web app's origin: a pull request body links back to its plan, and a push
+	// notification deep-links to the same place.
 	appUrl: string;
 }
 
@@ -81,9 +90,13 @@ export function lineDeps(fastify: FastifyInstance): LineDeps {
 		githubInstallationRepo: fastify.repos.githubInstallationRepo,
 		onboardingRunRepo: fastify.repos.onboardingRunRepo,
 		userRepo: fastify.repos.userRepo,
+		projectMemberRepo: fastify.repos.projectMemberRepo,
+		notificationRepo: fastify.repos.notificationRepo,
+		pushSubscriptionRepo: fastify.repos.pushSubscriptionRepo,
 		idService: fastify.services.idService,
 		githubApp: fastify.services.githubApp,
 		socketRegistry: fastify.services.socketRegistry,
+		webPush: fastify.services.webPush,
 		runActivity: fastify.services.runActivity,
 		machineMemory: fastify.services.machineMemory,
 		planTextService: fastify.services.planTextService,

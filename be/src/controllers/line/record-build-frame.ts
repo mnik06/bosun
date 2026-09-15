@@ -3,6 +3,7 @@ import { scheduleMachine, scheduleRepository } from 'src/controllers/line/schedu
 import { announceBuild, announcePlanChanged } from 'src/controllers/line/shared/announce';
 import { settleBuild } from 'src/controllers/line/shared/lifecycle';
 import { notifyDependents } from 'src/controllers/line/shared/merge';
+import { notifyBuildStatus } from 'src/controllers/line/shared/notify';
 import { refreshPullRequest } from 'src/controllers/line/shared/pull-request';
 import { type Build } from 'src/types/BuildSchema';
 import { type Plan } from 'src/types/PlanSchema';
@@ -44,6 +45,10 @@ export async function recordWorktreeFrame(deps: LineDeps, opts: { machineId: str
 
 	if (updated) {
 		announceBuild({ socketRegistry: deps.socketRegistry, projectId: owned.plan.projectId, build: updated });
+
+		if (frame.type !== 'build.worktree.ready') {
+			await notifyBuildStatus(deps, { plan: owned.plan, build: updated });
+		}
 	}
 
 	await scheduleMachine(deps, { machineId: opts.machineId });
@@ -135,6 +140,7 @@ export async function recordIntegrateFrame(deps: LineDeps, opts: { machineId: st
 
 		if (stopped) {
 			announceBuild({ socketRegistry: deps.socketRegistry, projectId: located.plan.projectId, build: stopped });
+			await notifyBuildStatus(deps, { plan: located.plan, build: stopped });
 		}
 	}
 
