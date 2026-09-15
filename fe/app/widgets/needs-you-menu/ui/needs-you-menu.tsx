@@ -31,7 +31,7 @@ function NotificationEntry ({ notification }: { notification: Notification }) {
 			<Text size="sm" fw={600} truncate>
 				{notification.title}
 			</Text>
-			<Text size="xs" c="dimmed" lineClamp={2}>
+			<Text size="xs" c="dimmed" lineClamp={2} className="[overflow-wrap:anywhere]">
 				{notification.body}
 			</Text>
 			<Text size="xs" c="dimmed">
@@ -52,8 +52,11 @@ export function NeedsYouMenu () {
 	const unread = notifications.data ?? []
 	const count = items.length + unread.length
 
+	// A body carrying a path or a code span has no break opportunity, and a flex
+	// label sizes to its longest word: without `min-w-0` here and `overflow-wrap`
+	// on the bodies, an entry widens past the dropdown instead of wrapping inside it.
 	return (
-		<Menu position="bottom-end" width={320} withArrow>
+		<Menu position="bottom-end" width={320} withArrow classNames={{ itemLabel: 'min-w-0' }}>
 			<Menu.Target>
 				<Indicator label={count} size={16} color="orange" disabled={count === 0}>
 					<ActionIcon variant="subtle" size="lg" aria-label={`Needs you: ${String(count)}`}>
@@ -78,7 +81,7 @@ export function NeedsYouMenu () {
 							<Text size="sm" fw={600} truncate>
 								{planLabel({ number: item.planNumber, title: item.planTitle })}
 							</Text>
-							<Text size="xs" c="dimmed" lineClamp={2}>
+							<Text size="xs" c="dimmed" lineClamp={2} className="[overflow-wrap:anywhere]">
 								{KIND_LABEL[item.kind]} — {item.detail}
 							</Text>
 						</Menu.Item>
