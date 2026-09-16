@@ -4,16 +4,15 @@ import { type BuildRepo } from 'src/repos/builds/build.repo';
 import { type OnboardingRunRepo } from 'src/repos/onboarding/onboarding-run.repo';
 import { type PlanRepo } from 'src/repos/plans/plan.repo';
 import { type ProjectMemberRepo } from 'src/repos/projects/project-member.repo';
-import { ACTIVE_BUILD_STATUSES } from 'src/types/BuildSchema';
+import { ACTIVE_BUILD_STATUSES, type BuildStatus } from 'src/types/BuildSchema';
 import { type Machine } from 'src/types/MachineSchema';
-import { type Plan } from 'src/types/PlanSchema';
 
 export interface MachineOfflineDeps extends DispatchNotificationDeps {
 	onboardingRunRepo: OnboardingRunRepo;
 	buildRepo: BuildRepo;
 	planRepo: PlanRepo;
 	projectMemberRepo: ProjectMemberRepo;
-	// The web app's origin: a push notification deep-links back to the machine or plan.
+	// The web app's origin: a push notification deep-links back to the machine.
 	appUrl: string;
 }
 
@@ -32,52 +31,72 @@ export function machineOfflineDeps(fastify: FastifyInstance): MachineOfflineDeps
 	};
 }
 
-function planName(plan: Plan): string {
-	return plan.title ?? `Plan #${plan.number}`;
+// A build queued (`scheduled`) or deliberately paused (`held`) was not actually
+// interrupted by this machine dropping — only a build that was mid-session was.
+const DISRUPTED_BUILD_STATUSES: BuildStatus[] = ACTIVE_BUILD_STATUSES.filter(
+	(status) => status !== 'scheduled' && status !== 'held'
+);
+
+function countLabel(count: number, singular: string): string {
+	return `${count} ${singular}${count === 1 ? '' : 's'}`;
 }
 
 // A machine going offline is only worth telling anyone about when it was
-// holding work nobody else can pick up. Onboarding carries no user
-// attribution, so every leader hears about a run stranded mid-way; a build's
-// plan creator hears about their own build stopping, the same fallback to
-// leaders every other build trigger uses.
-export async function notifyMachineOffline(deps: MachineOfflineDeps, opts: { machine: Machine }): Promise<void> {
+// holding work nobody else can pick up, and everyone it affects hears about it
+// exactly once — never once per build and once more per onboarding run.
+// Onboarding carries no user attribution, so every leader hears about a run
+// stranded mid-way; a build's plan creator hears about their own build
+// stopping, the same fallback to leaders every other build trigger uses.
+export async function notifyMachineOffline(
+	deps: MachineOfflineDeps,
+	opts: { machine: Machine }
+): Promise<void> {
 	const { machine } = opts;
-	const [unfinishedOnboarding, activeBuilds] = await Promise.all([
+	const [unfinishedOnboarding, disruptedBuilds] = await Promise.all([
 		deps.onboardingRunRepo.listUnfinishedForMachine(machine.id),
-		deps.buildRepo.listForMachine({ machineId: machine.id, statuses: ACTIVE_BUILD_STATUSES })
+		deps.buildRepo.listForMachine({ machineId: machine.id, statuses: DISRUPTED_BUILD_STATUSES })
 	]);
 
+	if (unfinishedOnboarding.length === 0 && disruptedBuilds.length === 0) {
+		return;
+	}
+
+	const planIds = [...new Set(disruptedBuilds.map((build) => build.planId))];
+	const plans = await deps.planRepo.listByIds(planIds);
+	const planById = new Map(plans.map((plan) => [plan.id, plan]));
+
+	const needsLeaders =
+		unfinishedOnboarding.length > 0 ||
+		disruptedBuilds.some((build) => !planById.get(build.planId)?.createdByUserId);
+	const leaderIds = needsLeaders
+		? await deps.projectMemberRepo.listLeaders(machine.projectId)
+		: [];
+
+	const recipientIds = new Set<string>();
+
 	if (unfinishedOnboarding.length > 0) {
-		await dispatchNotification(deps, {
-			recipientIds: await deps.projectMemberRepo.listLeaders(machine.projectId),
-			projectId: machine.projectId,
-			kind: 'onboarding.machine_offline',
-			title: 'Machine went offline',
-			body: `${machine.name} went offline during onboarding`,
-			url: `${deps.appUrl}/machines/${machine.id}`,
-			machineId: machine.id
-		});
+		leaderIds.forEach((id) => recipientIds.add(id));
 	}
 
-	for (const build of activeBuilds) {
-		const plan = await deps.planRepo.getById(build.planId);
+	for (const build of disruptedBuilds) {
+		const createdByUserId = planById.get(build.planId)?.createdByUserId;
+		const forBuild = createdByUserId ? [createdByUserId] : leaderIds;
 
-		if (!plan) {
-			continue;
-		}
-
-		const recipientIds = plan.createdByUserId ? [plan.createdByUserId] : await deps.projectMemberRepo.listLeaders(machine.projectId);
-
-		await dispatchNotification(deps, {
-			recipientIds,
-			projectId: machine.projectId,
-			kind: 'build.machine_offline',
-			title: 'Machine went offline',
-			body: `${machine.name} went offline while building ${planName(plan)}`,
-			url: `${deps.appUrl}/plans/${plan.id}`,
-			planId: plan.id,
-			machineId: machine.id
-		});
+		forBuild.forEach((id) => recipientIds.add(id));
 	}
+
+	if (recipientIds.size === 0) {
+		return;
+	}
+
+	await dispatchNotification(deps, {
+		recipientIds: [...recipientIds],
+		projectId: machine.projectId,
+		kind: 'machine.offline',
+		title: 'Machine went offline',
+		body: `${machine.name} went offline — ${countLabel(disruptedBuilds.length, 'build')} and ${countLabel(unfinishedOnboarding.length, 'onboarding run')} interrupted`,
+		url: `${deps.appUrl}/machines/${machine.id}`,
+		planId: null,
+		machineId: machine.id
+	});
 }
