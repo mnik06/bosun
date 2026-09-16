@@ -1,12 +1,13 @@
 import type { PlanDetail, PlanState } from '~/entities/plan/model/plan'
 
-export type PlanTab = 'chat' | 'plan' | 'execution' | 'changes' | 'verification'
+export type PlanTab = 'chat' | 'plan' | 'execution' | 'changes' | 'sync' | 'verification'
 
 export const PLAN_TAB_LABEL: Record<PlanTab, string> = {
 	chat: 'Chat',
 	plan: 'Plan',
 	execution: 'Execution',
 	changes: 'Changes',
+	sync: 'Sync',
 	verification: 'Verification'
 }
 
@@ -32,6 +33,7 @@ export function visiblePlanTabs (detail: TabSource): PlanTab[] {
 		...(published ? (['plan'] as const) : []),
 		...(approved ? (['execution'] as const) : []),
 		...(committed ? (['changes'] as const) : []),
+		...(detail.integrations.length > 0 ? (['sync'] as const) : []),
 		...(driven ? (['verification'] as const) : [])
 	]
 }

@@ -1,4 +1,4 @@
-import { Badge, Card, Code, Group, Loader, Stack, Text } from '@mantine/core'
+import { Badge, Card, Group, Loader, Stack, Text } from '@mantine/core'
 
 import { useIntegrationActivity, type Integration } from '~/entities/plan'
 import { formatRelativeTime } from '~/shared/lib'
@@ -35,30 +35,6 @@ function Regenerated ({ integration }: { integration: Integration }) {
 					{rule.files.length === 0 ? ' — nothing changed' : ':'}{' '}
 					<span className="font-mono break-all">{rule.files.join(', ')}</span>
 				</Text>
-			))}
-		</Stack>
-	)
-}
-
-// The resolved diff is the reviewer's only way to check a session's merge — a
-// conflict resolved wrongly can still pass every check.
-function Resolved ({ integration }: { integration: Integration }) {
-	return integration.resolved.length === 0 ? null : (
-		<Stack gap={4}>
-			<Text size="xs" c="dimmed">
-				Conflicts resolved by a session
-			</Text>
-			{integration.resolved.map((conflict) => (
-				<Stack key={conflict.file} gap={2}>
-					<Text size="xs" className="font-mono break-all">
-						{conflict.file}
-					</Text>
-					<div className="overflow-x-auto">
-						<Code block className="text-xs">
-							{conflict.diff}
-						</Code>
-					</div>
-				</Stack>
 			))}
 		</Stack>
 	)
@@ -111,7 +87,6 @@ export function IntegrationCard ({ integration }: { integration: Integration }) 
 				) : null}
 
 				<Regenerated integration={integration} />
-				<Resolved integration={integration} />
 
 				{integration.detail === null ? null : (
 					<Text size="xs" c={integration.status === 'needs_you' ? 'orange' : 'dimmed'} className="whitespace-pre-wrap">

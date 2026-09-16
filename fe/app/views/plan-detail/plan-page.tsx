@@ -20,6 +20,7 @@ import { PlanChanges } from '~/widgets/plan-changes'
 import { PlanChat } from '~/widgets/plan-chat'
 import { PlanExecution } from '~/widgets/plan-execution'
 import { PlanHeader } from '~/widgets/plan-header'
+import { PlanSync } from '~/widgets/plan-sync'
 import { PlanVerification } from '~/widgets/plan-verification'
 
 import type { Route } from './+types/plan-page'
@@ -42,6 +43,8 @@ function Scrolled ({ tab, detail }: { tab: Exclude<PlanTab, 'chat'>, detail: Pla
 			return <PlanExecution detail={detail} />
 		case 'changes':
 			return <PlanChanges detail={detail} />
+		case 'sync':
+			return <PlanSync detail={detail} />
 		case 'verification':
 			return <PlanVerification detail={detail} />
 	}
