@@ -5,6 +5,7 @@ import { announceBuild } from 'src/controllers/line/shared/announce';
 import { getOwnedBuild } from 'src/controllers/line/shared/build-access';
 import { removeWorktree, stopRunningJobs } from 'src/controllers/line/shared/lifecycle';
 import { nextJob, waitingStatus } from 'src/controllers/line/shared/next-job';
+import { notifyBuildStatus } from 'src/controllers/line/shared/notify';
 import { type Build, type BuildStatus } from 'src/types/BuildSchema';
 
 export type BuildAction = 'hold' | 'release' | 'cancel' | 'front' | 'retry';
@@ -98,6 +99,13 @@ export async function controlBuild(deps: LineDeps, opts: { id: string; projectId
 	}
 
 	announceBuild({ socketRegistry: deps.socketRegistry, projectId: plan.projectId, build: updated });
+
+	// A build cancelled while already `failed` was reported once already: a second
+	// push for the same dead build is noise, not news.
+	if (opts.action === 'cancel' && build.status !== 'failed') {
+		await notifyBuildStatus(deps, { plan, build: updated });
+	}
+
 	await scheduleRepository(deps, { repositoryId: updated.repositoryId });
 
 	return (await deps.buildRepo.getById(updated.id)) ?? updated;

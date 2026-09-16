@@ -13,7 +13,11 @@ export const NotificationKindSchema = z.enum([
 	'build.needs_you',
 	'build.merged',
 	'build.failed',
-	'build.machine_offline'
+	'build.machine_offline',
+	'build.in_review',
+	'build.cancelled',
+	'machine.online',
+	'machine.offline'
 ]);
 
 export type NotificationKind = z.infer<typeof NotificationKindSchema>;

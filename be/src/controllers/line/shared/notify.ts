@@ -14,21 +14,27 @@ const STATUS_KIND: Partial<Record<BuildStatus, NotificationKind>> = {
 	waiting_answer: 'build.waiting_answer',
 	needs_you: 'build.needs_you',
 	merged: 'build.merged',
-	failed: 'build.failed'
+	failed: 'build.failed',
+	in_review: 'build.in_review',
+	cancelled: 'build.cancelled'
 };
 
 const STATUS_TITLE: Partial<Record<BuildStatus, string>> = {
 	waiting_answer: 'Waiting for an answer',
 	needs_you: 'Needs you',
 	merged: 'Merged',
-	failed: 'Build failed'
+	failed: 'Build failed',
+	in_review: 'In review',
+	cancelled: 'Cancelled'
 };
 
 const STATUS_SUMMARY: Partial<Record<BuildStatus, string>> = {
 	waiting_answer: 'is waiting for an answer',
 	needs_you: 'needs you',
 	merged: 'merged',
-	failed: 'failed'
+	failed: 'failed',
+	in_review: 'is in review',
+	cancelled: 'was cancelled'
 };
 
 function planName(plan: Plan): string {
