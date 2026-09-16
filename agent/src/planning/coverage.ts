@@ -11,7 +11,6 @@ export const CoverageEntrySchema = z.object({
 
 export type CoverageEntry = z.infer<typeof CoverageEntrySchema>;
 
-const HEADING = '## Requirements coverage';
 const LISTED = 10;
 
 function listed(items: string[]): string {
@@ -38,36 +37,4 @@ export function coverageRefusal(opts: { acCodes: string[]; coverage: CoverageEnt
 	].filter((problem): problem is string => problem !== null);
 
 	return problems.length === 0 ? null : `Refused: ${problems.join('. ')}.`;
-}
-
-function cell(text: string): string {
-	return text.replace(/\s+/g, ' ').replace(/\|/g, '\\|').trim();
-}
-
-function withoutCoverage(bodyMd: string): string {
-	const body = `\n${bodyMd}`;
-	const start = body.indexOf(`\n${HEADING}\n`);
-
-	if (start === -1) {
-		return bodyMd.trimEnd();
-	}
-
-	const next = body.indexOf('\n## ', start + HEADING.length + 1);
-
-	return `${body.slice(0, start)}${next === -1 ? '' : body.slice(next)}`.trim();
-}
-
-// Appended by the tool rather than written by the session, so the ledger a person
-// reads under the plan is always the one that was checked. A revision that sends a
-// new ledger replaces the section rather than adding a second one.
-export function withCoverage(bodyMd: string, coverage: CoverageEntry[]): string {
-	const rows = coverage.map((entry) => {
-		const delivered = [entry.acCodes.join(', '), entry.nonGoal === undefined ? '' : `Non-goal: ${entry.nonGoal}`]
-			.filter((part) => part !== '')
-			.join(' · ');
-
-		return `| ${cell(entry.source)} | ${cell(delivered)} |`;
-	});
-
-	return `${withoutCoverage(bodyMd)}\n\n${HEADING}\n\n| Requirement | Delivered by |\n|---|---|\n${rows.join('\n')}\n`;
 }

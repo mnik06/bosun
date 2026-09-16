@@ -454,13 +454,15 @@ The body is the document a different engineer would build from. **Do not repeat 
 criteria in the body** — they are rows of their own, shown as one list under the plan, and a second
 copy in the body drifts from them.
 
-**\`coverage\` is the ledger, and bosun renders it.** One entry per ledger line. \`source\` says where the
-requirement came from and quotes it briefly — \`Acceptance Criteria › Header: "The CPN and Description
-are visible without scrolling"\` — or reads \`gap (product|ui|architecture): …\` for one you found.
-\`acCodes\` are the criteria that deliver it. \`nonGoal\` says why it is out of scope and who agreed, and
-belongs only on a line no criterion delivers. Every criterion appears in at least one entry. The tool
-refuses anything else, and appends the ledger to the body as its **Requirements coverage** section —
-never write that section yourself.
+**\`coverage\` is the ledger, checked and then discarded.** One entry per ledger line. \`source\` says where
+the requirement came from and quotes it briefly — \`Acceptance Criteria › Header: "The CPN and
+Description are visible without scrolling"\` — or reads \`gap (product|ui|architecture): …\` for one you
+found. \`acCodes\` are the criteria that deliver it. \`nonGoal\` says why it is out of scope and who
+agreed, and belongs only on a line no criterion delivers. Every criterion appears in at least one
+entry. The tool refuses anything else, then validates the ledger against the criteria and discards it —
+it is never written into the body or stored anywhere. Acceptance criteria are the only checklist the
+plan is built and verified against; never write a "Requirements coverage" section into the body
+yourself.
 
 Codes are \`AC-1\`, \`AC-2\`, … in order. Cut 3 or 4 tracer bullets, \`ordinal\` starting at 1, and
 **never more than six build bullets**. A plan holds its build slot until its last bullet, and every plan
@@ -741,10 +743,11 @@ is usually because it was parked on a bullet with no surface to demonstrate it �
 the same fault while you are here, merge any two criteria that describe the same behaviour, and split
 any criterion that bundles several.
 
-The plan's **Requirements coverage** section is its ledger. When the change adds, removes or re-cuts
-criteria, send \`coverage\` for the whole plan as it should now be — every line of that section plus
-whatever the request adds — and bosun replaces the section. When it does not, leave \`coverage\` out and
-send the section back in the body unchanged.
+The requirements ledger is checked at publish time and then discarded — it is never stored in or
+rendered into the plan body. When the change adds, removes or re-cuts criteria, send \`coverage\` for
+the whole plan as it should now be, so the tool can re-validate every criterion traces to a
+requirement. When it does not, leave \`coverage\` out. Acceptance criteria remain the single checklist
+execution is built and verified against.
 
 ${opts.plan.verifyInUi ? 'This plan has UI verification on: the last bullet is the verify bullet, with no body and no claimed criteria.' : 'This plan has UI verification off: it takes no verify bullet, and the API refuses one.'}
 ${opts.plan.auto ? 'This plan runs in auto mode: nobody is at the keyboard. Ask with `bosun_ask` exactly where you would have, and it answers itself with the option you recommended first — take that as the ruling, and record what you settled in the key decisions section as a call made on their behalf.' : ''}
