@@ -10,14 +10,20 @@ export async function markMachineOnline(opts: {
 	publicKey?: string;
 	envSets?: EnvSetSummary[];
 	sessionSecrets?: string[];
-}): Promise<Machine | null> {
-	let machine = await opts.machineRepo.markOnline({
+}): Promise<{ machine: Machine; wasOnline: boolean } | null> {
+	const result = await opts.machineRepo.markOnline({
 		id: opts.id,
 		agentVersion: opts.agentVersion,
 		repoPath: opts.repoPath,
 		publicKey: opts.publicKey,
 		now: new Date()
 	});
+
+	if (!result) {
+		return null;
+	}
+
+	let machine: Machine | null = result.machine;
 
 	// Absent is an agent older than env sets, which cannot say what the machine
 	// holds. Treating it as an empty list would erase the summary a newer agent
@@ -30,5 +36,5 @@ export async function markMachineOnline(opts: {
 		machine = await opts.machineRepo.saveSessionSecrets({ id: machine.id, sessionSecrets: opts.sessionSecrets });
 	}
 
-	return machine;
+	return machine ? { machine, wasOnline: result.wasOnline } : null;
 }
