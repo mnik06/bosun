@@ -1,10 +1,10 @@
 import { Menu, Stack, Text } from '@mantine/core'
-import { modals } from '@mantine/modals'
 import { Trash2 } from 'lucide-react'
 import { useNavigate } from 'react-router'
 
 import type { Machine } from '~/entities/machine'
 import { useDeleteMachine } from '~/features/delete-machine/api/use-delete-machine'
+import { confirmAction } from '~/shared/lib'
 
 export function DeleteMenuItem ({ machine }: { machine: Machine }) {
 	const navigate = useNavigate()
@@ -14,12 +14,11 @@ export function DeleteMenuItem ({ machine }: { machine: Machine }) {
 	// reaches a machine only through a socket that machine opened, so once the
 	// agent has shut itself down nothing in the browser can bring it back.
 	const confirm = () => {
-		modals.openConfirmModal({
+		confirmAction({
 			title: `Delete ${machine.name}?`,
-			centered: true,
-			labels: { confirm: 'Delete machine', cancel: 'Cancel' },
-			confirmProps: { color: 'red' },
-			children: (
+			confirmLabel: 'Delete machine',
+			color: 'red',
+			body: (
 				<Stack gap="sm">
 					<Text size="sm">
 						This cannot be undone. The agent shuts itself down, disables its service and deletes

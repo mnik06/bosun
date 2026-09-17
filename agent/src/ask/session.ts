@@ -4,6 +4,7 @@ import { type AgentMsg, type LineAsk } from '../protocol';
 import { type Services } from '../services/index';
 import { startSessionMcpServer, type SessionMcpServer } from '../sessions/mcp-server';
 import { spawnClaudeSession, type ClaudeSession } from '../sessions/process';
+import { teardownSession } from '../sessions/teardown';
 import { createStderrTail, logDroppedFrame, reportStartFailure } from '../sessions/turn-support';
 
 const STDERR_KEPT_CHARS = 500;
@@ -40,15 +41,7 @@ export function createAskSessions(opts: {
 	const asks = new Map<string, Ask>();
 
 	const teardown = (askId: string): void => {
-		const ask = asks.get(askId);
-
-		if (!ask) {
-			return;
-		}
-
-		asks.delete(askId);
-		ask.process?.kill();
-		void ask.mcp.close();
+		teardownSession(asks, askId);
 	};
 
 	const settle = (askId: string, message: AgentMsg): void => {
@@ -74,9 +67,6 @@ export function createAskSessions(opts: {
 			definitions: [],
 			createDispatch: () => async (name: string) => {
 				throw new Error(`unknown tool ${name}`);
-			},
-			log: (line) => {
-				console.log(line);
 			}
 		});
 		const ask: Ask = { repositoryId: msg.repositoryId, mcp, process: null, settled: false, answer: '' };

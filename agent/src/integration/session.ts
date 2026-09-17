@@ -91,10 +91,7 @@ export function createIntegrationSessions(opts: { services: Services; send: (mes
 		const mcp = await startSessionMcpServer({
 			sessionId: ctx.msg.integrationId,
 			definitions: CONFLICT_DEFINITIONS,
-			createDispatch: createConflictDispatch({ onGiveUp: ctx.onGiveUp }),
-			log: (line) => {
-				console.log(line);
-			}
+			createDispatch: createConflictDispatch({ onGiveUp: ctx.onGiveUp })
 		});
 
 		ctx.entry.mcp = mcp;

@@ -282,7 +282,6 @@ export async function startSessionMcpServer(opts: {
 	definitions: unknown[];
 	createDispatch: SessionDispatchFactory;
 	userServers?: Record<string, unknown>;
-	log: (message: string) => void;
 }): Promise<SessionMcpServer> {
 	const pending = new Map<string, PendingQuestion>();
 	const dispatch = opts.createDispatch(pending);
@@ -348,7 +347,7 @@ export async function startSessionMcpServer(opts: {
 	const address = server.address();
 	const port = typeof address === 'object' && address ? address.port : 0;
 
-	opts.log(`mcp server for ${opts.sessionId} on 127.0.0.1:${port}`);
+	console.log(`mcp server for ${opts.sessionId} on 127.0.0.1:${port}`);
 
 	const configPath = writeConfigFile({
 		sessionId: opts.sessionId,

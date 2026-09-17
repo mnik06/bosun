@@ -1,20 +1,19 @@
 import { ActionIcon, Stack, Text, Tooltip } from '@mantine/core'
-import { modals } from '@mantine/modals'
 import { Trash2 } from 'lucide-react'
 
 import type { Project } from '~/entities/project'
 import { useDeleteProject } from '~/features/delete-project/api/use-delete-project'
+import { confirmAction } from '~/shared/lib'
 
 export function DeleteProjectButton ({ project }: { project: Project }) {
 	const deleteProject = useDeleteProject(project.id)
 
 	const confirm = () => {
-		modals.openConfirmModal({
+		confirmAction({
 			title: `Delete ${project.name}?`,
-			centered: true,
-			labels: { confirm: 'Delete project', cancel: 'Cancel' },
-			confirmProps: { color: 'red' },
-			children: (
+			confirmLabel: 'Delete project',
+			color: 'red',
+			body: (
 				<Stack gap="sm">
 					<Text size="sm">
 						Its machines, plans and queues are deleted with it, and its members lose access

@@ -1,20 +1,19 @@
 import { ActionIcon, Tooltip } from '@mantine/core'
-import { modals } from '@mantine/modals'
 import { Trash2 } from 'lucide-react'
 
 import type { ProjectMember } from '~/entities/project'
 import { useRemoveMember } from '~/features/remove-member/api/use-remove-member'
+import { confirmAction } from '~/shared/lib'
 
 export function RemoveMemberButton (props: { projectId: string, member: ProjectMember }) {
 	const removeMember = useRemoveMember(props.projectId)
 
 	const confirm = () => {
-		modals.openConfirmModal({
+		confirmAction({
 			title: 'Remove member',
-			centered: true,
-			children: `${props.member.email} loses access to this project immediately, including any open tab.`,
-			labels: { confirm: 'Remove', cancel: 'Cancel' },
-			confirmProps: { color: 'red' },
+			body: `${props.member.email} loses access to this project immediately, including any open tab.`,
+			confirmLabel: 'Remove',
+			color: 'red',
 			onConfirm: () => {
 				removeMember.mutate(props.member.userId)
 			}

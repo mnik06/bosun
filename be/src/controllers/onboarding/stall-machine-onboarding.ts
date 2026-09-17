@@ -1,6 +1,5 @@
 import { type OnboardingDeps } from 'src/controllers/onboarding/onboarding-deps';
-import { announceOnboarding, isActiveRun } from 'src/controllers/onboarding/shared/onboarding-runs';
-import { notifyOnboardingStatus } from 'src/controllers/onboarding/shared/notify';
+import { failOnboardingRun, isActiveRun } from 'src/controllers/onboarding/shared/onboarding-runs';
 import { maybeStartVerify } from 'src/controllers/onboarding/shared/start-verify';
 import { type OnboardingRun } from 'src/types/OnboardingSchema';
 
@@ -33,16 +32,7 @@ export async function stallMachineOnboarding(
 			continue;
 		}
 
-		const failed = await deps.onboardingRunRepo.update({
-			id: run.id,
-			status: 'failed',
-			failureReason: STRANDED,
-			finishedAt: new Date()
-		});
-		const settled = failed ?? run;
-
-		announceOnboarding({ socketRegistry: deps.socketRegistry, projectId: opts.projectId, run: settled });
-		await notifyOnboardingStatus(deps, { projectId: opts.projectId, run: settled });
+		await failOnboardingRun(deps, { run, projectId: opts.projectId, reason: STRANDED });
 	}
 
 	for (const runId of held) {

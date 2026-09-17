@@ -1,8 +1,8 @@
 import { Button, Menu } from '@mantine/core'
-import { modals } from '@mantine/modals'
 import { ArrowUpToLine, Hand, Play, RotateCcw, Square, X, type LucideIcon } from 'lucide-react'
 
 import { useControlBuild, type BuildAction } from '~/features/control-build/api/use-control-build'
+import { confirmAction } from '~/shared/lib'
 
 // Stop is a hold on a running build, named for what the person sees happen.
 export type BuildControl = Exclude<BuildAction, 'fix-again' | 'accept-gaps'> | 'stop'
@@ -52,12 +52,12 @@ function withConfirm (spec: ControlSpec, run: () => void): () => void {
 	}
 
 	return () => {
-		modals.openConfirmModal({
+		confirmAction({
 			title: confirm.title,
-			centered: true,
-			children: confirm.body,
-			labels: { confirm: confirm.label, cancel: 'Keep it' },
-			confirmProps: { color: spec.color ?? 'blue' },
+			body: confirm.body,
+			confirmLabel: confirm.label,
+			cancelLabel: 'Keep it',
+			color: spec.color ?? 'blue',
 			onConfirm: run
 		})
 	}
