@@ -20,7 +20,10 @@ export interface KnownGap {
 	acceptedBy: string | null;
 }
 
-function clip(text: string, max: number): string {
+// Exported for `git-provider-for.ts`'s Azure adapter, which clips the same
+// GitHub-shaped body a second time to Azure's own, much shorter length limit —
+// the head-preserving truncation keeps the plan-link line intact either way.
+export function clip(text: string, max: number): string {
 	const trimmed = text.trim();
 
 	return trimmed.length <= max ? trimmed : `${trimmed.slice(0, max).trimEnd()}…`;

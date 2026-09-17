@@ -70,7 +70,7 @@ describe('gitProviderFor', () => {
 		);
 	});
 
-	it('refuses every operation but getRepository for Azure, since they are not built yet', async () => {
+	it('refuses only repositoryToken for Azure — mint-git-credential.ts decrypts the PAT directly instead', async () => {
 		const azureConnectionRepo = {
 			getById: vi.fn().mockResolvedValue({ id: 'azc_1', organization: 'my-org', status: 'active', projectId: 'prj_1' }),
 			getEncryptedPatById: vi.fn().mockResolvedValue('encrypted-pat')
@@ -80,8 +80,49 @@ describe('gitProviderFor', () => {
 			{ ...BASE, provider: 'azure_devops', azureConnectionId: 'azc_1', azureProjectId: 'proj', azureRepoId: 'repo-guid' }
 		);
 
-		await expect(provider.readFile({ path: 'a', ref: 'main' })).rejects.toMatchObject({ statusCode: 501 });
-		await expect(provider.pointBranch({ branch: 'b', sha: 's' })).rejects.toMatchObject({ statusCode: 501 });
+		await expect(provider.repositoryToken()).rejects.toMatchObject({ statusCode: 501 });
+	});
+
+	it('wires every other Azure operation to the service, scoped to the connection and clipped to Azure’s PR body limit', async () => {
+		const azureConnectionRepo = {
+			getById: vi.fn().mockResolvedValue({ id: 'azc_1', organization: 'my-org', status: 'active', projectId: 'prj_1' }),
+			getEncryptedPatById: vi.fn().mockResolvedValue('encrypted-pat')
+		};
+		const azureDevOps = {
+			readFile: vi.fn().mockResolvedValue('content'),
+			proposeFile: vi.fn().mockResolvedValue({ url: 'https://dev.azure.com/my-org/proj/_git/app/pullrequest/1' }),
+			pointBranch: vi.fn().mockResolvedValue(undefined),
+			openOrUpdatePullRequest: vi.fn().mockResolvedValue({ url: 'https://dev.azure.com/my-org/proj/_git/app/pullrequest/1', number: 1, updated: false }),
+			getPullRequest: vi.fn().mockResolvedValue({ number: 1, url: 'https://x', state: 'open', merged: false, baseRef: 'main', baseSha: 'sha', headRef: 'b' }),
+			editPullRequest: vi.fn().mockResolvedValue(undefined)
+		};
+		const scope = { organization: 'my-org', pat: 'decrypted:encrypted-pat', azureProjectId: 'proj', azureRepoId: 'repo-guid' };
+		const provider = await gitProviderFor(
+			deps({ azureConnectionRepo, azureDevOps } as unknown as Partial<GitProviderResolverDeps>),
+			{ ...BASE, provider: 'azure_devops', azureConnectionId: 'azc_1', azureProjectId: 'proj', azureRepoId: 'repo-guid' }
+		);
+
+		await provider.readFile({ path: 'a', ref: 'main' });
+		expect(azureDevOps.readFile).toHaveBeenCalledWith({ ...scope, path: 'a', ref: 'main' });
+
+		await provider.pointBranch({ branch: 'b', sha: 's' });
+		expect(azureDevOps.pointBranch).toHaveBeenCalledWith({ ...scope, branch: 'b', sha: 's' });
+
+		await provider.editPullRequest({ number: 1, body: 'x'.repeat(5_000) });
+		const editedBody = azureDevOps.editPullRequest.mock.calls[0][0].body as string;
+		expect(editedBody.length).toBeLessThanOrEqual(4_001);
+		expect(editedBody.endsWith('…')).toBe(true);
+
+		await provider.openOrUpdatePullRequest({ head: 'h', base: 'm', title: 't', body: 'x'.repeat(5_000) });
+		const openedBody = azureDevOps.openOrUpdatePullRequest.mock.calls[0][0].body as string;
+		expect(openedBody.length).toBeLessThanOrEqual(4_001);
+		expect(openedBody.endsWith('…')).toBe(true);
+
+		await provider.proposeFile({ branch: 'b', path: 'a', content: 'c', message: 'm', title: 't', body: 'small body' });
+		expect(azureDevOps.proposeFile).toHaveBeenCalledWith({ ...scope, branch: 'b', path: 'a', content: 'c', message: 'm', title: 't', body: 'small body' });
+
+		await provider.getPullRequest({ number: 1 });
+		expect(azureDevOps.getPullRequest).toHaveBeenCalledWith({ ...scope, number: 1 });
 	});
 
 	it("refuses an Azure repository whose connection's token is broken", async () => {

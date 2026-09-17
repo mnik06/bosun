@@ -4,6 +4,9 @@ import { azureCloneUrl, azureRepositoryFullName, stripRefsHeadsPrefix, type Avai
 const API_VERSION = '7.1';
 const REQUEST_TIMEOUT_MS = 20_000;
 const MAX_PAGES = 20;
+// The value the Refs/Pushes APIs use to mean "this ref does not exist yet" —
+// Azure's equivalent of git's own all-zero parent for a brand-new branch.
+const ZERO_SHA = '0000000000000000000000000000000000000000';
 
 export type AzureErrorKind = 'invalid_token' | 'missing_scope' | 'unreachable' | 'other';
 
@@ -31,6 +34,28 @@ const RepoSchema = z.object({
 
 const ReposRespSchema = z.object({ value: z.array(RepoSchema) });
 
+const RefSchema = z.object({ name: z.string(), objectId: z.string() });
+
+const RefsRespSchema = z.object({ value: z.array(RefSchema) });
+
+const RefUpdateResultSchema = z.object({ name: z.string(), success: z.boolean().optional(), updateStatus: z.string().optional() });
+
+const RefUpdateRespSchema = z.object({ value: z.array(RefUpdateResultSchema) });
+
+const ItemSchema = z.object({ content: z.string().optional() });
+
+const CommitRefSchema = z.object({ commitId: z.string() });
+
+const PullRequestSchema = z.object({
+	pullRequestId: z.number(),
+	status: z.enum(['active', 'completed', 'abandoned', 'notSet']),
+	sourceRefName: z.string(),
+	targetRefName: z.string(),
+	lastMergeTargetCommit: CommitRefSchema.optional()
+});
+
+const PullRequestsRespSchema = z.object({ value: z.array(PullRequestSchema) });
+
 // Everything the service itself can know about a repository — it is asked for by
 // organization and PAT alone, with no notion of which bosun connection row that
 // pair belongs to. The caller (list-available-azure-repositories, which does
@@ -54,6 +79,19 @@ function apiUrl(opts: { organization: string; path: string; query?: Record<strin
 	return url.toString();
 }
 
+// Azure's item paths are rooted (`/path/to/file`); bosun's own config path constant
+// is stored without the leading slash, the same way GitHub's contents API takes it.
+function itemPath(path: string): string {
+	return path.startsWith('/') ? path : `/${path}`;
+}
+
+interface RepositoryScope {
+	organization: string;
+	pat: string;
+	azureProjectId: string;
+	azureRepoId: string;
+}
+
 // One error type for every failure a caller needs to tell apart: an invalid or
 // expired token, one missing a required scope, and an organization bosun's IP
 // cannot reach — the three messages AC-3/4/5 ask for, decided here rather than
@@ -61,13 +99,28 @@ function apiUrl(opts: { organization: string; path: string; query?: Record<strin
 export function getAzureDevOpsService(deps: { fetchImpl?: typeof fetch }) {
 	const fetchImpl = deps.fetchImpl ?? fetch;
 
-	async function call(opts: { url: string; pat: string; method?: string }): Promise<{ status: number; json: unknown; headers: Headers }> {
+	async function call(opts: {
+		url: string;
+		pat: string;
+		method?: string;
+		body?: unknown;
+		// Statuses the caller wants back instead of a thrown `AzureError` — a 404 on
+		// a file read that may legitimately not exist, or a 409 a create-pull-request
+		// race is about to retry.
+		allow?: number[];
+	}): Promise<{ status: number; json: unknown; headers: Headers }> {
 		let response: Response;
 
 		try {
 			response = await fetchImpl(opts.url, {
 				method: opts.method ?? 'GET',
-				headers: { accept: 'application/json', authorization: authHeader(opts.pat), 'user-agent': 'bosun' },
+				headers: {
+					accept: 'application/json',
+					authorization: authHeader(opts.pat),
+					'user-agent': 'bosun',
+					...(opts.body === undefined ? {} : { 'content-type': 'application/json' })
+				},
+				body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
 				signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
 			});
 		} catch (error) {
@@ -86,12 +139,284 @@ export function getAzureDevOpsService(deps: { fetchImpl?: typeof fetch }) {
 		}
 
 		const json: unknown = await response.json().catch(() => null);
+		const allowed = opts.allow ?? [];
 
-		if (!response.ok) {
+		if (!response.ok && !allowed.includes(response.status)) {
 			throw new AzureError('other', `Azure DevOps answered ${response.status}${json === null ? '' : ` — ${JSON.stringify(json)}`}`);
 		}
 
 		return { status: response.status, json, headers: response.headers };
+	}
+
+	// Prefixes a caught `AzureError` with what bosun was trying to do, the same
+	// role `failure()` plays in `github-app.service.ts` — everything else about the
+	// error (its `kind`, its being an `AzureError` at all) passes through untouched.
+	async function withContext<T>(what: string, run: () => Promise<T>): Promise<T> {
+		try {
+			return await run();
+		} catch (error) {
+			if (error instanceof AzureError) {
+				throw new AzureError(error.kind, `${what}: ${error.message}`);
+			}
+
+			throw error;
+		}
+	}
+
+	function repositoryPath(opts: RepositoryScope): string {
+		return `/${encodeURIComponent(opts.azureProjectId)}/_apis/git/repositories/${encodeURIComponent(opts.azureRepoId)}`;
+	}
+
+	async function fetchRepo(opts: RepositoryScope) {
+		const result = await call({ pat: opts.pat, url: apiUrl({ organization: opts.organization, path: repositoryPath(opts) }) });
+
+		return RepoSchema.parse(result.json);
+	}
+
+	function cloneUrlOf(opts: { organization: string }, repo: z.infer<typeof RepoSchema>): string {
+		return azureCloneUrl({ organization: opts.organization, projectName: repo.project.name, repoName: repo.name });
+	}
+
+	function pullRequestUrl(opts: { cloneUrl: string; pullRequestId: number }): string {
+		return `${opts.cloneUrl}/pullrequest/${opts.pullRequestId}`;
+	}
+
+	async function currentRefSha(opts: RepositoryScope & { branch: string }): Promise<string | null> {
+		const result = await call({
+			pat: opts.pat,
+			url: apiUrl({ organization: opts.organization, path: `${repositoryPath(opts)}/refs`, query: { filter: `heads/${opts.branch}` } })
+		});
+		const refs = RefsRespSchema.parse(result.json).value;
+
+		return refs.find((ref) => ref.name === `refs/heads/${opts.branch}`)?.objectId ?? null;
+	}
+
+	// Created, or force-moved when it already exists: re-shipping a foundation after
+	// its bullet was re-run points the branch at the new commit, the same job
+	// `githubApp.pointBranch` does with a create-then-PATCH pair. Azure's single
+	// Update Refs call does both, keyed off whatever the branch's current object id
+	// is (or the all-zero id when it does not exist yet).
+	async function pointBranch(opts: RepositoryScope & { branch: string; sha: string }): Promise<void> {
+		return withContext(`could not point ${opts.branch} at ${opts.sha.slice(0, 8)}`, async () => {
+			const oldObjectId = (await currentRefSha(opts)) ?? ZERO_SHA;
+			const result = await call({
+				method: 'POST',
+				pat: opts.pat,
+				url: apiUrl({ organization: opts.organization, path: `${repositoryPath(opts)}/refs` }),
+				body: [{ name: `refs/heads/${opts.branch}`, oldObjectId, newObjectId: opts.sha }]
+			});
+			const updated = RefUpdateRespSchema.parse(result.json).value.find((ref) => ref.name === `refs/heads/${opts.branch}`);
+
+			if (!updated?.success) {
+				throw new AzureError('other', `Azure DevOps refused the ref update${updated?.updateStatus ? ` (${updated.updateStatus})` : ''}`);
+			}
+		});
+	}
+
+	// Shared by `readFile` (which wants the content back) and `proposeFile` (which
+	// only needs to know whether the file exists at the parent commit, to pick
+	// `add` versus `edit`) — a 404 is returned rather than thrown either way.
+	async function getItem(opts: RepositoryScope & { path: string; ref: string; includeContent?: boolean }) {
+		return call({
+			pat: opts.pat,
+			allow: [404],
+			url: apiUrl({
+				organization: opts.organization,
+				path: `${repositoryPath(opts)}/items`,
+				query: {
+					path: itemPath(opts.path),
+					'versionDescriptor.version': opts.ref,
+					'versionDescriptor.versionType': 'branch',
+					...(opts.includeContent ? { includeContent: 'true', $format: 'json' } : {})
+				}
+			})
+		});
+	}
+
+	// Null when the file is not there. Azure returns the raw text content directly
+	// on the item when `includeContent` is set, the same shape a repository config
+	// read expects from every provider.
+	async function readFile(opts: RepositoryScope & { path: string; ref: string }): Promise<string | null> {
+		return withContext(`could not read ${opts.path}`, async () => {
+			const result = await getItem({ ...opts, includeContent: true });
+
+			if (result.status === 404) {
+				return null;
+			}
+
+			const file = ItemSchema.safeParse(result.json);
+
+			if (!file.success || file.data.content === undefined) {
+				throw new AzureError('other', 'Azure DevOps did not return the file content');
+			}
+
+			return file.data.content;
+		});
+	}
+
+	async function findActivePullRequest(opts: RepositoryScope & { head: string; base: string }) {
+		const result = await call({
+			pat: opts.pat,
+			url: apiUrl({
+				organization: opts.organization,
+				path: `${repositoryPath(opts)}/pullrequests`,
+				query: {
+					'searchCriteria.sourceRefName': `refs/heads/${opts.head}`,
+					'searchCriteria.targetRefName': `refs/heads/${opts.base}`,
+					'searchCriteria.status': 'active'
+				}
+			})
+		});
+
+		return PullRequestsRespSchema.parse(result.json).value[0] ?? null;
+	}
+
+	async function updatePullRequestDescription(opts: RepositoryScope & { pullRequestId: number; title: string; body: string }): Promise<void> {
+		await call({
+			method: 'PATCH',
+			pat: opts.pat,
+			url: apiUrl({ organization: opts.organization, path: `${repositoryPath(opts)}/pullrequests/${opts.pullRequestId}` }),
+			body: { title: opts.title, description: opts.body }
+		});
+	}
+
+	// AC-43/44: an existing active pull request for the same source and target is
+	// found first — Azure has no equivalent of GitHub's "create, then fall back to
+	// the one already open" 422, so the check happens up front. The `allow: [409]`
+	// on create covers the race where one appears between that check and this call.
+	async function openOrUpdatePullRequest(
+		opts: RepositoryScope & { head: string; base: string; title: string; body: string }
+	): Promise<{ url: string; number: number; updated: boolean }> {
+		return withContext('could not open the pull request', async () => {
+			const repo = await fetchRepo(opts);
+			const cloneUrl = cloneUrlOf(opts, repo);
+			const existing = await findActivePullRequest(opts);
+
+			if (existing) {
+				await updatePullRequestDescription({ ...opts, pullRequestId: existing.pullRequestId, title: opts.title, body: opts.body });
+
+				return { url: pullRequestUrl({ cloneUrl, pullRequestId: existing.pullRequestId }), number: existing.pullRequestId, updated: true };
+			}
+
+			const created = await call({
+				method: 'POST',
+				pat: opts.pat,
+				allow: [409],
+				url: apiUrl({ organization: opts.organization, path: `${repositoryPath(opts)}/pullrequests` }),
+				body: { sourceRefName: `refs/heads/${opts.head}`, targetRefName: `refs/heads/${opts.base}`, title: opts.title, description: opts.body }
+			});
+
+			if (created.status === 201) {
+				const pull = PullRequestSchema.parse(created.json);
+
+				return { url: pullRequestUrl({ cloneUrl, pullRequestId: pull.pullRequestId }), number: pull.pullRequestId, updated: false };
+			}
+
+			// Lost the race: a pull request for this pair appeared between the search
+			// above and the create just refused above.
+			const raced = await findActivePullRequest(opts);
+
+			if (!raced) {
+				throw new AzureError('other', `Azure DevOps answered ${created.status} creating the pull request`);
+			}
+
+			await updatePullRequestDescription({ ...opts, pullRequestId: raced.pullRequestId, title: opts.title, body: opts.body });
+
+			return { url: pullRequestUrl({ cloneUrl, pullRequestId: raced.pullRequestId }), number: raced.pullRequestId, updated: true };
+		});
+	}
+
+	async function getPullRequest(opts: RepositoryScope & { number: number }) {
+		return withContext(`could not read pull request !${opts.number}`, async () => {
+			const [result, repo] = await Promise.all([
+				call({ pat: opts.pat, url: apiUrl({ organization: opts.organization, path: `${repositoryPath(opts)}/pullrequests/${opts.number}` }) }),
+				fetchRepo(opts)
+			]);
+			const pull = PullRequestSchema.parse(result.json);
+			const baseRef = stripRefsHeadsPrefix(pull.targetRefName);
+			const baseSha = pull.lastMergeTargetCommit?.commitId ?? (await currentRefSha({ ...opts, branch: baseRef })) ?? '';
+
+			return {
+				number: pull.pullRequestId,
+				url: pullRequestUrl({ cloneUrl: cloneUrlOf(opts, repo), pullRequestId: pull.pullRequestId }),
+				state: (pull.status === 'active' ? 'open' : 'closed') as 'open' | 'closed',
+				merged: pull.status === 'completed',
+				baseRef,
+				baseSha,
+				headRef: stripRefsHeadsPrefix(pull.sourceRefName)
+			};
+		});
+	}
+
+	async function editPullRequest(opts: RepositoryScope & { number: number; base?: string; body?: string }): Promise<void> {
+		return withContext(`could not update pull request !${opts.number}`, async () => {
+			await call({
+				method: 'PATCH',
+				pat: opts.pat,
+				url: apiUrl({ organization: opts.organization, path: `${repositoryPath(opts)}/pullrequests/${opts.number}` }),
+				body: {
+					...(opts.base === undefined ? {} : { targetRefName: `refs/heads/${opts.base}` }),
+					...(opts.body === undefined ? {} : { description: opts.body })
+				}
+			});
+		});
+	}
+
+	// A branch cut from the default branch holding exactly one commit that writes
+	// one file, same as `githubApp.proposeFile` — but Azure's Pushes API creates the
+	// ref and the commit in one call when the branch does not exist yet, so the
+	// first-time onboarding path never needs the separate ref-create step GitHub
+	// does. Re-proposing after an edit still force-moves the branch back onto the
+	// default branch first (one extra call), so it never stacks a second commit or
+	// carries anything else along.
+	async function proposeFile(
+		opts: RepositoryScope & { branch: string; path: string; content: string; message: string; title: string; body: string }
+	): Promise<{ url: string }> {
+		return withContext(`could not create ${opts.branch}`, async () => {
+			const repo = await fetchRepo(opts);
+			const defaultBranch = stripRefsHeadsPrefix(repo.defaultBranch ?? 'refs/heads/main');
+			const parentSha = await currentRefSha({ ...opts, branch: defaultBranch });
+
+			if (parentSha === null) {
+				throw new AzureError('other', `could not read the current tip of ${defaultBranch}`);
+			}
+
+			const existingBranchSha = await currentRefSha({ ...opts, branch: opts.branch });
+
+			if (existingBranchSha !== null) {
+				await pointBranch({ ...opts, sha: parentSha });
+			}
+
+			const existingItem = await getItem({ ...opts, ref: defaultBranch });
+			const pushed = await call({
+				method: 'POST',
+				pat: opts.pat,
+				url: apiUrl({ organization: opts.organization, path: `${repositoryPath(opts)}/pushes` }),
+				body: {
+					refUpdates: [{ name: `refs/heads/${opts.branch}`, oldObjectId: parentSha }],
+					commits: [
+						{
+							comment: opts.message,
+							changes: [
+								{
+									changeType: existingItem.status === 404 ? 'add' : 'edit',
+									item: { path: itemPath(opts.path) },
+									newContent: { content: opts.content, contentType: 'rawtext' }
+								}
+							]
+						}
+					]
+				}
+			});
+
+			if (pushed.status !== 201) {
+				throw new AzureError('other', `Azure DevOps answered ${pushed.status} pushing the commit`);
+			}
+
+			const pull = await openOrUpdatePullRequest({ ...opts, head: opts.branch, base: defaultBranch, title: opts.title, body: opts.body });
+
+			return { url: pull.url };
+		});
 	}
 
 	async function listProjects(opts: { organization: string; pat: string }): Promise<{ id: string; name: string }[]> {
@@ -157,19 +482,22 @@ export function getAzureDevOpsService(deps: { fetchImpl?: typeof fetch }) {
 	return {
 		listRepositories,
 
-		async getRepository(opts: { organization: string; pat: string; azureProjectId: string; azureRepoId: string }) {
-			const result = await call({
-				pat: opts.pat,
-				url: apiUrl({ organization: opts.organization, path: `/${encodeURIComponent(opts.azureProjectId)}/_apis/git/repositories/${encodeURIComponent(opts.azureRepoId)}` })
-			});
-			const repo = RepoSchema.parse(result.json);
+		async getRepository(opts: RepositoryScope) {
+			const repo = await fetchRepo(opts);
 
 			return {
 				fullName: azureRepositoryFullName({ organization: opts.organization, projectName: repo.project.name, repoName: repo.name }),
 				defaultBranch: stripRefsHeadsPrefix(repo.defaultBranch ?? 'refs/heads/main'),
-				cloneUrl: azureCloneUrl({ organization: opts.organization, projectName: repo.project.name, repoName: repo.name })
+				cloneUrl: cloneUrlOf(opts, repo)
 			};
 		},
+
+		readFile,
+		proposeFile,
+		pointBranch,
+		openOrUpdatePullRequest,
+		getPullRequest,
+		editPullRequest,
 
 		// Best-effort on purpose — called only from disconnect, where the connection
 		// (and the PAT that authorized creating this subscription) is already on its

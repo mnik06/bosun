@@ -10,19 +10,13 @@ const RECONCILE_MS = 5 * 60 * 1000;
 async function reconcileBuild(deps: LineDeps, opts: { build: Build; log: FastifyBaseLogger }): Promise<boolean> {
 	const { build } = opts;
 	const repository = await deps.repositoryRepo.getById(build.repositoryId);
-	const installation = repository?.installationId ? await deps.githubInstallationRepo.getById(repository.installationId) : null;
 
-	if (!repository || !installation || build.prNumber === null) {
+	if (!repository || build.prNumber === null) {
 		return false;
 	}
 
-	const pull = await deps.githubApp.getPullRequest({
-		installationId: installation.installationId,
-		// `installation` resolving means this repository is a GitHub one, so its
-		// `githubRepoId` is set too.
-		githubRepoId: repository.githubRepoId!,
-		number: build.prNumber
-	});
+	const provider = await deps.gitProviderFor(repository);
+	const pull = await provider.getPullRequest({ number: build.prNumber });
 
 	if (pull.merged) {
 		await markMerged(deps, { build });

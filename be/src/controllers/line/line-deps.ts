@@ -1,5 +1,5 @@
 import { type FastifyInstance } from 'fastify';
-import { gitProviderFor } from 'src/controllers/line/shared/git-provider-for';
+import { bindGitProviderFor } from 'src/controllers/line/shared/git-provider-for';
 import { type AzureConnectionRepo } from 'src/repos/azure/azure-connection.repo';
 import { type BuildRepo } from 'src/repos/builds/build.repo';
 import { type IntegrationRepo } from 'src/repos/builds/integration.repo';
@@ -117,16 +117,6 @@ export function lineDeps(fastify: FastifyInstance): LineDeps {
 		planTextService: fastify.services.planTextService,
 		lineLock: fastify.services.lineLock,
 		appUrl: fastify.env.PUBLIC_APP_URL,
-		gitProviderFor: (repository) =>
-			gitProviderFor(
-				{
-					githubInstallationRepo: fastify.repos.githubInstallationRepo,
-					azureConnectionRepo: fastify.repos.azureConnectionRepo,
-					githubApp: fastify.services.githubApp,
-					azureDevOps: fastify.services.azureDevOps,
-					patEncryption: fastify.services.patEncryption
-				},
-				repository
-			)
+		gitProviderFor: bindGitProviderFor(fastify)
 	};
 }

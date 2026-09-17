@@ -1,6 +1,6 @@
 import { type LineDeps } from 'src/controllers/line/line-deps';
+import { gitProviderFailureMessage } from 'src/controllers/line/shared/git-provider-error';
 import { pullRequestBody } from 'src/controllers/line/shared/pull-request-body';
-import { GithubError } from 'src/services/github/github-app.service';
 import { type Build } from 'src/types/BuildSchema';
 import { type Plan } from 'src/types/PlanSchema';
 
@@ -46,36 +46,22 @@ export async function pullRequestText(deps: LineDeps, opts: { plan: Plan; build:
 	};
 }
 
-async function installationFor(deps: LineDeps, build: Build) {
-	const repository = await deps.repositoryRepo.getById(build.repositoryId);
-	const installation = repository?.installationId ? await deps.githubInstallationRepo.getById(repository.installationId) : null;
-
-	return repository && installation ? { repository, installation } : null;
-}
-
 // Opened, or updated when one is already open for the branch — its body and its
 // base both, so a stacked plan's pull request follows its base as it moves. A
 // failure is written on the build without changing its status: the branch is
 // pushed and nothing about the work is in doubt.
 export async function publishPullRequest(deps: LineDeps, opts: { plan: Plan; build: Build }): Promise<Build> {
 	const { build } = opts;
-	const connected = await installationFor(deps, build);
+	const repository = await deps.repositoryRepo.getById(build.repositoryId);
 
-	if (!connected || build.branch === null || build.baseBranch === null) {
-		return (await deps.buildRepo.update({ id: build.id, failureReason: 'the branch is pushed, but this repository is no longer connected to a GitHub installation' })) ?? build;
+	if (!repository || build.branch === null || build.baseBranch === null) {
+		return (await deps.buildRepo.update({ id: build.id, failureReason: 'the branch is pushed, but this repository is no longer connected' })) ?? build;
 	}
 
 	try {
+		const provider = await deps.gitProviderFor(repository);
 		const text = await pullRequestText(deps, opts);
-		const opened = await deps.githubApp.openOrUpdatePullRequest({
-			installationId: connected.installation.installationId,
-			// See the comment in merge.ts: `installation` resolving means this
-			// repository is a GitHub one, so its `githubRepoId` is set too.
-			githubRepoId: connected.repository.githubRepoId!,
-			head: build.branch,
-			base: build.baseBranch,
-			...text
-		});
+		const opened = await provider.openOrUpdatePullRequest({ head: build.branch, base: build.baseBranch, ...text });
 		const updated = await deps.buildRepo.update({ id: build.id, prNumber: opened.number, prUrl: opened.url, failureReason: null });
 
 		if (build.prNumber === null) {
@@ -84,11 +70,13 @@ export async function publishPullRequest(deps: LineDeps, opts: { plan: Plan; bui
 
 		return updated ?? build;
 	} catch (error) {
-		if (!(error instanceof GithubError)) {
+		const message = gitProviderFailureMessage(error);
+
+		if (message === null) {
 			throw error;
 		}
 
-		return (await deps.buildRepo.update({ id: build.id, failureReason: `${build.branch} is pushed, but the pull request failed: ${error.message}` })) ?? build;
+		return (await deps.buildRepo.update({ id: build.id, failureReason: `${build.branch} is pushed, but the pull request failed: ${message}` })) ?? build;
 	}
 }
 

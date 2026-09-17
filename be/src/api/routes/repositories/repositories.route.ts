@@ -9,6 +9,7 @@ import {
 	RepositoryRespSchema,
 	SaveConfigDraftReqSchema
 } from 'src/api/routes/schemas/repositories/RepositorySchemas';
+import { bindGitProviderFor } from 'src/controllers/line/shared/git-provider-for';
 import { getRepositoryConfig } from 'src/controllers/repositories/get-repository-config';
 import { listRepositories } from 'src/controllers/repositories/list-repositories';
 import { openConfigPullRequest } from 'src/controllers/repositories/open-config-pull-request';
@@ -31,9 +32,8 @@ const routes: FastifyPluginAsync = async function (f) {
 		async (req) => {
 			return getRepositoryConfig({
 				repositoryRepo: fastify.repos.repositoryRepo,
-				githubInstallationRepo: fastify.repos.githubInstallationRepo,
-				githubApp: fastify.services.githubApp,
 				socketRegistry: fastify.services.socketRegistry,
+				gitProviderFor: bindGitProviderFor(fastify),
 				id: req.params.id,
 				projectId: req.membership!.projectId
 			});
@@ -86,10 +86,9 @@ const routes: FastifyPluginAsync = async function (f) {
 		},
 		async (req) => {
 			return openConfigPullRequest({
-				githubApp: fastify.services.githubApp,
-				githubInstallationRepo: fastify.repos.githubInstallationRepo,
 				repositoryRepo: fastify.repos.repositoryRepo,
 				onboardingRunRepo: fastify.repos.onboardingRunRepo,
+				gitProviderFor: bindGitProviderFor(fastify),
 				id: req.params.id,
 				projectId: req.membership!.projectId
 			});

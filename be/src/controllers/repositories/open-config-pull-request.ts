@@ -1,11 +1,11 @@
 import { HttpError } from 'src/api/errors/HttpError';
-import { toGithubHttpError } from 'src/controllers/github/shared/github-errors';
+import { toGitProviderHttpError } from 'src/controllers/line/shared/git-provider-error';
 import { getOwnedRepository } from 'src/controllers/repositories/shared/announce-repository';
-import { type GithubInstallationRepo } from 'src/repos/github/github-installation.repo';
 import { type RepositoryRepo } from 'src/repos/github/repository.repo';
 import { type OnboardingRunRepo } from 'src/repos/onboarding/onboarding-run.repo';
-import { type GithubAppService } from 'src/services/github/github-app.service';
+import { type GitProvider } from 'src/services/git/git-provider';
 import { PROJECT_CONFIG_PATH } from 'src/types/ProjectConfigSchema';
+import { type Repository } from 'src/types/RepositorySchema';
 
 export const ONBOARDING_BRANCH = 'bosun/onboarding';
 
@@ -23,18 +23,14 @@ function body(fullName: string): string {
 // repository unasked. And only after a verify passed, so what is proposed is a
 // config that has been seen to install, start and sign in.
 export async function openConfigPullRequest(opts: {
-	githubApp: GithubAppService;
-	githubInstallationRepo: GithubInstallationRepo;
 	repositoryRepo: RepositoryRepo;
 	onboardingRunRepo: OnboardingRunRepo;
+	gitProviderFor: (repository: Repository) => Promise<GitProvider>;
 	id: string;
 	projectId: string;
 }): Promise<{ prUrl: string }> {
 	const repository = await getOwnedRepository(opts);
-	const [runs, installation] = await Promise.all([
-		opts.onboardingRunRepo.latestPerMachineForRepository(repository.id),
-		repository.installationId === null ? null : opts.githubInstallationRepo.getById(repository.installationId)
-	]);
+	const runs = await opts.onboardingRunRepo.latestPerMachineForRepository(repository.id);
 
 	if (!runs.some((run) => run.status === 'ready')) {
 		throw new HttpError(409, 'No machine has verified this config yet');
@@ -44,16 +40,9 @@ export async function openConfigPullRequest(opts: {
 		throw new HttpError(409, 'There is no draft to propose — the default branch already carries the file');
 	}
 
-	if (!installation) {
-		throw new HttpError(409, 'The GitHub installation this repository came from is no longer connected');
-	}
-
 	try {
-		const { url } = await opts.githubApp.proposeFile({
-			installationId: installation.installationId,
-			// `installation` resolving means this repository is a GitHub one, so its
-			// `githubRepoId` is set too.
-			githubRepoId: repository.githubRepoId!,
+		const provider = await opts.gitProviderFor(repository);
+		const { url } = await provider.proposeFile({
 			branch: ONBOARDING_BRANCH,
 			path: PROJECT_CONFIG_PATH,
 			content: repository.configDraft,
@@ -64,6 +53,6 @@ export async function openConfigPullRequest(opts: {
 
 		return { prUrl: url };
 	} catch (error) {
-		throw toGithubHttpError(error);
+		throw toGitProviderHttpError(error);
 	}
 }
