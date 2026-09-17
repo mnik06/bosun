@@ -7,7 +7,7 @@ import { type SliceRepo } from 'src/repos/plans/slice.repo';
 import { type Footprint } from 'src/types/FootprintSchema';
 import { type PlanState } from 'src/types/PlanStateSchema';
 
-export interface MachinePlanSummary {
+interface MachinePlanSummary {
 	number: number;
 	title: string | null;
 	status: string;

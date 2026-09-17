@@ -7,6 +7,7 @@ import {
 	scopedCommand,
 	type SessionScope
 } from '../services/memory.service';
+import { killProcessGroup } from '../utils';
 
 // A person is not obliged to answer within the working day. The CLI's default
 // MCP tool-call timeout is a minute, and `bosun_ask` blocking past it is what the
@@ -215,13 +216,7 @@ export function spawnClaudeSession(opts: {
 	// is deliberately left open — closing it ends the session after one turn.
 	write(opts.prompt);
 
-	const signalGroup = (signal: NodeJS.Signals): void => {
-		try {
-			process.kill(-child.pid!, signal);
-		} catch {
-			child.kill(signal);
-		}
-	};
+	const signalGroup = (signal: NodeJS.Signals): void => killProcessGroup(child, signal);
 
 	return {
 		send: write,

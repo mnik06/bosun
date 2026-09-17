@@ -5,7 +5,7 @@ import { type Services } from '../services/index';
 import { startSessionMcpServer, type SessionMcpServer } from '../sessions/mcp-server';
 import { spawnClaudeSession, type ClaudeSession } from '../sessions/process';
 import { teardownSession } from '../sessions/teardown';
-import { createStderrTail, logDroppedFrame, reportStartFailure } from '../sessions/turn-support';
+import { createStderrTail, logDroppedFrame, pipeSessionOutput, reportStartFailure } from '../sessions/turn-support';
 
 const STDERR_KEPT_CHARS = 500;
 
@@ -112,6 +112,8 @@ export function createAskSessions(opts: {
 			onDropped: logDroppedFrame
 		});
 
+		const pipe = pipeSessionOutput({ parser, stderr });
+
 		ask.process = spawnClaudeSession({
 			cwd: tree.path,
 			prompt: askPrompt({
@@ -123,14 +125,10 @@ export function createAskSessions(opts: {
 			userServerNames: [],
 			tools: ASK_TOOLS,
 			claudeAuth: opts.services.claudeAuth,
-			onStdout: (chunk) => {
-				parser.push(chunk);
-			},
-			onStderr: (chunk) => {
-				stderr.push(chunk);
-			},
+			onStdout: pipe.onStdout,
+			onStderr: pipe.onStderr,
 			onExit: (code) => {
-				parser.flush();
+				pipe.onExit();
 				// Settles only if the stream did not: an answer that arrived is the
 				// answer, whatever the exit code says afterwards.
 				settle(msg.askId, {

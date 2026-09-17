@@ -18,7 +18,7 @@ import { envFileFor } from '../services/project-env.service';
 import { runShell } from '../services/setup-steps.service';
 import { startSessionMcpServer, type SessionMcpServer } from '../sessions/mcp-server';
 import { spawnClaudeSession, type ClaudeSession } from '../sessions/process';
-import { createStderrTail } from '../sessions/turn-support';
+import { createStderrTail, pipeSessionOutput } from '../sessions/turn-support';
 import { getIntegrationGit, type IntegrationGit } from './git';
 import { CONFLICT_DEFINITIONS, CONFLICT_MCP_TOOLS, createConflictDispatch } from './mcp/tools';
 
@@ -118,6 +118,8 @@ export function createIntegrationSessions(opts: { services: Services; send: (mes
 					onDropped: () => {}
 				});
 
+				const pipe = pipeSessionOutput({ parser, stderr });
+
 				ctx.entry.process = spawnClaudeSession({
 					cwd: ctx.msg.worktreePath,
 					prompt: ctx.prompt,
@@ -127,14 +129,10 @@ export function createIntegrationSessions(opts: { services: Services; send: (mes
 					claudeAuth: services.claudeAuth,
 					env: { ...ctx.env, ...NO_PUSH_GIT_ENV },
 					scope: services.memory.sessionScope({ runId: ctx.msg.integrationId, memoryMaxBytes: ctx.msg.memoryMaxBytes }),
-					onStdout: (chunk) => {
-						parser.push(chunk);
-					},
-					onStderr: (chunk) => {
-						stderr.push(chunk);
-					},
+					onStdout: pipe.onStdout,
+					onStderr: pipe.onStderr,
 					onExit: (code) => {
-						parser.flush();
+						pipe.onExit();
 						resolve({ ok: false, message: stderr.value().trim() || `claude exited with code ${code ?? 'unknown'}` });
 					}
 				});

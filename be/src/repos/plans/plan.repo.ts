@@ -4,7 +4,7 @@ import { machines, plans } from 'src/services/drizzle/schema';
 import { PlanSchema, type Plan, type PlanStatus } from 'src/types/PlanSchema';
 import { type PlanSummary } from 'src/types/PlanSummarySchema';
 
-export const planColumns = {
+const planColumns = {
 	id: plans.id,
 	projectId: plans.projectId,
 	createdByUserId: plans.createdByUserId,

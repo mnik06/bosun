@@ -1,6 +1,7 @@
 import { HttpError } from 'src/api/errors/HttpError';
 import { type ProjectMemberRepo } from 'src/repos/projects/project-member.repo';
 import { type ProjectMembership } from 'src/types/ProjectSchema';
+import { orNotFound } from 'src/utils/general';
 
 // Read inside the caller's transaction, never before it: two leaders standing
 // each other down at the same moment would otherwise both see two leaders, both
@@ -11,14 +12,13 @@ export async function getMemberForLeaderChange(opts: {
 	userId: string;
 	stillALeader: boolean;
 }): Promise<ProjectMembership> {
-	const membership = await opts.projectMemberRepo.get({
-		projectId: opts.projectId,
-		userId: opts.userId
-	});
-
-	if (!membership) {
-		throw new HttpError(404, 'Member not found');
-	}
+	const membership = await orNotFound(
+		opts.projectMemberRepo.get({
+			projectId: opts.projectId,
+			userId: opts.userId
+		}),
+		'Member not found'
+	);
 
 	if (membership.role !== 'leader' || opts.stillALeader) {
 		return membership;
