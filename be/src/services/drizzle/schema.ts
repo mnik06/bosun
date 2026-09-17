@@ -568,12 +568,14 @@ export const notifications = pgTable(
 		body: text().notNull(),
 		url: text().notNull(),
 		planId: text().references(() => plans.id, { onDelete: 'cascade' }),
+		quickFixId: text().references(() => quickFixes.id, { onDelete: 'cascade' }),
 		sentAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
 		readAt: timestamp({ withTimezone: true })
 	},
 	(table) => [
 		index('notifications_user_project_idx').on(table.userId, table.projectId),
-		index('notifications_user_plan_idx').on(table.userId, table.planId)
+		index('notifications_user_plan_idx').on(table.userId, table.planId),
+		index('notifications_quick_fix_id_idx').on(table.quickFixId)
 	]
 );
 

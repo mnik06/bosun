@@ -17,7 +17,9 @@ export const NotificationKindSchema = z.enum([
 	'build.in_review',
 	'build.cancelled',
 	'machine.online',
-	'machine.offline'
+	'machine.offline',
+	'quickfix.pushed',
+	'quickfix.failed'
 ]);
 
 export type NotificationKind = z.infer<typeof NotificationKindSchema>;
@@ -29,6 +31,7 @@ export const NotificationSchema = z.object({
 	body: z.string(),
 	url: z.url(),
 	planId: z.string().nullable(),
+	quickFixId: z.string().nullable(),
 	sentAt: z.coerce.date(),
 	readAt: z.coerce.date().nullable()
 });

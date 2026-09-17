@@ -29,6 +29,7 @@ export async function dispatchNotification(
 		body: string;
 		url: string;
 		planId?: string | null;
+		quickFixId?: string | null;
 	}
 ): Promise<void> {
 	const recipientIds = [...new Set(opts.recipientIds)];
@@ -38,6 +39,7 @@ export async function dispatchNotification(
 	}
 
 	const planId = opts.planId ?? null;
+	const quickFixId = opts.quickFixId ?? null;
 
 	const [created, subscriptions] = await Promise.all([
 		Promise.all(
@@ -51,7 +53,8 @@ export async function dispatchNotification(
 					title: opts.title,
 					body: opts.body,
 					url: opts.url,
-					planId
+					planId,
+					quickFixId
 				})
 			}))
 		),
