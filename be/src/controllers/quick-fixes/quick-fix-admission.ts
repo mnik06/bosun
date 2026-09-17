@@ -21,6 +21,7 @@ export async function quickFixAdmission(deps: LineDeps, opts: { machine: Machine
 		load: { build: slots.length, lane: lanes.length, onboarding: onboardingRuns.length, quickFix: quickFixes.length },
 		verifyLanes: opts.machine.verifyLanes,
 		verifyWaiting: false,
-		buildCap: null
+		buildCap: null,
+		ignoreMemoryBudget: opts.machine.ignoreMemoryBudget
 	});
 }
