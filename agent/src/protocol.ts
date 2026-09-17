@@ -28,6 +28,7 @@ import {
 } from './build-frames';
 import { FootprintSchema } from './footprint';
 import { ProjectProfileSchema } from './project-profile';
+import { QuickFixDoneMsgSchema, QuickFixErrorMsgSchema, QuickFixStartMsgSchema } from './quick-fix-frames';
 
 export {
 	type OnboardingStart,
@@ -279,7 +280,9 @@ export const AgentMsgSchema = z.discriminatedUnion('type', [
 	RepoAttachedMsgSchema,
 	RepoErrorMsgSchema,
 	OnboardingDoneMsgSchema,
-	OnboardingErrorMsgSchema
+	OnboardingErrorMsgSchema,
+	QuickFixDoneMsgSchema,
+	QuickFixErrorMsgSchema
 ]);
 
 export type AgentMsg = z.infer<typeof AgentMsgSchema>;
@@ -506,7 +509,8 @@ export const ServerMsgSchema = z.discriminatedUnion('type', [
 	SecretsSetMsgSchema,
 	RepoAttachMsgSchema,
 	OnboardingStartMsgSchema,
-	OnboardingCancelMsgSchema
+	OnboardingCancelMsgSchema,
+	QuickFixStartMsgSchema
 ]);
 
 export type ServerMsg = z.infer<typeof ServerMsgSchema>;
@@ -522,3 +526,5 @@ export {
 	type Regenerated,
 	type ResolvedConflict
 } from './build-frames';
+
+export { type QuickFixStart } from './quick-fix-frames';

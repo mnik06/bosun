@@ -44,10 +44,14 @@ export function criteriaList(acs: { code: string; text: string }[]): string {
 // Nobody is reading the output, and there is no second chance to ask. Every rule
 // here exists because the alternative wastes the whole session rather than
 // degrading it.
-export function unattended(canAsk: boolean): string {
+// `canRecordDecisions` names whether `record_decision` is actually among this
+// session's tools: a quick fix is given none of the plan-bullet MCP tools, and
+// telling it to call one it does not have would be a promise the session cannot
+// keep.
+export function unattended(canAsk: boolean, canRecordDecisions = true): string {
 	const asking = canAsk
 		? `You may call \`bosun_ask\` when a decision is genuinely the operator's and you cannot settle it from the plan or the code. This plan keeps its build slot while you wait, but only for ten minutes: past that the session is stopped, other plans take the slot, and this bullet starts again from its last commit — with the answer in its prompt — once somebody gives one. Spend it on decisions that change what gets built, never on confirmations.`
-		: `**You cannot ask anything.** No tool exists for it. Decide, record the decision with \`record_decision\` where you have one, and carry on. A choice you are unsure of is still better than a session that ends having done nothing.`;
+		: `**You cannot ask anything.** No tool exists for it. Decide${canRecordDecisions ? ', record the decision with `record_decision` where you have one,' : ''} and carry on. A choice you are unsure of is still better than a session that ends having done nothing.`;
 
 	return `# Nobody is watching this run
 
@@ -66,7 +70,7 @@ ${asking}
 // Verify bullets used to arrive at a worktree with no database URL and build a
 // database of their own in /tmp. Naming the keys is what tells the session the
 // connection is already there and is the real one.
-function providedEnv(context: RunContext): string {
+export function providedEnv(context: Pick<RunContext, 'providedEnv'>): string {
 	if (context.providedEnv.length === 0) {
 		return '';
 	}
@@ -89,7 +93,7 @@ command's output you repeat, not in a brief, not in your report. If one of them 
 is a blocker: report it with the error it gave.`;
 }
 
-function commandList(entries: { label: string; cwd?: string; run: string }[]): string {
+export function commandList(entries: { label: string; cwd?: string; run: string }[]): string {
 	return entries.map((entry) => `  - ${entry.label}: \`${entry.run}\`${entry.cwd === undefined ? '' : ` in \`${entry.cwd}\``}`).join('\n');
 }
 
@@ -178,7 +182,15 @@ ${agentConfigRule()}
 
 ${migrationRule(context)}
 
-## How the loop runs — once per iteration, by you, one command at a time
+${loopRules(context)}`;
+}
+
+// The rules the loop itself runs under, once a session knows what its commands
+// are. Identical whatever kind of session is running it — a plan bullet, a verify
+// pass, a quick fix — because the machine it shares and the way `claude` gets
+// killed for memory do not change with the kind of work.
+export function loopRules(context: Pick<RunContext, 'baseRef'>): string {
+	return `## How the loop runs — once per iteration, by you, one command at a time
 
 This machine is shared with other plans and its memory is finite. Typechecking or linting a whole
 package can take gigabytes on its own; two of them at once, beside a dev stack, is how a session gets
