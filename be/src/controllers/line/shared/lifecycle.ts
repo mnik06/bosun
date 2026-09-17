@@ -8,6 +8,7 @@ import {
 	nextJob,
 	waitingStatus
 } from 'src/controllers/line/shared/next-job';
+import { notifyBuildStatus } from 'src/controllers/line/shared/notify';
 import { publishPullRequest } from 'src/controllers/line/shared/pull-request';
 import { type Build, type IntegrationTrigger } from 'src/types/BuildSchema';
 import { type Plan } from 'src/types/PlanSchema';
@@ -75,6 +76,7 @@ export async function finishVerification(deps: LineDeps, opts: { build: Build; p
 	const published = await publishPullRequest(deps, { plan: opts.plan, build: verified });
 
 	await announce(deps, { build: published, plan: opts.plan });
+	await notifyBuildStatus(deps, { plan: opts.plan, build: published });
 
 	return published;
 }
@@ -123,6 +125,7 @@ export async function settleBuild(deps: LineDeps, opts: { buildId: string }): Pr
 	const updated = (await deps.buildRepo.update({ id: build.id, status })) ?? build;
 
 	await announce(deps, { build: updated, plan });
+	await notifyBuildStatus(deps, { plan, build: updated });
 
 	return updated;
 }

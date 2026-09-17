@@ -3,6 +3,7 @@ import { type LineDeps } from 'src/controllers/line/line-deps';
 import { scheduleRepository } from 'src/controllers/line/schedule';
 import { announceBuild, announcePlanChanged } from 'src/controllers/line/shared/announce';
 import { consumeInstead } from 'src/controllers/line/shared/detect-dependencies';
+import { notifyBuildStatus } from 'src/controllers/line/shared/notify';
 import { resumeNeedsYouBuild } from 'src/controllers/line/shared/resume-needs-you-build';
 import { sayToPlan } from 'src/controllers/plans/say-to-plan';
 import { type Build, type OverlapChoice, type OverlapDecision } from 'src/types/BuildSchema';
@@ -147,6 +148,10 @@ async function rename(
 
 		if (cancelled) {
 			announceBuild({ socketRegistry: deps.socketRegistry, projectId: plan.projectId, build: cancelled });
+
+			if (build.status !== 'failed') {
+				await notifyBuildStatus(deps, { plan, build: cancelled });
+			}
 		}
 	}
 

@@ -144,14 +144,20 @@ export function getMachineRepo(db: Db) {
 
 		// `repoPath` and `publicKey` are written only when the agent sent them: an
 		// agent with no repository yet, or one older than the key, must not erase what
-		// the row already says.
+		// the row already says. `wasOnline` is read just before the write so a caller
+		// can tell a real offline/pending→online flip from a `hello` that arrived
+		// while the row already said `online`.
 		async markOnline(opts: {
 			id: string;
 			agentVersion: string;
 			repoPath?: string;
 			publicKey?: string;
 			now: Date;
-		}): Promise<Machine | null> {
+		}): Promise<{ machine: Machine; wasOnline: boolean } | null> {
+			const [before] = await db
+				.select({ status: machines.status })
+				.from(machines)
+				.where(eq(machines.id, opts.id));
 			const [row] = await db
 				.update(machines)
 				.set({
@@ -164,7 +170,7 @@ export function getMachineRepo(db: Db) {
 				.where(eq(machines.id, opts.id))
 				.returning(publicColumns);
 
-			return row ? MachineSchema.parse(row) : null;
+			return row ? { machine: MachineSchema.parse(row), wasOnline: before?.status === 'online' } : null;
 		},
 
 		async markOffline(opts: { id: string; now: Date }): Promise<Machine | null> {

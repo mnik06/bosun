@@ -7,6 +7,7 @@ import { markMachineOnline } from 'src/controllers/machines/mark-machine-online'
 import { reconcileRepository } from 'src/controllers/machines/reconcile-repository';
 import { saveMachinePreflight } from 'src/controllers/machines/save-machine-preflight';
 import { machineOfflineDeps, notifyMachineOffline } from 'src/controllers/machines/shared/notify-offline';
+import { machineOnlineDeps, notifyMachineOnline } from 'src/controllers/machines/shared/notify-online';
 import { lineDeps } from 'src/controllers/line/line-deps';
 import { scheduleMachine } from 'src/controllers/line/schedule';
 import { resendWorktrees } from 'src/controllers/line/shared/dispatch';
@@ -223,22 +224,32 @@ export async function applyMachineFrame(opts: {
 }): Promise<void> {
 	const machineRepo = opts.fastify.repos.machineRepo;
 	const socketRegistry = opts.fastify.services.socketRegistry;
-	const machine =
-		opts.msg.type === 'hello'
-			? await markMachineOnline({
-				machineRepo,
-				id: opts.machineId,
-				agentVersion: opts.msg.agentVersion,
-				repoPath: opts.msg.repoPath,
-				publicKey: opts.msg.publicKey,
-				envSets: opts.msg.envSets,
-				sessionSecrets: opts.msg.sessionSecrets
-			})
-			: await saveMachinePreflight({
-				machineRepo,
-				id: opts.machineId,
-				checks: opts.msg.checks
-			});
+
+	let machine: Machine | null;
+	// True only on a real offline/pending→online flip: a `refresh`/`change` hello
+	// arriving while the row already said `online` leaves this false.
+	let justReconnected = false;
+
+	if (opts.msg.type === 'hello') {
+		const result = await markMachineOnline({
+			machineRepo,
+			id: opts.machineId,
+			agentVersion: opts.msg.agentVersion,
+			repoPath: opts.msg.repoPath,
+			publicKey: opts.msg.publicKey,
+			envSets: opts.msg.envSets,
+			sessionSecrets: opts.msg.sessionSecrets
+		});
+
+		machine = result?.machine ?? null;
+		justReconnected = result !== null && !result.wasOnline;
+	} else {
+		machine = await saveMachinePreflight({
+			machineRepo,
+			id: opts.machineId,
+			checks: opts.msg.checks
+		});
+	}
 
 	// The row can disappear mid-session: deleting the owner's account cascades to
 	// their machines. Leaving the socket up would keep a machine nobody can reach
@@ -259,6 +270,15 @@ export async function applyMachineFrame(opts: {
 	// anything.
 	if (opts.msg.type === 'hello') {
 		await settleHello({ fastify: opts.fastify, machine, connectedAt: opts.connectedAt, msg: opts.msg });
+	}
+
+	// Runs after `settleHello` so the held/unfinished counts reflect what this
+	// reconnect actually resolved, not a stale pre-reconnect snapshot. A `paused`
+	// row stays paused through `markOnline` regardless of this flip, so it is
+	// excluded here rather than being able to read as a reconnect worth telling
+	// anyone about.
+	if (opts.msg.type === 'hello' && justReconnected && machine.status !== 'paused') {
+		await notifyMachineOnline(machineOnlineDeps(opts.fastify), { machine });
 	}
 
 	// Offered only when the operator asked for it. A connect-triggered upgrade

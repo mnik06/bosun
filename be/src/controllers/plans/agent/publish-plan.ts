@@ -2,6 +2,7 @@ import { HttpError } from 'src/api/errors/HttpError';
 import { type LineDeps } from 'src/controllers/line/line-deps';
 import { announceBuild } from 'src/controllers/line/shared/announce';
 import { removeWorktree, stopRunningJobs } from 'src/controllers/line/shared/lifecycle';
+import { notifyBuildStatus } from 'src/controllers/line/shared/notify';
 import { getMachinePlan } from 'src/controllers/plans/shared/plan-access';
 import { announcePlan, announcePlanArtifact } from 'src/controllers/plans/shared/plan-broadcast';
 import { getAcRepo, type AcRepo } from 'src/repos/plans/ac.repo';
@@ -152,6 +153,10 @@ async function withdrawBuild(deps: LineDeps, plan: Plan): Promise<void> {
 	if (cancelled) {
 		removeWorktree(deps, { build: cancelled });
 		announceBuild({ socketRegistry: deps.socketRegistry, projectId: plan.projectId, build: cancelled });
+
+		if (live.status !== 'failed') {
+			await notifyBuildStatus(deps, { plan, build: cancelled });
+		}
 	}
 }
 
