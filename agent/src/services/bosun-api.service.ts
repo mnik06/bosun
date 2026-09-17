@@ -90,8 +90,11 @@ export function getBosunApiService(deps: { serverUrl: string; machineKey?: strin
 			return z.array(McpPresetSchema).parse(await get('/mcp-presets'));
 		},
 
+		// Authenticated: some presets gate on the calling machine's agentVersion, so
+		// fetching one by id has to prove which machine is asking. The list at
+		// /mcp-presets stays open — nothing there depends on who is reading it.
 		async getMcpPreset(id: string): Promise<McpPreset> {
-			return McpPresetSchema.parse(await get(`/mcp-presets/${encodeURIComponent(id)}`));
+			return McpPresetSchema.parse(await get(`/agent/mcp-presets/${encodeURIComponent(id)}`, true));
 		},
 
 		async enroll(opts: { token: string; repoPath: string | null }) {
