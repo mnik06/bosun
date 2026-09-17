@@ -1,6 +1,8 @@
 import { getAgentReleaseService } from 'src/services/agent-release/agent-release.service';
 import { getSupabaseAdmin } from 'src/services/auth/supabase-admin.service';
 import { getSupabaseAuth } from 'src/services/auth/supabase-auth.service';
+import { getAzureBranchSnapshotService } from 'src/services/azure/azure-branch-snapshot.service';
+import { getAzureConnectionGuardService } from 'src/services/azure/azure-connection-guard.service';
 import { getAzureDevOpsService } from 'src/services/azure/azure-devops.service';
 import { getPatEncryptionService } from 'src/services/crypto/pat-encryption.service';
 import { getGithubAppService } from 'src/services/github/github-app.service';
@@ -29,6 +31,8 @@ export function getServices(opts: { env: Env }) {
 			latestReleaseUrl: opts.env.AGENT_LATEST_RELEASE_URL,
 			downloadBaseUrl: opts.env.AGENT_DOWNLOAD_BASE_URL
 		}),
+		azureBranchSnapshot: getAzureBranchSnapshotService(),
+		azureConnectionGuard: getAzureConnectionGuardService(),
 		azureDevOps: getAzureDevOpsService({}),
 		disconnectGrace: getDisconnectGraceService(),
 		githubApp: getGithubAppService({

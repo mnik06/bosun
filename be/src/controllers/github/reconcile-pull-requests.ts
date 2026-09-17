@@ -1,4 +1,5 @@
 import { type FastifyBaseLogger } from 'fastify';
+import { reconcileAzureRepositories } from 'src/controllers/azure/reconcile-repositories';
 import { type LineDeps } from 'src/controllers/line/line-deps';
 import { scheduleRepository } from 'src/controllers/line/schedule';
 import { queueIntegration } from 'src/controllers/line/shared/lifecycle';
@@ -56,9 +57,17 @@ export async function reconcilePullRequests(deps: LineDeps, opts: { log: Fastify
 	}
 }
 
+// One timer, two jobs — Azure's webhook-subscription health check and
+// branch-refs poll (AC-64, AC-65, AC-66) ride the same interval as pull request
+// reconciliation rather than a second one of their own.
+async function reconcile(deps: LineDeps, opts: { log: FastifyBaseLogger }): Promise<void> {
+	await reconcilePullRequests(deps, opts);
+	await reconcileAzureRepositories(deps, opts);
+}
+
 export function startPullRequestReconcile(opts: { deps: LineDeps; log: FastifyBaseLogger }): () => void {
 	const timer = setInterval(() => {
-		reconcilePullRequests(opts.deps, { log: opts.log }).catch((error: unknown) => {
+		reconcile(opts.deps, { log: opts.log }).catch((error: unknown) => {
 			opts.log.error({ error }, 'failed reconciling pull requests');
 		});
 	}, RECONCILE_MS);

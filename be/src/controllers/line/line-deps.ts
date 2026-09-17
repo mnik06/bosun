@@ -1,6 +1,7 @@
 import { type FastifyInstance } from 'fastify';
 import { bindGitProviderFor } from 'src/controllers/line/shared/git-provider-for';
 import { type AzureConnectionRepo } from 'src/repos/azure/azure-connection.repo';
+import { type AzureWebhookSubscriptionRepo } from 'src/repos/azure/azure-webhook-subscription.repo';
 import { type BuildRepo } from 'src/repos/builds/build.repo';
 import { type IntegrationRepo } from 'src/repos/builds/integration.repo';
 import { type OverlapDecisionRepo } from 'src/repos/builds/overlap-decision.repo';
@@ -22,12 +23,15 @@ import { type PlanRepo } from 'src/repos/plans/plan.repo';
 import { type SliceRepo } from 'src/repos/plans/slice.repo';
 import { type ProjectMemberRepo } from 'src/repos/projects/project-member.repo';
 import { type UserRepo } from 'src/repos/users/user.repo';
+import { type AzureBranchSnapshotService } from 'src/services/azure/azure-branch-snapshot.service';
+import { type AzureConnectionGuardService } from 'src/services/azure/azure-connection-guard.service';
 import { type AzureDevOpsService } from 'src/services/azure/azure-devops.service';
 import { type PatEncryptionService } from 'src/services/crypto/pat-encryption.service';
 import { type Db } from 'src/services/drizzle/drizzle.service';
 import { type GitProvider } from 'src/services/git/git-provider';
 import { type GithubAppService } from 'src/services/github/github-app.service';
 import { type IdService } from 'src/services/ids/id.service';
+import { type KeyService } from 'src/services/keys/key.service';
 import { type LineLockService } from 'src/services/line/line-lock.service';
 import { type WebPushService } from 'src/services/notifications/web-push.service';
 import { type PlanTextService } from 'src/services/plans/plan-text.service';
@@ -58,6 +62,7 @@ export interface LineDeps {
 	repositoryRepo: RepositoryRepo;
 	githubInstallationRepo: GithubInstallationRepo;
 	azureConnectionRepo: AzureConnectionRepo;
+	azureWebhookSubscriptionRepo: AzureWebhookSubscriptionRepo;
 	onboardingRunRepo: OnboardingRunRepo;
 	userRepo: UserRepo;
 	projectMemberRepo: ProjectMemberRepo;
@@ -67,6 +72,9 @@ export interface LineDeps {
 	githubApp: GithubAppService;
 	azureDevOps: AzureDevOpsService;
 	patEncryption: PatEncryptionService;
+	keyService: KeyService;
+	azureConnectionGuard: AzureConnectionGuardService;
+	azureBranchSnapshot: AzureBranchSnapshotService;
 	socketRegistry: SocketRegistry;
 	webPush: WebPushService;
 	runActivity: RunActivityService;
@@ -76,6 +84,8 @@ export interface LineDeps {
 	// The web app's origin: a pull request body links back to its plan, and a push
 	// notification deep-links to the same place.
 	appUrl: string;
+	// bosun's own origin — what an Azure webhook subscription's URL is built from.
+	serverUrl: string;
 	// Resolves the `GitProvider` for one repository from its own `provider` column
 	// — see `shared/git-provider-for.ts`.
 	gitProviderFor: (repository: Repository) => Promise<GitProvider>;
@@ -101,6 +111,7 @@ export function lineDeps(fastify: FastifyInstance): LineDeps {
 		repositoryRepo: fastify.repos.repositoryRepo,
 		githubInstallationRepo: fastify.repos.githubInstallationRepo,
 		azureConnectionRepo: fastify.repos.azureConnectionRepo,
+		azureWebhookSubscriptionRepo: fastify.repos.azureWebhookSubscriptionRepo,
 		onboardingRunRepo: fastify.repos.onboardingRunRepo,
 		userRepo: fastify.repos.userRepo,
 		projectMemberRepo: fastify.repos.projectMemberRepo,
@@ -110,6 +121,9 @@ export function lineDeps(fastify: FastifyInstance): LineDeps {
 		githubApp: fastify.services.githubApp,
 		azureDevOps: fastify.services.azureDevOps,
 		patEncryption: fastify.services.patEncryption,
+		keyService: fastify.services.keyService,
+		azureConnectionGuard: fastify.services.azureConnectionGuard,
+		azureBranchSnapshot: fastify.services.azureBranchSnapshot,
 		socketRegistry: fastify.services.socketRegistry,
 		webPush: fastify.services.webPush,
 		runActivity: fastify.services.runActivity,
@@ -117,6 +131,7 @@ export function lineDeps(fastify: FastifyInstance): LineDeps {
 		planTextService: fastify.services.planTextService,
 		lineLock: fastify.services.lineLock,
 		appUrl: fastify.env.PUBLIC_APP_URL,
+		serverUrl: fastify.env.PUBLIC_SERVER_URL,
 		gitProviderFor: bindGitProviderFor(fastify)
 	};
 }

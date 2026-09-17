@@ -17,7 +17,8 @@ export const NotificationKindSchema = z.enum([
 	'build.in_review',
 	'build.cancelled',
 	'machine.online',
-	'machine.offline'
+	'machine.offline',
+	'repository.connection_broken'
 ]);
 
 export type NotificationKind = z.infer<typeof NotificationKindSchema>;

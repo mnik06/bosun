@@ -89,6 +89,19 @@ export function getAzureConnectionRepo(db: DbOrTx) {
 			return row ? AzureConnectionSchema.parse(row) : null;
 		},
 
+		// Flips `active` to `broken` — and only from `active`: a second caller
+		// racing the same dead token sees `null` back, which is what keeps the
+		// broken-connection notification to exactly once (AC-72).
+		async markBroken(opts: { id: string; lastError: string }): Promise<AzureConnection | null> {
+			const [row] = await db
+				.update(azureConnections)
+				.set({ status: 'broken', lastError: opts.lastError, brokenAt: new Date() })
+				.where(and(eq(azureConnections.id, opts.id), eq(azureConnections.status, 'active')))
+				.returning(columns);
+
+			return row ? AzureConnectionSchema.parse(row) : null;
+		},
+
 		// Cascades to every repository the connection owns, and through them their
 		// builds and onboarding history — the same blast radius deleting a
 		// `github_installations` row already has.

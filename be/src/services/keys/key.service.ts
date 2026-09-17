@@ -31,6 +31,26 @@ export function getKeyService() {
 			}
 
 			return crypto.timingSafeEqual(candidate, expected);
+		},
+
+		// One secret shared by both of a repository's Azure webhook subscriptions
+		// (AC-56) — only its hash is stored, the same "never the plaintext" rule
+		// `hashMachineKey` follows.
+		generateWebhookSecret: (): string => randomToken(32),
+
+		hashWebhookSecret(secret: string): string {
+			return crypto.createHash('sha256').update(secret).digest('hex');
+		},
+
+		webhookSecretMatchesHash(opts: { secret: string; hash: string }): boolean {
+			const candidate = Buffer.from(crypto.createHash('sha256').update(opts.secret).digest('hex'), 'hex');
+			const expected = Buffer.from(opts.hash, 'hex');
+
+			if (candidate.length !== expected.length) {
+				return false;
+			}
+
+			return crypto.timingSafeEqual(candidate, expected);
 		}
 	};
 }

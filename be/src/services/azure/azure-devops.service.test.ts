@@ -254,3 +254,102 @@ describe('readFile', () => {
 		await expect(getAzureDevOpsService({ fetchImpl }).readFile({ ...SCOPE, path: '.bosun/project.yaml', ref: 'main' })).resolves.toBe('name: bosun');
 	});
 });
+
+describe('rate limiting and a dead token (AC-69, AC-70, AC-75)', () => {
+	it('carries the Retry-After header, in milliseconds, on a 429', async () => {
+		const fetchImpl = (async () => new Response(null, { status: 429, headers: { 'retry-after': '30' } })) as typeof fetch;
+
+		try {
+			await getAzureDevOpsService({ fetchImpl }).listRepositories({ organization: 'org', pat: 'token' });
+			throw new Error('expected listRepositories to throw');
+		} catch (error) {
+			expect(error).toBeInstanceOf(AzureError);
+			expect((error as AzureError).kind).toBe('rate_limited');
+			expect((error as AzureError).retryAfterMs).toBe(30_000);
+		}
+	});
+
+	it('falls back to a default backoff when Retry-After is missing', async () => {
+		const fetchImpl = (async () => new Response(null, { status: 429 })) as typeof fetch;
+
+		try {
+			await getAzureDevOpsService({ fetchImpl }).listRepositories({ organization: 'org', pat: 'token' });
+			throw new Error('expected listRepositories to throw');
+		} catch (error) {
+			expect((error as AzureError).retryAfterMs).toBe(60_000);
+		}
+	});
+
+	it('keeps retryAfterMs through withContext\'s rewrap, not just on the bare listRepositories path', async () => {
+		const fetchImpl = (async () => new Response(null, { status: 429, headers: { 'retry-after': '12' } })) as typeof fetch;
+
+		try {
+			await getAzureDevOpsService({ fetchImpl }).pointBranch({ ...SCOPE, branch: 'main', sha: 'abc' });
+			throw new Error('expected pointBranch to throw');
+		} catch (error) {
+			expect((error as AzureError).kind).toBe('rate_limited');
+			expect((error as AzureError).retryAfterMs).toBe(12_000);
+		}
+	});
+
+	it('treats a non-JSON body as a dead token rather than a parse crash', async () => {
+		const fetchImpl = (async () => new Response('<html>sign in</html>', { status: 200, headers: { 'content-type': 'text/html' } })) as typeof fetch;
+
+		try {
+			await getAzureDevOpsService({ fetchImpl }).listRepositories({ organization: 'org', pat: 'token' });
+			throw new Error('expected listRepositories to throw');
+		} catch (error) {
+			expect(error).toBeInstanceOf(AzureError);
+			expect((error as AzureError).kind).toBe('invalid_response');
+		}
+	});
+});
+
+describe('createSubscription / getSubscriptionStatus / listBranchHeads', () => {
+	it('sends StatusUpdateNotification only for git.pullrequest.updated', async () => {
+		let body: { eventType: string; publisherInputs: Record<string, string> } | undefined;
+		const fetchImpl = (async (_input: string | URL, init?: RequestInit) => {
+			body = JSON.parse(String(init?.body));
+
+			return reply(200, { id: 'sub-1', status: 'enabled' });
+		}) as typeof fetch;
+		const service = getAzureDevOpsService({ fetchImpl });
+
+		await service.createSubscription({ ...SCOPE, eventType: 'git.pullrequest.updated', url: 'https://bosun/azure/webhook/r1', secret: 's3cr3t' });
+
+		expect(body?.publisherInputs.notificationType).toBe('StatusUpdateNotification');
+
+		await service.createSubscription({ ...SCOPE, eventType: 'git.push', url: 'https://bosun/azure/webhook/r1', secret: 's3cr3t' });
+
+		expect(body?.publisherInputs.notificationType).toBeUndefined();
+	});
+
+	it('maps a subscription status to enabled, disabled, onProbation or missing', async () => {
+		const statusOf = async (status: number | string) => {
+			const fetchImpl = (async () => (status === 404 ? reply(404, { message: 'gone' }) : reply(200, { id: 'sub-1', status }))) as typeof fetch;
+
+			return getAzureDevOpsService({ fetchImpl }).getSubscriptionStatus({ organization: 'org', pat: 'token', azureSubscriptionId: 'sub-1' });
+		};
+
+		await expect(statusOf('enabled')).resolves.toBe('enabled');
+		await expect(statusOf('disabledByUser')).resolves.toBe('disabled');
+		await expect(statusOf('disabledBySystem')).resolves.toBe('disabled');
+		await expect(statusOf('onProbation')).resolves.toBe('onProbation');
+		await expect(statusOf(404)).resolves.toBe('missing');
+	});
+
+	it('lists every branch head from a single refs call', async () => {
+		const fetchImpl = (async () =>
+			reply(200, {
+				value: [
+					{ name: 'refs/heads/main', objectId: 'sha-main' },
+					{ name: 'refs/heads/feature', objectId: 'sha-feature' },
+					{ name: 'refs/tags/v1', objectId: 'sha-tag' }
+				]
+			})) as typeof fetch;
+
+		const heads = await getAzureDevOpsService({ fetchImpl }).listBranchHeads(SCOPE);
+
+		expect(heads).toEqual([{ branch: 'main', sha: 'sha-main' }, { branch: 'feature', sha: 'sha-feature' }]);
+	});
+});

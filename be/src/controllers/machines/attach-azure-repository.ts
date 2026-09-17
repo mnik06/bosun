@@ -1,15 +1,12 @@
 import { HttpError } from 'src/api/errors/HttpError';
 import { toAzureHttpError } from 'src/controllers/azure/shared/azure-errors';
+import { ensureAzureWebhookSubscriptionsOnAttach, type WebhookSyncDeps } from 'src/controllers/azure/shared/webhook-subscriptions';
 import { getMachine } from 'src/controllers/machines/get-machine';
 import { attachRefusal } from 'src/controllers/machines/shared/attach-refusal';
 import { finishAttach } from 'src/controllers/machines/shared/finish-attach';
-import { type AzureConnectionRepo } from 'src/repos/azure/azure-connection.repo';
 import { type BuildRepo } from 'src/repos/builds/build.repo';
-import { type RepositoryRepo } from 'src/repos/github/repository.repo';
 import { type MachineRepo } from 'src/repos/machines/machine.repo';
-import { type AzureDevOpsService } from 'src/services/azure/azure-devops.service';
 import { type PatEncryptionService } from 'src/services/crypto/pat-encryption.service';
-import { type IdService } from 'src/services/ids/id.service';
 import { type SocketRegistry } from 'src/services/sockets/registry.service';
 import { azureCloneUrl } from 'src/types/AzureSchema';
 import { toRepositorySlug, type Repository } from 'src/types/RepositorySchema';
@@ -35,21 +32,18 @@ async function dispatchAzureAttach(opts: { socketRegistry: SocketRegistry; machi
 // typing it (AC-29, AC-30). `attachRefusal` gates this on the agent version that
 // first answers for `dev.azure.com`, so the clone dispatched below only ever
 // reaches a machine that can actually authenticate it.
-export async function attachAzureRepository(opts: {
-	machineRepo: MachineRepo;
-	repositoryRepo: RepositoryRepo;
-	azureConnectionRepo: AzureConnectionRepo;
-	buildRepo: BuildRepo;
-	azureDevOps: AzureDevOpsService;
-	patEncryption: PatEncryptionService;
-	idService: IdService;
-	socketRegistry: SocketRegistry;
-	id: string;
-	projectId: string;
-	azureConnectionId: string;
-	azureProjectId: string;
-	azureRepoId: string;
-}): Promise<void> {
+export async function attachAzureRepository(
+	opts: WebhookSyncDeps & {
+		machineRepo: MachineRepo;
+		buildRepo: BuildRepo;
+		patEncryption: PatEncryptionService;
+		id: string;
+		projectId: string;
+		azureConnectionId: string;
+		azureProjectId: string;
+		azureRepoId: string;
+	}
+): Promise<void> {
 	const machine = await getMachine({ machineRepo: opts.machineRepo, id: opts.id, projectId: opts.projectId });
 	const refused = await attachRefusal({ ...opts, machine, provider: 'azure_devops' });
 
@@ -92,6 +86,12 @@ export async function attachAzureRepository(opts: {
 		fullName: granted.fullName,
 		defaultBranch: granted.defaultBranch
 	});
+
+	// Tied to the repository row's own existence, not to this machine's attach
+	// succeeding below — a second machine attaching the same row is a no-op here
+	// (AC-55), and a failed dispatch to an offline machine should not undo sync
+	// setup that already succeeded against Azure.
+	await ensureAzureWebhookSubscriptionsOnAttach(opts, { repository, connection, pat });
 
 	const repoName = granted.fullName.split('/').at(-1) ?? granted.fullName;
 

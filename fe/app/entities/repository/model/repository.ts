@@ -47,6 +47,7 @@ export const RepositorySchema = z.object({
 	configOnDefault: z.boolean(),
 	autoResolveConflicts: z.boolean(),
 	lastSyncedAt: z.iso.datetime().nullable(),
+	azureSyncMode: z.enum(['webhook', 'polling']).nullable(),
 	createdAt: z.iso.datetime()
 })
 

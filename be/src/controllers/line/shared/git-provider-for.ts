@@ -1,12 +1,13 @@
 import { type FastifyInstance } from 'fastify';
 import { HttpError } from 'src/api/errors/HttpError';
+import { runAzureConnectionCall, type AzureConnectionGuardDeps } from 'src/controllers/azure/shared/connection-guard';
 import { clip } from 'src/controllers/line/shared/pull-request-body';
-import { type AzureConnectionRepo } from 'src/repos/azure/azure-connection.repo';
 import { type GithubInstallationRepo } from 'src/repos/github/github-installation.repo';
 import { type AzureDevOpsService } from 'src/services/azure/azure-devops.service';
 import { type PatEncryptionService } from 'src/services/crypto/pat-encryption.service';
 import { type GitProvider } from 'src/services/git/git-provider';
 import { type GithubAppService } from 'src/services/github/github-app.service';
+import { type AzureConnection } from 'src/types/AzureSchema';
 import { type Repository } from 'src/types/RepositorySchema';
 
 // The ticket's own "reportedly 4000" figure, named so a corrected live figure is
@@ -41,24 +42,29 @@ function azureNotBuilt(operation: string): () => Promise<never> {
 	return () => Promise.reject(new HttpError(501, `Azure DevOps repositories do not support ${operation} yet`));
 }
 
-function azureProvider(opts: { azureDevOps: AzureDevOpsService; organization: string; pat: string; azureProjectId: string; azureRepoId: string }): GitProvider {
-	const { azureDevOps, ...scope } = opts;
+// Every call is made through `runAzureConnectionCall` — the same guard the
+// sync job uses — so a 401 or a non-JSON body from any of these flips the
+// connection broken and notifies the project (AC-69, AC-70) exactly as
+// reactively as a background poll would, and a connection still under a
+// Retry-After cooldown refuses here before Azure is asked anything (AC-71, AC-75).
+function azureProvider(opts: { deps: GitProviderResolverDeps; connection: AzureConnection; azureDevOps: AzureDevOpsService; organization: string; pat: string; azureProjectId: string; azureRepoId: string }): GitProvider {
+	const { azureDevOps, deps, connection, ...scope } = opts;
+	const guarded = <T>(run: () => Promise<T>): Promise<T> => runAzureConnectionCall(deps, connection, run);
 
 	return {
-		getRepository: () => azureDevOps.getRepository(scope),
-		readFile: (fileOpts) => azureDevOps.readFile({ ...scope, ...fileOpts }),
-		proposeFile: (fileOpts) => azureDevOps.proposeFile({ ...scope, ...fileOpts, body: clip(fileOpts.body, AZURE_MAX_PR_BODY) }),
-		pointBranch: (branchOpts) => azureDevOps.pointBranch({ ...scope, ...branchOpts }),
-		openOrUpdatePullRequest: (prOpts) => azureDevOps.openOrUpdatePullRequest({ ...scope, ...prOpts, body: clip(prOpts.body, AZURE_MAX_PR_BODY) }),
-		getPullRequest: (prOpts) => azureDevOps.getPullRequest({ ...scope, ...prOpts }),
-		editPullRequest: (prOpts) => azureDevOps.editPullRequest({ ...scope, ...prOpts, ...(prOpts.body === undefined ? {} : { body: clip(prOpts.body, AZURE_MAX_PR_BODY) }) }),
+		getRepository: () => guarded(() => azureDevOps.getRepository(scope)),
+		readFile: (fileOpts) => guarded(() => azureDevOps.readFile({ ...scope, ...fileOpts })),
+		proposeFile: (fileOpts) => guarded(() => azureDevOps.proposeFile({ ...scope, ...fileOpts, body: clip(fileOpts.body, AZURE_MAX_PR_BODY) })),
+		pointBranch: (branchOpts) => guarded(() => azureDevOps.pointBranch({ ...scope, ...branchOpts })),
+		openOrUpdatePullRequest: (prOpts) => guarded(() => azureDevOps.openOrUpdatePullRequest({ ...scope, ...prOpts, body: clip(prOpts.body, AZURE_MAX_PR_BODY) })),
+		getPullRequest: (prOpts) => guarded(() => azureDevOps.getPullRequest({ ...scope, ...prOpts })),
+		editPullRequest: (prOpts) => guarded(() => azureDevOps.editPullRequest({ ...scope, ...prOpts, ...(prOpts.body === undefined ? {} : { body: clip(prOpts.body, AZURE_MAX_PR_BODY) }) })),
 		repositoryToken: azureNotBuilt('minting a repository token')
 	};
 }
 
-export interface GitProviderResolverDeps {
+export interface GitProviderResolverDeps extends AzureConnectionGuardDeps {
 	githubInstallationRepo: GithubInstallationRepo;
-	azureConnectionRepo: AzureConnectionRepo;
 	githubApp: GithubAppService;
 	azureDevOps: AzureDevOpsService;
 	patEncryption: PatEncryptionService;
@@ -96,6 +102,8 @@ export async function gitProviderFor(deps: GitProviderResolverDeps, repository: 
 	}
 
 	return azureProvider({
+		deps,
+		connection,
 		azureDevOps: deps.azureDevOps,
 		organization: connection.organization,
 		pat: deps.patEncryption.decrypt(encryptedPat),
@@ -116,7 +124,15 @@ export function bindGitProviderFor(fastify: FastifyInstance): (repository: Repos
 				azureConnectionRepo: fastify.repos.azureConnectionRepo,
 				githubApp: fastify.services.githubApp,
 				azureDevOps: fastify.services.azureDevOps,
-				patEncryption: fastify.services.patEncryption
+				patEncryption: fastify.services.patEncryption,
+				azureConnectionGuard: fastify.services.azureConnectionGuard,
+				projectMemberRepo: fastify.repos.projectMemberRepo,
+				notificationRepo: fastify.repos.notificationRepo,
+				pushSubscriptionRepo: fastify.repos.pushSubscriptionRepo,
+				socketRegistry: fastify.services.socketRegistry,
+				webPush: fastify.services.webPush,
+				idService: fastify.services.idService,
+				appUrl: fastify.env.PUBLIC_APP_URL
 			},
 			repository
 		);

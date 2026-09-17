@@ -17,6 +17,7 @@ const BASE: Repository = {
 	configOnDefault: false,
 	autoResolveConflicts: true,
 	lastSyncedAt: null,
+	azureSyncMode: null,
 	createdAt: new Date()
 };
 
@@ -25,11 +26,20 @@ function deps(overrides: Partial<GitProviderResolverDeps> = {}): GitProviderReso
 		githubInstallationRepo: { getById: vi.fn().mockResolvedValue(null) } as unknown as GitProviderResolverDeps['githubInstallationRepo'],
 		azureConnectionRepo: {
 			getById: vi.fn().mockResolvedValue(null),
-			getEncryptedPatById: vi.fn().mockResolvedValue(null)
+			getEncryptedPatById: vi.fn().mockResolvedValue(null),
+			markBroken: vi.fn()
 		} as unknown as GitProviderResolverDeps['azureConnectionRepo'],
 		githubApp: { getRepository: vi.fn() } as unknown as GitProviderResolverDeps['githubApp'],
 		azureDevOps: { getRepository: vi.fn() } as unknown as GitProviderResolverDeps['azureDevOps'],
 		patEncryption: { decrypt: vi.fn((value: string) => `decrypted:${value}`) } as unknown as GitProviderResolverDeps['patEncryption'],
+		azureConnectionGuard: { isRateLimited: vi.fn().mockReturnValue(false), run: (_id: string, run: () => unknown) => run() } as unknown as GitProviderResolverDeps['azureConnectionGuard'],
+		projectMemberRepo: { list: vi.fn().mockResolvedValue([]) } as unknown as GitProviderResolverDeps['projectMemberRepo'],
+		notificationRepo: { create: vi.fn() } as unknown as GitProviderResolverDeps['notificationRepo'],
+		pushSubscriptionRepo: { listByUserIds: vi.fn().mockResolvedValue([]) } as unknown as GitProviderResolverDeps['pushSubscriptionRepo'],
+		socketRegistry: { sendToUiUser: vi.fn() } as unknown as GitProviderResolverDeps['socketRegistry'],
+		webPush: { send: vi.fn() } as unknown as GitProviderResolverDeps['webPush'],
+		idService: { createNotificationId: () => 'ntf_1' } as unknown as GitProviderResolverDeps['idService'],
+		appUrl: 'https://app.example.com',
 		...overrides
 	};
 }

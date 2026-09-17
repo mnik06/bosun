@@ -40,6 +40,10 @@ export const RepositorySchema = z.object({
 	// Azure only — the UI's "last synced" line. Null for a GitHub repository and
 	// for an Azure one bosun has not yet reconciled.
 	lastSyncedAt: z.date().nullable(),
+	// Azure only — whether bosun's webhook subscriptions are healthy or it fell
+	// back to polling. Null for GitHub and for an Azure repository not yet
+	// reconciled even once.
+	azureSyncMode: z.enum(['webhook', 'polling']).nullable(),
 	createdAt: z.date()
 });
 

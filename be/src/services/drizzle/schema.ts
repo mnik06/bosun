@@ -155,6 +155,11 @@ export const repositories = pgTable(
 		// Azure has no equivalent of a GitHub webhook installation event to announce
 		// a first successful sync, so the UI reads this instead.
 		lastSyncedAt: timestamp({ withTimezone: true }),
+		// Azure only — null for GitHub and for an Azure repository not yet reconciled
+		// even once. Set from what attach/reconcile actually achieved with Azure
+		// (webhook subscriptions healthy, or refused down to polling), not derived
+		// live from it on every read (AC-62, AC-63).
+		azureSyncMode: text().$type<'webhook' | 'polling'>(),
 		createdAt: timestamp({ withTimezone: true }).notNull().defaultNow()
 	},
 	(table) => [

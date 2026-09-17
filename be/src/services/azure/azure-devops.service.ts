@@ -8,17 +8,22 @@ const MAX_PAGES = 20;
 // Azure's equivalent of git's own all-zero parent for a brand-new branch.
 const ZERO_SHA = '0000000000000000000000000000000000000000';
 
-export type AzureErrorKind = 'invalid_token' | 'missing_scope' | 'unreachable' | 'other';
+export type AzureErrorKind = 'invalid_token' | 'missing_scope' | 'unreachable' | 'invalid_response' | 'rate_limited' | 'other';
 
 export class AzureError extends Error {
 	public readonly kind: AzureErrorKind;
+	// Set only for `rate_limited` — the `Retry-After` header, in milliseconds.
+	public readonly retryAfterMs?: number;
 
-	constructor(kind: AzureErrorKind, message: string) {
+	constructor(kind: AzureErrorKind, message: string, opts?: { retryAfterMs?: number }) {
 		super(message);
 		this.name = 'AzureError';
 		this.kind = kind;
+		this.retryAfterMs = opts?.retryAfterMs;
 	}
 }
+
+const DEFAULT_RETRY_AFTER_MS = 60_000;
 
 const ProjectSchema = z.object({ id: z.string(), name: z.string() });
 
@@ -92,6 +97,51 @@ interface RepositoryScope {
 	azureRepoId: string;
 }
 
+function rateLimitError(headers: Headers): AzureError {
+	const retryAfter = Number(headers.get('retry-after'));
+
+	return new AzureError('rate_limited', 'Azure DevOps is rate-limiting this connection', {
+		retryAfterMs: Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : DEFAULT_RETRY_AFTER_MS
+	});
+}
+
+// Checked ahead of everything else — a caller told to back off (429) should
+// never also be told its token is bad, and a dead token (401) is worth its own
+// message distinct from one merely missing a scope (403) (AC-3, AC-4, AC-75).
+function throwOnKnownFailureStatus(response: Response): void {
+	if (response.status === 429) {
+		throw rateLimitError(response.headers);
+	}
+
+	if (response.status === 401) {
+		throw new AzureError('invalid_token', 'This token is invalid or expired.');
+	}
+
+	if (response.status === 403) {
+		throw new AzureError(
+			'missing_scope',
+			'This token is missing a required scope — grant it Code (Read & Write) and the service hooks scope for this organization.'
+		);
+	}
+}
+
+// Azure's other known failure shape for a dead token: an HTML sign-in page
+// instead of the JSON every real response carries, even on a 200 — this is
+// what tells a caller downstream apart from an ordinary parse bug (AC-70).
+async function parseJsonBody(response: Response): Promise<unknown> {
+	const text = await response.text();
+
+	if (text.length === 0) {
+		return null;
+	}
+
+	try {
+		return JSON.parse(text);
+	} catch {
+		throw new AzureError('invalid_response', 'Azure DevOps did not return JSON — the token may be invalid');
+	}
+}
+
 // One error type for every failure a caller needs to tell apart: an invalid or
 // expired token, one missing a required scope, and an organization bosun's IP
 // cannot reach — the three messages AC-3/4/5 ask for, decided here rather than
@@ -127,18 +177,9 @@ export function getAzureDevOpsService(deps: { fetchImpl?: typeof fetch }) {
 			throw new AzureError('unreachable', `Could not reach that organization: ${error instanceof Error ? error.message : String(error)}`);
 		}
 
-		if (response.status === 401) {
-			throw new AzureError('invalid_token', 'This token is invalid or expired.');
-		}
+		throwOnKnownFailureStatus(response);
 
-		if (response.status === 403) {
-			throw new AzureError(
-				'missing_scope',
-				'This token is missing a required scope — grant it Code (Read & Write) and the service hooks scope for this organization.'
-			);
-		}
-
-		const json: unknown = await response.json().catch(() => null);
+		const json = await parseJsonBody(response);
 		const allowed = opts.allow ?? [];
 
 		if (!response.ok && !allowed.includes(response.status)) {
@@ -156,7 +197,7 @@ export function getAzureDevOpsService(deps: { fetchImpl?: typeof fetch }) {
 			return await run();
 		} catch (error) {
 			if (error instanceof AzureError) {
-				throw new AzureError(error.kind, `${what}: ${error.message}`);
+				throw new AzureError(error.kind, `${what}: ${error.message}`, { retryAfterMs: error.retryAfterMs });
 			}
 
 			throw error;
@@ -479,8 +520,89 @@ export function getAzureDevOpsService(deps: { fetchImpl?: typeof fetch }) {
 		return perProject.flat().sort((a, b) => a.fullName.localeCompare(b.fullName));
 	}
 
+	const SubscriptionSchema = z.object({ id: z.string(), status: z.string().optional() });
+
+	// One subscription per event type — Azure has no "create both" call, and no
+	// way to update an existing subscription's consumer secret, so the caller
+	// (`ensureAzureWebhookSubscriptionsOnAttach` / its reconcile sibling) always
+	// creates the pair together under one fresh secret rather than patching one.
+	async function createSubscription(
+		opts: RepositoryScope & { eventType: 'git.push' | 'git.pullrequest.updated'; url: string; secret: string }
+	): Promise<{ azureSubscriptionId: string }> {
+		return withContext(`could not create the ${opts.eventType} subscription`, async () => {
+			const publisherInputs: Record<string, string> = { projectId: opts.azureProjectId, repository: opts.azureRepoId };
+
+			if (opts.eventType === 'git.pullrequest.updated') {
+				// AC-53: only a status change (active/completed/abandoned), never every
+				// review comment or reviewer vote Azure could otherwise deliver.
+				publisherInputs.notificationType = 'StatusUpdateNotification';
+			}
+
+			const result = await call({
+				method: 'POST',
+				pat: opts.pat,
+				url: apiUrl({ organization: opts.organization, path: '/_apis/hooks/subscriptions' }),
+				body: {
+					publisherId: 'tfs',
+					eventType: opts.eventType,
+					resourceVersion: '1.0',
+					consumerId: 'webHooks',
+					consumerActionId: 'httpRequest',
+					publisherInputs,
+					consumerInputs: { url: opts.url, httpHeaders: `X-Bosun-Azure-Secret: ${opts.secret}` }
+				}
+			});
+
+			return { azureSubscriptionId: SubscriptionSchema.parse(result.json).id };
+		});
+	}
+
+	// 'missing' covers a 404 as well as a subscription id Azure no longer
+	// recognizes at all — both mean the same thing to a caller deciding whether
+	// to recreate it (AC-64).
+	async function getSubscriptionStatus(opts: { organization: string; pat: string; azureSubscriptionId: string }): Promise<'enabled' | 'disabled' | 'onProbation' | 'missing'> {
+		return withContext('could not read the subscription status', async () => {
+			const result = await call({
+				pat: opts.pat,
+				allow: [404],
+				url: apiUrl({ organization: opts.organization, path: `/_apis/hooks/subscriptions/${encodeURIComponent(opts.azureSubscriptionId)}` })
+			});
+
+			if (result.status === 404) {
+				return 'missing';
+			}
+
+			const status = SubscriptionSchema.parse(result.json).status;
+
+			if (status === 'disabledBySystem' || status === 'disabledByUser') {
+				return 'disabled';
+			}
+
+			return status === 'onProbation' ? 'onProbation' : 'enabled';
+		});
+	}
+
+	// Every branch's current tip in one call — what the polling half of sync
+	// (AC-66) diffs against its previous snapshot, so a webhook nobody heard from
+	// is never the only way a push is noticed.
+	async function listBranchHeads(opts: RepositoryScope): Promise<{ branch: string; sha: string }[]> {
+		return withContext('could not read branch refs', async () => {
+			const result = await call({
+				pat: opts.pat,
+				url: apiUrl({ organization: opts.organization, path: `${repositoryPath(opts)}/refs`, query: { filter: 'heads/' } })
+			});
+
+			return RefsRespSchema.parse(result.json)
+				.value.filter((ref) => ref.name.startsWith('refs/heads/'))
+				.map((ref) => ({ branch: stripRefsHeadsPrefix(ref.name), sha: ref.objectId }));
+		});
+	}
+
 	return {
 		listRepositories,
+		createSubscription,
+		getSubscriptionStatus,
+		listBranchHeads,
 
 		async getRepository(opts: RepositoryScope) {
 			const repo = await fetchRepo(opts);

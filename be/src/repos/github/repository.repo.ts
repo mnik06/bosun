@@ -18,6 +18,7 @@ const columns = {
 	configOnDefault: repositories.configOnDefault,
 	autoResolveConflicts: repositories.autoResolveConflicts,
 	lastSyncedAt: repositories.lastSyncedAt,
+	azureSyncMode: repositories.azureSyncMode,
 	createdAt: repositories.createdAt
 };
 
@@ -149,6 +150,23 @@ export function getRepositoryRepo(db: DbOrTx) {
 				.returning(columns);
 
 			return row ? RepositorySchema.parse(row) : null;
+		},
+
+		// Unscoped, like `buildRepo.listWithOpenPullRequests` — read by the
+		// background sync job for every project at once, not from a request that
+		// already knows which project it is in.
+		async listAllAzure(): Promise<Repository[]> {
+			const rows = await db.select(columns).from(repositories).where(eq(repositories.provider, 'azure_devops'));
+
+			return rows.map((row) => RepositorySchema.parse(row));
+		},
+
+		async markSynced(id: string): Promise<void> {
+			await db.update(repositories).set({ lastSyncedAt: new Date() }).where(eq(repositories.id, id));
+		},
+
+		async saveAzureSyncMode(opts: { id: string; azureSyncMode: 'webhook' | 'polling' }): Promise<void> {
+			await db.update(repositories).set({ azureSyncMode: opts.azureSyncMode }).where(eq(repositories.id, opts.id));
 		}
 	};
 }

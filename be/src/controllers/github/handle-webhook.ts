@@ -1,9 +1,7 @@
 import { z } from 'zod';
 import { type LineDeps } from 'src/controllers/line/line-deps';
 import { scheduleRepository } from 'src/controllers/line/schedule';
-import { queueIntegration } from 'src/controllers/line/shared/lifecycle';
-import { markMerged, notifyDependents } from 'src/controllers/line/shared/merge';
-import { UNMERGED_BUILT_STATUSES } from 'src/types/BuildSchema';
+import { onPullRequestMerged, onPush } from 'src/controllers/line/shared/provider-events';
 import { type Repository } from 'src/types/RepositorySchema';
 
 const PushSchema = z.object({
@@ -20,44 +18,12 @@ const PullRequestSchema = z.object({
 	repository: z.object({ id: z.number() })
 });
 
-// The default branch moved: every unmerged build on it integrates again, so an open
-// pull request stays mergeable as the others land.
-async function baseMoved(deps: LineDeps, repository: Repository): Promise<void> {
-	const builds = await deps.buildRepo.listForRepository({ repositoryId: repository.id, statuses: UNMERGED_BUILT_STATUSES });
-
-	for (const build of builds.filter((entry) => entry.baseBranch === repository.defaultBranch)) {
-		const plan = await deps.planRepo.getById(build.planId);
-
-		if (plan) {
-			await queueIntegration(deps, { build, plan, trigger: 'base_moved', onto: repository.defaultBranch });
-		}
-	}
-}
-
-async function onPush(deps: LineDeps, opts: { repository: Repository; branch: string }): Promise<void> {
-	if (opts.branch === opts.repository.defaultBranch) {
-		await baseMoved(deps, opts.repository);
-
-		return;
-	}
-
-	const provider = await deps.buildRepo.findByBranch({ repositoryId: opts.repository.id, branch: opts.branch });
-
-	if (provider) {
-		await notifyDependents(deps, { build: provider });
-	}
-}
-
 async function onPullRequest(deps: LineDeps, opts: { repository: Repository; payload: z.infer<typeof PullRequestSchema> }): Promise<void> {
 	if (opts.payload.action !== 'closed' || !opts.payload.pull_request.merged) {
 		return;
 	}
 
-	const build = await deps.buildRepo.findByBranch({ repositoryId: opts.repository.id, branch: opts.payload.pull_request.head.ref });
-
-	if (build) {
-		await markMerged(deps, { build });
-	}
+	await onPullRequestMerged(deps, { repository: opts.repository, headBranch: opts.payload.pull_request.head.ref });
 }
 
 // A delivery names the repository by GitHub's id, and one repository can be

@@ -20,6 +20,7 @@ export {
 export { configSource, describeConfigSource, type ConfigSource } from './lib/config-source'
 export { machinePickerLabel } from './lib/machine-label'
 export { onboardingProgress, type OnboardingProgress } from './lib/onboarding-progress'
+export { repositoryHostUrl } from './lib/repository-link'
 export {
 	AvailableAzureRepositorySchema,
 	AvailableRepositorySchema,
