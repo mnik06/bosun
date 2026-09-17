@@ -36,7 +36,7 @@ export async function run(opts: { config: AgentConfig; configPath: string }): Pr
 
 	// Before the first bullet can arrive, so none starts without knowing whether it
 	// can be limited. Orphans are reaped while this process holds no session of its
-	// own, which is the only moment stopping every `bosun-run-*` scope is safe.
+	// own, which is the only moment stopping this machine's `bosun-run-*` scopes is safe.
 	await services.memory.load();
 	await services.memory.reapOrphans();
 

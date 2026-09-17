@@ -77,7 +77,13 @@ export function getWorktreeService(deps: {
 		async ensure(opts: { slug: string }): Promise<WorktreeResult> {
 			const slug = opts.slug;
 			const worktreePath = pathFor(slug);
-			const repoPath = currentRepoPath();
+			let repoPath: string | null;
+
+			try {
+				repoPath = currentRepoPath();
+			} catch (error) {
+				return { ok: false, worktreePath, baseRef: '', detail: error instanceof Error ? error.message : String(error) };
+			}
 
 			if (repoPath === null) {
 				return { ok: false, worktreePath, baseRef: '', detail: NO_REPOSITORY };

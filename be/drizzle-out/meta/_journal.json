@@ -204,6 +204,13 @@
       "when": 1789655180642,
       "tag": "0028_wild_zeigeist",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1789666100141,
+      "tag": "0029_square_skullbuster",
+      "breakpoints": true
     }
   ]
 }

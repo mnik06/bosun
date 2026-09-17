@@ -106,12 +106,21 @@ jobs:
       # The release tag is derived from package.json, so a push that did not bump
       # the version would fail on an existing tag. Skipping keeps unrelated agent
       # changes (tests, refactors) from breaking the deploy.
+      #
+      # A draft is not a release. `gh release create` opens one before uploading and
+      # publishes after, so an upload that hung leaves a draft with no binaries —
+      # counted as released, every re-run skipped and the version never shipped.
       - id: version
         run: |
           set -euo pipefail
           version="$(node -p "require('./package.json').version")"
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          if gh release view "agent-v$version" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+          draft="$(gh release view "agent-v$version" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft 2>/dev/null || echo missing)"
+          if [ "$draft" = "true" ]; then
+            echo "agent-v$version is a draft left by an unfinished release — deleting it"
+            gh release delete "agent-v$version" --repo "$GITHUB_REPOSITORY" --yes
+          fi
+          if [ "$draft" = "false" ]; then
             echo "agent-v$version is already released — skipping"
             echo "release=false" >> "$GITHUB_OUTPUT"
           else
@@ -123,8 +132,11 @@ jobs:
       - run: pnpm preflight
         if: steps.version.outputs.release == 'true'
 
+      # Two 80 MB uploads normally take seconds. One that stalls otherwise holds the
+      # job for six hours; failing here leaves a draft the next run clears.
       - run: pnpm release
         if: steps.version.outputs.release == 'true'
+        timeout-minutes: 10
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

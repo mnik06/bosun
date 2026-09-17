@@ -33,10 +33,11 @@ onboarding's verify, a second machine — and the session only decides *when*. T
 
 ## Memory
 
-When the machine has scopes, each app runs in `bosun-run-<key>-<app>.scope` under the bullet's limit,
+When the machine has scopes, each app runs in `bosun-run-<machineId>-<key>-<app>.scope` under the bullet's limit,
 through the same `memory.sessionScope` a session uses. The limit applies per app rather than across the
-stack — a scope cannot join a scope that already exists — and the `bosun-run-` prefix is what lets a
-restarted agent's `reapOrphans` stop a stack the process before it left running.
+stack — a scope cannot join a scope that already exists — and the `bosun-run-<machineId>-` prefix is
+what lets a restarted agent's `reapOrphans` stop a stack the process before it left running, and only
+its own.
 
 ## Where failures surface
 

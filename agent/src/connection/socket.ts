@@ -67,6 +67,19 @@ function publicKeyOf(services: Services): string | undefined {
 	}
 }
 
+// A config this agent no longer owns is logged and left out of `hello`, not thrown:
+// the announce is what keeps the machine visible, and its preflight carries the
+// reason to the browser.
+function announcedRepoPath(services: Services): string | undefined {
+	try {
+		return services.workspace.repoPath() ?? undefined;
+	} catch (error) {
+		console.error(`config: ${error instanceof Error ? error.message : 'unreadable'}`);
+
+		return undefined;
+	}
+}
+
 // What `refresh` runs is deliberately the same thing `open` runs. Everything the
 // agent reports is read from disk at this moment — the env file, the MCP config,
 // the skills directories — so a token pasted in after the agent started, or a
@@ -84,7 +97,7 @@ function createAnnouncer(deps: ConnectionDeps & { socket: WebSocket }) {
 				type: 'hello',
 				agentVersion: AGENT_VERSION,
 				hostname: os.hostname(),
-				repoPath: deps.services.workspace.repoPath() ?? undefined,
+				repoPath: announcedRepoPath(deps.services),
 				reason,
 				// Every run whose outcome this agent is still going to report: the ones
 				// it is building, and the ones that settled while the connection was
@@ -318,7 +331,11 @@ async function connectOnce(deps: ConnectionDeps): Promise<void> {
 					onUpgrade
 				},
 				msg
-			);
+			).catch((error: unknown) => {
+				// Nothing awaits a frame, so a handler that throws is otherwise an
+				// unhandled rejection — and that ends the agent and every session on it.
+				console.error(`${msg.type}: ${error instanceof Error ? error.message : String(error)}`);
+			});
 		});
 
 		socket.on('unexpected-response', (_req, res) => {

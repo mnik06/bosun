@@ -217,6 +217,10 @@ export const machines = pgTable(
 		sessionSecrets: jsonb().$type<string[]>(),
 		verifyLanes: integer().notNull().default(1),
 		buildCap: integer(),
+		// A leader taking the build cap and verify lanes as given: memory stops refusing
+		// work here. Sessions keep their per-job limits, so what runs past the budget
+		// leans on swap rather than on the kernel's killer.
+		ignoreMemoryBudget: boolean().notNull().default(false),
 		createdAt: timestamp({ withTimezone: true }).notNull().defaultNow()
 	},
 	(table) => [index('machines_project_id_idx').on(table.projectId)]
