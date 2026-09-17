@@ -20,8 +20,8 @@ export async function notifyPlanStatus(deps: PlanNotifyDeps, opts: { plan: Plan 
 		return;
 	}
 
-	const recipientIds = await resolveRecipients(deps, opts.plan);
 	const name = planName(opts.plan);
+	const recipientIds = await resolveRecipients(deps, opts.plan);
 
 	await dispatchNotification(deps, {
 		recipientIds,
@@ -50,8 +50,8 @@ export async function notifyPlanMessage(
 		return;
 	}
 
-	const recipientIds = await resolveRecipients(deps, opts.plan);
 	const body = opts.message.content.questions[0]?.question ?? 'has a question for you';
+	const recipientIds = await resolveRecipients(deps, opts.plan);
 
 	await dispatchNotification(deps, {
 		recipientIds,

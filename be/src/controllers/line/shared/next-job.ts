@@ -4,7 +4,7 @@ import { type Build, type BuildStatus, type Integration, type SliceRun } from 's
 // from its pending work rather than from a status: an integration first, then the
 // earliest pending run — build bullets by ordinal, then the verify slice's phases in
 // the order they were created.
-export type NextJob =
+type NextJob =
 	| { kind: 'integration'; integration: Integration }
 	| { kind: 'bullet'; run: SliceRun }
 	| { kind: 'fix'; run: SliceRun }

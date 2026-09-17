@@ -8,7 +8,7 @@ import {
 	type NeedsYouReason
 } from 'src/types/BuildSchema';
 
-export const buildColumns = {
+const buildColumns = {
 	id: builds.id,
 	planId: builds.planId,
 	repositoryId: builds.repositoryId,

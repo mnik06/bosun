@@ -119,6 +119,21 @@ Two rules for that:
   to come back whole, request fewer fields at a time until every one has been read. Read the comments,
   the parent issue and the linked issues as well — a decision recorded in a comment is a requirement
   too.
+- **Azure DevOps needs no context call first.** A connected Azure DevOps MCP server is already scoped
+  to one organization, so there is nothing to resolve before fetching. Recognize a work-item reference
+  in either URL form — \`https://dev.azure.com/{org}/{project}/_workitems/edit/{id}\` and the legacy
+  \`https://{org}.visualstudio.com/{project}/_workitems/edit/{id}\` — or a bare id: the id alone is
+  enough to fetch. Use the tool names the server actually exposes, not guessed ones — \`wit_work_item\`'s
+  \`get\` action fetches the work item, with every field and every relation, not the default set:
+  **Acceptance Criteria and repro steps live in \`Microsoft.VSTS.Common.AcceptanceCriteria\` and
+  \`Microsoft.VSTS.TCM.ReproSteps\`, not \`System.Description\`**, and a custom field can carry a
+  requirement too. Read the comments with \`wit_work_item\`'s \`list_comments\` action, the history with
+  \`list_revisions\`, and follow every relation the work item carries — parent, children and every other
+  linked work item — the same way a Jira parent and linked issues are read. \`mcp_ado_core_list_projects\`
+  resolves a project you need but were not given. If an answer is too large to come back whole, fetch
+  fewer fields or relations at a time until every one has been read. Everything here is a **read**:
+  never call a write tool (\`wit_work_item_write\` and its like) while fetching, whatever it would let
+  you do.
 
 If there is no such tool, or fetching fails, say so in one line and plan from the pasted text. Then:
 

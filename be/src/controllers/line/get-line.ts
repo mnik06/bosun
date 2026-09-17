@@ -1,4 +1,3 @@
-import { HttpError } from 'src/api/errors/HttpError';
 import { type LineBuild, type MachineCapacity } from 'src/api/routes/schemas/line/LineSchemas';
 import { type LineDeps } from 'src/controllers/line/line-deps';
 import { verifyLine } from 'src/controllers/line/schedule';
@@ -6,6 +5,7 @@ import { loadRepositorySnapshot, type RepositorySnapshot } from 'src/controllers
 import { heldBytes, usableBytes } from 'src/controllers/line/shared/memory-budget';
 import { BUILD_SLOT_STATUSES, LANE_STATUSES } from 'src/controllers/line/shared/next-job';
 import { describeReason } from 'src/controllers/line/shared/reason';
+import { getOwnedRepository } from 'src/controllers/repositories/shared/announce-repository';
 import { type Machine } from 'src/types/MachineSchema';
 import { type Repository } from 'src/types/RepositorySchema';
 
@@ -66,11 +66,11 @@ export async function getLine(
 	if (opts.repositoryId === undefined) {
 		repositories = await deps.repositoryRepo.listForProject(opts.projectId);
 	} else {
-		const repository = await deps.repositoryRepo.getOwnedById({ id: opts.repositoryId, projectId: opts.projectId });
-
-		if (!repository) {
-			throw new HttpError(404, 'Repository not found');
-		}
+		const repository = await getOwnedRepository({
+			repositoryRepo: deps.repositoryRepo,
+			id: opts.repositoryId,
+			projectId: opts.projectId
+		});
 
 		repositories = [repository];
 	}

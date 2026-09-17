@@ -1,6 +1,7 @@
 import { HttpError } from 'src/api/errors/HttpError';
 import { type LineDeps } from 'src/controllers/line/line-deps';
 import { scheduleRepository } from 'src/controllers/line/schedule';
+import { getOwnedRepository } from 'src/controllers/repositories/shared/announce-repository';
 
 // Line order is a property of the line, so the board is the one place it changes.
 // Only what waits can be reordered, and the positions it already holds are dealt
@@ -9,11 +10,7 @@ export async function reorderLine(
 	deps: LineDeps,
 	opts: { projectId: string; repositoryId: string; buildIds: string[] }
 ): Promise<void> {
-	const repository = await deps.repositoryRepo.getOwnedById({ id: opts.repositoryId, projectId: opts.projectId });
-
-	if (!repository) {
-		throw new HttpError(404, 'Repository not found');
-	}
+	const repository = await getOwnedRepository({ repositoryRepo: deps.repositoryRepo, id: opts.repositoryId, projectId: opts.projectId });
 
 	const waiting = await deps.buildRepo.listForRepository({ repositoryId: repository.id, statuses: ['scheduled', 'held'] });
 	const known = new Set(waiting.map((build) => build.id));

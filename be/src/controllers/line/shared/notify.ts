@@ -5,7 +5,7 @@ import { type Build, type BuildStatus } from 'src/types/BuildSchema';
 import { type NotificationKind } from 'src/types/NotificationSchema';
 import { type Plan } from 'src/types/PlanSchema';
 
-export type BuildNotifyDeps = PlanNotifyRecipientDeps;
+type BuildNotifyDeps = PlanNotifyRecipientDeps;
 
 const STATUS_KIND: Partial<Record<BuildStatus, NotificationKind>> = {
 	waiting_answer: 'build.waiting_answer',
@@ -44,8 +44,8 @@ export async function notifyBuildStatus(deps: BuildNotifyDeps, opts: { plan: Pla
 		return;
 	}
 
-	const recipientIds = await resolveRecipients(deps, opts.plan);
 	const name = planName(opts.plan);
+	const recipientIds = await resolveRecipients(deps, opts.plan);
 
 	await dispatchNotification(deps, {
 		recipientIds,
@@ -63,14 +63,13 @@ export async function notifyBuildStatus(deps: BuildNotifyDeps, opts: { plan: Pla
 // leader when the plan carries no attribution.
 export async function notifyPlanUnblocked(deps: BuildNotifyDeps, opts: { plan: Plan }): Promise<void> {
 	const recipientIds = await resolveRecipients(deps, opts.plan);
-	const name = planName(opts.plan);
 
 	await dispatchNotification(deps, {
 		recipientIds,
 		projectId: opts.plan.projectId,
 		kind: 'plan.unblocked',
 		title: 'Unblocked',
-		body: `${name} is unblocked`,
+		body: `${planName(opts.plan)} is unblocked`,
 		url: `${deps.appUrl}/plans/${opts.plan.id}`,
 		planId: opts.plan.id
 	});

@@ -1,13 +1,20 @@
-// Three small pieces every session driver in `ask/`, `summary/`, `integration/`,
+import { type StreamParser } from '../planning/stream-parser';
+
+// Four small pieces every session driver in `ask/`, `summary/`, `integration/`,
 // `planning/`, `execution/` and `onboarding/` independently rebuilt around
 // `spawnClaudeSession`. The drivers themselves stay separate — what each does
-// with a finished turn is genuinely different — but these three jobs are the
-// same wherever they appear.
+// with a finished turn is genuinely different — but these jobs are the same
+// wherever they appear.
+
+export interface StderrTail {
+	push(chunk: string): void;
+	value(): string;
+}
 
 // The tail of a session's stderr, kept to the last `maxChars` characters so a
 // runaway process cannot grow the string held for its eventual error message
 // without bound.
-export function createStderrTail(maxChars: number): { push(chunk: string): void; value(): string } {
+export function createStderrTail(maxChars: number): StderrTail {
 	let text = '';
 
 	return {
@@ -16,6 +23,39 @@ export function createStderrTail(maxChars: number): { push(chunk: string): void;
 		},
 		value(): string {
 			return text;
+		}
+	};
+}
+
+// The prelude every session-spawn site wires the same way: stdout feeds the
+// stream parser, stderr is kept in case nothing else says what went wrong, and
+// the parser is flushed before the site's own exit handling — settling a
+// promise, checking a Set, failing a state machine — looks at what arrived.
+// `tag` is the one thing that differs site to site: given, stderr is echoed to
+// the console as it arrives so it lands in the journal even when the session
+// never reaches an error; omitted, nothing is echoed.
+export function pipeSessionOutput(opts: {
+	parser: StreamParser;
+	stderr: StderrTail;
+	tag?: string;
+}): {
+	onStdout: (chunk: string) => void;
+	onStderr: (chunk: string) => void;
+	onExit: () => void;
+} {
+	return {
+		onStdout: (chunk) => {
+			opts.parser.push(chunk);
+		},
+		onStderr: (chunk) => {
+			opts.stderr.push(chunk);
+
+			if (opts.tag !== undefined) {
+				console.error(`[${opts.tag}] ${chunk.trimEnd()}`);
+			}
+		},
+		onExit: () => {
+			opts.parser.flush();
 		}
 	};
 }

@@ -1,5 +1,11 @@
-import { McpPresetListSchema, McpPresetSchema } from 'src/types/McpPresetSchema';
+import { z } from 'zod';
+import { McpPresetSchema } from 'src/types/McpPresetSchema';
 
-export const McpPresetListRespSchema = McpPresetListSchema;
+// minAgentVersion is a gate the backend checks against the caller, never
+// something either the browser or the agent has a use for — dropped from every
+// response that serves this catalogue, list or single.
+const PublicMcpPresetSchema = McpPresetSchema.omit({ minAgentVersion: true });
 
-export const McpPresetRespSchema = McpPresetSchema;
+export const McpPresetListRespSchema = z.array(PublicMcpPresetSchema);
+
+export const McpPresetRespSchema = PublicMcpPresetSchema;
