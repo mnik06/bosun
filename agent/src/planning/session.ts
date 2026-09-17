@@ -12,6 +12,7 @@ import {
 	type SessionMcpServer
 } from '../sessions/mcp-server';
 import { spawnClaudeSession, type ClaudeSession } from '../sessions/process';
+import { teardownSession } from '../sessions/teardown';
 import { createStderrTail, logDroppedFrame, reportStartFailure } from '../sessions/turn-support';
 import { createStreamParser } from './stream-parser';
 
@@ -130,14 +131,8 @@ export function createPlanningSessions(opts: {
 	const teardown = (planId: string): void => {
 		const session = sessions.get(planId);
 
-		if (!session) {
-			return;
-		}
-
-		sessions.delete(planId);
-		session.process?.kill();
-		void session.mcp.close();
-		void session.served?.close();
+		teardownSession(sessions, planId);
+		void session?.served?.close();
 	};
 
 	// A server that will not start costs the session one convenience, not the grill.
@@ -309,10 +304,7 @@ export function createPlanningSessions(opts: {
 			sessionId: planId,
 			definitions: opts2.definitions,
 			createDispatch: opts2.createDispatch,
-			userServers: userMcp.servers,
-			log: (line) => {
-				console.log(line);
-			}
+			userServers: userMcp.servers
 		});
 		const session: Session = {
 			mcp,

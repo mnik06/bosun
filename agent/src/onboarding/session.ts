@@ -231,10 +231,7 @@ export function createOnboardingSessions(opts: { services: Services; send: (mess
 			sessionId: opts2.runId,
 			definitions: opts2.definitions,
 			createDispatch: opts2.createDispatch,
-			userServers: userMcp.servers,
-			log: (line) => {
-				console.log(line);
-			}
+			userServers: userMcp.servers
 		});
 
 		if (opts2.run.cancelled) {

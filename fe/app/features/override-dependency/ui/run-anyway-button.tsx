@@ -1,11 +1,10 @@
 import { Button } from '@mantine/core'
-import { modals } from '@mantine/modals'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { FastForward } from 'lucide-react'
 
 import { refreshAfterBuild } from '~/entities/plan'
 import { apiClient } from '~/shared/api'
-import { notifyError } from '~/shared/lib'
+import { confirmAction, notifyError } from '~/shared/lib'
 
 export function RunAnywayButton ({
 	buildId,
@@ -39,12 +38,12 @@ export function RunAnywayButton ({
 			leftSection={<FastForward size={12} />}
 			loading={override.isPending}
 			onClick={() => {
-				modals.openConfirmModal({
+				confirmAction({
 					title: 'Run anyway?',
-					centered: true,
-					children: `This plan stops waiting on ${provider}. It starts from the default branch rather than from that work, and the removal is recorded against you.`,
-					labels: { confirm: 'Run anyway', cancel: 'Keep waiting' },
-					confirmProps: { color: 'orange' },
+					body: `This plan stops waiting on ${provider}. It starts from the default branch rather than from that work, and the removal is recorded against you.`,
+					confirmLabel: 'Run anyway',
+					cancelLabel: 'Keep waiting',
+					color: 'orange',
 					onConfirm: () => {
 						override.mutate()
 					}

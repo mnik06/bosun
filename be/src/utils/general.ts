@@ -41,6 +41,10 @@ export async function orNotFound<T>(promise: Promise<T | null | undefined>, mess
 	return row;
 }
 
+export function countLabel(count: number, singular: string): string {
+	return `${count} ${singular}${count === 1 ? '' : 's'}`;
+}
+
 export function findDuplicate(values: string[]): string | null {
 	const seen = new Set<string>();
 

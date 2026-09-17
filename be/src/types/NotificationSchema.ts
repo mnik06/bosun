@@ -29,7 +29,6 @@ export const NotificationSchema = z.object({
 	body: z.string(),
 	url: z.url(),
 	planId: z.string().nullable(),
-	machineId: z.string().nullable(),
 	sentAt: z.coerce.date(),
 	readAt: z.coerce.date().nullable()
 });

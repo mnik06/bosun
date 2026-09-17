@@ -521,10 +521,7 @@ export function createExecutionSessions(opts: {
 			}),
 			// A fix session drives no browser, and a user server is a credential it has
 			// no use for.
-			userServers: modeOf(msg) === 'fix' ? {} : userMcp.servers,
-			log: (line) => {
-				console.log(line);
-			}
+			userServers: modeOf(msg) === 'fix' ? {} : userMcp.servers
 		});
 
 		if (run.cancelled) {

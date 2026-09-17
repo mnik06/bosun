@@ -7,6 +7,7 @@ import type { Machine } from '~/entities/machine/model/machine'
 import { UiMsgSchema, type UiMsg } from '~/entities/machine/model/ui-message'
 import { repositoryKeys, type Repository } from '~/entities/repository'
 import { subscribeToUiSocket } from '~/shared/api'
+import { refetchQuery } from '~/shared/lib'
 
 // A failed upgrade reports nothing back — the agent logs it and stays on the
 // build it has — so the banner needs an end of its own or it would outlive the
@@ -51,7 +52,7 @@ function patchMachine (queryClient: QueryClient, machine: Machine): void {
 	queryClient.setQueryData<Machine[]>(machineKeys.list(), (previous) =>
 		previous?.map((entry) => (entry.id === machine.id ? machine : entry))
 	)
-	refetch(queryClient, repositoryKeys.machineOnboarding(machine.id))
+	refetchQuery(queryClient, repositoryKeys.machineOnboarding(machine.id))
 }
 
 function patchRepository (queryClient: QueryClient, repository: Repository): void {
@@ -60,12 +61,6 @@ function patchRepository (queryClient: QueryClient, repository: Repository): voi
 			? previous.map((entry) => (entry.id === repository.id ? repository : entry))
 			: previous && [...previous, repository]
 	)
-}
-
-function refetch (queryClient: QueryClient, queryKey: readonly unknown[]): void {
-	queryClient.invalidateQueries({ queryKey }).catch(() => {
-		// A refetch that fails leaves the panel as it was; the next one recovers.
-	})
 }
 
 function without <T> (previous: Record<string, T>, machineId: string): Record<string, T> {
@@ -88,18 +83,18 @@ function handleRepositoryMsg (queryClient: QueryClient, msg: RepositoryMsg): voi
 	switch (msg.type) {
 		case 'repository.updated':
 			patchRepository(queryClient, msg.repository)
-			refetch(queryClient, repositoryKeys.config(msg.repository.id))
+			refetchQuery(queryClient, repositoryKeys.config(msg.repository.id))
 
 			return
 		case 'onboarding.updated':
-			refetch(queryClient, repositoryKeys.onboarding())
+			refetchQuery(queryClient, repositoryKeys.onboarding())
 
 			return
 		case 'machine.repository.error':
 			// The attach was a 202 long before the clone failed, so this is the only
 			// place the reason can reach whoever pressed the button.
 			notifications.show({ color: 'red', title: 'Could not attach the repository', message: msg.message })
-			refetch(queryClient, machineKeys.detail(msg.machineId))
+			refetchQuery(queryClient, machineKeys.detail(msg.machineId))
 	}
 }
 

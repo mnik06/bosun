@@ -3,6 +3,7 @@ import { type BuildSummarize } from '../protocol';
 import { type Services } from '../services/index';
 import { spawnClaudeSession, type ClaudeSession } from '../sessions/process';
 import { startSessionMcpServer, type SessionMcpServer } from '../sessions/mcp-server';
+import { teardownSession } from '../sessions/teardown';
 import { createStderrTail } from '../sessions/turn-support';
 import { createStreamParser } from '../planning/stream-parser';
 import { createSummaryDispatch, SUMMARY_TOOL_DEFINITIONS } from './mcp/tools';
@@ -48,15 +49,7 @@ export function createSummarySessions(opts: {
 	const sessions = new Map<string, Session>();
 
 	const teardown = (planId: string): void => {
-		const session = sessions.get(planId);
-
-		if (!session) {
-			return;
-		}
-
-		sessions.delete(planId);
-		session.process?.kill();
-		void session.mcp.close();
+		teardownSession(sessions, planId);
 	};
 
 	const startProcess = async (msg: Summarize): Promise<void> => {
@@ -66,10 +59,7 @@ export function createSummarySessions(opts: {
 			createDispatch: createSummaryDispatch({
 				planId: msg.planId,
 				bosunApi: opts.services.bosunApi
-			}),
-			log: (line) => {
-				console.log(line);
-			}
+			})
 		});
 		const session: Session = { mcp, process: null };
 

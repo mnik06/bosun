@@ -2,6 +2,7 @@ import { HttpError } from 'src/api/errors/HttpError';
 import { type OnboardingDeps } from 'src/controllers/onboarding/onboarding-deps';
 import { admitOnboarding } from 'src/controllers/line/shared/memory-budget';
 import { BUILD_SLOT_STATUSES, LANE_STATUSES } from 'src/controllers/line/shared/next-job';
+import { notifyOnboardingStatus } from 'src/controllers/onboarding/shared/notify';
 import { ACTIVE_ONBOARDING_STATUSES } from 'src/repos/onboarding/onboarding-run.repo';
 import { type SocketRegistry } from 'src/services/sockets/registry.service';
 import { type OnboardingRun } from 'src/types/OnboardingSchema';
@@ -29,6 +30,27 @@ export function announceOnboarding(opts: {
 
 export function isActiveRun(run: OnboardingRun): boolean {
 	return ACTIVE_ONBOARDING_STATUSES.includes(run.status);
+}
+
+// Falls back to the pre-update row when the update races another writer to the
+// same run: the caller still has to announce and notify something settled,
+// even if this call did not win the write.
+export async function failOnboardingRun(
+	deps: OnboardingDeps,
+	opts: { run: OnboardingRun; projectId: string; reason: string }
+): Promise<OnboardingRun> {
+	const failed = await deps.onboardingRunRepo.update({
+		id: opts.run.id,
+		status: 'failed',
+		failureReason: opts.reason,
+		finishedAt: new Date()
+	});
+	const settled = failed ?? opts.run;
+
+	announceOnboarding({ socketRegistry: deps.socketRegistry, projectId: opts.projectId, run: settled });
+	await notifyOnboardingStatus(deps, { projectId: opts.projectId, run: settled });
+
+	return settled;
 }
 
 // A run installs, starts and drives the whole stack, so it is admitted as a drive
