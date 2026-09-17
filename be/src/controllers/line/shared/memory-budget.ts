@@ -77,6 +77,7 @@ export function admit(opts: {
 	verifyLanes: number;
 	verifyWaiting: boolean;
 	buildCap: number | null;
+	ignoreMemoryBudget: boolean;
 }): Admission {
 	const { load } = opts;
 
@@ -94,6 +95,13 @@ export function admit(opts: {
 
 	const usable = usableBytes(opts.memory);
 	const limitBytes = jobBytes({ jobClass: opts.jobClass, usable });
+
+	// A leader's counts, taken as given: nothing is held back for the lane and nothing
+	// waits for memory. Builds still need a cap to go past it — with none, memory is
+	// the only thing that says how many.
+	if (opts.ignoreMemoryBudget && (opts.jobClass === 'lane' || opts.buildCap !== null)) {
+		return { admitted: true, limitBytes };
+	}
 
 	// A machine running nothing always takes the job: waiting for memory that
 	// nothing is holding would be a line stuck for good.
@@ -119,6 +127,7 @@ export function holderBlocksLane(opts: {
 	load: MachineLoad;
 	verifyLanes: number;
 	buildCap: number | null;
+	ignoreMemoryBudget: boolean;
 }): boolean {
 	if (opts.load.build === 0) {
 		return false;

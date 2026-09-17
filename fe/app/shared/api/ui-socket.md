@@ -56,6 +56,10 @@ A reconnect therefore starts with a server that has no memory of what this tab w
 why `usePlanStream` subscribes from `onOpen` rather than once on mount. Sending it only at mount
 produces a chat that works until the first network blip and is then silently dead.
 
+A plan page closed and opened again is the same gap: nothing was subscribed while it was away, and the
+cached detail is still fresh to the query. So every subscribe that finds the plan already cached
+refetches it in the background — otherwise a question asked in between never appears.
+
 ## A dropped frame is the whole error path
 
 Anything that fails to parse, or that no subscriber's schema matches, is discarded. A frame that does

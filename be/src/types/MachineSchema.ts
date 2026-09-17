@@ -34,6 +34,8 @@ export const MachineSchema = z.object({
 	verifyLanes: z.number().int(),
 	// A leader's ceiling on concurrent builds, below what memory would admit.
 	buildCap: z.number().int().nullable(),
+	// The two counts above are the only limit: memory admits and refuses nothing.
+	ignoreMemoryBudget: z.boolean(),
 	createdAt: z.date()
 });
 

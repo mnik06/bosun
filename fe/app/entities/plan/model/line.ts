@@ -20,6 +20,8 @@ export const MachineCapacitySchema = z.object({
 	buildsRunning: z.number().int(),
 	buildCap: z.number().int().nullable(),
 	verifyLanes: z.number().int(),
+	// Optional so a board served before the backend that sends it still parses.
+	ignoreMemoryBudget: z.boolean().optional(),
 	lane: z.array(
 		z.object({ planId: z.string(), planNumber: z.number().int(), status: BuildStatusSchema })
 	),

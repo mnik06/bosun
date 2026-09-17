@@ -8,7 +8,13 @@ import { type Machine } from 'src/types/MachineSchema';
 // bullet that happens to settle.
 export async function saveMachineCapacity(
 	deps: LineDeps,
-	opts: { id: string; projectId: string; verifyLanes?: number; buildCap?: number | null }
+	opts: {
+		id: string;
+		projectId: string;
+		verifyLanes?: number;
+		buildCap?: number | null;
+		ignoreMemoryBudget?: boolean;
+	}
 ): Promise<Machine> {
 	const machine = await deps.machineRepo.saveCapacity(opts);
 

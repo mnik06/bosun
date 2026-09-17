@@ -59,6 +59,7 @@ export const MachineCapacitySchema = z.object({
 	buildsRunning: z.number().int(),
 	buildCap: z.number().int().nullable(),
 	verifyLanes: z.number().int(),
+	ignoreMemoryBudget: z.boolean(),
 	lane: z.array(LaneOccupantSchema),
 	verifyWaiting: z.number().int()
 });
@@ -95,6 +96,7 @@ export const UpdateRepositoryReqSchema = z.object({ autoResolveConflicts: z.bool
 export const UpdateMachineCapacityReqSchema = z
 	.object({
 		verifyLanes: z.number().int().min(0).max(4),
-		buildCap: z.number().int().min(1).max(32).nullable()
+		buildCap: z.number().int().min(1).max(32).nullable(),
+		ignoreMemoryBudget: z.boolean()
 	})
 	.partial();
