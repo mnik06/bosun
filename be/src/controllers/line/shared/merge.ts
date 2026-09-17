@@ -75,7 +75,7 @@ export async function markMerged(deps: LineDeps, opts: { build: Build }): Promis
 		return;
 	}
 
-	await stopRunningJobs(deps, { build: opts.build });
+	await stopRunningJobs(deps, { build: opts.build, bugfixEndedReason: 'merged' });
 
 	const merged = (await deps.buildRepo.update({ id: opts.build.id, status: 'merged', mergedAt: new Date(), finishedAt: new Date() })) ?? opts.build;
 

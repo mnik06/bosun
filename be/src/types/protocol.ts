@@ -89,6 +89,11 @@ export const HelloMsgSchema = z.object({
 	onboardingRunIds: z.array(z.string()).optional(),
 	// The integrations still held, on the same terms.
 	integrationIds: z.array(z.string()).optional(),
+	// The bug-fixing sessions still held, on the same terms. Not yet reconciled
+	// against `bugfix_sessions` on reconnect — see `bugfix-idle-sweep.ts`, which
+	// is what recovers a build stranded in `fixing_bugs` by an agent that never
+	// comes back, on a longer clock.
+	bugfixSessionIds: z.array(z.string()).optional(),
 	// How long that agent process has been alive. A dropped socket and a restarted
 	// agent are indistinguishable here otherwise, and only one of them means every
 	// session on the machine is gone.

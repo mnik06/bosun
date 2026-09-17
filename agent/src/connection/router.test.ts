@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { parseServerFrame, routeServerFrame, type AgentState, type RouterDeps } from './router';
 import { type SummarySessions } from '../summary/session';
 import { type AskSessions } from '../ask/session';
+import { type BugfixSessions } from '../bugfix/session';
 import { type ExecutionSessions } from '../execution/session';
 import { type IntegrationSessions } from '../integration/session';
 import { type OnboardingSessions } from '../onboarding/session';
@@ -53,6 +54,15 @@ function build (opts?: { paused?: boolean; repositoryId?: string | null }) {
 		cancelAll: vi.fn(),
 		running: vi.fn().mockReturnValue(0)
 	};
+	const bugfix = {
+		start: vi.fn().mockResolvedValue(undefined),
+		say: vi.fn(),
+		cancel: vi.fn(),
+		cancelAll: vi.fn(),
+		held: vi.fn().mockReturnValue([]),
+		running: vi.fn().mockReturnValue(0),
+		endIdle: vi.fn()
+	};
 	const state: AgentState = { paused: opts?.paused ?? false };
 	const projectEnv = {
 		set: vi.fn(),
@@ -101,6 +111,7 @@ function build (opts?: { paused?: boolean; repositoryId?: string | null }) {
 		onboarding: onboarding as unknown as OnboardingSessions,
 		summaries: summaries as unknown as SummarySessions,
 		asks: asks as unknown as AskSessions,
+		bugfix: bugfix as unknown as BugfixSessions,
 		sink,
 		announce,
 		onUpgrade
@@ -109,6 +120,7 @@ function build (opts?: { paused?: boolean; repositoryId?: string | null }) {
 	return {
 		announce,
 		asks,
+		bugfix,
 		commit,
 		executions,
 		inputsKey,
@@ -217,7 +229,7 @@ describe('routeServerFrame', () => {
 	// Terminal, and it has to reap sessions first: the process group outlives the
 	// unit otherwise.
 	it('cancels every session before terminating on shutdown', async () => {
-		const { sessions, executions, integrations, onboarding, asks, terminateSelf, route } = build();
+		const { sessions, executions, integrations, onboarding, asks, bugfix, terminateSelf, route } = build();
 
 		await route({ type: 'shutdown', reason: 'deleted in bosun' });
 
@@ -226,10 +238,41 @@ describe('routeServerFrame', () => {
 		expect(integrations.cancelAll).toHaveBeenCalledOnce();
 		expect(onboarding.cancelAll).toHaveBeenCalledOnce();
 		expect(asks.cancelAll).toHaveBeenCalledOnce();
+		expect(bugfix.cancelAll).toHaveBeenCalledOnce();
 		expect(terminateSelf).toHaveBeenCalledWith({
 			configPath: '/home/u/.bosun/config.json',
 			reason: 'deleted in bosun'
 		});
+	});
+
+	it('refuses to start a bug-fixing session while paused, and tells the backend why', async () => {
+		const { send, bugfix, route } = build({ paused: true });
+
+		await route({ type: 'bugfix.start', sessionId: 'bfs_1', buildId: 'bld_1', worktreePath: '/tree', branch: 'b', planNumber: 1, planTitle: 't', planBodyMd: 'body', acs: [], text: 'bug list' });
+
+		expect(bugfix.start).not.toHaveBeenCalled();
+		expect(sent(send)).toEqual([
+			{ type: 'bugfix.error', sessionId: 'bfs_1', buildId: 'bld_1', message: 'this machine is paused' }
+		]);
+	});
+
+	it('starts a bug-fixing session when not paused', async () => {
+		const { bugfix, route } = build();
+		const msg = { type: 'bugfix.start' as const, sessionId: 'bfs_1', buildId: 'bld_1', worktreePath: '/tree', branch: 'b', planNumber: 1, planTitle: 't', planBodyMd: 'body', acs: [], text: 'bug list' };
+
+		await route(msg);
+
+		expect(bugfix.start).toHaveBeenCalledWith(msg);
+	});
+
+	it('routes a say and a cancel to the bug-fixing session', async () => {
+		const { bugfix, route } = build();
+
+		await route({ type: 'bugfix.say', sessionId: 'bfs_1', buildId: 'bld_1', text: 'more bugs' });
+		await route({ type: 'bugfix.cancel', sessionId: 'bfs_1', buildId: 'bld_1' });
+
+		expect(bugfix.say).toHaveBeenCalledWith({ type: 'bugfix.say', sessionId: 'bfs_1', buildId: 'bld_1', text: 'more bugs' });
+		expect(bugfix.cancel).toHaveBeenCalledWith('bfs_1');
 	});
 
 	// A frame type that reaches no case must do nothing at all. The switch replaced

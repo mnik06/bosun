@@ -33,6 +33,14 @@ export function getBugfixSessionRepo(db: DbOrTx) {
 			return row ? BugfixSessionSchema.parse(row) : null;
 		},
 
+		// Every session the idle sweep has to judge. Cheap: at most one row per
+		// build, and a build holds `fixing_bugs` for as long as one of these runs.
+		async listRunning(): Promise<BugfixSession[]> {
+			const rows = await db.select(columns).from(bugfixSessions).where(eq(bugfixSessions.status, 'running'));
+
+			return rows.map((row) => BugfixSessionSchema.parse(row));
+		},
+
 		// Guarded by status so a session already closed by another caller — the
 		// idle timeout and a person pressing "Done" at once — is reported as
 		// nothing to end rather than closed twice.

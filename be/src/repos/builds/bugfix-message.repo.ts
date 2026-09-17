@@ -1,4 +1,4 @@
-import { asc, eq, sql } from 'drizzle-orm';
+import { asc, desc, eq, sql } from 'drizzle-orm';
 import { type DbOrTx } from 'src/services/drizzle/drizzle.service';
 import { bugfixMessages } from 'src/services/drizzle/schema';
 import { BugfixMessageSchema, type BugfixMessage, type BugfixMessageContent, type BugfixMessageRole } from 'src/types/BugfixSchema';
@@ -36,6 +36,15 @@ export function getBugfixMessageRepo(db: DbOrTx) {
 			const rows = await db.select(columns).from(bugfixMessages).where(eq(bugfixMessages.buildId, buildId)).orderBy(asc(bugfixMessages.seq));
 
 			return rows.map((row) => BugfixMessageSchema.parse(row));
+		},
+
+		// What the idle sweep clocks a session's silence against: the last thing
+		// said in it, by any role — a person's message and the orchestrator's own
+		// activity both count as the session being alive.
+		async latestForBuild(buildId: string): Promise<BugfixMessage | null> {
+			const [row] = await db.select(columns).from(bugfixMessages).where(eq(bugfixMessages.buildId, buildId)).orderBy(desc(bugfixMessages.seq)).limit(1);
+
+			return row ? BugfixMessageSchema.parse(row) : null;
 		}
 	};
 }

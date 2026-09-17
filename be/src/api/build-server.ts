@@ -12,6 +12,7 @@ import { errorHandler } from 'src/api/errors/error.handler';
 import { startPullRequestReconcile } from 'src/controllers/github/reconcile-pull-requests';
 import { lineDeps } from 'src/controllers/line/line-deps';
 import { startQuestionSweep } from 'src/controllers/line/release-stale-questions';
+import { startBugfixIdleSweep } from 'src/controllers/plans/bugfix/bugfix-idle-sweep';
 import { startStalePlanSweep } from 'src/controllers/plans/sweep-stale-plans';
 import { getLoggerOptions } from 'src/api/plugins/logger.plugin';
 import {
@@ -148,11 +149,16 @@ export async function buildServer(): Promise<FastifyInstance> {
 	// happens on its machine, and a merge whose webhook was missed is still a merge.
 	const stopQuestionSweep = startQuestionSweep({ deps: lineDeps(server), log: server.log });
 	const stopReconcile = startPullRequestReconcile({ deps: lineDeps(server), log: server.log });
+	// A live bug-fixing session nobody is looking at any more has no event to end
+	// it: a person's "Done" is a choice, a merge and a cancel are events, but
+	// silence needs its own clock.
+	const stopBugfixIdleSweep = startBugfixIdleSweep({ deps: lineDeps(server), log: server.log });
 
 	server.addHook('onClose', stopSweep);
 	server.addHook('onClose', async () => {
 		stopQuestionSweep();
 		stopReconcile();
+		stopBugfixIdleSweep();
 	});
 
 	return server;

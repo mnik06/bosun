@@ -12,7 +12,7 @@ export type BuildAction = 'hold' | 'release' | 'cancel' | 'front' | 'retry';
 
 const HOLDABLE: BuildStatus[] = ['scheduled', 'building', 'waiting_answer', 'integrating', 'waiting_verify', 'driving', 'fixing', 'rechecking'];
 
-const CANCELLABLE: BuildStatus[] = [...HOLDABLE, 'held', 'in_review', 'needs_you', 'failed'];
+const CANCELLABLE: BuildStatus[] = [...HOLDABLE, 'held', 'in_review', 'fixing_bugs', 'needs_you', 'failed'];
 
 // A needs-you a retry can clear. An overlap is cleared by its decision, and a failed
 // re-check by fix again or accept.

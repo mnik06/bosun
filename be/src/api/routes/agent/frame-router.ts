@@ -9,6 +9,7 @@ import { recordRepoFrame } from 'src/controllers/machines/record-repo-frame';
 import { onboardingDeps } from 'src/controllers/onboarding/onboarding-deps';
 import { recordOnboardingFrame } from 'src/controllers/onboarding/record-onboarding-frame';
 import { recordPlanFrame } from 'src/controllers/plans/record-plan-frame';
+import { recordBugfixFrame } from 'src/controllers/plans/bugfix/record-bugfix-frame';
 import { applyMachineFrame } from 'src/api/routes/agent/ws.route';
 import { type AgentMsg } from 'src/types/protocol';
 
@@ -61,9 +62,11 @@ function isEnvReplyFrame(msg: AgentMsg): msg is EnvReplyFrame {
 
 // Frames that settle work are handled one at a time, in arrival order: a run's
 // `exec.done` and the integration the build starts next both move one build, and a
-// transcript's appends collide when they overlap.
+// transcript's appends collide when they overlap. A bug-fixing session's transcript
+// is the same collision waiting to happen: two text deltas racing on the same
+// build's `max(seq) + 1` insert.
 export function isOrderedFrame(msg: AgentMsg): boolean {
-	return isPlanFrame(msg) || isExecFrame(msg) || isWorktreeFrame(msg) || isIntegrateFrame(msg);
+	return isPlanFrame(msg) || isExecFrame(msg) || isWorktreeFrame(msg) || isIntegrateFrame(msg) || isBugfixFrame(msg);
 }
 
 function settleEnvReply(opts: {
@@ -234,10 +237,9 @@ export async function handleAgentFrame(opts: {
 		return;
 	}
 
-	// Persistence and rebroadcast for these land with the bullet that builds a
-	// real bug-fixing session and gives them a producer — dropped rather than
-	// routed to `applyMachineFrame`, which is typed to only `hello`/`preflight`.
 	if (isBugfixFrame(msg)) {
+		await recordBugfixFrame(lineDeps(opts.fastify), { machineId: opts.machineId, frame: msg });
+
 		return;
 	}
 
