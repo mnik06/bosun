@@ -17,6 +17,7 @@ import { watchBosunFiles } from './file-watch';
 import { createPlanningSessions, type PlanningSessions } from '../planning/session';
 import { planningPrompt, revisionPrompt } from '../prompts/planning';
 import { summaryPrompt } from '../prompts/summary';
+import { createQuickFixSessions, type QuickFixSessions } from '../quick-fix/session';
 import { createSummarySessions } from '../summary/session';
 import { type AgentMsg } from '../protocol';
 import { type Services } from '../services/index';
@@ -49,6 +50,7 @@ interface ConnectionDeps {
 	integrations: IntegrationSessions;
 	sessions: PlanningSessions;
 	onboarding: OnboardingSessions;
+	quickFixes: QuickFixSessions;
 	// The current connection's announce, so a file changing under ~/.bosun reaches
 	// whichever socket is open, and nothing at all while none is.
 	announcer: { current: ((reason: 'change') => Promise<void>) | null };
@@ -188,7 +190,11 @@ async function connectOnce(deps: ConnectionDeps): Promise<void> {
 			null;
 
 		const sessionsRunning = (): number =>
-			sessions.running() + deps.executions.running() + deps.integrations.running() + deps.onboarding.running();
+			sessions.running() +
+			deps.executions.running() +
+			deps.integrations.running() +
+			deps.onboarding.running() +
+			deps.quickFixes.running();
 
 		const install = async (target: {
 			version: string;
@@ -324,6 +330,7 @@ async function connectOnce(deps: ConnectionDeps): Promise<void> {
 					executions: deps.executions,
 					integrations: deps.integrations,
 					onboarding: deps.onboarding,
+					quickFixes: deps.quickFixes,
 					summaries,
 					asks,
 					sink: deps.sink.send,
@@ -405,6 +412,10 @@ export async function holdConnection(opts: {
 	// merge, a regenerate and a check run in a worktree, none of which needs bosun
 	// listening until it has something to say.
 	const integrations = createIntegrationSessions({ services: opts.services, send: sink.send });
+	// A quick fix outlives the socket for the same reason a bullet does: it is a
+	// branch, a fix and a push in a worktree, none of which needs bosun listening
+	// until it has something to say.
+	const quickFixes = createQuickFixSessions({ services: opts.services, send: sink.send });
 	const announcer: ConnectionDeps['announcer'] = { current: null };
 
 	// Stacks are reaped here too: an app a session started runs in a process group
@@ -415,6 +426,7 @@ export async function holdConnection(opts: {
 			executions.cancelAll();
 			integrations.cancelAll();
 			onboarding.cancelAll();
+			quickFixes.cancelAll();
 			void opts.services.stack.downAll().finally(() => {
 				process.exit(0);
 			});
@@ -432,7 +444,7 @@ export async function holdConnection(opts: {
 
 	for (;;) {
 		try {
-			await connectOnce({ ...opts, state, sink, executions, integrations, sessions, onboarding, announcer });
+			await connectOnce({ ...opts, state, sink, executions, integrations, sessions, onboarding, quickFixes, announcer });
 			console.log('connection closed');
 			attempt = 0;
 		} catch (error) {

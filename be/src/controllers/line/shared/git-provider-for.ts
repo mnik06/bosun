@@ -1,7 +1,6 @@
 import { type FastifyInstance } from 'fastify';
 import { HttpError } from 'src/api/errors/HttpError';
 import { runAzureConnectionCall, type AzureConnectionGuardDeps } from 'src/controllers/azure/shared/connection-guard';
-import { clip } from 'src/controllers/line/shared/pull-request-body';
 import { type GithubInstallationRepo } from 'src/repos/github/github-installation.repo';
 import { type AzureDevOpsService } from 'src/services/azure/azure-devops.service';
 import { type PatEncryptionService } from 'src/services/crypto/pat-encryption.service';
@@ -9,6 +8,7 @@ import { type GitProvider } from 'src/services/git/git-provider';
 import { type GithubAppService } from 'src/services/github/github-app.service';
 import { type AzureConnection } from 'src/types/AzureSchema';
 import { type Repository } from 'src/types/RepositorySchema';
+import { clip } from 'src/utils/general';
 
 // The ticket's own "reportedly 4000" figure, named so a corrected live figure is
 // a one-line change. GitHub's body is already clipped to its own, far larger

@@ -1,4 +1,4 @@
-import { HttpError } from 'src/api/errors/HttpError';
+import { getMachinePlan } from 'src/controllers/plans/shared/plan-access';
 import { type PlanDecisionRepo } from 'src/repos/plans/plan-decision.repo';
 import { type PlanRepo } from 'src/repos/plans/plan.repo';
 import { type IdService } from 'src/services/ids/id.service';
@@ -19,14 +19,11 @@ export async function recordPlanDecision(opts: {
 	blastRadius: string | null;
 	reversing: string | null;
 }): Promise<PlanDecision> {
-	const plan = await opts.planRepo.getByIdForMachine({
+	const plan = await getMachinePlan({
+		planRepo: opts.planRepo,
 		id: opts.planId,
 		machineId: opts.machineId
 	});
-
-	if (!plan) {
-		throw new HttpError(404, 'Plan not found');
-	}
 
 	const decision = await opts.planDecisionRepo.create({
 		id: opts.idService.createPlanDecisionId(),

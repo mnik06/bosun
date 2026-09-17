@@ -42,12 +42,6 @@ export function getPlanDependencyRepo(db: DbOrTx) {
 			return parse(await db.insert(planDependencies).values(rows).returning(columns));
 		},
 
-		async getById(id: string): Promise<PlanDependency | null> {
-			const [row] = await db.select(columns).from(planDependencies).where(eq(planDependencies.id, id));
-
-			return row ? PlanDependencySchema.parse(row) : null;
-		},
-
 		async listForPlan(planId: string): Promise<PlanDependency[]> {
 			return parse(
 				await db

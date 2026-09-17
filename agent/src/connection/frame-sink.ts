@@ -22,7 +22,9 @@ const SETTLING = new Set([
 	'build.worktree.ready',
 	'build.worktree.error',
 	'integrate.done',
-	'integrate.needs_you'
+	'integrate.needs_you',
+	'quickfix.done',
+	'quickfix.error'
 ]);
 
 export interface FrameSink {

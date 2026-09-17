@@ -1,10 +1,9 @@
-import { Alert, Button, Select, Stack, Switch, Textarea } from '@mantine/core'
+import { Alert, Button, Stack, Switch, Textarea } from '@mantine/core'
 import { useForm } from '@mantine/form'
 import { zod4Resolver } from 'mantine-form-zod-resolver'
-import { useEffect } from 'react'
 import { useNavigate } from 'react-router'
 
-import { machineKind, useMachinesQuery } from '~/entities/machine'
+import { machineKind, MachineSelectField, useOnlineMachineOptions } from '~/entities/machine'
 import { machinePickerLabel, useRepositoriesQuery } from '~/entities/repository'
 import { useCreatePlan } from '~/features/create-plan/api/use-create-plan'
 import {
@@ -15,7 +14,6 @@ import { AppModal } from '~/shared/ui'
 
 export function NewPlanModal ({ opened, onClose }: { opened: boolean, onClose: () => void }) {
 	const navigate = useNavigate()
-	const machines = useMachinesQuery()
 	const repositories = useRepositoriesQuery()
 	const createPlan = useCreatePlan()
 
@@ -27,21 +25,13 @@ export function NewPlanModal ({ opened, onClose }: { opened: boolean, onClose: (
 
 	// Only online machines with something to read: a session runs in that
 	// machine's checkout, and one enrolled with no repository attached has none.
-	const options = (machines.data ?? [])
-		.filter((machine) => machine.status === 'online' && machineKind(machine) !== 'unattached')
-		.map((machine) => ({
-			value: machine.id,
-			label: machinePickerLabel({ machine, repositories: repositories.data })
-		}))
-	const firstMachineId = options[0]?.value
-
-	// An effect rather than an initial value: the machines arrive after the form is
-	// built, and a reset on close empties the pick again for the next open.
-	useEffect(() => {
-		if (opened && firstMachineId !== undefined && form.getValues().machineId === '') {
-			form.setFieldValue('machineId', firstMachineId)
-		}
-	}, [opened, firstMachineId, form])
+	const { options } = useOnlineMachineOptions({
+		filter: (machine) => machineKind(machine) !== 'unattached',
+		label: (machine) => machinePickerLabel({ machine, repositories: repositories.data }),
+		opened,
+		machineId: form.getValues().machineId,
+		onDefaultMachine: (machineId) => { form.setFieldValue('machineId', machineId) }
+	})
 
 	const close = () => {
 		form.reset()
@@ -67,15 +57,7 @@ export function NewPlanModal ({ opened, onClose }: { opened: boolean, onClose: (
 						</Alert>
 					) : null}
 
-					<Select
-						label="Machine"
-						placeholder="Pick an online machine"
-						data={options}
-						disabled={options.length === 0}
-						data-autofocus
-						key={form.key('machineId')}
-						{...form.getInputProps('machineId')}
-					/>
+					<MachineSelectField form={form} options={options} />
 
 					<Textarea
 						label="Ticket"

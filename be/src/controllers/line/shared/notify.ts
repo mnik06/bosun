@@ -1,5 +1,6 @@
 import { dispatchNotification } from 'src/controllers/notifications/dispatch-notification';
-import { planName, resolveRecipients, type PlanNotifyRecipientDeps } from 'src/controllers/plans/shared/notify-recipients';
+import { resolveRecipients } from 'src/controllers/notifications/shared/resolve-recipients';
+import { planName, type PlanNotifyRecipientDeps } from 'src/controllers/plans/shared/notify-recipients';
 import { type Build, type BuildStatus } from 'src/types/BuildSchema';
 import { type NotificationKind } from 'src/types/NotificationSchema';
 import { type Plan } from 'src/types/PlanSchema';

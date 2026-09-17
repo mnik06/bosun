@@ -22,6 +22,7 @@ import { type PlanMessageRepo } from 'src/repos/plans/plan-message.repo';
 import { type PlanRepo } from 'src/repos/plans/plan.repo';
 import { type SliceRepo } from 'src/repos/plans/slice.repo';
 import { type ProjectMemberRepo } from 'src/repos/projects/project-member.repo';
+import { type QuickFixRepo } from 'src/repos/quick-fixes/quick-fix.repo';
 import { type UserRepo } from 'src/repos/users/user.repo';
 import { type AzureBranchSnapshotService } from 'src/services/azure/azure-branch-snapshot.service';
 import { type AzureConnectionGuardService } from 'src/services/azure/azure-connection-guard.service';
@@ -68,6 +69,7 @@ export interface LineDeps {
 	projectMemberRepo: ProjectMemberRepo;
 	notificationRepo: NotificationRepo;
 	pushSubscriptionRepo: PushSubscriptionRepo;
+	quickFixRepo: QuickFixRepo;
 	idService: IdService;
 	githubApp: GithubAppService;
 	azureDevOps: AzureDevOpsService;
@@ -117,6 +119,7 @@ export function lineDeps(fastify: FastifyInstance): LineDeps {
 		projectMemberRepo: fastify.repos.projectMemberRepo,
 		notificationRepo: fastify.repos.notificationRepo,
 		pushSubscriptionRepo: fastify.repos.pushSubscriptionRepo,
+		quickFixRepo: fastify.repos.quickFixRepo,
 		idService: fastify.services.idService,
 		githubApp: fastify.services.githubApp,
 		azureDevOps: fastify.services.azureDevOps,

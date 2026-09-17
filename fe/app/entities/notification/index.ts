@@ -6,7 +6,7 @@ export {
 	useUnreadCountsQuery
 } from './api/notification.queries'
 export { refreshNotifications } from './lib/notification-cache'
-export { notificationPath } from './lib/notification-path'
+export { isExternalNotificationUrl, notificationPath } from './lib/notification-path'
 export {
 	NotificationKindSchema,
 	NotificationSchema,

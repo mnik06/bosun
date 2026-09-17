@@ -2,7 +2,7 @@ import { ActionIcon, Indicator, Menu, Text } from '@mantine/core'
 import { BellRing } from 'lucide-react'
 import { Link } from 'react-router'
 
-import { notificationPath, type Notification, useNotificationsQuery } from '~/entities/notification'
+import { isExternalNotificationUrl, notificationPath, type Notification, useNotificationsQuery } from '~/entities/notification'
 import { planLabel, useNeedsYouQuery, type NeedsYouItem } from '~/entities/plan'
 import { useMarkNotificationRead } from '~/features/mark-notification-read'
 import { formatRelativeTime } from '~/shared/lib'
@@ -17,17 +17,9 @@ const KIND_LABEL: Record<NeedsYouItem['kind'], string> = {
 	worktree: 'Could not start'
 }
 
-function NotificationEntry ({ notification }: { notification: Notification }) {
-	const markRead = useMarkNotificationRead()
-
+function NotificationEntryBody ({ notification }: { notification: Notification }) {
 	return (
-		<Menu.Item
-			component={Link}
-			to={notificationPath(notification)}
-			onClick={() => {
-				markRead.mutate(notification.id)
-			}}
-		>
+		<>
 			<Text size="sm" fw={600} truncate>
 				{notification.title}
 			</Text>
@@ -37,6 +29,30 @@ function NotificationEntry ({ notification }: { notification: Notification }) {
 			<Text size="xs" c="dimmed">
 				{formatRelativeTime(notification.sentAt)}
 			</Text>
+		</>
+	)
+}
+
+function NotificationEntry ({ notification }: { notification: Notification }) {
+	const markRead = useMarkNotificationRead()
+	const onClick = () => {
+		markRead.mutate(notification.id)
+	}
+
+	// Every other kind's url is an app route, but a pushed quick fix's is the
+	// pull request itself (see `isExternalNotificationUrl`) — that one opens as
+	// a real link instead of resolving to a route that does not exist.
+	if (isExternalNotificationUrl(notification)) {
+		return (
+			<Menu.Item component="a" href={notification.url} target="_blank" rel="noreferrer" onClick={onClick}>
+				<NotificationEntryBody notification={notification} />
+			</Menu.Item>
+		)
+	}
+
+	return (
+		<Menu.Item component={Link} to={notificationPath(notification)} onClick={onClick}>
+			<NotificationEntryBody notification={notification} />
 		</Menu.Item>
 	)
 }
