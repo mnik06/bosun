@@ -1,4 +1,6 @@
-import { notifyPlanEvent, planName, type PlanNotifyRecipientDeps } from 'src/controllers/plans/shared/notify-recipients';
+import { dispatchNotification } from 'src/controllers/notifications/dispatch-notification';
+import { resolveRecipients } from 'src/controllers/notifications/shared/resolve-recipients';
+import { planName, type PlanNotifyRecipientDeps } from 'src/controllers/plans/shared/notify-recipients';
 import { type Build, type BuildStatus } from 'src/types/BuildSchema';
 import { type NotificationKind } from 'src/types/NotificationSchema';
 import { type Plan } from 'src/types/PlanSchema';
@@ -43,12 +45,16 @@ export async function notifyBuildStatus(deps: BuildNotifyDeps, opts: { plan: Pla
 	}
 
 	const name = planName(opts.plan);
+	const recipientIds = await resolveRecipients(deps, opts.plan);
 
-	await notifyPlanEvent(deps, {
-		plan: opts.plan,
+	await dispatchNotification(deps, {
+		recipientIds,
+		projectId: opts.plan.projectId,
 		kind,
 		title: STATUS_TITLE[opts.build.status]!,
-		body: opts.build.failureReason ? `${name}: ${opts.build.failureReason}` : `${name} ${STATUS_SUMMARY[opts.build.status]}`
+		body: opts.build.failureReason ? `${name}: ${opts.build.failureReason}` : `${name} ${STATUS_SUMMARY[opts.build.status]}`,
+		url: `${deps.appUrl}/plans/${opts.plan.id}`,
+		planId: opts.plan.id
 	});
 }
 
@@ -56,10 +62,15 @@ export async function notifyBuildStatus(deps: BuildNotifyDeps, opts: { plan: Pla
 // rule as every other build-scoped trigger: the plan's own creator, or every
 // leader when the plan carries no attribution.
 export async function notifyPlanUnblocked(deps: BuildNotifyDeps, opts: { plan: Plan }): Promise<void> {
-	await notifyPlanEvent(deps, {
-		plan: opts.plan,
+	const recipientIds = await resolveRecipients(deps, opts.plan);
+
+	await dispatchNotification(deps, {
+		recipientIds,
+		projectId: opts.plan.projectId,
 		kind: 'plan.unblocked',
 		title: 'Unblocked',
-		body: `${planName(opts.plan)} is unblocked`
+		body: `${planName(opts.plan)} is unblocked`,
+		url: `${deps.appUrl}/plans/${opts.plan.id}`,
+		planId: opts.plan.id
 	});
 }

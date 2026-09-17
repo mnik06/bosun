@@ -1,7 +1,6 @@
 import { HttpError } from 'src/api/errors/HttpError';
 import { type OnboardingDeps } from 'src/controllers/onboarding/onboarding-deps';
-import { admitOnboarding } from 'src/controllers/line/shared/memory-budget';
-import { BUILD_SLOT_STATUSES, LANE_STATUSES } from 'src/controllers/line/shared/next-job';
+import { admitOnboarding, loadForMachine } from 'src/controllers/line/shared/memory-budget';
 import { notifyOnboardingStatus } from 'src/controllers/onboarding/shared/notify';
 import { ACTIVE_ONBOARDING_STATUSES } from 'src/repos/onboarding/onboarding-run.repo';
 import { type SocketRegistry } from 'src/services/sockets/registry.service';
@@ -61,15 +60,11 @@ export async function onboardingAdmission(
 	deps: OnboardingDeps,
 	opts: { machineId: string }
 ): Promise<{ admitted: true; limitBytes: number | null } | { admitted: false }> {
-	const [slots, lanes, runs] = await Promise.all([
-		deps.buildRepo.listForMachine({ machineId: opts.machineId, statuses: BUILD_SLOT_STATUSES }),
-		deps.buildRepo.listForMachine({ machineId: opts.machineId, statuses: LANE_STATUSES }),
-		deps.onboardingRunRepo.listActiveForMachine(opts.machineId)
-	]);
+	const load = await loadForMachine(deps, opts.machineId);
 
 	return admitOnboarding({
 		memory: deps.machineMemory.get(opts.machineId),
-		load: { build: slots.length, lane: lanes.length, onboarding: runs.length }
+		load
 	});
 }
 

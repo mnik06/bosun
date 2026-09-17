@@ -1,4 +1,6 @@
-import { notifyPlanEvent, planName, type PlanNotifyRecipientDeps } from 'src/controllers/plans/shared/notify-recipients';
+import { dispatchNotification } from 'src/controllers/notifications/dispatch-notification';
+import { resolveRecipients } from 'src/controllers/notifications/shared/resolve-recipients';
+import { planName, type PlanNotifyRecipientDeps } from 'src/controllers/plans/shared/notify-recipients';
 import { type NotificationKind } from 'src/types/NotificationSchema';
 import { type Plan, type PlanMessage, type PlanStatus } from 'src/types/PlanSchema';
 
@@ -19,15 +21,19 @@ export async function notifyPlanStatus(deps: PlanNotifyDeps, opts: { plan: Plan 
 	}
 
 	const name = planName(opts.plan);
+	const recipientIds = await resolveRecipients(deps, opts.plan);
 
-	await notifyPlanEvent(deps, {
-		plan: opts.plan,
+	await dispatchNotification(deps, {
+		recipientIds,
+		projectId: opts.plan.projectId,
 		kind,
 		title: opts.plan.status === 'ready' ? 'Plan ready' : 'Plan failed',
 		body:
 			opts.plan.status === 'failed' && opts.plan.failureReason
 				? `${name}: ${opts.plan.failureReason}`
-				: `${name} is ${opts.plan.status}`
+				: `${name} is ${opts.plan.status}`,
+		url: `${deps.appUrl}/plans/${opts.plan.id}`,
+		planId: opts.plan.id
 	});
 }
 
@@ -45,11 +51,15 @@ export async function notifyPlanMessage(
 	}
 
 	const body = opts.message.content.questions[0]?.question ?? 'has a question for you';
+	const recipientIds = await resolveRecipients(deps, opts.plan);
 
-	await notifyPlanEvent(deps, {
-		plan: opts.plan,
+	await dispatchNotification(deps, {
+		recipientIds,
+		projectId: opts.plan.projectId,
 		kind: 'plan.message',
 		title: `${planName(opts.plan)} needs your answer`,
-		body
+		body,
+		url: `${deps.appUrl}/plans/${opts.plan.id}`,
+		planId: opts.plan.id
 	});
 }

@@ -1,9 +1,8 @@
 import { type PlanCriteria } from '../protocol';
+import { criteriaList } from './shared';
 
 function criteriaBlock(plan: PlanCriteria): string {
-	const acs = plan.acs.length === 0 ? '_No criteria recorded._' : plan.acs.map((ac) => `- **${ac.code}** ${ac.text}`).join('\n');
-
-	return `### #${plan.planNumber} ${plan.title}\n\n${acs}`;
+	return `### #${plan.planNumber} ${plan.title}\n\n${criteriaList(plan.acs)}`;
 }
 
 function plansSection(opts: { own: PlanCriteria; others: PlanCriteria[] }): string {

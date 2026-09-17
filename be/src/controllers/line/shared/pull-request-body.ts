@@ -1,5 +1,6 @@
 import { type Integration, type VerifyFinding } from 'src/types/BuildSchema';
 import { type Ac, type Plan, type PlanDecision } from 'src/types/PlanSchema';
+import { clip } from 'src/utils/general';
 
 // GitHub refuses a body over 65536 characters, and it refuses it *after* the
 // branch is pushed — the work lands and the pull request does not exist. So the
@@ -18,12 +19,6 @@ interface KnownGap {
 	text: string;
 	reproduction: string;
 	acceptedBy: string | null;
-}
-
-function clip(text: string, max: number): string {
-	const trimmed = text.trim();
-
-	return trimmed.length <= max ? trimmed : `${trimmed.slice(0, max).trimEnd()}…`;
 }
 
 function listed<T>(entries: T[], render: (entry: T) => string): string {

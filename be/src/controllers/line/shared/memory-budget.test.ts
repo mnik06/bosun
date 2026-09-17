@@ -17,7 +17,7 @@ function box(totalGib: number, swapGib = 0): MachineMemory {
 }
 
 function load(overrides: Partial<MachineLoad> = {}): MachineLoad {
-	return { build: 0, lane: 0, onboarding: 0, ...overrides };
+	return { build: 0, lane: 0, onboarding: 0, quickFix: 0, ...overrides };
 }
 
 const BASE = { verifyLanes: 1, verifyWaiting: false, buildCap: null, ignoreMemoryBudget: false };
@@ -106,6 +106,28 @@ describe('admit', () => {
 			admitted: true,
 			limitBytes: null
 		});
+	});
+});
+
+describe('admit — quickFix', () => {
+	const sixteen = box(16);
+
+	it('sizes a quick fix like a build, not a lane', () => {
+		expect(admit({ ...BASE, memory: sixteen, jobClass: 'quickFix', load: load() })).toEqual({
+			admitted: true,
+			limitBytes: BUILD_BYTES
+		});
+	});
+
+	it('counts a running build and a running quick fix as two build-sized jobs', () => {
+		// 14.5 GiB usable: room for four build-sized jobs, not five.
+		expect(admit({ ...BASE, memory: sixteen, jobClass: 'quickFix', load: load({ build: 4 }) }).admitted).toBe(false);
+		expect(admit({ ...BASE, memory: sixteen, jobClass: 'quickFix', load: load({ build: 3 }) }).admitted).toBe(true);
+		expect(admit({ ...BASE, memory: sixteen, jobClass: 'build', load: load({ quickFix: 4 }) }).admitted).toBe(false);
+	});
+
+	it('is never gated by the leader cap — that ceiling counts plans, not quick fixes', () => {
+		expect(admit({ ...BASE, memory: sixteen, jobClass: 'quickFix', load: load({ build: 2 }), buildCap: 2 }).admitted).toBe(true);
 	});
 });
 

@@ -4,6 +4,7 @@ import { type ExecutionSessions } from '../execution/session';
 import { type IntegrationSessions } from '../integration/session';
 import { type OnboardingSessions } from '../onboarding/session';
 import { type PlanningSessions } from '../planning/session';
+import { type QuickFixSessions } from '../quick-fix/session';
 import { type SummarySessions } from '../summary/session';
 import {
 	ServerMsgSchema,
@@ -50,6 +51,7 @@ export interface RouterDeps {
 	executions: ExecutionSessions;
 	integrations: IntegrationSessions;
 	onboarding: OnboardingSessions;
+	quickFixes: QuickFixSessions;
 	summaries: SummarySessions;
 	asks: AskSessions;
 	// Where outcomes that outlive this connection go: a worktree readied while the
@@ -304,6 +306,15 @@ export async function routeServerFrame(deps: RouterDeps, msg: ServerMsg): Promis
 
 			return;
 
+		case 'quickfix.start':
+			if (refusePaused(deps, { type: 'quickfix.error', quickFixId: msg.quickFixId, message: PAUSED })) {
+				return;
+			}
+
+			await deps.quickFixes.start(msg);
+
+			return;
+
 		case 'build.worktree.ensure':
 		case 'build.worktree.remove':
 		case 'build.summarize':
@@ -319,6 +330,7 @@ export async function routeServerFrame(deps: RouterDeps, msg: ServerMsg): Promis
 			deps.executions.cancelAll();
 			deps.integrations.cancelAll();
 			deps.onboarding.cancelAll();
+			deps.quickFixes.cancelAll();
 			deps.asks.cancelAll();
 			await deps.services.stack.downAll();
 			await deps.services.teardown.terminateSelf({

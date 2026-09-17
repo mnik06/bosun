@@ -1,7 +1,7 @@
 import type { EnvSetSummary } from '~/entities/machine'
 import type { OnboardingRequirement } from '~/entities/repository'
 import type { RequiredVar } from '~/features/edit-env-sets'
-import { stripSlashes } from '~/shared/lib'
+import { normalizeRelativePath } from '~/shared/lib'
 
 export interface VarsGroup {
 	required: RequiredVar[]
@@ -23,7 +23,7 @@ export interface InputGroups {
 const ROOT = '.'
 
 export function normalizeEnvPath (path: string): string {
-	const relative = stripSlashes(path)
+	const relative = normalizeRelativePath(path)
 
 	return relative === '' ? ROOT : relative
 }

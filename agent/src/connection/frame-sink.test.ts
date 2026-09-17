@@ -5,6 +5,15 @@ import { type AgentMsg } from '../protocol';
 const DONE = { type: 'exec.done', runId: 'sr_1', commitSha: 'abc', report: '', changedFiles: [], pushed: true, pushError: null } as AgentMsg;
 const ERROR = { type: 'exec.error', runId: 'sr_1', message: 'x' } as AgentMsg;
 const TEXT = { type: 'exec.text', runId: 'sr_1', delta: 'hello' } as AgentMsg;
+const QUICK_FIX_DONE = {
+	type: 'quickfix.done',
+	quickFixId: 'qf_1',
+	commitSha: 'abc',
+	report: '',
+	changedFiles: [],
+	pushed: true,
+	pushError: null
+} as AgentMsg;
 
 describe('createFrameSink', () => {
 	// The whole point of the sink: a bullet that settles while the backend is
@@ -71,6 +80,21 @@ describe('createFrameSink', () => {
 		sink.send(TEXT);
 
 		expect(sink.pendingRunIds()).toEqual(['sr_1']);
+	});
+
+	// A quick fix outlives the socket the same way a bullet does: its outcome must
+	// not be lost to a reconnect that lands between its push and the next frame.
+	it('replays a quick fix outcome that settled while nothing was attached', () => {
+		const sink = createFrameSink();
+		const deliver = vi.fn();
+
+		sink.send(QUICK_FIX_DONE);
+
+		expect(deliver).not.toHaveBeenCalled();
+
+		sink.attach(deliver);
+
+		expect(deliver).toHaveBeenCalledWith(QUICK_FIX_DONE);
 	});
 
 	it('reports nothing once the parked results have flushed', () => {

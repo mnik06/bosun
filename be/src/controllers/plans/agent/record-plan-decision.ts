@@ -1,9 +1,9 @@
+import { getMachinePlan } from 'src/controllers/plans/shared/plan-access';
 import { type PlanDecisionRepo } from 'src/repos/plans/plan-decision.repo';
 import { type PlanRepo } from 'src/repos/plans/plan.repo';
 import { type IdService } from 'src/services/ids/id.service';
 import { type SocketRegistry } from 'src/services/sockets/registry.service';
 import { type PlanDecision } from 'src/types/PlanSchema';
-import { orNotFound } from 'src/utils/general';
 
 export async function recordPlanDecision(opts: {
 	planRepo: PlanRepo;
@@ -19,13 +19,11 @@ export async function recordPlanDecision(opts: {
 	blastRadius: string | null;
 	reversing: string | null;
 }): Promise<PlanDecision> {
-	const plan = await orNotFound(
-		opts.planRepo.getByIdForMachine({
-			id: opts.planId,
-			machineId: opts.machineId
-		}),
-		'Plan not found'
-	);
+	const plan = await getMachinePlan({
+		planRepo: opts.planRepo,
+		id: opts.planId,
+		machineId: opts.machineId
+	});
 
 	const decision = await opts.planDecisionRepo.create({
 		id: opts.idService.createPlanDecisionId(),

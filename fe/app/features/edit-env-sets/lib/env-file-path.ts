@@ -1,7 +1,7 @@
-import { stripSlashes } from '~/shared/lib'
+import { normalizeRelativePath } from '~/shared/lib'
 
 export function envFilePath (path: string): string {
-	const relative = stripSlashes(path)
+	const relative = normalizeRelativePath(path)
 
 	return relative === '' || relative === '.' ? '.env' : `${relative}/.env`
 }
