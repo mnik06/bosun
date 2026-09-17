@@ -6,3 +6,11 @@ import type { Notification } from '~/entities/notification/model/notification'
 export function notificationPath (notification: Notification): string {
 	return new URL(notification.url).pathname
 }
+
+// Every other kind's url stays in-app, but a pushed quick fix has nowhere
+// in-app to point to (there is no quick-fix page) — its url is the pull
+// request itself, so the bell menu has to open it as a real link rather than
+// resolving it to an app route that does not exist.
+export function isExternalNotificationUrl (notification: Notification): boolean {
+	return new URL(notification.url).origin !== window.location.origin
+}

@@ -211,6 +211,13 @@
       "when": 1789659076278,
       "tag": "0029_wealthy_spirit",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1789671227913,
+      "tag": "0030_orange_grandmaster",
+      "breakpoints": true
     }
   ]
 }

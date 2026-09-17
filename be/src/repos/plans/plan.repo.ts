@@ -4,7 +4,7 @@ import { machines, plans } from 'src/services/drizzle/schema';
 import { PlanSchema, type Plan, type PlanStatus } from 'src/types/PlanSchema';
 import { type PlanSummary } from 'src/types/PlanSummarySchema';
 
-export const planColumns = {
+const planColumns = {
 	id: plans.id,
 	projectId: plans.projectId,
 	createdByUserId: plans.createdByUserId,
@@ -122,20 +122,6 @@ export function getPlanRepo(db: DbOrTx) {
 				.where(and(eq(plans.id, opts.id), eq(plans.projectId, opts.projectId)));
 
 			return row ? PlanSchema.parse(row) : null;
-		},
-
-		async listOwnedByIds(opts: { projectId: string; ids: string[] }): Promise<Plan[]> {
-			if (opts.ids.length === 0) {
-				return [];
-			}
-
-			const rows = await db
-				.select(planColumns)
-				.from(plans)
-				.where(and(eq(plans.projectId, opts.projectId), inArray(plans.id, opts.ids)))
-				.orderBy(asc(plans.number));
-
-			return rows.map((row) => PlanSchema.parse(row));
 		},
 
 		async getByIdForMachine(opts: { id: string; machineId: string }): Promise<Plan | null> {

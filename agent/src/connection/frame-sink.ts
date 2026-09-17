@@ -24,7 +24,9 @@ const SETTLING = new Set([
 	'integrate.done',
 	'integrate.needs_you',
 	'bugfix.done',
-	'bugfix.error'
+	'bugfix.error',
+	'quickfix.done',
+	'quickfix.error'
 ]);
 
 export interface FrameSink {

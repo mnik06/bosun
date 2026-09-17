@@ -1,4 +1,4 @@
-import { and, asc, eq } from 'drizzle-orm';
+import { asc, eq } from 'drizzle-orm';
 import { type DbOrTx } from 'src/services/drizzle/drizzle.service';
 import { githubInstallations } from 'src/services/drizzle/schema';
 import { GithubInstallationSchema, type GithubInstallation } from 'src/types/RepositorySchema';
@@ -43,15 +43,6 @@ export function getGithubInstallationRepo(db: DbOrTx) {
 				.orderBy(asc(githubInstallations.createdAt));
 
 			return rows.map((row) => GithubInstallationSchema.parse(row));
-		},
-
-		async getOwnedById(opts: { id: string; projectId: string }): Promise<GithubInstallation | null> {
-			const [row] = await db
-				.select(columns)
-				.from(githubInstallations)
-				.where(and(eq(githubInstallations.id, opts.id), eq(githubInstallations.projectId, opts.projectId)));
-
-			return row ? GithubInstallationSchema.parse(row) : null;
 		},
 
 		// Unscoped: reached from a repository row whose project is already known.

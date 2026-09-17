@@ -44,10 +44,14 @@ export function criteriaList(acs: { code: string; text: string }[]): string {
 // Nobody is reading the output, and there is no second chance to ask. Every rule
 // here exists because the alternative wastes the whole session rather than
 // degrading it.
-export function unattended(canAsk: boolean): string {
+// `canRecordDecisions` names whether `record_decision` is actually among this
+// session's tools: a quick fix is given none of the plan-bullet MCP tools, and
+// telling it to call one it does not have would be a promise the session cannot
+// keep.
+export function unattended(canAsk: boolean, canRecordDecisions = true): string {
 	const asking = canAsk
 		? `You may call \`bosun_ask\` when a decision is genuinely the operator's and you cannot settle it from the plan or the code. This plan keeps its build slot while you wait, but only for ten minutes: past that the session is stopped, other plans take the slot, and this bullet starts again from its last commit — with the answer in its prompt — once somebody gives one. Spend it on decisions that change what gets built, never on confirmations.`
-		: `**You cannot ask anything.** No tool exists for it. Decide, record the decision with \`record_decision\` where you have one, and carry on. A choice you are unsure of is still better than a session that ends having done nothing.`;
+		: `**You cannot ask anything.** No tool exists for it. Decide${canRecordDecisions ? ', record the decision with `record_decision` where you have one,' : ''} and carry on. A choice you are unsure of is still better than a session that ends having done nothing.`;
 
 	return `# Nobody is watching this run
 
@@ -66,7 +70,7 @@ ${asking}
 // Verify bullets used to arrive at a worktree with no database URL and build a
 // database of their own in /tmp. Naming the keys is what tells the session the
 // connection is already there and is the real one.
-function providedEnv(context: RunContext): string {
+export function providedEnv(context: Pick<RunContext, 'providedEnv'>): string {
 	if (context.providedEnv.length === 0) {
 		return '';
 	}
@@ -89,8 +93,59 @@ command's output you repeat, not in a brief, not in your report. If one of them 
 is a blocker: report it with the error it gave.`;
 }
 
-function commandList(entries: { label: string; cwd?: string; run: string }[]): string {
+export function commandList(entries: { label: string; cwd?: string; run: string }[]): string {
 	return entries.map((entry) => `  - ${entry.label}: \`${entry.run}\`${entry.cwd === undefined ? '' : ` in \`${entry.cwd}\``}`).join('\n');
+}
+
+// The toolchain line, identical wherever a config is rendered: a plan bullet, a
+// verify pass or a quick fix all run on whatever node bosun provisioned.
+export function toolchainSection(config: ProjectConfig): string {
+	const toolchain = config.toolchain;
+
+	return toolchain === undefined
+		? ''
+		: `- Toolchain: node ${toolchain.node}${toolchain.packageManager === undefined ? '' : `, ${toolchain.packageManager}`} — provisioned by bosun and already first on your PATH. Never install or switch another.`;
+}
+
+// The setup block. A quick fix has no dev-stack re-run to mention, so it takes the
+// shorter of the two — the plain fact that setup already ran in this worktree —
+// while a plan bullet also says setup is kept current for it as watched files change.
+export function setupSection(config: ProjectConfig, opts: { rerun: boolean }): string {
+	if (config.setup.length === 0) {
+		return '';
+	}
+
+	const commands = commandList(config.setup.map((step) => ({ label: step.name, cwd: step.cwd, run: step.run })));
+
+	return opts.rerun
+		? `- Setup, already run in this worktree and re-run by bosun whenever its watched files change:\n${commands}`
+		: `- Setup, already run in this worktree:\n${commands}`;
+}
+
+export function codegenSection(config: ProjectConfig): string {
+	const apps = Object.entries(config.apps);
+
+	return apps.some(([, app]) => app.codegen !== undefined)
+		? `- Code generation:\n${commandList(apps.filter(([, app]) => app.codegen !== undefined).map(([name, app]) => ({ label: name, cwd: app.cwd, run: app.codegen! })))}`
+		: '';
+}
+
+export function migrateSection(config: ProjectConfig): string {
+	const apps = Object.entries(config.apps);
+
+	return apps.some(([, app]) => app.migrate !== undefined)
+		? `- Migrations:\n${commandList(apps.filter(([, app]) => app.migrate !== undefined).map(([name, app]) => ({ label: name, cwd: app.cwd, run: app.migrate! })))}`
+		: '';
+}
+
+export function checksSection(config: ProjectConfig): string {
+	return config.checks.length === 0
+		? ''
+		: `- The project's checks — the core of your loop:\n${commandList(config.checks.map((check, index) => ({ label: check.name ?? `check ${index + 1}`, cwd: check.cwd, run: check.run })))}`;
+}
+
+export function notesSection(config: ProjectConfig): string {
+	return config.notes === undefined ? '' : `- Notes: ${config.notes.trim()}`;
 }
 
 // Everything a session used to rediscover an hour into a bullet, written down once
@@ -105,31 +160,20 @@ export function configuredProject(context: RunContext): string[] {
 
 	const ports = appPorts(config, context.portBase);
 	const apps = Object.entries(config.apps);
-	const toolchain = config.toolchain;
 
 	return [
-		toolchain === undefined
-			? ''
-			: `- Toolchain: node ${toolchain.node}${toolchain.packageManager === undefined ? '' : `, ${toolchain.packageManager}`} — provisioned by bosun and already first on your PATH. Never install or switch another.`,
-		config.setup.length === 0
-			? ''
-			: `- Setup, already run in this worktree and re-run by bosun whenever its watched files change:\n${commandList(config.setup.map((step) => ({ label: step.name, cwd: step.cwd, run: step.run })))}`,
+		toolchainSection(config),
+		setupSection(config, { rerun: true }),
 		apps.length === 0
 			? ''
 			: `- Apps, started only with the \`stack_up\` tool — never by running their start command yourself:\n${apps.map(([name, app]) => `  - \`${name}\` on port ${ports[name]} (http://127.0.0.1:${ports[name]})${app.cwd === undefined ? '' : ` in \`${app.cwd}\``}${app.dependsOn === undefined ? '' : `, after ${app.dependsOn.join(', ')}`}`).join('\n')}`,
-		apps.some(([, app]) => app.codegen !== undefined)
-			? `- Code generation:\n${commandList(apps.filter(([, app]) => app.codegen !== undefined).map(([name, app]) => ({ label: name, cwd: app.cwd, run: app.codegen! })))}`
-			: '',
-		apps.some(([, app]) => app.migrate !== undefined)
-			? `- Migrations:\n${commandList(apps.filter(([, app]) => app.migrate !== undefined).map(([name, app]) => ({ label: name, cwd: app.cwd, run: app.migrate! })))}`
-			: '',
-		config.checks.length === 0
-			? ''
-			: `- The project's checks — the core of your loop:\n${commandList(config.checks.map((check, index) => ({ label: check.name ?? `check ${index + 1}`, cwd: check.cwd, run: check.run })))}`,
+		codegenSection(config),
+		migrateSection(config),
+		checksSection(config),
 		config.testAccounts.length === 0
 			? ''
 			: `- Test accounts: ${config.testAccounts.map((account) => `${account.role} signs in at ${renderTemplate(account.signIn, { app: null, ports })} with ${account.secrets.map((key) => `\`$${key}\``).join(' and ')} from your environment`).join('; ')}. Read them with \`printenv\` when you need them and never print, quote or write down their values.`,
-		config.notes === undefined ? '' : `- Notes: ${config.notes.trim()}`,
+		notesSection(config),
 		`- \`${PROJECT_CONFIG_PATH}\` describes this code and travels with the branch. If your work changes how the project installs, generates, migrates, starts or proves itself, update it in this bullet — it is validated before the bullet is committed, and a file you leave invalid fails the bullet.`
 	].filter(Boolean);
 }
@@ -178,7 +222,15 @@ ${agentConfigRule()}
 
 ${migrationRule(context)}
 
-## How the loop runs — once per iteration, by you, one command at a time
+${loopRules(context)}`;
+}
+
+// The rules the loop itself runs under, once a session knows what its commands
+// are. Identical whatever kind of session is running it — a plan bullet, a verify
+// pass, a quick fix — because the machine it shares and the way `claude` gets
+// killed for memory do not change with the kind of work.
+export function loopRules(context: Pick<RunContext, 'baseRef'>): string {
+	return `## How the loop runs — once per iteration, by you, one command at a time
 
 This machine is shared with other plans and its memory is finite. Typechecking or linting a whole
 package can take gigabytes on its own; two of them at once, beside a dev stack, is how a session gets
@@ -215,15 +267,18 @@ start must be inside that range — take a port outside it and you take one anot
 both stacks break in ways neither session can explain.`;
 }
 
-// The agent re-reads its config on every call, so a session that enrolls over it
-// moves the whole machine onto another identity mid-run. One did, driving a plan
-// that needed an enrolled agent, and every plan on the box failed after it.
+// Sessions driving a plan that touched the agent CLI took the box down three ways:
+// an enroll over the config moved the machine onto another identity, a second
+// agent's startup stopped every session running, and a revoked one deletes
+// `~/.bosun` whatever `--config` it was given. None is safe from a worktree.
 export function agentConfigRule(): string {
-	return `**The bosun agent running this session is not yours.** Outside your own worktree, nothing under
-\`~/.bosun\` is: never edit, move or replace \`~/.bosun/config.json\`, and never run \`bosun-agent enroll\`,
-\`setup\` or \`mcp add\` against it. Every plan on this machine runs through that config, and replacing it
-takes their repository and credentials away mid-run. If the work needs an enrolled agent, enroll one
-with \`--config\` pointing inside your worktree, and pass that same \`--config\` to every command after.`;
+	return `**The bosun agent on this machine is not yours to run.** Never run \`bosun-agent enroll\`, \`run\`,
+\`setup\` or \`mcp add\`; never start, stop or restart \`bosun-agent\` or \`bosun-run-*\` units; and outside
+your own worktree never edit, move or replace anything under \`~/.bosun\`. Every plan on this machine runs
+through that agent: an enroll replaces its identity, a starting agent stops running sessions, and a
+removed one deletes \`~/.bosun\` — each takes every plan down, yours included, and a \`--config\` inside
+your worktree prevents none of it. Work that can only be checked by enrolling or running an agent is
+blocked: say so, and do not work around it.`;
 }
 
 // The database belongs to the lane. Every worktree gets the same env, so a bullet

@@ -12,17 +12,23 @@ import { type Machine } from 'src/types/MachineSchema';
 // otherwise load, and treating a bug fix as never blocking a waiting verify is
 // the documented approximation.
 export async function admitBugfixSession(deps: LineDeps, opts: { machine: Machine }): Promise<Admission> {
-	const [slots, lanes, fixingBugs, onboarding] = await Promise.all([
+	const [slots, lanes, fixingBugs, onboarding, quickFixes] = await Promise.all([
 		deps.buildRepo.listForMachine({ machineId: opts.machine.id, statuses: BUILD_SLOT_STATUSES }),
 		deps.buildRepo.listForMachine({ machineId: opts.machine.id, statuses: LANE_STATUSES }),
 		deps.buildRepo.listForMachine({ machineId: opts.machine.id, statuses: ['fixing_bugs'] }),
-		deps.onboardingRunRepo.listActiveForMachine(opts.machine.id)
+		deps.onboardingRunRepo.listActiveForMachine(opts.machine.id),
+		deps.quickFixRepo.listActiveForMachine(opts.machine.id)
 	]);
 
 	return admit({
 		memory: deps.machineMemory.get(opts.machine.id),
 		jobClass: 'build',
-		load: { build: slots.length + fixingBugs.length, lane: lanes.length, onboarding: onboarding.length },
+		load: {
+			build: slots.length + fixingBugs.length,
+			lane: lanes.length,
+			onboarding: onboarding.length,
+			quickFix: quickFixes.length
+		},
 		verifyLanes: opts.machine.verifyLanes,
 		verifyWaiting: false,
 		buildCap: opts.machine.buildCap,

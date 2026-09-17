@@ -1,3 +1,7 @@
+import { BUILD_SLOT_STATUSES, LANE_STATUSES } from 'src/controllers/line/shared/next-job';
+import { type BuildRepo } from 'src/repos/builds/build.repo';
+import { type OnboardingRunRepo } from 'src/repos/onboarding/onboarding-run.repo';
+import { type QuickFixRepo } from 'src/repos/quick-fixes/quick-fix.repo';
 import { type MachineMemory } from 'src/types/machine-memory';
 
 const GIB = 1024 ** 3;
@@ -5,13 +9,15 @@ const GIB = 1024 ** 3;
 // Kept back from every session: the kernel, the agent, a RAM-backed `/tmp`, and
 // enough page cache that the box is not paging its own binaries. The agent falls
 // back to the same number when a backend sends it no limit.
-export const RESERVED_BYTES = 1.5 * GIB;
+const RESERVED_BYTES = 1.5 * GIB;
 
 // Measured, not guessed. On an 8 GB box a whole-package lint peaked at 2 GB, a
 // typecheck at 1.1 GB and a dev server at 0.8 GB, and a verify session running
 // them beside its own stack reached 6.3 GB before the kernel killed it. A build
 // session runs the same loop but never starts a stack. A drive (stack and browser,
 // no loop) starts at the verify figure and a fix (loop, no stack) at the build one.
+// A quick fix is a fix session with no plan behind it, so it takes the build figure
+// too.
 export const BUILD_BYTES = 3 * GIB;
 export const LANE_BYTES = 6 * GIB;
 
@@ -19,16 +25,40 @@ export const LANE_BYTES = 6 * GIB;
 // which reads as a bullet that cannot start rather than a machine that is too small.
 const FLOOR_BYTES = GIB;
 
-export type JobClass = 'build' | 'lane';
+export type JobClass = 'build' | 'lane' | 'quickFix';
 
 // What a machine is holding right now. A build slot is held by a plan from its
 // first build bullet to its last, between its bullets too, and by a running fix or
 // integration; a lane by a running drive or re-check. Onboarding runs the whole
-// stack, so it is held as a lane is.
+// stack, so it is held as a lane is. A quick fix holds no plan at all, but is sized
+// and counted like a build slot so it cannot combine with one to overrun the machine.
 export interface MachineLoad {
 	build: number;
 	lane: number;
 	onboarding: number;
+	quickFix: number;
+}
+
+export interface LoadRepos {
+	buildRepo: Pick<BuildRepo, 'listForMachine'>;
+	onboardingRunRepo: Pick<OnboardingRunRepo, 'listActiveForMachine'>;
+	quickFixRepo: Pick<QuickFixRepo, 'listActiveForMachine'>;
+}
+
+// What a quick fix and an onboarding run both admit against: every slot, lane,
+// onboarding run and quick fix a machine holds right now. A plan build reuses its
+// own already-fetched build/lane counts instead (see `schedule.ts`), so this is not
+// the only place a `MachineLoad` is assembled — just the one two unrelated callers
+// were assembling identically.
+export async function loadForMachine(deps: LoadRepos, machineId: string): Promise<MachineLoad> {
+	const [slots, lanes, onboardingRuns, quickFixes] = await Promise.all([
+		deps.buildRepo.listForMachine({ machineId, statuses: BUILD_SLOT_STATUSES }),
+		deps.buildRepo.listForMachine({ machineId, statuses: LANE_STATUSES }),
+		deps.onboardingRunRepo.listActiveForMachine(machineId),
+		deps.quickFixRepo.listActiveForMachine(machineId)
+	]);
+
+	return { build: slots.length, lane: lanes.length, onboarding: onboardingRuns.length, quickFix: quickFixes.length };
 }
 
 // Swap counts for half: it turns a spike into a slowdown instead of a kill, but a
@@ -40,12 +70,14 @@ export function usableBytes(memory: MachineMemory): number {
 // Never more than the machine can give. A box smaller than a drive still runs one
 // — alone, under everything it has — rather than never running it.
 export function jobBytes(opts: { jobClass: JobClass; usable: number }): number {
-	return Math.max(FLOOR_BYTES, Math.min(opts.jobClass === 'build' ? BUILD_BYTES : LANE_BYTES, opts.usable));
+	const cap = opts.jobClass === 'lane' ? LANE_BYTES : BUILD_BYTES;
+
+	return Math.max(FLOOR_BYTES, Math.min(cap, opts.usable));
 }
 
 export function heldBytes(opts: { load: MachineLoad; usable: number }): number {
 	return (
-		opts.load.build * jobBytes({ jobClass: 'build', usable: opts.usable }) +
+		(opts.load.build + opts.load.quickFix) * jobBytes({ jobClass: 'build', usable: opts.usable }) +
 		(opts.load.lane + opts.load.onboarding) * jobBytes({ jobClass: 'lane', usable: opts.usable })
 	);
 }
@@ -53,7 +85,7 @@ export function heldBytes(opts: { load: MachineLoad; usable: number }): number {
 export type Admission = { admitted: true; limitBytes: number | null } | { admitted: false };
 
 function idle(load: MachineLoad): boolean {
-	return load.build + load.lane + load.onboarding === 0;
+	return load.build + load.lane + load.onboarding + load.quickFix === 0;
 }
 
 // The limit handed to a session is the number it was admitted with, so the limits

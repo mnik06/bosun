@@ -16,7 +16,7 @@ import { runShell } from '../services/setup-steps.service';
 import { appPorts, renderTemplate } from '../services/stack.service';
 import { startSessionMcpServer, type SessionDispatchFactory, type SessionMcpServer } from '../sessions/mcp-server';
 import { spawnClaudeSession, type ClaudeSession } from '../sessions/process';
-import { createStderrTail, logDroppedFrame } from '../sessions/turn-support';
+import { createStderrTail, logDroppedFrame, pipeSessionOutput } from '../sessions/turn-support';
 import {
 	createDiscoveryDispatch,
 	createSignInDispatch,
@@ -272,6 +272,8 @@ export function createOnboardingSessions(opts: { services: Services; send: (mess
 				onDropped: logDroppedFrame
 			});
 
+			const pipe = pipeSessionOutput({ parser, stderr, tag: opts2.runId });
+
 			opts2.run.process = spawnClaudeSession({
 				cwd: opts2.cwd,
 				prompt: opts2.prompt,
@@ -281,15 +283,10 @@ export function createOnboardingSessions(opts: { services: Services; send: (mess
 				claudeAuth: services.claudeAuth,
 				env: opts2.env,
 				scope: services.memory.sessionScope({ runId: opts2.runId, memoryMaxBytes: opts2.memoryMaxBytes }),
-				onStdout: (chunk) => {
-					parser.push(chunk);
-				},
-				onStderr: (chunk) => {
-					stderr.push(chunk);
-					console.error(`[${opts2.runId}] ${chunk.trimEnd()}`);
-				},
+				onStdout: pipe.onStdout,
+				onStderr: pipe.onStderr,
 				onExit: (code) => {
-					parser.flush();
+					pipe.onExit();
 					settle({ ok: false, message: stderr.value().trim() || `claude exited with code ${code ?? 'unknown'}` });
 				}
 			});

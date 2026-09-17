@@ -10,6 +10,7 @@ import { onboardingDeps } from 'src/controllers/onboarding/onboarding-deps';
 import { recordOnboardingFrame } from 'src/controllers/onboarding/record-onboarding-frame';
 import { recordPlanFrame } from 'src/controllers/plans/record-plan-frame';
 import { recordBugfixFrame } from 'src/controllers/plans/bugfix/record-bugfix-frame';
+import { recordQuickFixFrame } from 'src/controllers/quick-fixes/record-quick-fix-frame';
 import { applyMachineFrame } from 'src/api/routes/agent/ws.route';
 import { type AgentMsg } from 'src/types/protocol';
 
@@ -21,6 +22,7 @@ type AnswerFrame = Extract<AgentMsg, { type: `line.answer.${string}` }>;
 type EnvReplyFrame = Extract<AgentMsg, { type: 'env.saved' | 'env.error' }>;
 type RepoFrame = Extract<AgentMsg, { type: `repo.${string}` }>;
 type OnboardingFrame = Extract<AgentMsg, { type: `onboarding.${string}` }>;
+type QuickFixFrame = Extract<AgentMsg, { type: `quickfix.${string}` }>;
 
 type BugfixFrame = Extract<AgentMsg, { type: `bugfix.${string}` }>;
 
@@ -34,6 +36,10 @@ function isRepoFrame(msg: AgentMsg): msg is RepoFrame {
 
 function isOnboardingFrame(msg: AgentMsg): msg is OnboardingFrame {
 	return msg.type.startsWith('onboarding.');
+}
+
+function isQuickFixFrame(msg: AgentMsg): msg is QuickFixFrame {
+	return msg.type.startsWith('quickfix.');
 }
 
 function isPlanFrame(msg: AgentMsg): msg is PlanFrame {
@@ -205,6 +211,12 @@ export async function handleAgentFrame(opts: {
 
 	if (isRepoFrame(msg) || isOnboardingFrame(msg)) {
 		await handleRepositoryFrame({ fastify: opts.fastify, machineId: opts.machineId, projectId: opts.projectId, msg });
+
+		return;
+	}
+
+	if (isQuickFixFrame(msg)) {
+		await recordQuickFixFrame(lineDeps(opts.fastify), { machineId: opts.machineId, frame: msg });
 
 		return;
 	}

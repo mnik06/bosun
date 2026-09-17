@@ -1,4 +1,4 @@
-import { asc, eq, inArray } from 'drizzle-orm';
+import { asc, eq } from 'drizzle-orm';
 import { type DbOrTx } from 'src/services/drizzle/drizzle.service';
 import { verifyFindings } from 'src/services/drizzle/schema';
 import { VerifyFindingSchema, type FindingStatus, type VerifyFinding } from 'src/types/BuildSchema';
@@ -59,21 +59,6 @@ export function getVerifyFindingRepo(db: DbOrTx) {
 			const [row] = await db.update(verifyFindings).set(changes).where(eq(verifyFindings.id, id)).returning(columns);
 
 			return row ? VerifyFindingSchema.parse(row) : null;
-		},
-
-		async updateMany(opts: {
-			ids: string[];
-			status: FindingStatus;
-			note?: string | null;
-			acceptedByUserId?: string | null;
-		}): Promise<void> {
-			if (opts.ids.length === 0) {
-				return;
-			}
-
-			const { ids, ...changes } = opts;
-
-			await db.update(verifyFindings).set(changes).where(inArray(verifyFindings.id, ids));
 		}
 	};
 }

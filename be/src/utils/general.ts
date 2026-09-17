@@ -41,6 +41,12 @@ export async function orNotFound<T>(promise: Promise<T | null | undefined>, mess
 	return row;
 }
 
+export function clip(text: string, max: number): string {
+	const trimmed = text.trim();
+
+	return trimmed.length <= max ? trimmed : `${trimmed.slice(0, max - 1)}…`;
+}
+
 export function countLabel(count: number, singular: string): string {
 	return `${count} ${singular}${count === 1 ? '' : 's'}`;
 }

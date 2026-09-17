@@ -13,7 +13,7 @@ import {
 } from '../sessions/mcp-server';
 import { spawnClaudeSession, type ClaudeSession } from '../sessions/process';
 import { teardownSession } from '../sessions/teardown';
-import { createStderrTail, logDroppedFrame, reportStartFailure } from '../sessions/turn-support';
+import { createStderrTail, logDroppedFrame, pipeSessionOutput, reportStartFailure } from '../sessions/turn-support';
 import { createStreamParser } from './stream-parser';
 
 // Planning reads and asks; it never writes to the repository.
@@ -347,6 +347,8 @@ export function createPlanningSessions(opts: {
 			onDropped: logDroppedFrame
 		});
 
+		const pipe = pipeSessionOutput({ parser, stderr, tag: planId });
+
 		session.process = spawnClaudeSession({
 			cwd: opts2.cwd,
 			prompt,
@@ -354,15 +356,10 @@ export function createPlanningSessions(opts: {
 			userServerNames: userMcp.serverNames,
 			tools: opts2.tools,
 			claudeAuth: opts.services.claudeAuth,
-			onStdout: (chunk) => {
-				parser.push(chunk);
-			},
-			onStderr: (chunk) => {
-				stderr.push(chunk);
-				console.error(`[${planId}] ${chunk.trimEnd()}`);
-			},
+			onStdout: pipe.onStdout,
+			onStderr: pipe.onStderr,
 			onExit: (code) => {
-				parser.flush();
+				pipe.onExit();
 
 				if (session.cancelled) {
 					return;
@@ -396,6 +393,46 @@ export function createPlanningSessions(opts: {
 			send: (message) => {
 				opts.send({ type: 'plan.error', planId: payload.planId, message });
 			}
+		});
+	};
+
+	// What `start` and a fresh `say` share once the tree is read: serve it, build
+	// the prompt against wherever it ended up served, and spawn. `buildPrompt`
+	// takes the served URL rather than the prompt taking it directly, because the
+	// two callers' prompts are built by entirely different services and this is
+	// the only shape both can be handed through. `published`, `requireGrill`,
+	// `requireCoverage` and `auto` are where a fresh grill and a revision
+	// genuinely differ, so those stay arguments rather than being folded in here.
+	const launchPlanning = async (payload: {
+		planId: string;
+		tree: ReadTree;
+		buildPrompt: (served: string | null) => string;
+		published: boolean;
+		requireGrill: boolean;
+		requireCoverage: boolean;
+		auto: boolean;
+	}): Promise<void> => {
+		const served = await serveFor(payload.planId, payload.tree);
+
+		await spawnFor({
+			planId: payload.planId,
+			prompt: payload.buildPrompt(served?.url ?? null),
+			cwd: payload.tree.path,
+			served,
+			published: payload.published,
+			requireGrill: payload.requireGrill,
+			tools: PLANNING_TOOLS,
+			definitions: TOOL_DEFINITIONS,
+			createDispatch: createPlanDispatch({
+				planId: payload.planId,
+				auto: payload.auto,
+				requireGrill: payload.requireGrill,
+				requireCoverage: payload.requireCoverage,
+				bosunApi: opts.services.bosunApi,
+				onPublished: onPublished(payload.planId),
+				onGrilled: onGrilled(payload.planId),
+				onQuestion: onQuestion(payload.planId)
+			})
 		});
 	};
 
@@ -433,34 +470,23 @@ export function createPlanningSessions(opts: {
 			}
 
 			const { tree, notes } = read;
-			const served = await serveFor(payload.planId, tree);
 
-			await spawnFor({
+			await launchPlanning({
 				planId: payload.planId,
-				prompt: opts.prompt({
-					input: payload.input,
-					verifyInUi: payload.verifyInUi,
-					auto: payload.auto,
-					notes,
-					tree,
-					served: served?.url ?? null
-				}),
-				cwd: tree.path,
-				served,
+				tree,
+				buildPrompt: (served) =>
+					opts.prompt({
+						input: payload.input,
+						verifyInUi: payload.verifyInUi,
+						auto: payload.auto,
+						notes,
+						tree,
+						served
+					}),
 				published: false,
 				requireGrill: !payload.auto,
-				tools: PLANNING_TOOLS,
-				definitions: TOOL_DEFINITIONS,
-				createDispatch: createPlanDispatch({
-					planId: payload.planId,
-					auto: payload.auto,
-					requireGrill: !payload.auto,
-					requireCoverage: true,
-					bosunApi: opts.services.bosunApi,
-					onPublished: onPublished(payload.planId),
-					onGrilled: onGrilled(payload.planId),
-					onQuestion: onQuestion(payload.planId)
-				})
+				requireCoverage: true,
+				auto: payload.auto
 			});
 		},
 
@@ -491,19 +517,18 @@ export function createPlanningSessions(opts: {
 			}
 
 			const { tree, notes } = read;
-			const served = await serveFor(payload.planId, tree);
 
-			await spawnFor({
+			await launchPlanning({
 				planId: payload.planId,
-				prompt: opts.revisionPrompt({
-					plan: payload.plan,
-					request: payload.text,
-					notes,
-					tree,
-					served: served?.url ?? null
-				}),
-				cwd: tree.path,
-				served,
+				tree,
+				buildPrompt: (served) =>
+					opts.revisionPrompt({
+						plan: payload.plan,
+						request: payload.text,
+						notes,
+						tree,
+						served
+					}),
 				// A revision is handed a plan that is already written, so a turn that
 				// changes nothing is a legitimate answer rather than an empty plan.
 				published: payload.plan.bodyMd !== null,
@@ -512,21 +537,10 @@ export function createPlanningSessions(opts: {
 				// asked for a change in prose, which is the decision the grill exists to
 				// get.
 				requireGrill: false,
-				tools: PLANNING_TOOLS,
-				definitions: TOOL_DEFINITIONS,
-				createDispatch: createPlanDispatch({
-					planId: payload.planId,
-					// A revision of an auto plan still answers itself: the snapshot
-					// carries the flag, because the agent holds no plan state between
-					// sessions.
-					auto: payload.plan.auto,
-					requireGrill: false,
-					requireCoverage: false,
-					bosunApi: opts.services.bosunApi,
-					onPublished: onPublished(payload.planId),
-					onGrilled: onGrilled(payload.planId),
-					onQuestion: onQuestion(payload.planId)
-				})
+				requireCoverage: false,
+				// A revision of an auto plan still answers itself: the snapshot carries
+				// the flag, because the agent holds no plan state between sessions.
+				auto: payload.plan.auto
 			});
 		},
 

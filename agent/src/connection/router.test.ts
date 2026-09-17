@@ -7,6 +7,7 @@ import { type ExecutionSessions } from '../execution/session';
 import { type IntegrationSessions } from '../integration/session';
 import { type OnboardingSessions } from '../onboarding/session';
 import { type PlanningSessions } from '../planning/session';
+import { type QuickFixSessions } from '../quick-fix/session';
 import { type ServerMsg } from '../protocol';
 import { DEFAULT_PROJECT_PROFILE } from '../project-profile';
 import { type Services } from '../services/index';
@@ -44,6 +45,11 @@ function build (opts?: { paused?: boolean; repositoryId?: string | null }) {
 		start: vi.fn().mockResolvedValue(undefined),
 		cancel: vi.fn(),
 		cancelAll: vi.fn()
+	};
+	const quickFixes = {
+		start: vi.fn().mockResolvedValue(undefined),
+		cancelAll: vi.fn(),
+		running: vi.fn().mockReturnValue(0)
 	};
 	const summaries = {
 		start: vi.fn().mockResolvedValue(undefined),
@@ -109,6 +115,7 @@ function build (opts?: { paused?: boolean; repositoryId?: string | null }) {
 		executions: executions as unknown as ExecutionSessions,
 		integrations: integrations as unknown as IntegrationSessions,
 		onboarding: onboarding as unknown as OnboardingSessions,
+		quickFixes: quickFixes as unknown as QuickFixSessions,
 		summaries: summaries as unknown as SummarySessions,
 		asks: asks as unknown as AskSessions,
 		bugfix: bugfix as unknown as BugfixSessions,
@@ -128,6 +135,7 @@ function build (opts?: { paused?: boolean; repositoryId?: string | null }) {
 		onUpgrade,
 		onboarding,
 		projectEnv,
+		quickFixes,
 		send,
 		sessions,
 		setupSteps,
@@ -229,7 +237,7 @@ describe('routeServerFrame', () => {
 	// Terminal, and it has to reap sessions first: the process group outlives the
 	// unit otherwise.
 	it('cancels every session before terminating on shutdown', async () => {
-		const { sessions, executions, integrations, onboarding, asks, bugfix, terminateSelf, route } = build();
+		const { sessions, executions, integrations, onboarding, quickFixes, asks, bugfix, terminateSelf, route } = build();
 
 		await route({ type: 'shutdown', reason: 'deleted in bosun' });
 
@@ -237,6 +245,7 @@ describe('routeServerFrame', () => {
 		expect(executions.cancelAll).toHaveBeenCalledOnce();
 		expect(integrations.cancelAll).toHaveBeenCalledOnce();
 		expect(onboarding.cancelAll).toHaveBeenCalledOnce();
+		expect(quickFixes.cancelAll).toHaveBeenCalledOnce();
 		expect(asks.cancelAll).toHaveBeenCalledOnce();
 		expect(bugfix.cancelAll).toHaveBeenCalledOnce();
 		expect(terminateSelf).toHaveBeenCalledWith({
@@ -369,6 +378,38 @@ describe('exec frames', () => {
 		await harness.route({ type: 'exec.cancel', runId: 'sr_1' });
 
 		expect(harness.executions.cancel).toHaveBeenCalledWith('sr_1');
+	});
+});
+
+describe('quick fix frames', () => {
+	const start = {
+		type: 'quickfix.start',
+		quickFixId: 'qf_1',
+		branch: 'bosun/quickfix/qf_1-fix-the-typo',
+		baseRef: 'main',
+		description: 'The signup button is unreadable on dark mode.',
+		memoryMaxBytes: null
+	} satisfies ServerMsg;
+
+	it('starts a quick fix', async () => {
+		const harness = build();
+
+		await harness.route(start);
+
+		expect(harness.quickFixes.start).toHaveBeenCalledWith(expect.objectContaining({ quickFixId: 'qf_1' }));
+	});
+
+	// There is no cancel frame for a single quick fix — pausing is the only thing
+	// short of a shutdown that can stop one before it starts.
+	it('refuses a quick fix while paused, and says so', async () => {
+		const harness = build({ paused: true });
+
+		await harness.route(start);
+
+		expect(harness.quickFixes.start).not.toHaveBeenCalled();
+		expect(sent(harness.send)).toEqual([
+			{ type: 'quickfix.error', quickFixId: 'qf_1', message: 'this machine is paused' }
+		]);
 	});
 });
 

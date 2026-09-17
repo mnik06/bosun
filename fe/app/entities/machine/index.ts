@@ -35,4 +35,6 @@ export {
 	type UpgradeDecline
 } from './model/machines-socket'
 export { UiMsgSchema, type UiMsg } from './model/ui-message'
+export { useOnlineMachineOptions, type MachineOption } from './model/use-online-machine-options'
+export { MachineSelectField } from './ui/machine-select-field'
 export { MachineStatusDot } from './ui/machine-status-dot'

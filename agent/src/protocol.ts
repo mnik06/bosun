@@ -38,6 +38,8 @@ import {
 } from './bugfix-frames';
 import { FootprintSchema } from './footprint';
 import { ProjectProfileSchema } from './project-profile';
+import { CommitOutcomeSchema } from './commit-outcome';
+import { QuickFixDoneMsgSchema, QuickFixErrorMsgSchema, QuickFixStartMsgSchema } from './quick-fix-frames';
 
 export {
 	type OnboardingStart,
@@ -215,16 +217,9 @@ export const ExecQuestionMsgSchema = z.object({
 	questions: z.array(PlanQuestionSchema).min(1)
 });
 
-// `changedFiles` is what the landed commit touched; `pushed` is whether the branch
-// reached the remote after it, which is what lets a dependent start elsewhere.
-export const ExecDoneMsgSchema = z.object({
+export const ExecDoneMsgSchema = CommitOutcomeSchema.extend({
 	type: z.literal('exec.done'),
-	runId: z.string(),
-	commitSha: z.string().nullable(),
-	report: z.string(),
-	changedFiles: z.array(z.string()).default([]),
-	pushed: z.boolean().default(false),
-	pushError: z.string().nullable().default(null)
+	runId: z.string()
 });
 
 export const ExecErrorMsgSchema = z.object({
@@ -296,7 +291,9 @@ export const AgentMsgSchema = z.discriminatedUnion('type', [
 	BugfixActivityMsgSchema,
 	BugfixBugsMsgSchema,
 	BugfixDoneMsgSchema,
-	BugfixErrorMsgSchema
+	BugfixErrorMsgSchema,
+	QuickFixDoneMsgSchema,
+	QuickFixErrorMsgSchema
 ]);
 
 export type AgentMsg = z.infer<typeof AgentMsgSchema>;
@@ -526,7 +523,8 @@ export const ServerMsgSchema = z.discriminatedUnion('type', [
 	OnboardingCancelMsgSchema,
 	BugfixStartMsgSchema,
 	BugfixSayMsgSchema,
-	BugfixCancelMsgSchema
+	BugfixCancelMsgSchema,
+	QuickFixStartMsgSchema
 ]);
 
 export type ServerMsg = z.infer<typeof ServerMsgSchema>;
@@ -544,3 +542,4 @@ export {
 } from './build-frames';
 
 export { type BugfixStart, type BugfixSay } from './bugfix-frames';
+export { type QuickFixStart } from './quick-fix-frames';

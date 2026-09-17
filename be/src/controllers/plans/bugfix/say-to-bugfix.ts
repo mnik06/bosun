@@ -4,7 +4,7 @@ import { announceBuild } from 'src/controllers/line/shared/announce';
 import { type LineDeps } from 'src/controllers/line/line-deps';
 import { announceBugfixMessage } from 'src/controllers/plans/bugfix/shared/bugfix-broadcast';
 import { getOwnedPlan } from 'src/controllers/plans/shared/plan-access';
-import { requireHost } from 'src/controllers/plans/shared/plan-hosting';
+import { requireHost } from 'src/controllers/machines/shared/require-host';
 import { type Build } from 'src/types/BuildSchema';
 import { type BugfixSession } from 'src/types/BugfixSchema';
 import { type Plan } from 'src/types/PlanSchema';

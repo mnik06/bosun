@@ -22,6 +22,7 @@ import { type PlanMessageRepo } from 'src/repos/plans/plan-message.repo';
 import { type PlanRepo } from 'src/repos/plans/plan.repo';
 import { type SliceRepo } from 'src/repos/plans/slice.repo';
 import { type ProjectMemberRepo } from 'src/repos/projects/project-member.repo';
+import { type QuickFixRepo } from 'src/repos/quick-fixes/quick-fix.repo';
 import { type UserRepo } from 'src/repos/users/user.repo';
 import { type Db } from 'src/services/drizzle/drizzle.service';
 import { type GithubAppService } from 'src/services/github/github-app.service';
@@ -62,6 +63,7 @@ export interface LineDeps {
 	projectMemberRepo: ProjectMemberRepo;
 	notificationRepo: NotificationRepo;
 	pushSubscriptionRepo: PushSubscriptionRepo;
+	quickFixRepo: QuickFixRepo;
 	idService: IdService;
 	githubApp: GithubAppService;
 	socketRegistry: SocketRegistry;
@@ -102,6 +104,7 @@ export function lineDeps(fastify: FastifyInstance): LineDeps {
 		projectMemberRepo: fastify.repos.projectMemberRepo,
 		notificationRepo: fastify.repos.notificationRepo,
 		pushSubscriptionRepo: fastify.repos.pushSubscriptionRepo,
+		quickFixRepo: fastify.repos.quickFixRepo,
 		idService: fastify.services.idService,
 		githubApp: fastify.services.githubApp,
 		socketRegistry: fastify.services.socketRegistry,

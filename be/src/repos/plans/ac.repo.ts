@@ -78,20 +78,6 @@ export function getAcRepo(db: DbOrTx) {
 			return rows.map((row) => AcSchema.parse(row));
 		},
 
-		async assignToSlice(opts: {
-			planId: string;
-			codes: string[];
-			sliceId: string;
-		}): Promise<Ac[]> {
-			const rows = await db
-				.update(acs)
-				.set({ sliceId: opts.sliceId })
-				.where(and(eq(acs.planId, opts.planId), inArray(acs.code, opts.codes)))
-				.returning(columns);
-
-			return rows.map((row) => AcSchema.parse(row));
-		},
-
 		// By code rather than by id: a session names the criterion the way the plan
 		// does, and it has no id to hold on to.
 		async markInPlan(opts: {

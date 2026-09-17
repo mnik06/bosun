@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { type DbOrTx } from 'src/services/drizzle/drizzle.service';
 import { bugfixSessions, builds, integrations, sliceRuns } from 'src/services/drizzle/schema';
 import {
@@ -78,17 +78,6 @@ export function getIntegrationRepo(db: DbOrTx) {
 				.orderBy(asc(integrations.createdAt));
 
 			return parse(rows);
-		},
-
-		async latestForBuild(buildId: string): Promise<Integration | null> {
-			const [row] = await db
-				.select(columns)
-				.from(integrations)
-				.where(eq(integrations.buildId, buildId))
-				.orderBy(desc(integrations.createdAt))
-				.limit(1);
-
-			return row ? IntegrationSchema.parse(row) : null;
 		},
 
 		// The same guard a run's claim has: nothing else of this build may be running

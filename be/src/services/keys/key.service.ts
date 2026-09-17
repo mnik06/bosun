@@ -20,18 +20,7 @@ export function getKeyService() {
 		// rather than hex: the same entropy in fewer characters to transcribe.
 		generateMemberPassword: (): string => randomToken(18),
 
-		generateMachineKey: (): string => crypto.randomBytes(32).toString('hex'),
-
-		machineKeyMatchesHash(opts: { key: string; hash: string }): boolean {
-			const candidate = Buffer.from(hashMachineKey(opts.key), 'hex');
-			const expected = Buffer.from(opts.hash, 'hex');
-
-			if (candidate.length !== expected.length) {
-				return false;
-			}
-
-			return crypto.timingSafeEqual(candidate, expected);
-		}
+		generateMachineKey: (): string => crypto.randomBytes(32).toString('hex')
 	};
 }
 
