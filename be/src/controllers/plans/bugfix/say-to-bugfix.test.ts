@@ -117,6 +117,7 @@ function deps(opts: { theBuild: Build; theMachine: Machine; running: BugfixSessi
 		},
 		machineRepo: { getOwnedById: vi.fn().mockResolvedValue(opts.theMachine) },
 		onboardingRunRepo: { listActiveForMachine: vi.fn().mockResolvedValue([]) },
+		quickFixRepo: { listActiveForMachine: vi.fn().mockResolvedValue([]) },
 		acRepo: { listByPlan: vi.fn().mockResolvedValue([]) },
 		bugfixSessionRepo: { getRunningForBuild: vi.fn().mockResolvedValue(opts.running), start },
 		bugfixMessageRepo: { append },
