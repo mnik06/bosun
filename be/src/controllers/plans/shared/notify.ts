@@ -1,34 +1,14 @@
-import { dispatchNotification, type DispatchNotificationDeps } from 'src/controllers/notifications/dispatch-notification';
-import { type ProjectMemberRepo } from 'src/repos/projects/project-member.repo';
+import { dispatchNotification } from 'src/controllers/notifications/dispatch-notification';
+import { planName, resolveRecipients, type PlanNotifyRecipientDeps } from 'src/controllers/plans/shared/notify-recipients';
 import { type NotificationKind } from 'src/types/NotificationSchema';
 import { type Plan, type PlanMessage, type PlanStatus } from 'src/types/PlanSchema';
 
-export interface PlanNotifyDeps extends DispatchNotificationDeps {
-	projectMemberRepo: ProjectMemberRepo;
-	// The web app's origin: a push notification deep-links back to the plan.
-	appUrl: string;
-}
+export type PlanNotifyDeps = PlanNotifyRecipientDeps;
 
 const STATUS_KIND: Partial<Record<PlanStatus, NotificationKind>> = {
 	ready: 'plan.ready',
 	failed: 'plan.failed'
 };
-
-function planName(plan: Plan): string {
-	return plan.title ?? `Plan #${plan.number}`;
-}
-
-// A plan's creator is who asked for it, so they are who is told how it turned
-// out. `createdByUserId` is nullable only for plans written before that column
-// existed, and every leader is the same fallback every other trigger uses when
-// a write carries no user attribution.
-async function resolveRecipients(deps: PlanNotifyDeps, plan: Plan): Promise<string[]> {
-	if (plan.createdByUserId) {
-		return [plan.createdByUserId];
-	}
-
-	return deps.projectMemberRepo.listLeaders(plan.projectId);
-}
 
 // A no-op for `planning`: it is not a terminal state, and nothing should be
 // told about a plan that has not finished yet.

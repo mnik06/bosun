@@ -567,7 +567,6 @@ export const notifications = pgTable(
 		body: text().notNull(),
 		url: text().notNull(),
 		planId: text().references(() => plans.id, { onDelete: 'cascade' }),
-		machineId: text().references(() => machines.id, { onDelete: 'cascade' }),
 		sentAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
 		readAt: timestamp({ withTimezone: true })
 	},

@@ -21,7 +21,8 @@ program
 	.option('--token <token>', 'one-time enrollment code (prefer the BOSUN_TOKEN env var)')
 	.option('--repo <path>', 'an existing checkout to work in — leave it out and bosun attaches a repository')
 	.option('--config <path>', 'where to write the agent config', defaultConfigPath())
-	.action(async (opts: { server?: string; token?: string; repo?: string; config: string }) => {
+	.option('--force', 'replace an agent config that already exists at --config')
+	.action(async (opts: { server?: string; token?: string; repo?: string; config: string; force?: boolean }) => {
 		// The token is read from the environment first: argv is world-readable
 		// through /proc/<pid>/cmdline, while /proc/<pid>/environ is owner-only.
 		const token = process.env.BOSUN_TOKEN ?? opts.token;
@@ -40,7 +41,8 @@ program
 			serverUrl,
 			token,
 			repoPath: opts.repo === undefined ? null : path.resolve(opts.repo),
-			configPath
+			configPath,
+			force: opts.force === true
 		});
 
 		console.log(`Enrolled as ${config.machineId}`);

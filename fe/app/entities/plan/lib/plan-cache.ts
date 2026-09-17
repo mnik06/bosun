@@ -10,6 +10,7 @@ import type {
 	PlanMessage,
 	Slice
 } from '~/entities/plan/model/plan'
+import { refetchQuery } from '~/shared/lib'
 
 // A pushed row carries no derived state, so the state already held survives it:
 // a push saying nothing about the build must not blank what the board shows.
@@ -62,34 +63,28 @@ export function patchPlanArtifact (opts: {
 	)
 }
 
-function refetch (queryClient: QueryClient, queryKey: readonly unknown[]): void {
-	queryClient.invalidateQueries({ queryKey }).catch(() => {
-		// A refetch that fails leaves the screen as it was; the next push recovers.
-	})
-}
-
 // Everything a moved build can change: the board, the plan's own page, the line's
 // capacity and the header count. Refetched rather than merged, because the reason
 // lines and capacity are computed by the backend.
 export function refreshAfterBuild (opts: { queryClient: QueryClient, planId: string | null }): void {
-	refetch(opts.queryClient, planKeys.list())
-	refetch(opts.queryClient, lineKeys.all())
-	refetch(opts.queryClient, needsYouKeys.all())
+	refetchQuery(opts.queryClient, planKeys.list())
+	refetchQuery(opts.queryClient, lineKeys.all())
+	refetchQuery(opts.queryClient, needsYouKeys.all())
 
 	if (opts.planId !== null) {
-		refetch(opts.queryClient, planKeys.detail(opts.planId))
+		refetchQuery(opts.queryClient, planKeys.detail(opts.planId))
 	}
 }
 
 export function refreshPlanDetail (queryClient: QueryClient, planId: string): void {
-	refetch(queryClient, planKeys.detail(planId))
+	refetchQuery(queryClient, planKeys.detail(planId))
 }
 
 export function refreshNeedsYou (queryClient: QueryClient): void {
-	refetch(queryClient, needsYouKeys.all())
+	refetchQuery(queryClient, needsYouKeys.all())
 }
 
 export function refreshLine (queryClient: QueryClient): void {
-	refetch(queryClient, planKeys.list())
-	refetch(queryClient, lineKeys.all())
+	refetchQuery(queryClient, planKeys.list())
+	refetchQuery(queryClient, lineKeys.all())
 }

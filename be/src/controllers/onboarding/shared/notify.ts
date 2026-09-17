@@ -37,7 +37,6 @@ export async function notifyOnboardingStatus(deps: OnboardingDeps, opts: { proje
 		kind,
 		title: `Onboarding ${summary}`,
 		body: opts.run.status === 'failed' && opts.run.failureReason ? `${name}: ${opts.run.failureReason}` : `${name} — onboarding ${summary}`,
-		url: `${deps.appUrl}/machines/${opts.run.machineId}`,
-		machineId: opts.run.machineId
+		url: `${deps.appUrl}/machines/${opts.run.machineId}`
 	});
 }

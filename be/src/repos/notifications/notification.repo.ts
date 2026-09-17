@@ -10,7 +10,6 @@ const columns = {
 	body: notifications.body,
 	url: notifications.url,
 	planId: notifications.planId,
-	machineId: notifications.machineId,
 	sentAt: notifications.sentAt,
 	readAt: notifications.readAt
 };
@@ -26,7 +25,6 @@ export function getNotificationRepo(db: DbOrTx) {
 			body: string;
 			url: string;
 			planId: string | null;
-			machineId: string | null;
 		}): Promise<Notification> {
 			const [row] = await db.insert(notifications).values(opts).returning(columns);
 

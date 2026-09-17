@@ -1,5 +1,5 @@
 import { appPorts, renderTemplate } from '../services/stack.service';
-import { configuredProject, criteriaList, gitFlow, migrationRule, portsRule, unattended, type RunContext } from './shared';
+import { agentConfigRule, configuredProject, criteriaList, gitFlow, migrationRule, portsRule, unattended, type RunContext } from './shared';
 
 export interface DriveContext extends RunContext {
 	// A re-check drives only these. Empty is the full drive.
@@ -83,6 +83,8 @@ ${scope(context)}
 ${projectFacts.length === 0 ? '_Nothing is configured beyond what the steps below say._' : projectFacts.join('\n')}
 
 ${portsRule(context)}
+
+${agentConfigRule()}
 
 ${migrationRule(context)}
 

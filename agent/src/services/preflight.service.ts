@@ -142,7 +142,13 @@ export function getPreflightService(deps: {
 			return { name: 'git', ok: false, detail: `git: ${version.reason}` };
 		}
 
-		const repoPath = currentRepoPath();
+		let repoPath: string | null;
+
+		try {
+			repoPath = currentRepoPath();
+		} catch (error) {
+			return { name: 'git', ok: false, detail: `${version.stdout} · ${error instanceof Error ? error.message : String(error)}` };
+		}
 
 		if (repoPath === null) {
 			return { name: 'git', ok: false, detail: `${version.stdout} · ${NO_REPOSITORY}` };

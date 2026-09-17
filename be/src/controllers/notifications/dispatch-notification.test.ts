@@ -14,7 +14,6 @@ function notification(userId: string): Notification {
 		body: 'A machine — onboarding is ready',
 		url: 'https://app.test/machines/m_1',
 		planId: null,
-		machineId: 'm_1',
 		sentAt: new Date('2026-01-01T00:00:00.000Z'),
 		readAt: null
 	};
@@ -54,8 +53,7 @@ function build(opts: { subscriptions: PushSubscription[]; sendResult?: { ok: tru
 					kind: 'onboarding.ready',
 					title: 'Onboarding ready',
 					body: 'A machine — onboarding is ready',
-					url: 'https://app.test/machines/m_1',
-					machineId: 'm_1'
+					url: 'https://app.test/machines/m_1'
 				}
 			)
 	};

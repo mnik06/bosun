@@ -1,8 +1,7 @@
-import { HttpError } from 'src/api/errors/HttpError';
+import { assertUniqueKeys } from 'src/controllers/machines/shared/assert-unique-keys';
 import { relayEnvFrame, type EnvRelayDeps } from 'src/controllers/machines/shared/relay-env-frame';
 import { type EnvVarInput } from 'src/types/env-sets';
 import { type Machine } from 'src/types/MachineSchema';
-import { findDuplicate } from 'src/utils/general';
 
 // Values a session gets in its environment and never in a file — test-account
 // passwords, above all. The machine keeps them beside its env sets under the
@@ -16,11 +15,7 @@ export async function saveSessionSecrets(
 		onSaved?: (machine: Machine) => Promise<void>;
 	}
 ): Promise<Machine> {
-	const duplicate = findDuplicate(opts.vars.map((envVar) => envVar.key));
-
-	if (duplicate !== null) {
-		throw new HttpError(400, `duplicate key ${duplicate}`);
-	}
+	assertUniqueKeys(opts.vars);
 
 	return relayEnvFrame(deps, {
 		id: opts.id,

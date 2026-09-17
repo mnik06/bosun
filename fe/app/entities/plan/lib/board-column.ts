@@ -1,13 +1,14 @@
 import type { BuildSummary } from '~/entities/plan/model/build'
 import type { PlanState } from '~/entities/plan/model/plan'
 
-export type BoardColumn = 'drafting' | 'needs_approval' | 'scheduled' | 'building' | 'verifying' | 'in_review'
+export type BoardColumn = 'drafting' | 'needs_approval' | 'scheduled' | 'building' | 'syncing' | 'verifying' | 'in_review'
 
 export const BOARD_COLUMNS: { value: BoardColumn, label: string }[] = [
 	{ value: 'drafting', label: 'Drafting' },
 	{ value: 'needs_approval', label: 'Needs approval' },
 	{ value: 'scheduled', label: 'Scheduled' },
 	{ value: 'building', label: 'Building' },
+	{ value: 'syncing', label: 'Syncing' },
 	{ value: 'verifying', label: 'Verifying' },
 	{ value: 'in_review', label: 'In review' }
 ]
@@ -20,17 +21,19 @@ const DIRECT: Partial<Record<PlanState, BoardColumn>> = {
 	scheduled: 'scheduled',
 	held: 'scheduled',
 	building: 'building',
-	integrating: 'building',
+	integrating: 'syncing',
 	verifying: 'verifying',
 	in_review: 'in_review'
 }
 
 // A plan that stopped — on a decision, or on a failure — has no column of its own:
 // it stays where its work stopped, so the board still says how far it got. A grill
-// that failed never had a build and stays with the drafts.
+// that failed never had a build and stays with the drafts. A stop caused by a failed
+// sync goes to Syncing regardless of bullet progress: the build is done, its merge
+// isn't.
 export function boardColumn (entry: {
 	state: PlanState,
-	build: Pick<BuildSummary, 'bulletsDone' | 'bulletsTotal'> | null
+	build: Pick<BuildSummary, 'bulletsDone' | 'bulletsTotal' | 'needsYouReason'> | null
 }): BoardColumn | null {
 	const direct = DIRECT[entry.state]
 
@@ -44,6 +47,10 @@ export function boardColumn (entry: {
 
 	if (entry.build === null) {
 		return entry.state === 'failed' ? 'drafting' : 'scheduled'
+	}
+
+	if (entry.build.needsYouReason === 'integration') {
+		return 'syncing'
 	}
 
 	if (entry.build.bulletsDone === 0) {
