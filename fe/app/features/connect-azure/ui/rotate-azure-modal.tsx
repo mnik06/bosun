@@ -1,12 +1,11 @@
-import { Alert, Button, PasswordInput, Stack, Text } from '@mantine/core'
+import { Button, PasswordInput, Stack, Text } from '@mantine/core'
 import { useForm } from '@mantine/form'
 import { zod4Resolver } from 'mantine-form-zod-resolver'
 
 import type { AzureConnection } from '~/entities/repository'
 import { useRotateAzureConnection } from '~/features/connect-azure/api/use-connect-azure'
 import { RotateAzureFormSchema, type RotateAzureForm } from '~/features/connect-azure/model/connect-azure-form'
-import { AppModal } from '~/shared/ui'
-import { toErrorMessage } from '~/shared/lib'
+import { AppModal, QueryErrorAlert } from '~/shared/ui'
 
 export function RotateAzureModal (props: { connection: AzureConnection, opened: boolean, onClose: () => void }) {
 	const rotate = useRotateAzureConnection(props.connection.id)
@@ -43,9 +42,7 @@ export function RotateAzureModal (props: { connection: AzureConnection, opened: 
 					/>
 
 					{rotate.error === null ? null : (
-						<Alert color="red" variant="light" title="Could not replace the token">
-							{toErrorMessage(rotate.error, 'Unknown error')}
-						</Alert>
+						<QueryErrorAlert title="Could not replace the token" error={rotate.error} variant="light" />
 					)}
 
 					<Button type="submit" loading={rotate.isPending}>

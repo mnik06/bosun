@@ -45,8 +45,6 @@ export const MachinePolicySchema = z.object({
 	confirmed: z.boolean().default(false)
 })
 
-export type MachinePolicy = z.infer<typeof MachinePolicySchema>
-
 export const MachineSchema = z.object({
 	id: z.string(),
 	name: z.string(),

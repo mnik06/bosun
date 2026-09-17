@@ -4,8 +4,7 @@ import { zod4Resolver } from 'mantine-form-zod-resolver'
 
 import { useConnectAzureOrganization } from '~/features/connect-azure/api/use-connect-azure'
 import { ConnectAzureFormSchema, type ConnectAzureForm } from '~/features/connect-azure/model/connect-azure-form'
-import { AppModal } from '~/shared/ui'
-import { toErrorMessage } from '~/shared/lib'
+import { AppModal, QueryErrorAlert } from '~/shared/ui'
 
 const PAT_DOCS_URL = 'https://learn.microsoft.com/en-us/azure/devops/organizations/accounts/use-personal-access-tokens-to-authenticate'
 
@@ -67,9 +66,7 @@ export function ConnectAzureModal (props: { opened: boolean, onClose: () => void
 					</Text>
 
 					{connect.error === null ? null : (
-						<Alert color="red" variant="light" title="Could not connect">
-							{toErrorMessage(connect.error, 'Unknown error')}
-						</Alert>
+						<QueryErrorAlert title="Could not connect" error={connect.error} variant="light" />
 					)}
 
 					<Button type="submit" loading={connect.isPending}>

@@ -23,8 +23,6 @@ export const NotificationKindSchema = z.enum([
 	'quickfix.failed'
 ])
 
-export type NotificationKind = z.infer<typeof NotificationKindSchema>
-
 export const NotificationSchema = z.object({
 	id: z.string(),
 	kind: NotificationKindSchema,

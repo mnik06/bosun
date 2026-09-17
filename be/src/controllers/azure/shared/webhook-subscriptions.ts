@@ -113,21 +113,22 @@ export async function reconcileAzureWebhookSubscriptions(
 	const existing = await deps.azureWebhookSubscriptionRepo.listForRepositoryIds([opts.repository.id]);
 	const byEvent = new Map(existing.map((row) => [row.eventType, row]));
 
-	const unhealthy = await Promise.all(
-		EVENT_TYPES.map(async (eventType) => {
-			const row = byEvent.get(eventType);
+	const unhealthy: boolean[] = [];
 
-			if (!row) {
-				return true;
-			}
+	for (const eventType of EVENT_TYPES) {
+		const row = byEvent.get(eventType);
 
-			const status = await runAzureConnectionCall(deps, opts.connection, () =>
-				deps.azureDevOps.getSubscriptionStatus({ organization: opts.connection.organization, pat: opts.pat, azureSubscriptionId: row.azureSubscriptionId })
-			);
+		if (!row) {
+			unhealthy.push(true);
+			continue;
+		}
 
-			return status !== 'enabled';
-		})
-	);
+		const status = await runAzureConnectionCall(deps, opts.connection, () =>
+			deps.azureDevOps.getSubscriptionStatus({ organization: opts.connection.organization, pat: opts.pat, azureSubscriptionId: row.azureSubscriptionId })
+		);
+
+		unhealthy.push(status !== 'enabled');
+	}
 
 	if (!unhealthy.some(Boolean)) {
 		await deps.repositoryRepo.saveAzureSyncMode({ id: opts.repository.id, azureSyncMode: 'webhook' });

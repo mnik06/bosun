@@ -12,7 +12,6 @@ export {
 	NotificationSchema,
 	UnreadCountSchema,
 	type Notification,
-	type NotificationKind,
 	type UnreadCount
 } from './model/notification'
 export { NotificationsSocketProvider } from './model/notifications-socket'

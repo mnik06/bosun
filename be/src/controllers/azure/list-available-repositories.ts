@@ -1,4 +1,3 @@
-import { toAzureHttpError } from 'src/controllers/azure/shared/azure-errors';
 import { type AzureConnectionRepo } from 'src/repos/azure/azure-connection.repo';
 import { type AzureDevOpsService } from 'src/services/azure/azure-devops.service';
 import { type PatEncryptionService } from 'src/services/crypto/pat-encryption.service';
@@ -27,11 +26,14 @@ export async function listAvailableAzureRepositories(opts: {
 			}
 
 			const pat = opts.patEncryption.decrypt(encryptedPat);
-			const repositories = await opts.azureDevOps.listRepositories({ organization: connection.organization, pat }).catch((error: unknown) => {
-				throw toAzureHttpError(error);
-			});
 
-			return repositories.map((repo) => ({ ...repo, azureConnectionId: connection.id }));
+			try {
+				const repositories = await opts.azureDevOps.listRepositories({ organization: connection.organization, pat });
+
+				return repositories.map((repo) => ({ ...repo, azureConnectionId: connection.id }));
+			} catch {
+				return [];
+			}
 		})
 	);
 

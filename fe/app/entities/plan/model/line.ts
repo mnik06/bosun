@@ -1,14 +1,6 @@
 import { z } from 'zod'
 
-import { BuildSchema, BuildStatusSchema, NeedsYouReasonSchema } from '~/entities/plan/model/build'
-
-export const LineBuildSchema = BuildSchema.extend({
-	planNumber: z.number().int(),
-	planTitle: z.string().nullable(),
-	reason: z.string().nullable()
-})
-
-export type LineBuild = z.infer<typeof LineBuildSchema>
+import { BuildStatusSchema, NeedsYouReasonSchema } from '~/entities/plan/model/build'
 
 export const MachineCapacitySchema = z.object({
 	machineId: z.string(),
@@ -31,7 +23,6 @@ export const MachineCapacitySchema = z.object({
 export type MachineCapacity = z.infer<typeof MachineCapacitySchema>
 
 export const LineSchema = z.object({
-	builds: z.array(LineBuildSchema),
 	capacity: z.array(MachineCapacitySchema)
 })
 

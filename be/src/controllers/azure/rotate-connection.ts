@@ -1,5 +1,5 @@
 import { HttpError } from 'src/api/errors/HttpError';
-import { toAzureHttpError } from 'src/controllers/azure/shared/azure-errors';
+import { assertPatGrantsRepositories } from 'src/controllers/azure/shared/validate-pat';
 import { type AzureConnectionRepo } from 'src/repos/azure/azure-connection.repo';
 import { type AzureDevOpsService } from 'src/services/azure/azure-devops.service';
 import { type PatEncryptionService } from 'src/services/crypto/pat-encryption.service';
@@ -22,13 +22,7 @@ export async function rotateAzureConnection(opts: {
 		throw new HttpError(404, 'Azure DevOps connection not found');
 	}
 
-	const repositories = await opts.azureDevOps.listRepositories({ organization: connection.organization, pat: opts.pat }).catch((error: unknown) => {
-		throw toAzureHttpError(error);
-	});
-
-	if (repositories.length === 0) {
-		throw new HttpError(400, 'No repositories are visible to this token');
-	}
+	await assertPatGrantsRepositories(opts.azureDevOps, { organization: connection.organization, pat: opts.pat });
 
 	const rotated = await opts.azureConnectionRepo.rotatePat({
 		id: connection.id,

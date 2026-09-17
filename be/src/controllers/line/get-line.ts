@@ -1,10 +1,9 @@
-import { type LineBuild, type MachineCapacity } from 'src/api/routes/schemas/line/LineSchemas';
+import { type MachineCapacity } from 'src/api/routes/schemas/line/LineSchemas';
 import { type LineDeps } from 'src/controllers/line/line-deps';
 import { verifyLine } from 'src/controllers/line/schedule';
 import { loadRepositorySnapshot, type RepositorySnapshot } from 'src/controllers/line/shared/line-snapshot';
 import { heldBytes, usableBytes } from 'src/controllers/line/shared/memory-budget';
 import { BUILD_SLOT_STATUSES, LANE_STATUSES } from 'src/controllers/line/shared/next-job';
-import { describeReason } from 'src/controllers/line/shared/reason';
 import { getOwnedRepository } from 'src/controllers/repositories/shared/announce-repository';
 import { type Machine } from 'src/types/MachineSchema';
 import { type Repository } from 'src/types/RepositorySchema';
@@ -43,24 +42,13 @@ async function capacityOf(deps: LineDeps, opts: { machine: Machine; snapshot: Re
 	};
 }
 
-function lineBuilds(snapshot: RepositorySnapshot): LineBuild[] {
-	const verify = verifyLine(snapshot);
-
-	return snapshot.states.map((state) => ({
-		...state.build,
-		planNumber: state.plan.number,
-		planTitle: state.plan.title,
-		reason: describeReason({ state, snapshot, verifyLine: verify })
-	}));
-}
-
 // Every repository's line in the project, or one of them, with what each machine
 // holds. The board is built from the plans list; this is the order within the line
 // and the capacity strip above it.
 export async function getLine(
 	deps: LineDeps,
 	opts: { projectId: string; repositoryId?: string }
-): Promise<{ builds: LineBuild[]; capacity: MachineCapacity[] }> {
+): Promise<{ capacity: MachineCapacity[] }> {
 	let repositories: Repository[];
 
 	if (opts.repositoryId === undefined) {
@@ -84,7 +72,6 @@ export async function getLine(
 	);
 
 	return {
-		builds: snapshots.flatMap(lineBuilds),
 		capacity: await Promise.all(machines.map(async (machine) => capacityOf(deps, { machine, snapshot: byRepository.get(machine.repositoryId!) })))
 	};
 }

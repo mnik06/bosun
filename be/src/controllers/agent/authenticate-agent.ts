@@ -1,7 +1,6 @@
-import crypto from 'crypto';
 import { type MachineRepo } from 'src/repos/machines/machine.repo';
 import { type KeyService } from 'src/services/keys/key.service';
-import { readBearerToken } from 'src/utils/general';
+import { hexDigestsEqual, readBearerToken } from 'src/utils/general';
 
 export async function authenticateAgent(opts: {
 	machineRepo: MachineRepo;
@@ -21,10 +20,5 @@ export async function authenticateAgent(opts: {
 		return null;
 	}
 
-	const matches = crypto.timingSafeEqual(
-		Buffer.from(hash, 'hex'),
-		Buffer.from(auth.machineKeyHash, 'hex')
-	);
-
-	return matches ? { machineId: auth.id, projectId: auth.projectId } : null;
+	return hexDigestsEqual(hash, auth.machineKeyHash) ? { machineId: auth.id, projectId: auth.projectId } : null;
 }

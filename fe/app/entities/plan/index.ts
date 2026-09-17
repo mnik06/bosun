@@ -38,7 +38,7 @@ export {
 	type VerifyFinding
 } from './model/build'
 export type { ConsumedPiece, ContractChange, Footprint, ModuleChange, SchemaChange } from './model/footprint'
-export type { Line, LineBuild, MachineCapacity, NeedsYouItem } from './model/line'
+export type { Line, MachineCapacity, NeedsYouItem } from './model/line'
 export {
 	AcSchema,
 	PlanAnswerSchema,

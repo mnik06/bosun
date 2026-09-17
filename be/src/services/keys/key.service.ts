@@ -1,16 +1,17 @@
 import crypto from 'crypto';
+import { hexDigestsEqual } from 'src/utils/general';
 
 function randomToken(bytes: number): string {
 	return crypto.randomBytes(bytes).toString('base64url');
 }
 
-export function getKeyService() {
-	function hashMachineKey(key: string): string {
-		return crypto.createHash('sha256').update(key).digest('hex');
-	}
+function sha256Hex(input: string): string {
+	return crypto.createHash('sha256').update(input).digest('hex');
+}
 
+export function getKeyService() {
 	return {
-		hashMachineKey,
+		hashMachineKey: sha256Hex,
 
 		generateEnrollmentToken: (): string => randomToken(24),
 
@@ -22,35 +23,15 @@ export function getKeyService() {
 
 		generateMachineKey: (): string => crypto.randomBytes(32).toString('hex'),
 
-		machineKeyMatchesHash(opts: { key: string; hash: string }): boolean {
-			const candidate = Buffer.from(hashMachineKey(opts.key), 'hex');
-			const expected = Buffer.from(opts.hash, 'hex');
-
-			if (candidate.length !== expected.length) {
-				return false;
-			}
-
-			return crypto.timingSafeEqual(candidate, expected);
-		},
-
 		// One secret shared by both of a repository's Azure webhook subscriptions
 		// (AC-56) — only its hash is stored, the same "never the plaintext" rule
 		// `hashMachineKey` follows.
 		generateWebhookSecret: (): string => randomToken(32),
 
-		hashWebhookSecret(secret: string): string {
-			return crypto.createHash('sha256').update(secret).digest('hex');
-		},
+		hashWebhookSecret: sha256Hex,
 
 		webhookSecretMatchesHash(opts: { secret: string; hash: string }): boolean {
-			const candidate = Buffer.from(crypto.createHash('sha256').update(opts.secret).digest('hex'), 'hex');
-			const expected = Buffer.from(opts.hash, 'hex');
-
-			if (candidate.length !== expected.length) {
-				return false;
-			}
-
-			return crypto.timingSafeEqual(candidate, expected);
+			return hexDigestsEqual(sha256Hex(opts.secret), opts.hash);
 		}
 	};
 }
