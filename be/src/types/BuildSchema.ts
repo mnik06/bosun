@@ -243,8 +243,6 @@ export const OverlapDecisionSchema = z.object({
 	item: OverlapItemSchema,
 	options: z.array(OverlapChoiceSchema),
 	chosen: OverlapChoiceSchema.nullable(),
-	decidedByUserId: z.string().nullable(),
-	decidedAt: z.coerce.date().nullable(),
 	createdAt: z.coerce.date()
 });
 

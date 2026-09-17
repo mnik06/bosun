@@ -199,10 +199,6 @@ export async function handleAgentFrame(opts: {
 }): Promise<void> {
 	const { msg } = opts;
 
-	if (msg.type === 'pong') {
-		return;
-	}
-
 	if (msg.type === 'upgrade.declined' || isEnvReplyFrame(msg)) {
 		settleReply({ ...opts, msg });
 

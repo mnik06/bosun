@@ -63,7 +63,6 @@ export const AgentBlockersReqSchema = z.object({
 });
 
 export const AgentDecisionReqSchema = z.object({
-	sliceId: z.string().nullable().default(null),
 	fork: z.string().min(1),
 	options: z.string().nullable().default(null),
 	chose: z.string().min(1),

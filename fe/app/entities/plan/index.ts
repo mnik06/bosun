@@ -40,10 +40,7 @@ export {
 	type OverlapDecisionView,
 	type PendingRunQuestion,
 	type PlanAmendment,
-	type PlanRef,
-	type RunPhase,
 	type SliceRun,
-	type SliceRunStatus,
 	type VerifyFinding
 } from './model/build'
 export {
@@ -51,13 +48,11 @@ export {
 	PlanBugSchema,
 	PlanBugStatusSchema,
 	type BugfixMessage,
-	type BugfixMessageRole,
-	type PlanBug,
-	type PlanBugStatus
+	type PlanBug
 } from './model/bugfix'
 export { BugfixUiMsgSchema, type BugfixUiMsg } from './model/bugfix-message'
-export type { ConsumedPiece, ContractChange, Footprint, ModuleChange, SchemaChange } from './model/footprint'
-export type { Line, LineBuild, MachineCapacity, NeedsYouItem } from './model/line'
+export type { Footprint } from './model/footprint'
+export type { Line, MachineCapacity, NeedsYouItem } from './model/line'
 export {
 	AcSchema,
 	PlanAnswerSchema,
@@ -80,11 +75,9 @@ export {
 	type PlanMessage,
 	type PlanQuestion,
 	type PlanState,
-	type PlanStatus,
 	type PlanSummary,
 	type PlanSummaryEntry,
-	type Slice,
-	type SliceKind
+	type Slice
 } from './model/plan'
 export { PlanUiMsgSchema, type PlanUiMsg } from './model/plan-message'
 export { PlansSocketProvider, useIntegrationActivity, useRunActivity } from './model/plans-socket'

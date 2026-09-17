@@ -173,7 +173,6 @@ export function getBosunApiService(deps: { serverUrl: string; machineKey?: strin
 
 		async recordPlanDecision(opts: {
 			planId: string;
-			sliceId: string | null;
 			fork: string;
 			options: string | null;
 			chose: string;

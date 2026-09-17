@@ -5,7 +5,7 @@ import { type AgentMsg, type BugfixSay, type BugfixStart } from '../protocol';
 import { type Services } from '../services/index';
 import { startSessionMcpServer, type SessionMcpServer } from '../sessions/mcp-server';
 import { spawnClaudeSession, type ClaudeSession } from '../sessions/process';
-import { createStderrTail, logDroppedFrame, reportStartFailure } from '../sessions/turn-support';
+import { createStderrTail, logDroppedFrame, pipeSessionOutput, reportStartFailure } from '../sessions/turn-support';
 import { BUGFIX_MCP_TOOLS, BUGFIX_TOOL_DEFINITIONS, createBugfixDispatch } from './mcp/tools';
 
 const STDERR_KEPT_CHARS = 500;
@@ -158,6 +158,7 @@ export function createBugfixSessions(opts: { services: Services; send: (message:
 			},
 			onDropped: logDroppedFrame
 		});
+		const pipe = pipeSessionOutput({ parser, stderr, tag: msg.sessionId });
 
 		entry.process = spawnClaudeSession({
 			cwd: msg.worktreePath,
@@ -174,15 +175,10 @@ export function createBugfixSessions(opts: { services: Services; send: (message:
 			userServerNames: [],
 			tools: { builtin: BUGFIX_BUILTIN_TOOLS, mcp: BUGFIX_MCP_TOOLS },
 			claudeAuth: services.claudeAuth,
-			onStdout: (chunk) => {
-				parser.push(chunk);
-			},
-			onStderr: (chunk) => {
-				stderr.push(chunk);
-				console.error(`[${msg.sessionId}] ${chunk.trimEnd()}`);
-			},
+			onStdout: pipe.onStdout,
+			onStderr: pipe.onStderr,
 			onExit: (code) => {
-				parser.flush();
+				pipe.onExit();
 
 				if (entry.cancelled) {
 					return;

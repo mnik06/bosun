@@ -7,4 +7,3 @@ export const NotificationUiMsgSchema = z.object({
 	notification: NotificationSchema
 })
 
-export type NotificationUiMsg = z.infer<typeof NotificationUiMsgSchema>

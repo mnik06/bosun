@@ -129,12 +129,6 @@ export const PreflightMsgSchema = z.object({
 	checks: z.array(PreflightCheckSchema)
 });
 
-export const PongMsgSchema = z.object({
-	type: z.literal('pong'),
-	id: z.string(),
-	at: z.number()
-});
-
 export const ExecTextMsgSchema = z.object({
 	type: z.literal('exec.text'),
 	runId: z.string(),
@@ -185,7 +179,6 @@ export const UpgradeDeclinedMsgSchema = z.object({
 export const AgentMsgSchema = z.discriminatedUnion('type', [
 	HelloMsgSchema,
 	PreflightMsgSchema,
-	PongMsgSchema,
 	UpgradeDeclinedMsgSchema,
 	PlanTextMsgSchema,
 	PlanActivityMsgSchema,

@@ -1,6 +1,7 @@
-import { Badge, Card, Stack, Text } from '@mantine/core'
+import { Stack, Text } from '@mantine/core'
 
 import type { PlanBug } from '~/entities/plan'
+import { StatusCard } from '~/shared/ui'
 
 // Styled the same as `plan-verification`'s `FindingCard`: a badge, the text, and
 // an optional note, so a bug reads as the same kind of thing a finding does.
@@ -13,21 +14,11 @@ const STATUS_COLOR: Record<PlanBug['status'], string> = {
 
 function BugCard ({ bug }: { bug: PlanBug }) {
 	return (
-		<Card withBorder padding="sm" radius="md">
-			<Stack gap={4}>
-				<Badge size="xs" variant="filled" color={STATUS_COLOR[bug.status]} className="self-start">
-					{bug.status}
-				</Badge>
-				<Text size="sm" className="whitespace-pre-wrap">
-					{bug.description}
-				</Text>
-				{bug.note === null ? null : (
-					<Text size="xs" c="dimmed" className="whitespace-pre-wrap">
-						{bug.note}
-					</Text>
-				)}
-			</Stack>
-		</Card>
+		<StatusCard
+			badges={[{ label: bug.status, color: STATUS_COLOR[bug.status], variant: 'filled' }]}
+			body={bug.description}
+			note={bug.note}
+		/>
 	)
 }
 

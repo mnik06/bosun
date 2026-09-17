@@ -79,11 +79,7 @@ export type BuildSummary = z.infer<typeof BuildSummarySchema>
 
 export const RunPhaseSchema = z.enum(['drive', 'fix', 'recheck'])
 
-export type RunPhase = z.infer<typeof RunPhaseSchema>
-
 export const SliceRunStatusSchema = z.enum(['pending', 'running', 'done', 'failed'])
-
-export type SliceRunStatus = z.infer<typeof SliceRunStatusSchema>
 
 export const SliceRunSchema = z.object({
 	id: z.string(),
@@ -198,8 +194,6 @@ export const OverlapDecisionViewSchema = z.object({
 	}),
 	options: z.array(OverlapChoiceSchema),
 	chosen: OverlapChoiceSchema.nullable(),
-	decidedByUserId: z.string().nullable(),
-	decidedAt: z.iso.datetime().nullable(),
 	createdAt: z.iso.datetime(),
 	providerNumber: z.number().int(),
 	providerTitle: z.string().nullable()
@@ -212,8 +206,6 @@ export const PlanRefSchema = z.object({
 	number: z.number().int(),
 	title: z.string().nullable()
 })
-
-export type PlanRef = z.infer<typeof PlanRefSchema>
 
 export const PendingRunQuestionSchema = z.object({
 	runId: z.string(),

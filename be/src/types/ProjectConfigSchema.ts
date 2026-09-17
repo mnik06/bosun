@@ -251,7 +251,7 @@ export const ProjectConfigSchema = BaseSchema.superRefine((config, ctx) => {
 	});
 });
 
-export type ProjectConfig = z.infer<typeof ProjectConfigSchema>;
+type ProjectConfig = z.infer<typeof ProjectConfigSchema>;
 
 export interface ConfigIssue {
 	path: string;

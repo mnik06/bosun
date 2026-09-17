@@ -2,8 +2,6 @@ import { z } from 'zod'
 
 export const PlanBugStatusSchema = z.enum(['pending', 'fixing', 'fixed', 'failed'])
 
-export type PlanBugStatus = z.infer<typeof PlanBugStatusSchema>
-
 // Keyed by build, not by session: a later round's pasted bugs append to the
 // same list, spanning any number of sessions on that build.
 export const PlanBugSchema = z.object({
@@ -20,8 +18,6 @@ export const PlanBugSchema = z.object({
 export type PlanBug = z.infer<typeof PlanBugSchema>
 
 export const BugfixMessageRoleSchema = z.enum(['user', 'assistant', 'system'])
-
-export type BugfixMessageRole = z.infer<typeof BugfixMessageRoleSchema>
 
 export const BugfixMessageSchema = z.object({
 	id: z.string(),

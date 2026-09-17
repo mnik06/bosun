@@ -3,7 +3,7 @@ import { admitBugfixSession } from 'src/controllers/line/shared/bugfix-admission
 import { announceBuild } from 'src/controllers/line/shared/announce';
 import { type LineDeps } from 'src/controllers/line/line-deps';
 import { announceBugfixMessage } from 'src/controllers/plans/bugfix/shared/bugfix-broadcast';
-import { getOwnedPlan } from 'src/controllers/plans/shared/plan-access';
+import { getLatestBuildForPlan, getOwnedPlan } from 'src/controllers/plans/shared/plan-access';
 import { requireHost } from 'src/controllers/machines/shared/require-host';
 import { type Build } from 'src/types/BuildSchema';
 import { type BugfixSession } from 'src/types/BugfixSchema';
@@ -22,8 +22,7 @@ function refuseTerminal(build: Build): void {
 // The build a bug-fixing session continues: whatever build a plan's pull
 // request lives on, whether or not that build is still going anywhere.
 async function currentBuild(deps: LineDeps, plan: Plan): Promise<Build> {
-	const latest = await deps.buildRepo.latestForPlans([plan.id]);
-	const build = latest.get(plan.id) ?? null;
+	const build = await getLatestBuildForPlan({ buildRepo: deps.buildRepo, planId: plan.id });
 
 	if (!build || build.prNumber === null) {
 		throw new HttpError(409, 'this plan has no pull request to fix bugs on');

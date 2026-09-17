@@ -472,8 +472,6 @@ export const overlapDecisions = pgTable(
 		item: jsonb().$type<OverlapItem>().notNull(),
 		options: jsonb().$type<OverlapChoice[]>().notNull(),
 		chosen: text().$type<OverlapChoice>(),
-		decidedByUserId: text().references(() => users.id, { onDelete: 'set null' }),
-		decidedAt: timestamp({ withTimezone: true }),
 		createdAt: timestamp({ withTimezone: true }).notNull().defaultNow()
 	},
 	(table) => [index('overlap_decisions_plan_id_idx').on(table.planId)]
@@ -579,14 +577,12 @@ export const notifications = pgTable(
 		body: text().notNull(),
 		url: text().notNull(),
 		planId: text().references(() => plans.id, { onDelete: 'cascade' }),
-		quickFixId: text().references(() => quickFixes.id, { onDelete: 'cascade' }),
 		sentAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
 		readAt: timestamp({ withTimezone: true })
 	},
 	(table) => [
 		index('notifications_user_project_idx').on(table.userId, table.projectId),
-		index('notifications_user_plan_idx').on(table.userId, table.planId),
-		index('notifications_quick_fix_id_idx').on(table.quickFixId)
+		index('notifications_user_plan_idx').on(table.userId, table.planId)
 	]
 );
 
@@ -700,7 +696,6 @@ export const planDecisions = pgTable(
 		planId: text()
 			.notNull()
 			.references(() => plans.id, { onDelete: 'cascade' }),
-		sliceId: text().references(() => slices.id, { onDelete: 'set null' }),
 		fork: text().notNull(),
 		options: text(),
 		chose: text().notNull(),
