@@ -127,12 +127,12 @@ describe('unitFromCgroup', () => {
 });
 
 describe('scopeUnitFor', () => {
-	it('keeps a run id that is already a valid unit name', () => {
-		expect(scopeUnitFor('sr_rtt_P-KaXCk5')).toBe('bosun-run-sr_rtt_P-KaXCk5');
+	it('keeps ids that are already valid unit names', () => {
+		expect(scopeUnitFor({ machineId: 'm_tDCbnUXY212Q', runId: 'sr_rtt_P-KaXCk5' })).toBe('bosun-run-m_tDCbnUXY212Q-sr_rtt_P-KaXCk5');
 	});
 
 	it('replaces what systemd would refuse', () => {
-		expect(scopeUnitFor('sr/1 x')).toBe('bosun-run-sr_1_x');
+		expect(scopeUnitFor({ machineId: 'm/1', runId: 'sr/1 x' })).toBe('bosun-run-m_1-sr_1_x');
 	});
 });
 
@@ -172,6 +172,7 @@ describe('getMemoryService', () => {
 			memory: getMemoryService({
 				exec,
 				env: {},
+				machineId: 'm_self',
 				platform: opts.platform ?? 'linux',
 				readFile: () => MEMINFO
 			})
@@ -184,7 +185,7 @@ describe('getMemoryService', () => {
 		await memory.load();
 
 		expect(memory.sessionScope({ runId: 'sr_1', memoryMaxBytes: 3 * GIB })).toEqual({
-			unit: 'bosun-run-sr_1',
+			unit: 'bosun-run-m_self-sr_1',
 			memoryMaxBytes: 3 * GIB
 		});
 	});
@@ -220,5 +221,16 @@ describe('getMemoryService', () => {
 		expect(exec.run).not.toHaveBeenCalled();
 		expect(memory.report()).toBeUndefined();
 		expect(memory.sessionScope({ runId: 'sr_1', memoryMaxBytes: 3 * GIB })).toBeNull();
+	});
+
+	// A second agent on the same box — a verify session driving the CLI started one —
+	// used to stop every `bosun-run-*` scope on startup, the real agent's sessions too.
+	it('reaps only the scopes this machine started', async () => {
+		const { exec, memory } = service({ probeOk: true });
+
+		await memory.load();
+		await memory.reapOrphans();
+
+		expect(exec.run).toHaveBeenLastCalledWith('systemctl', ['--user', 'stop', 'bosun-run-m_self-*.scope'], expect.anything());
 	});
 });

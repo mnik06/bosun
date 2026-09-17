@@ -50,11 +50,23 @@ export function defaultSessionLimit(memory: { totalBytes: number; swapTotalBytes
 	);
 }
 
-// Run ids are already safe unit names. The replace is what keeps a future id
-// format from producing an argument systemd refuses, which would read as a bullet
-// that cannot start for no visible reason.
-export function scopeUnitFor(runId: string): string {
-	return `${SCOPE_PREFIX}${runId.replace(/[^A-Za-z0-9_-]/g, '_')}`;
+// Ids are already safe unit names. The replace is what keeps a future id format
+// from producing an argument systemd refuses, which would read as a bullet that
+// cannot start for no visible reason.
+function unitPart(value: string): string {
+	return value.replace(/[^A-Za-z0-9_-]/g, '_');
+}
+
+// Named by machine as well as run. Scopes live in the user's manager, not the
+// agent's unit, so every agent under the same user sees every scope — and a second
+// agent started on the box, by a verify session driving the CLI, reaped on startup
+// and killed every session the real agent was running, the verify's own included.
+export function scopePrefixFor(machineId: string): string {
+	return `${SCOPE_PREFIX}${unitPart(machineId)}-`;
+}
+
+export function scopeUnitFor(opts: { machineId: string; runId: string }): string {
+	return `${scopePrefixFor(opts.machineId)}${unitPart(opts.runId)}`;
 }
 
 // `systemd-run --scope` registers the scope and then execs the command in the
@@ -147,6 +159,7 @@ export function previousExitResult(journal: string): string | null {
 export function getMemoryService(deps: {
 	exec: ExecService;
 	env: NodeJS.ProcessEnv;
+	machineId: string;
 	platform?: NodeJS.Platform;
 	readFile?: (path: string) => string;
 }) {
@@ -237,6 +250,10 @@ export function getMemoryService(deps: {
 		// a crash — does not take the sessions with it. Left alone, a `claude` from
 		// the old process keeps writing to a worktree the backend is about to hand
 		// the same bullet to again.
+		//
+		// Only this machine's. A scope named before the machine was part of the name
+		// is left alone: an upgrade lands only on an idle machine, so none is a bullet
+		// this process abandoned, and one could belong to an agent still on that naming.
 		async reapOrphans(): Promise<void> {
 			if (!sessionLimits) {
 				return;
@@ -244,7 +261,7 @@ export function getMemoryService(deps: {
 
 			const stopped = await deps.exec.run(
 				'systemctl',
-				['--user', 'stop', `${SCOPE_PREFIX}*.scope`],
+				['--user', 'stop', `${scopePrefixFor(deps.machineId)}*.scope`],
 				{ env: deps.env, timeoutMs: 30_000 }
 			);
 
@@ -262,7 +279,7 @@ export function getMemoryService(deps: {
 			const limit =
 				opts.memoryMaxBytes ?? (memory === null ? null : defaultSessionLimit(memory));
 
-			return limit === null ? null : { unit: scopeUnitFor(opts.runId), memoryMaxBytes: limit };
+			return limit === null ? null : { unit: scopeUnitFor({ machineId: deps.machineId, runId: opts.runId }), memoryMaxBytes: limit };
 		}
 	};
 }

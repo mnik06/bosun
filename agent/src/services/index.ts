@@ -26,7 +26,7 @@ export function getServices(opts: { config: AgentConfig; configPath: string; env
 	const env = getEnvService({ baseEnv: opts.env });
 	const claudeAuth = getClaudeAuthService({ exec, env });
 	const mcpConfig = getMcpConfigService({ env });
-	const memory = getMemoryService({ exec, env: opts.env });
+	const memory = getMemoryService({ exec, env: opts.env, machineId: opts.config.machineId });
 	const projectEnv = getProjectEnvService({});
 	const workspace = getWorkspaceService({
 		exec,

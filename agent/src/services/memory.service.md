@@ -8,7 +8,7 @@ restarted". Nothing had crashed; the box had simply run out.
 
 ## What changed
 
-**Each execution session runs in `bosun-run-<runId>.scope`,** started through
+**Each execution session runs in `bosun-run-<machineId>-<runId>.scope`,** started through
 `systemd-run --user --scope`. The scope execs `claude` in the same process, so the pid the agent holds
 is still `claude`'s and killing its process group still reaps everything the session started.
 
@@ -17,9 +17,14 @@ is still `claude`'s and killing its process group still reaps everything the ses
 - `OOMPolicy=continue` means a process killed for going over the limit is one failed command. The
   default for a scope is `stop`, which would end the `claude` that ran it.
 - The scope is outside the agent's unit, so even a kill that does reach the agent leaves the sessions
-  standing. That is also why `run` stops every `bosun-run-*.scope` on startup: a session the previous
-  process left behind would otherwise keep writing to a worktree the backend is about to hand the same
-  bullet to again.
+  standing. That is also why `run` stops its machine's `bosun-run-<machineId>-*.scope` on startup: a
+  session the previous process left behind would otherwise keep writing to a worktree the backend is
+  about to hand the same bullet to again.
+- **The machine id is in the name because scopes belong to the user, not the agent.** Every agent under
+  that user sees every scope. When the pattern was `bosun-run-*`, a verify session that enrolled a test
+  machine and started a second agent on the box killed every session the real agent was running, its
+  own included — each failing as `claude exited with code 143`. Scopes named before the machine was in
+  the name are never reaped: an upgrade only lands on an idle machine, so none is an abandoned bullet.
 
 **The kill is counted, not guessed.** `spawnClaudeSession` reads the scope's `memory.events` every two
 seconds and once more on exit. A session that ends with `SIGKILL` and a non-zero `oom_kill` fails with
