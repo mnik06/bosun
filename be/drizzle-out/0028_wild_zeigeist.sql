@@ -1,0 +1,1 @@
+ALTER TABLE "machines" ADD COLUMN "ignore_memory_budget" boolean DEFAULT false NOT NULL;

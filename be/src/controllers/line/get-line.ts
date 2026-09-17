@@ -31,6 +31,7 @@ async function capacityOf(deps: LineDeps, opts: { machine: Machine; snapshot: Re
 		buildsRunning: load.build,
 		buildCap: machine.buildCap,
 		verifyLanes: machine.verifyLanes,
+		ignoreMemoryBudget: machine.ignoreMemoryBudget,
 		lane: mine
 			.filter((state) => LANE_STATUSES.includes(state.build.status))
 			.map((state) => ({ planId: state.plan.id, planNumber: state.plan.number, status: state.build.status })),
