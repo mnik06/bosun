@@ -51,6 +51,13 @@ import {
 } from 'src/types/BuildSchema';
 import { type Footprint } from 'src/types/FootprintSchema';
 import { type NotificationKind } from 'src/types/NotificationSchema';
+import {
+	type BugfixMessageContent,
+	type BugfixMessageRole,
+	type BugfixSessionEndedReason,
+	type BugfixSessionStatus,
+	type PlanBugStatus
+} from 'src/types/BugfixSchema';
 
 export const users = pgTable('users', {
 	id: text().primaryKey(),
@@ -578,6 +585,72 @@ export const notifications = pgTable(
 		index('notifications_user_project_idx').on(table.userId, table.projectId),
 		index('notifications_user_plan_idx').on(table.userId, table.planId)
 	]
+);
+
+// The claim a bug-fixing session holds on a build's worktree, on the same terms
+// `slice_runs`/`integrations` already claim it: at most one row `running` per
+// build. The build's own status transition (`in_review` -> `fixing_bugs`) is the
+// actual race-guarded gate — this row is the session's history and what
+// `report_bugs`/`update_bug_status` are gated against.
+export const bugfixSessions = pgTable(
+	'bugfix_sessions',
+	{
+		id: text().primaryKey(),
+		buildId: text()
+			.notNull()
+			.references(() => builds.id, { onDelete: 'cascade' }),
+		status: text().$type<BugfixSessionStatus>().notNull().default('running'),
+		endedReason: text().$type<BugfixSessionEndedReason>(),
+		startedByUserId: text().references(() => users.id, { onDelete: 'set null' }),
+		createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+		endedAt: timestamp({ withTimezone: true })
+	},
+	(table) => [
+		uniqueIndex('bugfix_sessions_running_build_key')
+			.on(table.buildId)
+			.where(sql`status = 'running'`)
+	]
+);
+
+// A bug pasted into a bug-fixing session's chat, keyed by build rather than by
+// session: a later round's pasted bugs append to the same list, spanning any
+// number of sessions on that build. Only a live session's orchestrator writes
+// `status` and `note` — there is no API path that sets them directly.
+export const planBugs = pgTable(
+	'plan_bugs',
+	{
+		id: text().primaryKey(),
+		buildId: text()
+			.notNull()
+			.references(() => builds.id, { onDelete: 'cascade' }),
+		seq: integer().notNull(),
+		description: text().notNull(),
+		status: text().$type<PlanBugStatus>().notNull().default('pending'),
+		note: text(),
+		createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+		updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [
+		index('plan_bugs_build_id_idx').on(table.buildId),
+		unique('plan_bugs_build_seq_key').on(table.buildId, table.seq)
+	]
+);
+
+// A bug-fixing session's transcript, keyed by build on the same terms as
+// `plan_bugs`: history persists and appends across any number of sessions.
+export const bugfixMessages = pgTable(
+	'bugfix_messages',
+	{
+		id: text().primaryKey(),
+		buildId: text()
+			.notNull()
+			.references(() => builds.id, { onDelete: 'cascade' }),
+		seq: integer().notNull(),
+		role: text().$type<BugfixMessageRole>().notNull(),
+		content: jsonb().$type<BugfixMessageContent>().notNull(),
+		createdAt: timestamp({ withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [unique('bugfix_messages_build_seq_key').on(table.buildId, table.seq)]
 );
 
 // The forks a plan could not settle, resolved while executing it. Kept as rows

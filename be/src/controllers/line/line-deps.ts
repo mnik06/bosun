@@ -1,8 +1,11 @@
 import { type FastifyInstance } from 'fastify';
+import { type BugfixMessageRepo } from 'src/repos/builds/bugfix-message.repo';
+import { type BugfixSessionRepo } from 'src/repos/builds/bugfix-session.repo';
 import { type BuildRepo } from 'src/repos/builds/build.repo';
 import { type IntegrationRepo } from 'src/repos/builds/integration.repo';
 import { type OverlapDecisionRepo } from 'src/repos/builds/overlap-decision.repo';
 import { type PlanAmendmentRepo } from 'src/repos/builds/plan-amendment.repo';
+import { type PlanBugRepo } from 'src/repos/builds/plan-bug.repo';
 import { type PlanDependencyRepo } from 'src/repos/builds/plan-dependency.repo';
 import { type RepositoryMessageRepo } from 'src/repos/builds/repository-message.repo';
 import { type SliceRunRepo } from 'src/repos/builds/slice-run.repo';
@@ -39,6 +42,9 @@ export interface LineDeps {
 	sliceRunRepo: SliceRunRepo;
 	integrationRepo: IntegrationRepo;
 	verifyFindingRepo: VerifyFindingRepo;
+	bugfixSessionRepo: BugfixSessionRepo;
+	planBugRepo: PlanBugRepo;
+	bugfixMessageRepo: BugfixMessageRepo;
 	planDependencyRepo: PlanDependencyRepo;
 	planAmendmentRepo: PlanAmendmentRepo;
 	overlapDecisionRepo: OverlapDecisionRepo;
@@ -76,6 +82,9 @@ export function lineDeps(fastify: FastifyInstance): LineDeps {
 		sliceRunRepo: fastify.repos.sliceRunRepo,
 		integrationRepo: fastify.repos.integrationRepo,
 		verifyFindingRepo: fastify.repos.verifyFindingRepo,
+		bugfixSessionRepo: fastify.repos.bugfixSessionRepo,
+		planBugRepo: fastify.repos.planBugRepo,
+		bugfixMessageRepo: fastify.repos.bugfixMessageRepo,
 		planDependencyRepo: fastify.repos.planDependencyRepo,
 		planAmendmentRepo: fastify.repos.planAmendmentRepo,
 		overlapDecisionRepo: fastify.repos.overlapDecisionRepo,

@@ -21,6 +21,12 @@ type EnvReplyFrame = Extract<AgentMsg, { type: 'env.saved' | 'env.error' }>;
 type RepoFrame = Extract<AgentMsg, { type: `repo.${string}` }>;
 type OnboardingFrame = Extract<AgentMsg, { type: `onboarding.${string}` }>;
 
+type BugfixFrame = Extract<AgentMsg, { type: `bugfix.${string}` }>;
+
+function isBugfixFrame(msg: AgentMsg): msg is BugfixFrame {
+	return msg.type.startsWith('bugfix.');
+}
+
 function isRepoFrame(msg: AgentMsg): msg is RepoFrame {
 	return msg.type.startsWith('repo.');
 }
@@ -225,6 +231,13 @@ export async function handleAgentFrame(opts: {
 			frame: msg
 		});
 
+		return;
+	}
+
+	// Persistence and rebroadcast for these land with the bullet that builds a
+	// real bug-fixing session and gives them a producer — dropped rather than
+	// routed to `applyMachineFrame`, which is typed to only `hello`/`preflight`.
+	if (isBugfixFrame(msg)) {
 		return;
 	}
 

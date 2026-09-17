@@ -15,6 +15,14 @@ import {
 	PlanQuestionMsgSchema,
 	PlanTextMsgSchema
 } from 'src/types/plan-stream';
+import { BugfixCancelMsgSchema, BugfixSayMsgSchema, BugfixStartMsgSchema } from 'src/types/bugfix-frames';
+import {
+	BugfixActivityMsgSchema,
+	BugfixBugsMsgSchema,
+	BugfixDoneMsgSchema,
+	BugfixErrorMsgSchema,
+	BugfixTextMsgSchema
+} from 'src/types/bugfix-stream';
 import { MachineMemorySchema } from 'src/types/machine-memory';
 import {
 	EnvDeleteMsgSchema,
@@ -196,7 +204,12 @@ export const AgentMsgSchema = z.discriminatedUnion('type', [
 	RepoAttachedMsgSchema,
 	RepoErrorMsgSchema,
 	OnboardingDoneMsgSchema,
-	OnboardingErrorMsgSchema
+	OnboardingErrorMsgSchema,
+	BugfixTextMsgSchema,
+	BugfixActivityMsgSchema,
+	BugfixBugsMsgSchema,
+	BugfixDoneMsgSchema,
+	BugfixErrorMsgSchema
 ]);
 
 export type AgentMsg = z.infer<typeof AgentMsgSchema>;
@@ -331,7 +344,10 @@ export const ServerMsgSchema = z.discriminatedUnion('type', [
 	SecretsSetMsgSchema,
 	RepoAttachMsgSchema,
 	OnboardingStartMsgSchema,
-	OnboardingCancelMsgSchema
+	OnboardingCancelMsgSchema,
+	BugfixStartMsgSchema,
+	BugfixSayMsgSchema,
+	BugfixCancelMsgSchema
 ]);
 
 export type ServerMsg = z.infer<typeof ServerMsgSchema>;

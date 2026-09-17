@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { BuildSchema, RepositoryMessageSchema } from 'src/types/BuildSchema';
+import { BugfixMessageSchema } from 'src/types/BugfixSchema';
 import { MachineSchema } from 'src/types/MachineSchema';
 import {
 	AcSchema,
@@ -18,6 +19,13 @@ import {
 	PlanQuestionMsgSchema,
 	PlanTextMsgSchema
 } from 'src/types/plan-stream';
+import {
+	BugfixActivityMsgSchema,
+	BugfixBugsMsgSchema,
+	BugfixDoneMsgSchema,
+	BugfixErrorMsgSchema,
+	BugfixTextMsgSchema
+} from 'src/types/bugfix-stream';
 
 export const MachineUpdatedMsgSchema = z.object({
 	type: z.literal('machine.updated'),
@@ -88,6 +96,15 @@ export const PlanMessageMsgSchema = z.object({
 export const PlanDeletedMsgSchema = z.object({
 	type: z.literal('plan.deleted'),
 	planId: z.string()
+});
+
+// Rides the plan's existing `plan.subscribe` channel, on the same terms as
+// `plan.message`: a bug-fixing session's chat has no subscription of its own,
+// and every subscriber watching the plan is already watching its build.
+export const BugfixMessageMsgSchema = z.object({
+	type: z.literal('bugfix.message'),
+	buildId: z.string(),
+	message: BugfixMessageSchema
 });
 
 export const PlanArtifactMsgSchema = z.object({
@@ -206,7 +223,13 @@ export const UiMsgSchema = z.discriminatedUnion('type', [
 	PlanDecisionMsgSchema,
 	RepositoryMessageMsgSchema,
 	RepositoryAnswerMsgSchema,
-	NotificationCreatedMsgSchema
+	NotificationCreatedMsgSchema,
+	BugfixTextMsgSchema,
+	BugfixActivityMsgSchema,
+	BugfixBugsMsgSchema,
+	BugfixDoneMsgSchema,
+	BugfixErrorMsgSchema,
+	BugfixMessageMsgSchema
 ]);
 
 export type UiMsg = z.infer<typeof UiMsgSchema>;

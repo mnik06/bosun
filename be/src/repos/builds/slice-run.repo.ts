@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray, isNotNull, lt, sql } from 'drizzle-orm';
 import { type DbOrTx } from 'src/services/drizzle/drizzle.service';
-import { builds, integrations, repositories, sliceRuns, slices } from 'src/services/drizzle/schema';
+import { bugfixSessions, builds, integrations, repositories, sliceRuns, slices } from 'src/services/drizzle/schema';
 import {
 	RunPhaseSchema,
 	SliceRunSchema,
@@ -31,11 +31,11 @@ const columns = {
 	finishedAt: sliceRuns.finishedAt
 };
 
-// One worktree holds one session, and a bullet, a verify phase and an integration
-// all run in the build's worktree — so nothing starts beside anything else of the
-// same build.
+// One worktree holds one session, and a bullet, a verify phase, an integration
+// and a bug-fixing session all run in the build's worktree — so nothing starts
+// beside anything else of the same build.
 function nothingRunningForBuild(buildId: string) {
-	return sql`not exists (select 1 from ${sliceRuns} where build_id = ${buildId} and status = 'running') and not exists (select 1 from ${integrations} where build_id = ${buildId} and status = 'running')`;
+	return sql`not exists (select 1 from ${sliceRuns} where build_id = ${buildId} and status = 'running') and not exists (select 1 from ${integrations} where build_id = ${buildId} and status = 'running') and not exists (select 1 from ${bugfixSessions} where build_id = ${buildId} and status = 'running')`;
 }
 
 export interface RunningJob {
