@@ -31,7 +31,9 @@ function hostingRefusal(machine: Machine): string | null {
 }
 
 // Refused before anything is written, so a machine that cannot host a session
-// does not leave a plan row behind that will sit in `planning` forever.
+// does not leave a row behind that will sit unfinished forever. Shared by
+// starting a plan and dispatching a quick fix — both are a session on a machine's
+// own checkout, and neither should duplicate what makes one refuse to host.
 export async function requireHost(opts: {
 	machineRepo: MachineRepo;
 	socketRegistry: SocketRegistry;

@@ -51,6 +51,11 @@ import {
 	LineAskMsgSchema
 } from 'src/types/build-frames';
 import { FindingKindSchema, FindingSeveritySchema, RunPhaseSchema } from 'src/types/BuildSchema';
+import {
+	QuickFixDoneMsgSchema,
+	QuickFixErrorMsgSchema,
+	QuickFixStartMsgSchema
+} from 'src/types/quick-fix-frames';
 
 export {
 	PlanActivityMsgSchema,
@@ -196,7 +201,9 @@ export const AgentMsgSchema = z.discriminatedUnion('type', [
 	RepoAttachedMsgSchema,
 	RepoErrorMsgSchema,
 	OnboardingDoneMsgSchema,
-	OnboardingErrorMsgSchema
+	OnboardingErrorMsgSchema,
+	QuickFixDoneMsgSchema,
+	QuickFixErrorMsgSchema
 ]);
 
 export type AgentMsg = z.infer<typeof AgentMsgSchema>;
@@ -331,7 +338,8 @@ export const ServerMsgSchema = z.discriminatedUnion('type', [
 	SecretsSetMsgSchema,
 	RepoAttachMsgSchema,
 	OnboardingStartMsgSchema,
-	OnboardingCancelMsgSchema
+	OnboardingCancelMsgSchema,
+	QuickFixStartMsgSchema
 ]);
 
 export type ServerMsg = z.infer<typeof ServerMsgSchema>;

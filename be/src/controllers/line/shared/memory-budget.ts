@@ -12,6 +12,8 @@ export const RESERVED_BYTES = 1.5 * GIB;
 // them beside its own stack reached 6.3 GB before the kernel killed it. A build
 // session runs the same loop but never starts a stack. A drive (stack and browser,
 // no loop) starts at the verify figure and a fix (loop, no stack) at the build one.
+// A quick fix is a fix session with no plan behind it, so it takes the build figure
+// too.
 export const BUILD_BYTES = 3 * GIB;
 export const LANE_BYTES = 6 * GIB;
 
@@ -19,16 +21,18 @@ export const LANE_BYTES = 6 * GIB;
 // which reads as a bullet that cannot start rather than a machine that is too small.
 const FLOOR_BYTES = GIB;
 
-export type JobClass = 'build' | 'lane';
+export type JobClass = 'build' | 'lane' | 'quickFix';
 
 // What a machine is holding right now. A build slot is held by a plan from its
 // first build bullet to its last, between its bullets too, and by a running fix or
 // integration; a lane by a running drive or re-check. Onboarding runs the whole
-// stack, so it is held as a lane is.
+// stack, so it is held as a lane is. A quick fix holds no plan at all, but is sized
+// and counted like a build slot so it cannot combine with one to overrun the machine.
 export interface MachineLoad {
 	build: number;
 	lane: number;
 	onboarding: number;
+	quickFix: number;
 }
 
 // Swap counts for half: it turns a spike into a slowdown instead of a kill, but a
@@ -40,12 +44,14 @@ export function usableBytes(memory: MachineMemory): number {
 // Never more than the machine can give. A box smaller than a drive still runs one
 // — alone, under everything it has — rather than never running it.
 export function jobBytes(opts: { jobClass: JobClass; usable: number }): number {
-	return Math.max(FLOOR_BYTES, Math.min(opts.jobClass === 'build' ? BUILD_BYTES : LANE_BYTES, opts.usable));
+	const cap = opts.jobClass === 'lane' ? LANE_BYTES : BUILD_BYTES;
+
+	return Math.max(FLOOR_BYTES, Math.min(cap, opts.usable));
 }
 
 export function heldBytes(opts: { load: MachineLoad; usable: number }): number {
 	return (
-		opts.load.build * jobBytes({ jobClass: 'build', usable: opts.usable }) +
+		(opts.load.build + opts.load.quickFix) * jobBytes({ jobClass: 'build', usable: opts.usable }) +
 		(opts.load.lane + opts.load.onboarding) * jobBytes({ jobClass: 'lane', usable: opts.usable })
 	);
 }
@@ -53,7 +59,7 @@ export function heldBytes(opts: { load: MachineLoad; usable: number }): number {
 export type Admission = { admitted: true; limitBytes: number | null } | { admitted: false };
 
 function idle(load: MachineLoad): boolean {
-	return load.build + load.lane + load.onboarding === 0;
+	return load.build + load.lane + load.onboarding + load.quickFix === 0;
 }
 
 // The limit handed to a session is the number it was admitted with, so the limits

@@ -19,6 +19,7 @@ import { getPlanMessageRepo } from 'src/repos/plans/plan-message.repo';
 import { getPlanRepo } from 'src/repos/plans/plan.repo';
 import { getProjectMemberRepo } from 'src/repos/projects/project-member.repo';
 import { getProjectRepo } from 'src/repos/projects/project.repo';
+import { getQuickFixRepo } from 'src/repos/quick-fixes/quick-fix.repo';
 import { getSliceRepo } from 'src/repos/plans/slice.repo';
 import { getUserRepo } from 'src/repos/users/user.repo';
 
@@ -40,6 +41,7 @@ export function getRepos(db: ReturnType<typeof getDb>) {
 		projectMemberRepo: getProjectMemberRepo(db),
 		projectRepo: getProjectRepo(db),
 		pushSubscriptionRepo: getPushSubscriptionRepo(db),
+		quickFixRepo: getQuickFixRepo(db),
 		repositoryMessageRepo: getRepositoryMessageRepo(db),
 		repositoryRepo: getRepositoryRepo(db),
 		sliceRunRepo: getSliceRunRepo(db),

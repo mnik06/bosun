@@ -6,6 +6,7 @@ import { type NotificationRepo } from 'src/repos/notifications/notification.repo
 import { type PushSubscriptionRepo } from 'src/repos/notifications/push-subscription.repo';
 import { type OnboardingRunRepo } from 'src/repos/onboarding/onboarding-run.repo';
 import { type ProjectMemberRepo } from 'src/repos/projects/project-member.repo';
+import { type QuickFixRepo } from 'src/repos/quick-fixes/quick-fix.repo';
 import { type IdService } from 'src/services/ids/id.service';
 import { type WebPushService } from 'src/services/notifications/web-push.service';
 import { type MachineMemoryService } from 'src/services/sockets/machine-memory.service';
@@ -19,6 +20,7 @@ export interface OnboardingDeps {
 	projectMemberRepo: ProjectMemberRepo;
 	notificationRepo: NotificationRepo;
 	pushSubscriptionRepo: PushSubscriptionRepo;
+	quickFixRepo: QuickFixRepo;
 	idService: IdService;
 	machineMemory: MachineMemoryService;
 	socketRegistry: SocketRegistry;
@@ -39,6 +41,7 @@ export function onboardingDeps(fastify: FastifyInstance): OnboardingDeps {
 		projectMemberRepo: fastify.repos.projectMemberRepo,
 		notificationRepo: fastify.repos.notificationRepo,
 		pushSubscriptionRepo: fastify.repos.pushSubscriptionRepo,
+		quickFixRepo: fastify.repos.quickFixRepo,
 		idService: fastify.services.idService,
 		machineMemory: fastify.services.machineMemory,
 		socketRegistry: fastify.services.socketRegistry,

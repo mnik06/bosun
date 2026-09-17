@@ -51,6 +51,7 @@ import {
 } from 'src/types/BuildSchema';
 import { type Footprint } from 'src/types/FootprintSchema';
 import { type NotificationKind } from 'src/types/NotificationSchema';
+import { type QuickFixStatus } from 'src/types/QuickFixSchema';
 
 export const users = pgTable('users', {
 	id: text().primaryKey(),
@@ -573,6 +574,39 @@ export const notifications = pgTable(
 	(table) => [
 		index('notifications_user_project_idx').on(table.userId, table.projectId),
 		index('notifications_user_plan_idx').on(table.userId, table.planId)
+	]
+);
+
+// A one-shot bug fix dispatched outside the line entirely: no plan, no board card,
+// no ACs, no tracer bullets. Deliberately its own table rather than a `builds` row
+// with everything plan-shaped left null — a quick fix has no line to stall, and a
+// query against `builds` must never pick one up.
+export const quickFixes = pgTable(
+	'quick_fixes',
+	{
+		id: text().primaryKey(),
+		projectId: text()
+			.notNull()
+			.references(() => projects.id, { onDelete: 'cascade' }),
+		machineId: text()
+			.notNull()
+			.references(() => machines.id, { onDelete: 'cascade' }),
+		repositoryId: text()
+			.notNull()
+			.references(() => repositories.id, { onDelete: 'cascade' }),
+		branch: text().notNull(),
+		baseBranch: text().notNull(),
+		description: text().notNull(),
+		status: text().$type<QuickFixStatus>().notNull().default('running'),
+		prUrl: text(),
+		error: text(),
+		createdByUserId: text().references(() => users.id, { onDelete: 'set null' }),
+		createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+		finishedAt: timestamp({ withTimezone: true })
+	},
+	(table) => [
+		index('quick_fixes_project_id_idx').on(table.projectId),
+		index('quick_fixes_machine_id_idx').on(table.machineId)
 	]
 );
 

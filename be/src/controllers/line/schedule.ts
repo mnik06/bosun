@@ -177,12 +177,16 @@ async function yieldSlot(pass: Pass, state: BuildState): Promise<boolean> {
 }
 
 async function machineLoad(pass: Pass): Promise<MachineLoad> {
-	const onboarding = await pass.deps.onboardingRunRepo.listActiveForMachine(pass.machine.id);
+	const [onboarding, quickFixes] = await Promise.all([
+		pass.deps.onboardingRunRepo.listActiveForMachine(pass.machine.id),
+		pass.deps.quickFixRepo.listActiveForMachine(pass.machine.id)
+	]);
 
 	return {
 		build: pass.mine.filter((state) => BUILD_SLOT_STATUSES.includes(state.build.status)).length,
 		lane: pass.mine.filter((state) => LANE_STATUSES.includes(state.build.status)).length,
-		onboarding: onboarding.length
+		onboarding: onboarding.length,
+		quickFix: quickFixes.length
 	};
 }
 

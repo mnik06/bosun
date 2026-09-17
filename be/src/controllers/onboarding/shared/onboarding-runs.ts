@@ -60,15 +60,16 @@ export async function onboardingAdmission(
 	deps: OnboardingDeps,
 	opts: { machineId: string }
 ): Promise<{ admitted: true; limitBytes: number | null } | { admitted: false }> {
-	const [slots, lanes, runs] = await Promise.all([
+	const [slots, lanes, runs, quickFixes] = await Promise.all([
 		deps.buildRepo.listForMachine({ machineId: opts.machineId, statuses: BUILD_SLOT_STATUSES }),
 		deps.buildRepo.listForMachine({ machineId: opts.machineId, statuses: LANE_STATUSES }),
-		deps.onboardingRunRepo.listActiveForMachine(opts.machineId)
+		deps.onboardingRunRepo.listActiveForMachine(opts.machineId),
+		deps.quickFixRepo.listActiveForMachine(opts.machineId)
 	]);
 
 	return admitOnboarding({
 		memory: deps.machineMemory.get(opts.machineId),
-		load: { build: slots.length, lane: lanes.length, onboarding: runs.length }
+		load: { build: slots.length, lane: lanes.length, onboarding: runs.length, quickFix: quickFixes.length }
 	});
 }
 

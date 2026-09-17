@@ -12,12 +12,16 @@ import { type Repository } from 'src/types/RepositorySchema';
 async function capacityOf(deps: LineDeps, opts: { machine: Machine; snapshot: RepositorySnapshot | undefined }): Promise<MachineCapacity> {
 	const { machine, snapshot } = opts;
 	const mine = (snapshot?.states ?? []).filter((state) => state.build.machineId === machine.id);
-	const onboarding = await deps.onboardingRunRepo.listActiveForMachine(machine.id);
+	const [onboarding, quickFixes] = await Promise.all([
+		deps.onboardingRunRepo.listActiveForMachine(machine.id),
+		deps.quickFixRepo.listActiveForMachine(machine.id)
+	]);
 	const memory = deps.machineMemory.get(machine.id);
 	const load = {
 		build: mine.filter((state) => BUILD_SLOT_STATUSES.includes(state.build.status)).length,
 		lane: mine.filter((state) => LANE_STATUSES.includes(state.build.status)).length,
-		onboarding: onboarding.length
+		onboarding: onboarding.length,
+		quickFix: quickFixes.length
 	};
 	const usable = memory === null ? null : usableBytes(memory);
 
