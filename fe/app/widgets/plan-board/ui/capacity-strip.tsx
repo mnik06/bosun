@@ -63,6 +63,11 @@ export function CapacityStrip ({ capacity }: { capacity: MachineCapacity[] }) {
 							<Text size="xs" c="dimmed">
 								verify lane: {laneText(machine)}
 							</Text>
+							{machine.ignoreMemoryBudget === true ? (
+								<Text size="xs" c="yellow">
+									memory budget ignored
+								</Text>
+							) : null}
 						</>
 					) : (
 						<Text size="xs" c="dimmed">

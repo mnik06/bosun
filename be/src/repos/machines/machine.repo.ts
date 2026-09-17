@@ -32,6 +32,7 @@ const publicColumns = {
 	sessionSecrets: machines.sessionSecrets,
 	verifyLanes: machines.verifyLanes,
 	buildCap: machines.buildCap,
+	ignoreMemoryBudget: machines.ignoreMemoryBudget,
 	createdAt: machines.createdAt
 };
 
@@ -289,6 +290,7 @@ export function getMachineRepo(db: Db) {
 			projectId: string;
 			verifyLanes?: number;
 			buildCap?: number | null;
+			ignoreMemoryBudget?: boolean;
 		}): Promise<Machine | null> {
 			const { id, projectId, ...values } = opts;
 			const [row] = await db

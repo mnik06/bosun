@@ -8,7 +8,13 @@ import { orNotFound } from 'src/utils/general';
 // bullet that happens to settle.
 export async function saveMachineCapacity(
 	deps: LineDeps,
-	opts: { id: string; projectId: string; verifyLanes?: number; buildCap?: number | null }
+	opts: {
+		id: string;
+		projectId: string;
+		verifyLanes?: number;
+		buildCap?: number | null;
+		ignoreMemoryBudget?: boolean;
+	}
 ): Promise<Machine> {
 	const machine = await orNotFound(deps.machineRepo.saveCapacity(opts), 'Machine not found');
 

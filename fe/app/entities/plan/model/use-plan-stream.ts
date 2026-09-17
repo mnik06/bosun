@@ -83,11 +83,13 @@ export function usePlanStream (planId: string): PlanStream {
 			onOpen: () => {
 				sendUiCommand({ type: 'plan.subscribe', planId })
 
-				// Frames sent while the socket was down are gone — they are pushes, not a
-				// queue — so a reconnect refetches the transcript rather than resuming a
-				// chat with a hole in it. Skipped on the first open, where the query is
-				// already loading.
-				if (opened.current) {
+				// Frames sent while nothing here was subscribed are gone — they are pushes,
+				// not a queue. That is a socket that dropped, and just as much a plan left
+				// and opened again: its cached transcript is still fresh to the query, so a
+				// question asked in between never showed. Every subscribe refetches in the
+				// background, except a first load that has nothing cached and is already
+				// fetching.
+				if (opened.current || queryClient.getQueryData(planKeys.detail(planId)) !== undefined) {
 					void queryClient.invalidateQueries({ queryKey: planKeys.detail(planId) })
 				}
 

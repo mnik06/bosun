@@ -20,7 +20,7 @@ function load(overrides: Partial<MachineLoad> = {}): MachineLoad {
 	return { build: 0, lane: 0, onboarding: 0, ...overrides };
 }
 
-const BASE = { verifyLanes: 1, verifyWaiting: false, buildCap: null };
+const BASE = { verifyLanes: 1, verifyWaiting: false, buildCap: null, ignoreMemoryBudget: false };
 
 describe('usableBytes', () => {
 	it('counts swap for half and keeps the reserve back', () => {
@@ -29,7 +29,7 @@ describe('usableBytes', () => {
 });
 
 describe('holderBlocksLane', () => {
-	const LANE = { verifyLanes: 1, buildCap: null };
+	const LANE = { verifyLanes: 1, buildCap: null, ignoreMemoryBudget: false };
 
 	it('is the holder when a drive fits only without it', () => {
 		expect(holderBlocksLane({ ...LANE, memory: box(7.5), load: load({ build: 1 }) })).toBe(true);
@@ -45,7 +45,7 @@ describe('holderBlocksLane', () => {
 
 	it('is not when the lane is taken or there is none', () => {
 		expect(holderBlocksLane({ ...LANE, memory: box(7.5), load: load({ build: 1, lane: 1 }) })).toBe(false);
-		expect(holderBlocksLane({ verifyLanes: 0, buildCap: null, memory: box(7.5), load: load({ build: 1 }) })).toBe(false);
+		expect(holderBlocksLane({ verifyLanes: 0, buildCap: null, ignoreMemoryBudget: false, memory: box(7.5), load: load({ build: 1 }) })).toBe(false);
 	});
 });
 
@@ -113,5 +113,42 @@ describe('admitOnboarding', () => {
 	it('is held to what the line leaves', () => {
 		expect(admitOnboarding({ memory: box(16), load: load({ build: 3 }) }).admitted).toBe(false);
 		expect(admitOnboarding({ memory: box(16), load: load({ build: 2 }) }).admitted).toBe(true);
+	});
+});
+
+// An 8 GB box: 6.1 GiB usable, two builds, or one drive and nothing beside it.
+describe('admit, ignoring the memory budget', () => {
+	const EIGHT = box(7.6);
+	const IGNORE = { ...BASE, ignoreMemoryBudget: true };
+
+	it('builds up to the cap past what memory holds', () => {
+		expect(admit({ ...IGNORE, buildCap: 5, memory: EIGHT, jobClass: 'build', load: load({ build: 4 }) })).toEqual({
+			admitted: true,
+			limitBytes: BUILD_BYTES
+		});
+		expect(admit({ ...IGNORE, buildCap: 5, memory: EIGHT, jobClass: 'build', load: load({ build: 5 }) }).admitted).toBe(false);
+	});
+
+	it('holds nothing back for a plan waiting to verify', () => {
+		expect(
+			admit({ ...IGNORE, buildCap: 5, verifyLanes: 3, verifyWaiting: true, memory: EIGHT, jobClass: 'build', load: load({ build: 1 }) }).admitted
+		).toBe(true);
+	});
+
+	it('leaves builds to memory when there is no cap to take instead', () => {
+		expect(admit({ ...IGNORE, memory: EIGHT, jobClass: 'build', load: load({ build: 2 }) }).admitted).toBe(false);
+	});
+
+	it('verifies up to the lane count beside full builds', () => {
+		expect(admit({ ...IGNORE, verifyLanes: 3, memory: EIGHT, jobClass: 'lane', load: load({ build: 2, lane: 2 }) }).admitted).toBe(true);
+		expect(admit({ ...IGNORE, verifyLanes: 3, memory: EIGHT, jobClass: 'lane', load: load({ build: 2, lane: 3 }) }).admitted).toBe(false);
+	});
+
+	it('never has a plan between bullets give up its slot for a drive', () => {
+		expect(holderBlocksLane({ verifyLanes: 1, buildCap: 5, ignoreMemoryBudget: true, memory: EIGHT, load: load({ build: 2 }) })).toBe(false);
+	});
+
+	it('changes nothing while it is off', () => {
+		expect(admit({ ...BASE, buildCap: 5, memory: EIGHT, jobClass: 'build', load: load({ build: 2 }) }).admitted).toBe(false);
 	});
 });
