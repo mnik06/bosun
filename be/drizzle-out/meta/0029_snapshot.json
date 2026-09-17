@@ -1,5 +1,5 @@
 {
-  "id": "17f86666-feff-4dc5-94f0-43d85d5a227a",
+  "id": "d222f0a2-86f9-4947-916b-83d7c2d6a0bb",
   "prevId": "9538fb5b-482a-4c63-ad35-55edb89a0649",
   "version": "7",
   "dialect": "postgresql",
@@ -121,180 +121,6 @@
           ]
         }
       },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.bugfix_messages": {
-      "name": "bugfix_messages",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "build_id": {
-          "name": "build_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "seq": {
-          "name": "seq",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "role": {
-          "name": "role",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "content": {
-          "name": "content",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "bugfix_messages_build_id_builds_id_fk": {
-          "name": "bugfix_messages_build_id_builds_id_fk",
-          "tableFrom": "bugfix_messages",
-          "tableTo": "builds",
-          "columnsFrom": [
-            "build_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "bugfix_messages_build_seq_key": {
-          "name": "bugfix_messages_build_seq_key",
-          "nullsNotDistinct": false,
-          "columns": [
-            "build_id",
-            "seq"
-          ]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.bugfix_sessions": {
-      "name": "bugfix_sessions",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "build_id": {
-          "name": "build_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'running'"
-        },
-        "ended_reason": {
-          "name": "ended_reason",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "started_by_user_id": {
-          "name": "started_by_user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "ended_at": {
-          "name": "ended_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "bugfix_sessions_running_build_key": {
-          "name": "bugfix_sessions_running_build_key",
-          "columns": [
-            {
-              "expression": "build_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "status = 'running'",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "bugfix_sessions_build_id_builds_id_fk": {
-          "name": "bugfix_sessions_build_id_builds_id_fk",
-          "tableFrom": "bugfix_sessions",
-          "tableTo": "builds",
-          "columnsFrom": [
-            "build_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "bugfix_sessions_started_by_user_id_users_id_fk": {
-          "name": "bugfix_sessions_started_by_user_id_users_id_fk",
-          "tableFrom": "bugfix_sessions",
-          "tableTo": "users",
-          "columnsFrom": [
-            "started_by_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -1007,6 +833,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "quick_fix_id": {
+          "name": "quick_fix_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "sent_at": {
           "name": "sent_at",
           "type": "timestamp with time zone",
@@ -1063,6 +895,21 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "notifications_quick_fix_id_idx": {
+          "name": "notifications_quick_fix_id_idx",
+          "columns": [
+            {
+              "expression": "quick_fix_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -1098,6 +945,19 @@
           "tableTo": "plans",
           "columnsFrom": [
             "plan_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "notifications_quick_fix_id_quick_fixes_id_fk": {
+          "name": "notifications_quick_fix_id_quick_fixes_id_fk",
+          "tableFrom": "notifications",
+          "tableTo": "quick_fixes",
+          "columnsFrom": [
+            "quick_fix_id"
           ],
           "columnsTo": [
             "id"
@@ -1472,109 +1332,6 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.plan_bugs": {
-      "name": "plan_bugs",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "build_id": {
-          "name": "build_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "seq": {
-          "name": "seq",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "description": {
-          "name": "description",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'pending'"
-        },
-        "note": {
-          "name": "note",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "plan_bugs_build_id_idx": {
-          "name": "plan_bugs_build_id_idx",
-          "columns": [
-            {
-              "expression": "build_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "plan_bugs_build_id_builds_id_fk": {
-          "name": "plan_bugs_build_id_builds_id_fk",
-          "tableFrom": "plan_bugs",
-          "tableTo": "builds",
-          "columnsFrom": [
-            "build_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "plan_bugs_build_seq_key": {
-          "name": "plan_bugs_build_seq_key",
-          "nullsNotDistinct": false,
-          "columns": [
-            "build_id",
-            "seq"
-          ]
-        }
-      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -2354,6 +2111,183 @@
           ]
         }
       },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.quick_fixes": {
+      "name": "quick_fixes",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "project_id": {
+          "name": "project_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "machine_id": {
+          "name": "machine_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "repository_id": {
+          "name": "repository_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "branch": {
+          "name": "branch",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "base_branch": {
+          "name": "base_branch",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'running'"
+        },
+        "pr_url": {
+          "name": "pr_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "error": {
+          "name": "error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_by_user_id": {
+          "name": "created_by_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "finished_at": {
+          "name": "finished_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "quick_fixes_project_id_idx": {
+          "name": "quick_fixes_project_id_idx",
+          "columns": [
+            {
+              "expression": "project_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "quick_fixes_machine_id_idx": {
+          "name": "quick_fixes_machine_id_idx",
+          "columns": [
+            {
+              "expression": "machine_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "quick_fixes_project_id_projects_id_fk": {
+          "name": "quick_fixes_project_id_projects_id_fk",
+          "tableFrom": "quick_fixes",
+          "tableTo": "projects",
+          "columnsFrom": [
+            "project_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "quick_fixes_machine_id_machines_id_fk": {
+          "name": "quick_fixes_machine_id_machines_id_fk",
+          "tableFrom": "quick_fixes",
+          "tableTo": "machines",
+          "columnsFrom": [
+            "machine_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "quick_fixes_repository_id_repositories_id_fk": {
+          "name": "quick_fixes_repository_id_repositories_id_fk",
+          "tableFrom": "quick_fixes",
+          "tableTo": "repositories",
+          "columnsFrom": [
+            "repository_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "quick_fixes_created_by_user_id_users_id_fk": {
+          "name": "quick_fixes_created_by_user_id_users_id_fk",
+          "tableFrom": "quick_fixes",
+          "tableTo": "users",
+          "columnsFrom": [
+            "created_by_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
