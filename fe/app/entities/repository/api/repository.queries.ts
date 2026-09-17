@@ -7,6 +7,7 @@ import {
 	AvailableRepositorySchema,
 	AzureConnectionSchema,
 	GithubInstallationSchema,
+	GithubPatConnectionSchema,
 	MachineOnboardingSchema,
 	RepositoryConfigSchema,
 	RepositoryMessageSchema,
@@ -15,6 +16,7 @@ import {
 	type AvailableRepository,
 	type AzureConnection,
 	type GithubInstallation,
+	type GithubPatConnection,
 	type MachineOnboarding,
 	type Repository,
 	type RepositoryConfig,
@@ -26,6 +28,7 @@ export const repositoryKeys = {
 	all: () => ['repositories', getActiveProjectId()] as const,
 	list: () => [...repositoryKeys.all(), 'list'] as const,
 	installations: () => [...repositoryKeys.all(), 'installations'] as const,
+	patConnections: () => [...repositoryKeys.all(), 'pat-connections'] as const,
 	available: () => [...repositoryKeys.all(), 'available'] as const,
 	azureConnections: () => [...repositoryKeys.all(), 'azure-connections'] as const,
 	availableAzure: () => [...repositoryKeys.all(), 'available-azure'] as const,
@@ -59,6 +62,12 @@ export async function fetchGithubInstallations (): Promise<GithubInstallation[]>
 	const { data } = await apiClient.get<unknown>('/github/installations')
 
 	return z.array(GithubInstallationSchema).parse(data)
+}
+
+export async function fetchGithubPatConnections (): Promise<GithubPatConnection[]> {
+	const { data } = await apiClient.get<unknown>('/github/pat-connections')
+
+	return z.array(GithubPatConnectionSchema).parse(data)
 }
 
 export async function fetchAvailableRepositories (): Promise<AvailableRepository[]> {
@@ -112,6 +121,13 @@ export function useGithubInstallationsQuery () {
 	return useQuery({
 		queryKey: repositoryKeys.installations(),
 		queryFn: fetchGithubInstallations
+	})
+}
+
+export function useGithubPatConnectionsQuery () {
+	return useQuery({
+		queryKey: repositoryKeys.patConnections(),
+		queryFn: fetchGithubPatConnections
 	})
 }
 

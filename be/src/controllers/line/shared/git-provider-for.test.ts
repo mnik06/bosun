@@ -8,6 +8,8 @@ const BASE: Repository = {
 	provider: 'github',
 	installationId: null,
 	githubRepoId: null,
+	githubPatConnectionId: null,
+	syncMode: null,
 	azureConnectionId: null,
 	azureProjectId: null,
 	azureRepoId: null,

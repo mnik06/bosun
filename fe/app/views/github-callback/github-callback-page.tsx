@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 
 import { useCompleteGithubInstall, useImportGithubInstallations } from '~/features/connect-github'
+import { ConnectGithubPatButton } from '~/features/connect-github-pat'
 import { Page } from '~/shared/ui'
 import { toErrorMessage } from '~/shared/lib'
 
@@ -14,12 +15,13 @@ function BackToSettings () {
 	)
 }
 
-function Notice ({ color, title, children }: { color: string, title: string, children: string }) {
+function Notice ({ color, title, children, offerToken = false }: { color: string, title: string, children: string, offerToken?: boolean }) {
 	return (
 		<Page title="Connect GitHub">
 			<Alert color={color} variant="light" title={title}>
 				<Stack gap="xs" align="start">
 					<Text size="sm">{children}</Text>
+					{offerToken ? <ConnectGithubPatButton label="Can't wait? Connect with a token instead" /> : null}
 					<BackToSettings />
 				</Stack>
 			</Alert>
@@ -72,7 +74,7 @@ export default function GithubCallbackPage () {
 
 	if (requested) {
 		return (
-			<Notice color="blue" title="Waiting for an organization owner">
+			<Notice color="blue" title="Waiting for an organization owner" offerToken>
 				The installation was requested. Once an owner approves it on GitHub, connect again from Settings.
 			</Notice>
 		)

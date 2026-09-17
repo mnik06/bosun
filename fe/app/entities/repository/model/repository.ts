@@ -32,12 +32,36 @@ export const RepositoryProviderSchema = z.enum(['github', 'azure_devops'])
 
 export type RepositoryProvider = z.infer<typeof RepositoryProviderSchema>
 
+export const GithubPatConnectionStatusSchema = z.enum(['active', 'broken'])
+
+export type GithubPatConnectionStatus = z.infer<typeof GithubPatConnectionStatusSchema>
+
+export const GithubTokenTypeSchema = z.enum(['fine_grained', 'classic'])
+
+export type GithubTokenType = z.infer<typeof GithubTokenTypeSchema>
+
+export const GithubPatConnectionSchema = z.object({
+	id: z.string(),
+	projectId: z.string(),
+	githubLogin: z.string(),
+	tokenType: GithubTokenTypeSchema,
+	status: GithubPatConnectionStatusSchema,
+	lastError: z.string().nullable(),
+	brokenAt: z.iso.datetime().nullable(),
+	createdByUserId: z.string().nullable(),
+	createdAt: z.iso.datetime()
+})
+
+export type GithubPatConnection = z.infer<typeof GithubPatConnectionSchema>
+
 export const RepositorySchema = z.object({
 	id: z.string(),
 	projectId: z.string(),
 	provider: RepositoryProviderSchema,
 	installationId: z.string().nullable(),
 	githubRepoId: z.number().nullable(),
+	githubPatConnectionId: z.string().nullable(),
+	syncMode: z.enum(['webhook', 'polling']).nullable(),
 	azureConnectionId: z.string().nullable(),
 	azureProjectId: z.string().nullable(),
 	azureRepoId: z.string().nullable(),
@@ -63,12 +87,19 @@ export const RepositoryMessageSchema = z.object({
 
 export type RepositoryMessage = z.infer<typeof RepositoryMessageSchema>
 
+export const GithubRepositoryConnectionSchema = z.discriminatedUnion('kind', [
+	z.object({ kind: z.literal('app'), installationId: z.string(), accountLogin: z.string() }),
+	z.object({ kind: z.literal('pat'), connectionId: z.string(), githubLogin: z.string() })
+])
+
+export type GithubRepositoryConnection = z.infer<typeof GithubRepositoryConnectionSchema>
+
 export const AvailableRepositorySchema = z.object({
 	githubRepoId: z.number(),
 	fullName: z.string(),
 	defaultBranch: z.string(),
 	private: z.boolean(),
-	installationId: z.string()
+	connection: GithubRepositoryConnectionSchema
 })
 
 export type AvailableRepository = z.infer<typeof AvailableRepositorySchema>

@@ -9,6 +9,8 @@ const columns = {
 	provider: repositories.provider,
 	installationId: repositories.installationId,
 	githubRepoId: repositories.githubRepoId,
+	githubPatConnectionId: repositories.githubPatConnectionId,
+	syncMode: repositories.syncMode,
 	azureConnectionId: repositories.azureConnectionId,
 	azureProjectId: repositories.azureProjectId,
 	azureRepoId: repositories.azureRepoId,
@@ -27,23 +29,36 @@ export function getRepositoryRepo(db: DbOrTx) {
 		// Picking a repository for a machine is what creates its row, so the second
 		// machine on it lands on the same row — its draft, its onboarding runs. What
 		// GitHub says now wins: a renamed repository or a changed default branch.
-		async upsert(opts: {
-			id: string;
-			projectId: string;
-			installationId: string;
-			githubRepoId: number;
-			fullName: string;
-			defaultBranch: string;
-		}): Promise<Repository> {
+		// `connection` names exactly one side of the App/PAT split; writing both
+		// columns on every call (one of them always null) is what keeps them
+		// mutually exclusive when a repository is re-attached through the other
+		// connection kind, rather than leaving the old side's id stale.
+		async upsert(
+			opts: {
+				id: string;
+				projectId: string;
+				githubRepoId: number;
+				fullName: string;
+				defaultBranch: string;
+			} & ({ installationId: string; githubPatConnectionId?: undefined } | { installationId?: undefined; githubPatConnectionId: string })
+		): Promise<Repository> {
+			const installationId = opts.installationId ?? null;
+			const githubPatConnectionId = opts.githubPatConnectionId ?? null;
 			const [row] = await db
 				.insert(repositories)
-				.values(opts)
+				.values({ ...opts, installationId, githubPatConnectionId })
 				.onConflictDoUpdate({
 					target: [repositories.projectId, repositories.githubRepoId],
 					set: {
-						installationId: opts.installationId,
+						installationId,
+						githubPatConnectionId,
 						fullName: opts.fullName,
-						defaultBranch: opts.defaultBranch
+						defaultBranch: opts.defaultBranch,
+						// App-connected repositories never carry a PAT webhook — attaching
+						// through the App clears whatever a previous PAT connection left, so
+						// re-attaching away from a PAT connection never leaves its secret,
+						// GitHub webhook id, or sync mode stale on the row.
+						...(installationId === null ? {} : { webhookSecretEncrypted: null, githubWebhookId: null, syncMode: null })
 					}
 				})
 				.returning(columns);
@@ -88,6 +103,14 @@ export function getRepositoryRepo(db: DbOrTx) {
 			return rows.map((row) => RepositorySchema.parse(row));
 		},
 
+		// The GitHub PAT equivalent — every repository a connection owns, so
+		// disconnecting it can announce every machine that loses its clone.
+		async listForGithubPatConnection(githubPatConnectionId: string): Promise<Repository[]> {
+			const rows = await db.select(columns).from(repositories).where(eq(repositories.githubPatConnectionId, githubPatConnectionId));
+
+			return rows.map((row) => RepositorySchema.parse(row));
+		},
+
 		async listForProject(projectId: string): Promise<Repository[]> {
 			const rows = await db
 				.select(columns)
@@ -112,6 +135,15 @@ export function getRepositoryRepo(db: DbOrTx) {
 			const [row] = await db.select(columns).from(repositories).where(eq(repositories.id, id));
 
 			return row ? RepositorySchema.parse(row) : null;
+		},
+
+		// Excluded from `columns` for the same reason `azureConnectionRepo` keeps its
+		// PAT off every column list: a per-repository webhook secret is a credential,
+		// never returned by anything that answers with a `Repository`.
+		async getWebhookSecretEncryptedById(id: string): Promise<string | null> {
+			const [row] = await db.select({ webhookSecretEncrypted: repositories.webhookSecretEncrypted }).from(repositories).where(eq(repositories.id, id));
+
+			return row?.webhookSecretEncrypted ?? null;
 		},
 
 		async saveConfigDraft(opts: { id: string; configDraft: string }): Promise<Repository | null> {

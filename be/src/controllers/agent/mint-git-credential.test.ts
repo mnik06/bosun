@@ -15,6 +15,8 @@ function repository(overrides: Partial<Repository> = {}): Repository {
 		provider: 'github',
 		installationId: null,
 		githubRepoId: null,
+		githubPatConnectionId: null,
+		syncMode: null,
 		azureConnectionId: null,
 		azureProjectId: null,
 		azureRepoId: null,
@@ -24,6 +26,7 @@ function repository(overrides: Partial<Repository> = {}): Repository {
 		configOnDefault: false,
 		autoResolveConflicts: false,
 		lastSyncedAt: null,
+		azureSyncMode: null,
 		createdAt: new Date(),
 		...overrides
 	};
