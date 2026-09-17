@@ -1,1 +1,0 @@
-ALTER TABLE "repositories" ADD COLUMN "azure_sync_mode" text;
