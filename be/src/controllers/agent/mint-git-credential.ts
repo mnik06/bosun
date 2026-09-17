@@ -22,7 +22,7 @@ export async function mintGitCredential(opts: {
 	}
 
 	const repository = await opts.repositoryRepo.getById(machine.repositoryId);
-	const installation = repository ? await opts.githubInstallationRepo.getById(repository.installationId) : null;
+	const installation = repository?.installationId ? await opts.githubInstallationRepo.getById(repository.installationId) : null;
 
 	if (!repository || !installation) {
 		throw new HttpError(403, 'The repository this machine was attached to is no longer connected');
@@ -31,7 +31,9 @@ export async function mintGitCredential(opts: {
 	try {
 		return await opts.githubApp.repositoryToken({
 			installationId: installation.installationId,
-			githubRepoId: repository.githubRepoId
+			// `installation` resolving means this repository is a GitHub one, so its
+			// `githubRepoId` is set too.
+			githubRepoId: repository.githubRepoId!
 		});
 	} catch (error) {
 		throw toGithubHttpError(error);

@@ -33,7 +33,7 @@ export async function openConfigPullRequest(opts: {
 	const repository = await getOwnedRepository(opts);
 	const [runs, installation] = await Promise.all([
 		opts.onboardingRunRepo.latestPerMachineForRepository(repository.id),
-		opts.githubInstallationRepo.getById(repository.installationId)
+		repository.installationId === null ? null : opts.githubInstallationRepo.getById(repository.installationId)
 	]);
 
 	if (!runs.some((run) => run.status === 'ready')) {
@@ -51,7 +51,9 @@ export async function openConfigPullRequest(opts: {
 	try {
 		const { url } = await opts.githubApp.proposeFile({
 			installationId: installation.installationId,
-			githubRepoId: repository.githubRepoId,
+			// `installation` resolving means this repository is a GitHub one, so its
+			// `githubRepoId` is set too.
+			githubRepoId: repository.githubRepoId!,
 			branch: ONBOARDING_BRANCH,
 			path: PROJECT_CONFIG_PATH,
 			content: repository.configDraft,

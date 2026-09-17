@@ -1,4 +1,6 @@
 import { type FastifyInstance } from 'fastify';
+import { gitProviderFor } from 'src/controllers/line/shared/git-provider-for';
+import { type AzureConnectionRepo } from 'src/repos/azure/azure-connection.repo';
 import { type BuildRepo } from 'src/repos/builds/build.repo';
 import { type IntegrationRepo } from 'src/repos/builds/integration.repo';
 import { type OverlapDecisionRepo } from 'src/repos/builds/overlap-decision.repo';
@@ -20,7 +22,10 @@ import { type PlanRepo } from 'src/repos/plans/plan.repo';
 import { type SliceRepo } from 'src/repos/plans/slice.repo';
 import { type ProjectMemberRepo } from 'src/repos/projects/project-member.repo';
 import { type UserRepo } from 'src/repos/users/user.repo';
+import { type AzureDevOpsService } from 'src/services/azure/azure-devops.service';
+import { type PatEncryptionService } from 'src/services/crypto/pat-encryption.service';
 import { type Db } from 'src/services/drizzle/drizzle.service';
+import { type GitProvider } from 'src/services/git/git-provider';
 import { type GithubAppService } from 'src/services/github/github-app.service';
 import { type IdService } from 'src/services/ids/id.service';
 import { type LineLockService } from 'src/services/line/line-lock.service';
@@ -29,6 +34,7 @@ import { type PlanTextService } from 'src/services/plans/plan-text.service';
 import { type RunActivityService } from 'src/services/runs/run-activity.service';
 import { type MachineMemoryService } from 'src/services/sockets/machine-memory.service';
 import { type SocketRegistry } from 'src/services/sockets/registry.service';
+import { type Repository } from 'src/types/RepositorySchema';
 
 // Everything the line touches, in one place because the agent socket, the HTTP
 // routes, the webhook and the timers all schedule, and a set assembled four times
@@ -51,6 +57,7 @@ export interface LineDeps {
 	machineRepo: MachineRepo;
 	repositoryRepo: RepositoryRepo;
 	githubInstallationRepo: GithubInstallationRepo;
+	azureConnectionRepo: AzureConnectionRepo;
 	onboardingRunRepo: OnboardingRunRepo;
 	userRepo: UserRepo;
 	projectMemberRepo: ProjectMemberRepo;
@@ -58,6 +65,8 @@ export interface LineDeps {
 	pushSubscriptionRepo: PushSubscriptionRepo;
 	idService: IdService;
 	githubApp: GithubAppService;
+	azureDevOps: AzureDevOpsService;
+	patEncryption: PatEncryptionService;
 	socketRegistry: SocketRegistry;
 	webPush: WebPushService;
 	runActivity: RunActivityService;
@@ -67,6 +76,9 @@ export interface LineDeps {
 	// The web app's origin: a pull request body links back to its plan, and a push
 	// notification deep-links to the same place.
 	appUrl: string;
+	// Resolves the `GitProvider` for one repository from its own `provider` column
+	// — see `shared/git-provider-for.ts`.
+	gitProviderFor: (repository: Repository) => Promise<GitProvider>;
 }
 
 export function lineDeps(fastify: FastifyInstance): LineDeps {
@@ -88,6 +100,7 @@ export function lineDeps(fastify: FastifyInstance): LineDeps {
 		machineRepo: fastify.repos.machineRepo,
 		repositoryRepo: fastify.repos.repositoryRepo,
 		githubInstallationRepo: fastify.repos.githubInstallationRepo,
+		azureConnectionRepo: fastify.repos.azureConnectionRepo,
 		onboardingRunRepo: fastify.repos.onboardingRunRepo,
 		userRepo: fastify.repos.userRepo,
 		projectMemberRepo: fastify.repos.projectMemberRepo,
@@ -95,12 +108,25 @@ export function lineDeps(fastify: FastifyInstance): LineDeps {
 		pushSubscriptionRepo: fastify.repos.pushSubscriptionRepo,
 		idService: fastify.services.idService,
 		githubApp: fastify.services.githubApp,
+		azureDevOps: fastify.services.azureDevOps,
+		patEncryption: fastify.services.patEncryption,
 		socketRegistry: fastify.services.socketRegistry,
 		webPush: fastify.services.webPush,
 		runActivity: fastify.services.runActivity,
 		machineMemory: fastify.services.machineMemory,
 		planTextService: fastify.services.planTextService,
 		lineLock: fastify.services.lineLock,
-		appUrl: fastify.env.PUBLIC_APP_URL
+		appUrl: fastify.env.PUBLIC_APP_URL,
+		gitProviderFor: (repository) =>
+			gitProviderFor(
+				{
+					githubInstallationRepo: fastify.repos.githubInstallationRepo,
+					azureConnectionRepo: fastify.repos.azureConnectionRepo,
+					githubApp: fastify.services.githubApp,
+					azureDevOps: fastify.services.azureDevOps,
+					patEncryption: fastify.services.patEncryption
+				},
+				repository
+			)
 	};
 }

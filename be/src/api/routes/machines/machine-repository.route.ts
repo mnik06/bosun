@@ -6,7 +6,8 @@ import {
 	AttachRepositoryRespSchema,
 	SaveMachinePolicyReqSchema
 } from 'src/api/routes/schemas/machines/MachineRepositoryReqSchemas';
-import { attachRepository } from 'src/controllers/machines/attach-repository';
+import { attachAzureRepository } from 'src/controllers/machines/attach-azure-repository';
+import { attachGithubRepository } from 'src/controllers/machines/attach-repository';
 import { saveMachinePolicy } from 'src/controllers/machines/save-machine-policy';
 import { onboardingDeps } from 'src/controllers/onboarding/onboarding-deps';
 import { MachineSchema } from 'src/types/MachineSchema';
@@ -25,18 +26,36 @@ const routes: FastifyPluginAsync = async function (f) {
 			}
 		},
 		async (req, reply) => {
-			await attachRepository({
-				machineRepo: fastify.repos.machineRepo,
-				repositoryRepo: fastify.repos.repositoryRepo,
-				githubInstallationRepo: fastify.repos.githubInstallationRepo,
-				buildRepo: fastify.repos.buildRepo,
-				githubApp: fastify.services.githubApp,
-				idService: fastify.services.idService,
-				socketRegistry: fastify.services.socketRegistry,
-				id: req.params.id,
-				projectId: req.membership!.projectId,
-				githubRepoId: req.body.githubRepoId
-			});
+			if (req.body.provider === 'github') {
+				await attachGithubRepository({
+					machineRepo: fastify.repos.machineRepo,
+					repositoryRepo: fastify.repos.repositoryRepo,
+					githubInstallationRepo: fastify.repos.githubInstallationRepo,
+					buildRepo: fastify.repos.buildRepo,
+					githubApp: fastify.services.githubApp,
+					idService: fastify.services.idService,
+					socketRegistry: fastify.services.socketRegistry,
+					id: req.params.id,
+					projectId: req.membership!.projectId,
+					githubRepoId: req.body.githubRepoId
+				});
+			} else {
+				await attachAzureRepository({
+					machineRepo: fastify.repos.machineRepo,
+					repositoryRepo: fastify.repos.repositoryRepo,
+					azureConnectionRepo: fastify.repos.azureConnectionRepo,
+					buildRepo: fastify.repos.buildRepo,
+					azureDevOps: fastify.services.azureDevOps,
+					patEncryption: fastify.services.patEncryption,
+					idService: fastify.services.idService,
+					socketRegistry: fastify.services.socketRegistry,
+					id: req.params.id,
+					projectId: req.membership!.projectId,
+					azureConnectionId: req.body.azureConnectionId,
+					azureProjectId: req.body.azureProjectId,
+					azureRepoId: req.body.azureRepoId
+				});
+			}
 
 			return reply.status(202).send({ status: 'requested' as const });
 		}

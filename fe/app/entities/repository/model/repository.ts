@@ -11,16 +11,42 @@ export const GithubInstallationSchema = z.object({
 
 export type GithubInstallation = z.infer<typeof GithubInstallationSchema>
 
+export const AzureConnectionStatusSchema = z.enum(['active', 'broken'])
+
+export type AzureConnectionStatus = z.infer<typeof AzureConnectionStatusSchema>
+
+export const AzureConnectionSchema = z.object({
+	id: z.string(),
+	projectId: z.string(),
+	organization: z.string(),
+	status: AzureConnectionStatusSchema,
+	lastError: z.string().nullable(),
+	brokenAt: z.iso.datetime().nullable(),
+	createdByUserId: z.string().nullable(),
+	createdAt: z.iso.datetime()
+})
+
+export type AzureConnection = z.infer<typeof AzureConnectionSchema>
+
+export const RepositoryProviderSchema = z.enum(['github', 'azure_devops'])
+
+export type RepositoryProvider = z.infer<typeof RepositoryProviderSchema>
+
 export const RepositorySchema = z.object({
 	id: z.string(),
 	projectId: z.string(),
-	installationId: z.string(),
-	githubRepoId: z.number(),
+	provider: RepositoryProviderSchema,
+	installationId: z.string().nullable(),
+	githubRepoId: z.number().nullable(),
+	azureConnectionId: z.string().nullable(),
+	azureProjectId: z.string().nullable(),
+	azureRepoId: z.string().nullable(),
 	fullName: z.string(),
 	defaultBranch: z.string(),
 	configDraft: z.string().nullable(),
 	configOnDefault: z.boolean(),
 	autoResolveConflicts: z.boolean(),
+	lastSyncedAt: z.iso.datetime().nullable(),
 	createdAt: z.iso.datetime()
 })
 
@@ -45,6 +71,20 @@ export const AvailableRepositorySchema = z.object({
 })
 
 export type AvailableRepository = z.infer<typeof AvailableRepositorySchema>
+
+export const AvailableAzureRepositorySchema = z.object({
+	azureConnectionId: z.string(),
+	organization: z.string(),
+	azureProjectId: z.string(),
+	azureProjectName: z.string(),
+	azureRepoId: z.string(),
+	fullName: z.string(),
+	defaultBranch: z.string(),
+	cloneUrl: z.string(),
+	private: z.boolean()
+})
+
+export type AvailableAzureRepository = z.infer<typeof AvailableAzureRepositorySchema>
 
 export const OnboardingStatusSchema = z.enum(['discovering', 'needs_input', 'verifying', 'ready', 'failed'])
 

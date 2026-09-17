@@ -1,12 +1,16 @@
 export {
+	fetchAvailableAzureRepositories,
 	fetchAvailableRepositories,
+	fetchAzureConnections,
 	fetchGithubInstallations,
 	fetchMachineOnboarding,
 	fetchRepositories,
 	fetchRepositoryConfig,
 	fetchRepositoryMessages,
 	repositoryKeys,
+	useAvailableAzureRepositoriesQuery,
 	useAvailableRepositoriesQuery,
+	useAzureConnectionsQuery,
 	useGithubInstallationsQuery,
 	useMachineOnboardingQuery,
 	useRepositoriesQuery,
@@ -17,7 +21,10 @@ export { configSource, describeConfigSource, type ConfigSource } from './lib/con
 export { machinePickerLabel } from './lib/machine-label'
 export { onboardingProgress, type OnboardingProgress } from './lib/onboarding-progress'
 export {
+	AvailableAzureRepositorySchema,
 	AvailableRepositorySchema,
+	AzureConnectionSchema,
+	AzureConnectionStatusSchema,
 	GithubInstallationSchema,
 	MachineOnboardingSchema,
 	OnboardingAssumptionSchema,
@@ -28,8 +35,12 @@ export {
 	OnboardingStepSchema,
 	RepositoryConfigSchema,
 	RepositoryMessageSchema,
+	RepositoryProviderSchema,
 	RepositorySchema,
+	type AvailableAzureRepository,
 	type AvailableRepository,
+	type AzureConnection,
+	type AzureConnectionStatus,
 	type GithubInstallation,
 	type MachineOnboarding,
 	type OnboardingAssumption,
@@ -40,7 +51,8 @@ export {
 	type OnboardingStep,
 	type Repository,
 	type RepositoryConfig,
-	type RepositoryMessage
+	type RepositoryMessage,
+	type RepositoryProvider
 } from './model/repository'
 export { useRepositoryAnswer } from './model/use-repository-answer'
 export { OnboardingStatusBadge } from './ui/onboarding-status-badge'

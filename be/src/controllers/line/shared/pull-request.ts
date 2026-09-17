@@ -48,7 +48,7 @@ export async function pullRequestText(deps: LineDeps, opts: { plan: Plan; build:
 
 async function installationFor(deps: LineDeps, build: Build) {
 	const repository = await deps.repositoryRepo.getById(build.repositoryId);
-	const installation = repository ? await deps.githubInstallationRepo.getById(repository.installationId) : null;
+	const installation = repository?.installationId ? await deps.githubInstallationRepo.getById(repository.installationId) : null;
 
 	return repository && installation ? { repository, installation } : null;
 }
@@ -69,7 +69,9 @@ export async function publishPullRequest(deps: LineDeps, opts: { plan: Plan; bui
 		const text = await pullRequestText(deps, opts);
 		const opened = await deps.githubApp.openOrUpdatePullRequest({
 			installationId: connected.installation.installationId,
-			githubRepoId: connected.repository.githubRepoId,
+			// See the comment in merge.ts: `installation` resolving means this
+			// repository is a GitHub one, so its `githubRepoId` is set too.
+			githubRepoId: connected.repository.githubRepoId!,
 			head: build.branch,
 			base: build.baseBranch,
 			...text

@@ -27,7 +27,7 @@ export async function getRepositoryConfig(opts: {
 	projectId: string;
 }): Promise<RepositoryConfig> {
 	const repository = await getOwnedRepository(opts);
-	const installation = await opts.githubInstallationRepo.getById(repository.installationId);
+	const installation = repository.installationId === null ? null : await opts.githubInstallationRepo.getById(repository.installationId);
 
 	if (!installation) {
 		throw new HttpError(409, 'The GitHub installation this repository came from is no longer connected');
@@ -36,7 +36,10 @@ export async function getRepositoryConfig(opts: {
 	const file = await opts.githubApp
 		.readFile({
 			installationId: installation.installationId,
-			githubRepoId: repository.githubRepoId,
+			// `installation` resolving means this repository is a GitHub one, so its
+			// `githubRepoId` — set alongside `installationId` by `repositoryRepo.upsert` —
+			// is set too.
+			githubRepoId: repository.githubRepoId!,
 			path: PROJECT_CONFIG_PATH,
 			ref: repository.defaultBranch
 		})

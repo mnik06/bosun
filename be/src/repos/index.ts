@@ -1,4 +1,6 @@
 import { type getDb } from 'src/services/drizzle/drizzle.service';
+import { getAzureConnectionRepo } from 'src/repos/azure/azure-connection.repo';
+import { getAzureWebhookSubscriptionRepo } from 'src/repos/azure/azure-webhook-subscription.repo';
 import { getBuildRepo } from 'src/repos/builds/build.repo';
 import { getIntegrationRepo } from 'src/repos/builds/integration.repo';
 import { getOverlapDecisionRepo } from 'src/repos/builds/overlap-decision.repo';
@@ -25,6 +27,8 @@ import { getUserRepo } from 'src/repos/users/user.repo';
 export function getRepos(db: ReturnType<typeof getDb>) {
 	return {
 		acRepo: getAcRepo(db),
+		azureConnectionRepo: getAzureConnectionRepo(db),
+		azureWebhookSubscriptionRepo: getAzureWebhookSubscriptionRepo(db),
 		buildRepo: getBuildRepo(db),
 		githubInstallationRepo: getGithubInstallationRepo(db),
 		integrationRepo: getIntegrationRepo(db),

@@ -109,6 +109,27 @@ export const githubInstallations = pgTable(
 	(table) => [unique('github_installations_project_installation_key').on(table.projectId, table.installationId)]
 );
 
+// One PAT per organization, project-scoped like `github_installations`. The PAT
+// is the only long-lived, non-mintable credential this codebase stores — see
+// `pat-encryption.service.md` for why it is encrypted rather than hashed.
+export const azureConnections = pgTable(
+	'azure_connections',
+	{
+		id: text().primaryKey(),
+		projectId: text()
+			.notNull()
+			.references(() => projects.id, { onDelete: 'cascade' }),
+		organization: text().notNull(),
+		encryptedPat: text().notNull(),
+		status: text().$type<'active' | 'broken'>().notNull().default('active'),
+		lastError: text(),
+		brokenAt: timestamp({ withTimezone: true }),
+		createdByUserId: text().references(() => users.id, { onDelete: 'set null' }),
+		createdAt: timestamp({ withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [unique('azure_connections_project_organization_key').on(table.projectId, table.organization)]
+);
+
 export const repositories = pgTable(
 	'repositories',
 	{
@@ -116,10 +137,14 @@ export const repositories = pgTable(
 		projectId: text()
 			.notNull()
 			.references(() => projects.id, { onDelete: 'cascade' }),
-		installationId: text()
-			.notNull()
-			.references(() => githubInstallations.id, { onDelete: 'cascade' }),
-		githubRepoId: bigint({ mode: 'number' }).notNull(),
+		provider: text().$type<'github' | 'azure_devops'>().notNull().default('github'),
+		installationId: text().references(() => githubInstallations.id, { onDelete: 'cascade' }),
+		githubRepoId: bigint({ mode: 'number' }),
+		azureConnectionId: text().references(() => azureConnections.id, { onDelete: 'cascade' }),
+		azureProjectId: text(),
+		// Azure's repository GUID. Stored as text: it is never arithmetic, and every
+		// other identifier this table carries for a remote repository is text too.
+		azureRepoId: text(),
 		fullName: text().notNull(),
 		defaultBranch: text().notNull(),
 		// Held only until `.bosun/project.yaml` exists on a branch. Validated on write,
@@ -127,9 +152,34 @@ export const repositories = pgTable(
 		configDraft: text(),
 		configOnDefault: boolean().notNull().default(false),
 		autoResolveConflicts: boolean().notNull().default(true),
+		// Azure has no equivalent of a GitHub webhook installation event to announce
+		// a first successful sync, so the UI reads this instead.
+		lastSyncedAt: timestamp({ withTimezone: true }),
 		createdAt: timestamp({ withTimezone: true }).notNull().defaultNow()
 	},
-	(table) => [unique('repositories_project_github_repo_key').on(table.projectId, table.githubRepoId)]
+	(table) => [
+		unique('repositories_project_github_repo_key').on(table.projectId, table.githubRepoId),
+		unique('repositories_project_azure_repo_key').on(table.projectId, table.azureRepoId)
+	]
+);
+
+// One row per (repository, event type) service hook Azure was asked to create.
+// The secret is duplicated across both of a repository's rows rather than kept
+// once on the repository: a webhook delivery names only its own subscription id,
+// and this is what a delivery is checked against.
+export const azureWebhookSubscriptions = pgTable(
+	'azure_webhook_subscriptions',
+	{
+		id: text().primaryKey(),
+		repositoryId: text()
+			.notNull()
+			.references(() => repositories.id, { onDelete: 'cascade' }),
+		eventType: text().$type<'git.push' | 'git.pullrequest.updated'>().notNull(),
+		azureSubscriptionId: text().notNull(),
+		secretHash: text().notNull(),
+		createdAt: timestamp({ withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [unique('azure_webhook_subscriptions_repository_event_key').on(table.repositoryId, table.eventType)]
 );
 
 export const machines = pgTable(

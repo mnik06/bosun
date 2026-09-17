@@ -13,6 +13,7 @@ export function getIdService() {
 		createPlanDecisionId: (): string => `pd_${nanoid(12)}`,
 		createSliceRunId: (): string => `sr_${nanoid(12)}`,
 		createGithubInstallationId: (): string => `ghi_${nanoid(12)}`,
+		createAzureConnectionId: (): string => `azc_${nanoid(12)}`,
 		createRepositoryId: (): string => `repo_${nanoid(12)}`,
 		createOnboardingRunId: (): string => `onb_${nanoid(12)}`,
 		createBuildId: (): string => `bld_${nanoid(12)}`,

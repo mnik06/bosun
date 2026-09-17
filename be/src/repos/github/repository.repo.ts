@@ -6,13 +6,18 @@ import { RepositorySchema, type Repository } from 'src/types/RepositorySchema';
 const columns = {
 	id: repositories.id,
 	projectId: repositories.projectId,
+	provider: repositories.provider,
 	installationId: repositories.installationId,
 	githubRepoId: repositories.githubRepoId,
+	azureConnectionId: repositories.azureConnectionId,
+	azureProjectId: repositories.azureProjectId,
+	azureRepoId: repositories.azureRepoId,
 	fullName: repositories.fullName,
 	defaultBranch: repositories.defaultBranch,
 	configDraft: repositories.configDraft,
 	configOnDefault: repositories.configOnDefault,
 	autoResolveConflicts: repositories.autoResolveConflicts,
+	lastSyncedAt: repositories.lastSyncedAt,
 	createdAt: repositories.createdAt
 };
 
@@ -43,6 +48,43 @@ export function getRepositoryRepo(db: DbOrTx) {
 				.returning(columns);
 
 			return RepositorySchema.parse(row);
+		},
+
+		// Same identity-picks-the-row rule as GitHub's `upsert`, keyed on the azure repo
+		// GUID instead: attaching an already-known repository to a second machine
+		// finds the same row rather than creating a duplicate (AC-30).
+		async upsertAzure(opts: {
+			id: string;
+			projectId: string;
+			azureConnectionId: string;
+			azureProjectId: string;
+			azureRepoId: string;
+			fullName: string;
+			defaultBranch: string;
+		}): Promise<Repository> {
+			const [row] = await db
+				.insert(repositories)
+				.values({ ...opts, provider: 'azure_devops' })
+				.onConflictDoUpdate({
+					target: [repositories.projectId, repositories.azureRepoId],
+					set: {
+						azureConnectionId: opts.azureConnectionId,
+						azureProjectId: opts.azureProjectId,
+						fullName: opts.fullName,
+						defaultBranch: opts.defaultBranch
+					}
+				})
+				.returning(columns);
+
+			return RepositorySchema.parse(row);
+		},
+
+		// Every repository an Azure connection owns, so disconnect knows which
+		// webhook subscriptions to delete from Azure before the cascade drops them.
+		async listForAzureConnection(azureConnectionId: string): Promise<Repository[]> {
+			const rows = await db.select(columns).from(repositories).where(eq(repositories.azureConnectionId, azureConnectionId));
+
+			return rows.map((row) => RepositorySchema.parse(row));
 		},
 
 		async listForProject(projectId: string): Promise<Repository[]> {

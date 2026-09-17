@@ -69,7 +69,7 @@ export async function markMerged(deps: LineDeps, opts: { build: Build }): Promis
 		deps.repositoryRepo.getById(opts.build.repositoryId),
 		deps.planRepo.getById(opts.build.planId)
 	]);
-	const installation = repository ? await deps.githubInstallationRepo.getById(repository.installationId) : null;
+	const installation = repository?.installationId ? await deps.githubInstallationRepo.getById(repository.installationId) : null;
 
 	if (!repository || !plan || opts.build.status === 'merged') {
 		return;
@@ -92,7 +92,10 @@ export async function markMerged(deps: LineDeps, opts: { build: Build }): Promis
 			continue;
 		}
 
-		const moved = await retarget(deps, { dependent, defaultBranch: repository.defaultBranch, githubRepoId: repository.githubRepoId, installationId: installation.installationId });
+		// `installation` resolves only when this repository's `installationId` was set,
+		// which is exactly when its `githubRepoId` is too — the two columns are
+		// written together by `repositoryRepo.upsert` and never independently.
+		const moved = await retarget(deps, { dependent, defaultBranch: repository.defaultBranch, githubRepoId: repository.githubRepoId!, installationId: installation.installationId });
 		const dependentPlan = await deps.planRepo.getById(moved.planId);
 
 		if (dependentPlan && UNMERGED_BUILT_STATUSES.includes(moved.status)) {

@@ -15,7 +15,7 @@ export async function shipFoundation(deps: LineDeps, opts: { id: string; project
 	]);
 	const foundation = slices.find((slice) => slice.foundation);
 	const landed = foundation ? runs.find((run) => run.sliceId === foundation.id && run.phase === null && run.status === 'done') : undefined;
-	const installation = repository ? await deps.githubInstallationRepo.getById(repository.installationId) : null;
+	const installation = repository?.installationId ? await deps.githubInstallationRepo.getById(repository.installationId) : null;
 
 	if (!foundation) {
 		throw new HttpError(409, 'This plan has no foundation bullet');
@@ -33,11 +33,14 @@ export async function shipFoundation(deps: LineDeps, opts: { id: string; project
 	const pieces = footprintPieces(foundation.footprint).map((piece) => `- ${piece.kind}: \`${piece.label}\``);
 
 	try {
-		await deps.githubApp.pointBranch({ installationId: installation.installationId, githubRepoId: repository.githubRepoId, branch, sha: landed.commitSha });
+		// `installation` resolving means this repository is a GitHub one, so its
+		// `githubRepoId` — set alongside `installationId` by `repositoryRepo.upsert` —
+		// is set too.
+		await deps.githubApp.pointBranch({ installationId: installation.installationId, githubRepoId: repository.githubRepoId!, branch, sha: landed.commitSha });
 
 		const opened = await deps.githubApp.openOrUpdatePullRequest({
 			installationId: installation.installationId,
-			githubRepoId: repository.githubRepoId,
+			githubRepoId: repository.githubRepoId!,
 			head: branch,
 			base: repository.defaultBranch,
 			title: `#${plan.number} foundation — ${foundation.title}`,

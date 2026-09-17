@@ -60,7 +60,13 @@ export const EnvSchema = z.object({
 	// subscription can be created against the same key pair the backend signs with.
 	VAPID_PUBLIC_KEY: z.string().min(1),
 	VAPID_PRIVATE_KEY: z.string().min(1),
-	VAPID_SUBJECT: z.string().min(1)
+	VAPID_SUBJECT: z.string().min(1),
+	// Encrypts every Azure DevOps PAT at rest (AES-256-GCM) — the only reversible
+	// secret this codebase stores, because unlike a GitHub installation token a PAT
+	// has no short-lived-mint equivalent. A 32-byte key as 64 hex characters,
+	// generated with `openssl rand -hex 32`. No rotation support: changing it means
+	// every organization re-pastes its token.
+	AZURE_PAT_ENCRYPTION_KEY: z.string().regex(/^[0-9a-f]{64}$/i, 'must be a 32-byte key as 64 hex characters')
 });
 
 export type Env = z.infer<typeof EnvSchema>;
