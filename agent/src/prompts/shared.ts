@@ -215,15 +215,18 @@ start must be inside that range — take a port outside it and you take one anot
 both stacks break in ways neither session can explain.`;
 }
 
-// The agent re-reads its config on every call, so a session that enrolls over it
-// moves the whole machine onto another identity mid-run. One did, driving a plan
-// that needed an enrolled agent, and every plan on the box failed after it.
+// Sessions driving a plan that touched the agent CLI took the box down three ways:
+// an enroll over the config moved the machine onto another identity, a second
+// agent's startup stopped every session running, and a revoked one deletes
+// `~/.bosun` whatever `--config` it was given. None is safe from a worktree.
 export function agentConfigRule(): string {
-	return `**The bosun agent running this session is not yours.** Outside your own worktree, nothing under
-\`~/.bosun\` is: never edit, move or replace \`~/.bosun/config.json\`, and never run \`bosun-agent enroll\`,
-\`setup\` or \`mcp add\` against it. Every plan on this machine runs through that config, and replacing it
-takes their repository and credentials away mid-run. If the work needs an enrolled agent, enroll one
-with \`--config\` pointing inside your worktree, and pass that same \`--config\` to every command after.`;
+	return `**The bosun agent on this machine is not yours to run.** Never run \`bosun-agent enroll\`, \`run\`,
+\`setup\` or \`mcp add\`; never start, stop or restart \`bosun-agent\` or \`bosun-run-*\` units; and outside
+your own worktree never edit, move or replace anything under \`~/.bosun\`. Every plan on this machine runs
+through that agent: an enroll replaces its identity, a starting agent stops running sessions, and a
+removed one deletes \`~/.bosun\` — each takes every plan down, yours included, and a \`--config\` inside
+your worktree prevents none of it. Work that can only be checked by enrolling or running an agent is
+blocked: say so, and do not work around it.`;
 }
 
 // The database belongs to the lane. Every worktree gets the same env, so a bullet
