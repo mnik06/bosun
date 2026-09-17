@@ -39,7 +39,9 @@ function NeedsYou ({ detail }: { detail: PlanDetail }) {
 		>
 			<Stack gap="xs">
 				{build.failureReason === null ? null : (
-					<Text size="sm" className="whitespace-pre-wrap">
+					// Capped on its own: a check's output runs to 2,000 characters, and past the
+					// panels' cap it pushed Retry and Cancel out of view.
+					<Text size="sm" className="max-h-[20vh] overflow-y-auto whitespace-pre-wrap break-words">
 						{build.failureReason}
 					</Text>
 				)}
