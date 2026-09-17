@@ -4,7 +4,6 @@ import { ExternalLink } from 'lucide-react'
 import { PlanStatusBadge, type PlanDetail } from '~/entities/plan'
 import { formatRelativeTime } from '~/shared/lib'
 import { ChangeMap } from '~/widgets/plan-changes/ui/change-map'
-import { IntegrationCard } from '~/widgets/plan-changes/ui/integration-card'
 
 function PullRequest ({ detail }: { detail: PlanDetail }) {
 	const { build } = detail
@@ -53,11 +52,7 @@ function PullRequest ({ detail }: { detail: PlanDetail }) {
 	)
 }
 
-// Read with the diff, by the reviewer, after the work is done — which is why the
-// integration log lives here rather than beside the bullets.
 export function PlanChanges ({ detail }: { detail: PlanDetail }) {
-	const integrations = [...detail.integrations].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-
 	return (
 		<Stack gap="lg">
 			<PullRequest detail={detail} />
@@ -81,22 +76,6 @@ export function PlanChanges ({ detail }: { detail: PlanDetail }) {
 					<ChangeMap summary={detail.plan.summary} />
 				</Stack>
 			)}
-
-			<Stack gap="xs">
-				<Text size="xs" c="dimmed">
-					Syncs
-				</Text>
-				{integrations.length === 0 ? (
-					<Text size="sm" c="dimmed">
-						None yet. The branch syncs with its base when it finishes building, and again whenever the
-						base or the plan it stacks on moves.
-					</Text>
-				) : (
-					integrations.map((integration) => (
-						<IntegrationCard key={integration.id} integration={integration} />
-					))
-				)}
-			</Stack>
 		</Stack>
 	)
 }

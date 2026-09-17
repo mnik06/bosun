@@ -9,7 +9,7 @@ import {
 import { FootprintSchema } from '../../footprint';
 import { type PlanAnswer, type PlanQuestion } from '../../protocol';
 import { type BosunApiService } from '../../services/bosun-api.service';
-import { CoverageEntrySchema, coverageRefusal, withCoverage } from '../coverage';
+import { CoverageEntrySchema, coverageRefusal } from '../coverage';
 
 export const NamePlanArgsSchema = z.object({ title: z.string().min(1) });
 
@@ -53,7 +53,7 @@ const DESCRIPTIONS: Record<string, string> = {
 	set_blockers:
 		'Declare the plans whose whole feature this one needs before it can start — not a piece of them, which is a `consumes` entry in a bullet\'s footprint. Names them by plan number, replacing whatever was declared before; pass an empty list to clear. Bosun detects every other dependency itself from footprints when the plan is approved, so declare only what no footprint can say.',
 	publish_plan:
-		'Publish the whole plan at once: title, markdown body, every acceptance criterion, every tracer bullet with the criteria it claims, its footprint, and `foundation` on bullet 1 when it holds shared pieces, and the `coverage` ledger. Replaces whatever was published before, so a revision re-sends the plan as it should now be rather than a diff. Every AC must be claimed by exactly one bullet, and what is already marked implemented or verified stays that way. Refused with more than six build bullets, a build bullet without a footprint, or a schema change, contract or created module outside bullet 1. Refused without `coverage` on a new plan, and whenever `coverage` holds a requirement no criterion delivers and no non-goal explains, or the plan holds a criterion no entry traces to. The ledger is appended to the body as its Requirements coverage section.'
+		'Publish the whole plan at once: title, markdown body, every acceptance criterion, every tracer bullet with the criteria it claims, its footprint, and `foundation` on bullet 1 when it holds shared pieces, and the `coverage` ledger. Replaces whatever was published before, so a revision re-sends the plan as it should now be rather than a diff. Every AC must be claimed by exactly one bullet, and what is already marked implemented or verified stays that way. Refused with more than six build bullets, a build bullet without a footprint, or a schema change, contract or created module outside bullet 1. Refused without `coverage` on a new plan, and whenever `coverage` holds a requirement no criterion delivers and no non-goal explains, or the plan holds a criterion no entry traces to. The ledger is checked against the criteria and then discarded — it is never stored in or readable from the plan body.'
 };
 
 export const TOOL_SCHEMAS = {
@@ -98,7 +98,7 @@ export function createPlanDispatch(opts: {
 	// Off for a revision: the plan handed to it is already the product of a grill,
 	// and a change the person asked for in prose is not a new one.
 	requireGrill: boolean;
-	// Off for a revision too: its ledger is already in the body it was handed.
+	// Off for a revision too: its criteria haven't changed, so there is no new ledger to check.
 	requireCoverage: boolean;
 	bosunApi: BosunApiService;
 	onPublished: () => void;
@@ -167,7 +167,7 @@ export function createPlanDispatch(opts: {
 
 				const saved = await opts.bosunApi.publishPlan({
 					planId: opts.planId,
-					artifact: coverage === undefined ? artifact : { ...artifact, bodyMd: withCoverage(artifact.bodyMd, coverage) }
+					artifact
 				});
 
 				opts.onPublished();

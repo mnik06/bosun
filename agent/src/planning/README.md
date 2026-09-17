@@ -159,10 +159,11 @@ project's; what a screen does in every state is the plan's.
 takes `coverage` — one entry per requirement or found gap, with the criteria that deliver it or the
 non-goal it became — and `coverage.ts` refuses a plan with a line nothing accounts for, or a criterion
 that traces to no line. The tool cannot know a requirement the session never wrote down, but writing
-them down is no longer a step it can skip, and the ledger is appended to the body as **Requirements
-coverage**, where the person can hold it against the ticket line by line. It is appended by the tool
-rather than written by the session so the section a person reads is the one that was checked. A
-revision is handed that section in the body and sends a new ledger only when it re-cuts criteria.
+them down is no longer a step it can skip. The ledger is validated against the plan's criteria and then
+discarded — it is never rendered into the body or stored anywhere, so a plan's `bodyMd` stays exactly
+what the session wrote. Acceptance criteria are the only checklist a plan is built and verified
+against. A revision sends `coverage` again only when it re-cuts criteria, so the tool can re-check the
+new set traces cleanly.
 
 Rejected: **fetching the ticket in the agent** and inlining it into the prompt. The agent holds no
 tracker credential — trackers are the user's MCP servers — and every tracker's field model is its own.

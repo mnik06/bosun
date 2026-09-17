@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { coverageRefusal, withCoverage, type CoverageEntry } from './coverage';
+import { coverageRefusal, type CoverageEntry } from './coverage';
 
 const entry = (overrides: Partial<CoverageEntry>): CoverageEntry => ({ source: 'Header: "shows the CPN"', acCodes: [], ...overrides });
 
@@ -46,28 +46,5 @@ describe('coverageRefusal', () => {
 		const coverage = Array.from({ length: 14 }, (_, index) => entry({ source: `requirement ${index}` }));
 
 		expect(coverageRefusal({ acCodes: [], coverage })).toContain('and 4 more');
-	});
-});
-
-describe('withCoverage', () => {
-	it('appends the ledger as a table, escaping what would break a row', () => {
-		const body = withCoverage('# Plan\n\n## Non-goals\n\nNone.', [
-			entry({ source: 'a | b\nc', acCodes: ['AC-1', 'AC-2'] }),
-			entry({ source: 'd', nonGoal: 'later' })
-		]);
-
-		expect(body).toContain('## Non-goals\n\nNone.\n\n## Requirements coverage');
-		expect(body).toContain('| a \\| b c | AC-1, AC-2 |');
-		expect(body).toContain('| d | Non-goal: later |');
-	});
-
-	it('replaces the ledger a revision was handed rather than adding a second one', () => {
-		const first = withCoverage('# Plan', [entry({ source: 'old', acCodes: ['AC-1'] })]);
-		const revised = withCoverage(`${first}\n## Blockers & dependencies\n\nNone.`, [entry({ source: 'new', acCodes: ['AC-1'] })]);
-
-		expect(revised.match(/## Requirements coverage/g)).toHaveLength(1);
-		expect(revised).not.toContain('| old |');
-		expect(revised).toContain('| new |');
-		expect(revised).toContain('## Blockers & dependencies');
 	});
 });

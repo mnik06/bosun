@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { defaultPlanTab, visiblePlanTabs } from '~/entities/plan/lib/plan-tabs'
-import type { Build, SliceRun } from '~/entities/plan/model/build'
+import type { Build, Integration, SliceRun } from '~/entities/plan/model/build'
 import type { Plan, Slice } from '~/entities/plan/model/plan'
 
 const plan = { title: null, approvedAt: null } as unknown as Plan
@@ -27,6 +27,12 @@ describe('visiblePlanTabs', () => {
 
 	it('adds changes once a bullet commits', () => {
 		expect(visiblePlanTabs({ ...empty, build, runs: [run({ status: 'done', commitSha: 'abc' })] })).toContain('changes')
+	})
+
+	it('adds sync, right after changes, once the plan has an integration', () => {
+		const integration = {} as unknown as Integration
+		expect(visiblePlanTabs({ ...empty, integrations: [integration] })).toEqual(['chat', 'changes', 'sync'])
+		expect(visiblePlanTabs(empty)).not.toContain('sync')
 	})
 
 	// A drive that is only queued has nothing to show yet; one that started does.
