@@ -5,7 +5,7 @@ const GIB = 1024 ** 3;
 // Kept back from every session: the kernel, the agent, a RAM-backed `/tmp`, and
 // enough page cache that the box is not paging its own binaries. The agent falls
 // back to the same number when a backend sends it no limit.
-export const RESERVED_BYTES = 1.5 * GIB;
+const RESERVED_BYTES = 1.5 * GIB;
 
 // Measured, not guessed. On an 8 GB box a whole-package lint peaked at 2 GB, a
 // typecheck at 1.1 GB and a dev server at 0.8 GB, and a verify session running
@@ -50,7 +50,7 @@ export function heldBytes(opts: { load: MachineLoad; usable: number }): number {
 	);
 }
 
-export type Admission = { admitted: true; limitBytes: number | null } | { admitted: false };
+type Admission = { admitted: true; limitBytes: number | null } | { admitted: false };
 
 function idle(load: MachineLoad): boolean {
 	return load.build + load.lane + load.onboarding === 0;

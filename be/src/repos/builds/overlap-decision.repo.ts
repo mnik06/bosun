@@ -54,16 +54,6 @@ export function getOverlapDecisionRepo(db: DbOrTx) {
 			return rows.map((row) => OverlapDecisionSchema.parse(row));
 		},
 
-		async listOpenForProject(projectId: string): Promise<OverlapDecision[]> {
-			const rows = await db
-				.select(columns)
-				.from(overlapDecisions)
-				.innerJoin(plans, eq(plans.id, overlapDecisions.planId))
-				.where(and(eq(plans.projectId, projectId), isNull(overlapDecisions.chosen)));
-
-			return rows.map((row) => OverlapDecisionSchema.parse(row));
-		},
-
 		// Only an open decision can be decided: two people answering at once get one
 		// ruling, not the last one.
 		async decide(opts: { id: string; chosen: OverlapChoice; userId: string }): Promise<OverlapDecision | null> {

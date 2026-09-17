@@ -1,10 +1,9 @@
-import { dispatchNotification } from 'src/controllers/notifications/dispatch-notification';
-import { planName, resolveRecipients, type PlanNotifyRecipientDeps } from 'src/controllers/plans/shared/notify-recipients';
+import { notifyPlanEvent, planName, type PlanNotifyRecipientDeps } from 'src/controllers/plans/shared/notify-recipients';
 import { type Build, type BuildStatus } from 'src/types/BuildSchema';
 import { type NotificationKind } from 'src/types/NotificationSchema';
 import { type Plan } from 'src/types/PlanSchema';
 
-export type BuildNotifyDeps = PlanNotifyRecipientDeps;
+type BuildNotifyDeps = PlanNotifyRecipientDeps;
 
 const STATUS_KIND: Partial<Record<BuildStatus, NotificationKind>> = {
 	waiting_answer: 'build.waiting_answer',
@@ -43,17 +42,13 @@ export async function notifyBuildStatus(deps: BuildNotifyDeps, opts: { plan: Pla
 		return;
 	}
 
-	const recipientIds = await resolveRecipients(deps, opts.plan);
 	const name = planName(opts.plan);
 
-	await dispatchNotification(deps, {
-		recipientIds,
-		projectId: opts.plan.projectId,
+	await notifyPlanEvent(deps, {
+		plan: opts.plan,
 		kind,
 		title: STATUS_TITLE[opts.build.status]!,
-		body: opts.build.failureReason ? `${name}: ${opts.build.failureReason}` : `${name} ${STATUS_SUMMARY[opts.build.status]}`,
-		url: `${deps.appUrl}/plans/${opts.plan.id}`,
-		planId: opts.plan.id
+		body: opts.build.failureReason ? `${name}: ${opts.build.failureReason}` : `${name} ${STATUS_SUMMARY[opts.build.status]}`
 	});
 }
 
@@ -61,16 +56,10 @@ export async function notifyBuildStatus(deps: BuildNotifyDeps, opts: { plan: Pla
 // rule as every other build-scoped trigger: the plan's own creator, or every
 // leader when the plan carries no attribution.
 export async function notifyPlanUnblocked(deps: BuildNotifyDeps, opts: { plan: Plan }): Promise<void> {
-	const recipientIds = await resolveRecipients(deps, opts.plan);
-	const name = planName(opts.plan);
-
-	await dispatchNotification(deps, {
-		recipientIds,
-		projectId: opts.plan.projectId,
+	await notifyPlanEvent(deps, {
+		plan: opts.plan,
 		kind: 'plan.unblocked',
 		title: 'Unblocked',
-		body: `${name} is unblocked`,
-		url: `${deps.appUrl}/plans/${opts.plan.id}`,
-		planId: opts.plan.id
+		body: `${planName(opts.plan)} is unblocked`
 	});
 }

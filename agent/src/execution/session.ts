@@ -14,7 +14,7 @@ import { describeApplied, envFileFor } from '../services/project-env.service';
 import { runShell } from '../services/setup-steps.service';
 import { startSessionMcpServer, type SessionMcpServer } from '../sessions/mcp-server';
 import { spawnClaudeSession, type ClaudeSession, type SessionExit } from '../sessions/process';
-import { createStderrTail, logDroppedFrame, reportStartFailure } from '../sessions/turn-support';
+import { createStderrTail, logDroppedFrame, pipeSessionOutput, reportStartFailure } from '../sessions/turn-support';
 import { commitMessageFor, mergeBranches } from './commit';
 import {
 	createExecutionDispatch,
@@ -559,6 +559,8 @@ export function createExecutionSessions(opts: {
 			onDropped: logDroppedFrame
 		});
 
+		const pipe = pipeSessionOutput({ parser, stderr, tag: msg.runId });
+
 		run.process = spawnClaudeSession({
 			cwd: msg.worktreePath,
 			prompt: promptFor({
@@ -591,15 +593,10 @@ export function createExecutionSessions(opts: {
 					label: 'A command ran out of memory'
 				});
 			},
-			onStdout: (chunk) => {
-				parser.push(chunk);
-			},
-			onStderr: (chunk) => {
-				stderr.push(chunk);
-				console.error(`[${msg.runId}] ${chunk.trimEnd()}`);
-			},
+			onStdout: pipe.onStdout,
+			onStderr: pipe.onStderr,
 			onExit: (code, exit) => {
-				parser.flush();
+				pipe.onExit();
 
 				if (run.cancelled) {
 					return;

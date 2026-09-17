@@ -5,6 +5,7 @@ import os from 'os';
 import path from 'path';
 import { type ExecService } from './exec.service';
 import { type ProjectConfig } from '../project-config';
+import { killProcessGroup } from '../utils';
 
 const SETUP_STATE_DIRNAME = 'setup-state';
 
@@ -57,13 +58,7 @@ export function runShell(opts: {
 		const keep = (chunk: Buffer) => {
 			tail = `${tail}${chunk.toString('utf8')}`.slice(-TAIL_CHARS);
 		};
-		const signal = (name: NodeJS.Signals) => {
-			try {
-				process.kill(-child.pid!, name);
-			} catch {
-				child.kill(name);
-			}
-		};
+		const signal = (name: NodeJS.Signals) => killProcessGroup(child, name);
 		const timer = setTimeout(() => {
 			timedOut = true;
 			signal('SIGTERM');

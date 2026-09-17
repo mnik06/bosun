@@ -108,7 +108,7 @@ function describeServer(server: unknown): string {
 }
 
 export async function addMcpPreset(opts: { config: AgentConfig; id: string }): Promise<void> {
-	const api = getBosunApiService({ serverUrl: opts.config.serverUrl });
+	const api = getBosunApiService({ serverUrl: opts.config.serverUrl, machineKey: opts.config.machineKey });
 	const env = getEnvService({ baseEnv: process.env });
 	const mcpConfig = getMcpConfigService({ env });
 	const prompt = getPromptService({});

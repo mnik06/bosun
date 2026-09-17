@@ -13,7 +13,7 @@ const MAX_TEXT = 160;
 const MAX_LISTED = 10;
 const MAX_DIFF = 3_000;
 
-export interface KnownGap {
+interface KnownGap {
 	code: string;
 	text: string;
 	reproduction: string;

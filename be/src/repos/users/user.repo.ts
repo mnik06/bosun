@@ -13,12 +13,6 @@ const publicColumns = {
 
 export function getUserRepo(db: DbOrTx) {
 	return {
-		async getBySubId(subId: string): Promise<User | null> {
-			const [row] = await db.select(publicColumns).from(users).where(eq(users.subId, subId));
-
-			return row ? UserSchema.parse(row) : null;
-		},
-
 		async listByIds(ids: string[]): Promise<User[]> {
 			if (ids.length === 0) {
 				return [];

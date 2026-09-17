@@ -1,5 +1,33 @@
-import { describe, expect, it } from 'vitest';
-import { buildSecrets, credentialVariables, encodeBasicAuth, planCredentials } from './mcp';
+import { describe, expect, it, vi } from 'vitest';
+import { addMcpPreset, buildSecrets, credentialVariables, encodeBasicAuth, planCredentials } from './mcp';
+import { type AgentConfig } from '../config/config';
+
+vi.mock('../services/bosun-api.service', () => ({
+	getBosunApiService: vi.fn(() => ({
+		getMcpPreset: vi.fn().mockRejectedValue(new Error('stop before any prompt'))
+	}))
+}));
+
+describe('addMcpPreset', () => {
+	// The preset fetch went from GET /mcp-presets/:id (unauthenticated) to
+	// GET /agent/mcp-presets/:id, which refuses every call with no machine
+	// credential — including this one, if the machine key is dropped on the way.
+	it('authenticates the preset fetch with the machine key', async () => {
+		const { getBosunApiService } = await import('../services/bosun-api.service');
+		const config: AgentConfig = {
+			serverUrl: 'https://bosun.example',
+			machineId: 'm_1',
+			machineKey: 'the-machine-key'
+		};
+
+		await expect(addMcpPreset({ config, id: 'azure-devops' })).rejects.toThrow();
+
+		expect(getBosunApiService).toHaveBeenCalledWith({
+			serverUrl: config.serverUrl,
+			machineKey: config.machineKey
+		});
+	});
+});
 
 describe('encodeBasicAuth', () => {
 	// The one header shape variable substitution cannot express, which is the

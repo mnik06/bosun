@@ -1,5 +1,6 @@
-import { type DispatchNotificationDeps } from 'src/controllers/notifications/dispatch-notification';
+import { dispatchNotification, type DispatchNotificationDeps } from 'src/controllers/notifications/dispatch-notification';
 import { type ProjectMemberRepo } from 'src/repos/projects/project-member.repo';
+import { type NotificationKind } from 'src/types/NotificationSchema';
 import { type Plan } from 'src/types/PlanSchema';
 
 export interface PlanNotifyRecipientDeps extends DispatchNotificationDeps {
@@ -22,4 +23,24 @@ export async function resolveRecipients(deps: PlanNotifyRecipientDeps, plan: Pla
 	}
 
 	return deps.projectMemberRepo.listLeaders(plan.projectId);
+}
+
+// The shared tail of every plan/build notification trigger: resolve who gets
+// it, then hand off to the single fan-in dispatcher. Callers own only the
+// kind/title/body decision that is specific to their event.
+export async function notifyPlanEvent(
+	deps: PlanNotifyRecipientDeps,
+	opts: { plan: Plan; kind: NotificationKind; title: string; body: string }
+): Promise<void> {
+	const recipientIds = await resolveRecipients(deps, opts.plan);
+
+	await dispatchNotification(deps, {
+		recipientIds,
+		projectId: opts.plan.projectId,
+		kind: opts.kind,
+		title: opts.title,
+		body: opts.body,
+		url: `${deps.appUrl}/plans/${opts.plan.id}`,
+		planId: opts.plan.id
+	});
 }

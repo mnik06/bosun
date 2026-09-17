@@ -2,6 +2,7 @@ import { HttpError } from 'src/api/errors/HttpError';
 import { type PlanDependencyRepo } from 'src/repos/builds/plan-dependency.repo';
 import { type PlanRepo } from 'src/repos/plans/plan.repo';
 import { type IdService } from 'src/services/ids/id.service';
+import { orNotFound } from 'src/utils/general';
 
 // What a planning session declares: this plan needs another plan's whole feature.
 // The finer dependencies — a table, a contract, a module — are detected from
@@ -14,11 +15,10 @@ export async function setPlanBlockers(opts: {
 	machineId: string;
 	blockedByNumbers: number[];
 }): Promise<{ blockedBy: number[] }> {
-	const plan = await opts.planRepo.getByIdForMachine({ id: opts.planId, machineId: opts.machineId });
-
-	if (!plan) {
-		throw new HttpError(404, 'Plan not found');
-	}
+	const plan = await orNotFound(
+		opts.planRepo.getByIdForMachine({ id: opts.planId, machineId: opts.machineId }),
+		'Plan not found'
+	);
 
 	const wanted = [...new Set(opts.blockedByNumbers)].filter((number) => number !== plan.number);
 	const found = await opts.planRepo.getByNumbers({ projectId: plan.projectId, numbers: wanted });

@@ -6,6 +6,7 @@ import { notifyOnboardingStatus } from 'src/controllers/onboarding/shared/notify
 import { ACTIVE_ONBOARDING_STATUSES } from 'src/repos/onboarding/onboarding-run.repo';
 import { type SocketRegistry } from 'src/services/sockets/registry.service';
 import { type OnboardingRun } from 'src/types/OnboardingSchema';
+import { orNotFound } from 'src/utils/general';
 
 // Below the first build's range, which starts at 4100. One run is active on a
 // machine at a time, so a fixed range cannot collide with another run, and no
@@ -79,11 +80,10 @@ export async function getActiveRunForMachine(
 	deps: Pick<OnboardingDeps, 'onboardingRunRepo'>,
 	opts: { runId: string; machineId: string }
 ): Promise<OnboardingRun> {
-	const run = await deps.onboardingRunRepo.getForMachine({ id: opts.runId, machineId: opts.machineId });
-
-	if (!run) {
-		throw new HttpError(404, 'Onboarding run not found');
-	}
+	const run = await orNotFound(
+		deps.onboardingRunRepo.getForMachine({ id: opts.runId, machineId: opts.machineId }),
+		'Onboarding run not found'
+	);
 
 	if (!isActiveRun(run)) {
 		throw new HttpError(409, `this onboarding run is ${run.status} and takes no more reports`);

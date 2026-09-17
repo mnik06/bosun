@@ -18,7 +18,7 @@ import { compareVersions } from 'src/utils/general';
 // The release that carries `repo.attach`, the credential helper, the toolchain and
 // stack services and the key. An older agent would drop the frame as unknown, and
 // the browser would wait on a clone that is never going to start.
-export const MIN_REPOSITORY_AGENT_VERSION = '3.0.0';
+const MIN_REPOSITORY_AGENT_VERSION = '3.0.0';
 
 async function remoteFor(opts: {
 	githubApp: GithubAppService;
