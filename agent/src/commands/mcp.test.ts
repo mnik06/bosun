@@ -36,12 +36,28 @@ describe('credentialVariables', () => {
 		expect(credentialVariables({ requires: [{ env: 'A' }, { env: 'B' }] })).toEqual(['A', 'B']);
 	});
 
-	// With basic auth the raw answers are combined and discarded, so the encoded
-	// header is the only thing that lands in the env file.
-	it('lists only the derived variable for a basic-auth preset', () => {
+	// With basic auth the pair it consumes collapses into the encoded header, so
+	// that is the only variable it writes — Atlassian's shape, unaffected by the
+	// azure-devops case below since both its requires entries are consumed.
+	it('lists only the derived variable when basicAuth consumes every requires entry', () => {
 		expect(
-			credentialVariables({ requires: [{ env: 'EMAIL' }, { env: 'TOKEN' }], basicAuth: { into: 'BASIC' } })
+			credentialVariables({
+				requires: [{ env: 'EMAIL' }, { env: 'TOKEN' }],
+				basicAuth: { user: 'EMAIL', secret: 'TOKEN', into: 'BASIC' }
+			})
 		).toEqual(['BASIC']);
+	});
+
+	// azure-devops' org is a `requires` answer that is neither half of the
+	// basicAuth pair — it must still be stored, or the config's ${AZURE_DEVOPS_ORG}
+	// reference never resolves.
+	it('also lists a requires entry that basicAuth does not consume', () => {
+		expect(
+			credentialVariables({
+				requires: [{ env: 'ORG' }, { env: 'ACCOUNT' }, { env: 'PAT' }],
+				basicAuth: { user: 'ACCOUNT', secret: 'PAT', into: 'BASIC' }
+			})
+		).toEqual(['BASIC', 'ORG']);
 	});
 });
 
@@ -121,5 +137,25 @@ describe('buildSecrets', () => {
 
 	it('writes nothing for a preset that requires nothing', () => {
 		expect(buildSecrets({ preset: { requires: [] }, answers: new Map(), replace: true })).toEqual([]);
+	});
+
+	// azure-devops' shape: three requires entries, only two of them consumed by
+	// basicAuth. The org answer must land as its own variable alongside the
+	// derived header, or ${AZURE_DEVOPS_ORG} never resolves.
+	it('stores a requires answer that basicAuth does not consume alongside the derived variable', () => {
+		const azureDevopsPreset = {
+			requires: [{ env: 'ORG' }, { env: 'ACCOUNT' }, { env: 'PAT' }],
+			basicAuth: { user: 'ACCOUNT', secret: 'PAT', into: 'BASIC' }
+		};
+		const answers = new Map([
+			['ORG', 'my-org'],
+			['ACCOUNT', 'me@example.com'],
+			['PAT', 'tok']
+		]);
+
+		expect(buildSecrets({ preset: azureDevopsPreset, answers, replace: true })).toEqual([
+			{ variable: 'BASIC', value: encodeBasicAuth({ user: 'me@example.com', secret: 'tok' }) },
+			{ variable: 'ORG', value: 'my-org' }
+		]);
 	});
 });

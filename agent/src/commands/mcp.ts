@@ -27,8 +27,15 @@ export function buildSecrets(opts: {
 	const { basicAuth } = opts.preset;
 
 	if (basicAuth) {
-		// Only the encoded header value is stored. Keeping the raw pair as well
-		// would mean two places to rotate and one of them silently stale.
+		// Only the encoded header value is stored for the pair basicAuth consumes —
+		// keeping the raw pair as well would mean two places to rotate and one of
+		// them silently stale. A `requires` answer that is neither half of that pair
+		// (azure-devops' org, alongside its account/PAT pair) is still a variable
+		// the server's config references, so it is stored too, not dropped.
+		const extras = [...opts.answers].filter(
+			([variable]) => variable !== basicAuth.user && variable !== basicAuth.secret
+		);
+
 		return [
 			{
 				variable: basicAuth.into,
@@ -36,20 +43,32 @@ export function buildSecrets(opts: {
 					user: opts.answers.get(basicAuth.user) ?? '',
 					secret: opts.answers.get(basicAuth.secret) ?? ''
 				})
-			}
+			},
+			...extras.map(([variable, value]) => ({ variable, value }))
 		];
 	}
 
 	return [...opts.answers].map(([variable, value]) => ({ variable, value }));
 }
 
-// The variables this preset owns. With `basicAuth` the raw answers are combined
-// and only the encoded header is stored, so that is the single variable it writes.
+// The variables this preset owns. With `basicAuth` the pair it consumes collapses
+// into the single encoded header, but a `requires` answer outside that pair is
+// still its own stored variable — dropping it would leave the config's `${VAR}`
+// referencing something nothing ever wrote.
 export function credentialVariables(preset: {
 	requires: { env: string }[];
-	basicAuth?: { into: string };
+	basicAuth?: { user: string; secret: string; into: string };
 }): string[] {
-	return preset.basicAuth ? [preset.basicAuth.into] : preset.requires.map((entry) => entry.env);
+	if (!preset.basicAuth) {
+		return preset.requires.map((entry) => entry.env);
+	}
+
+	const { basicAuth } = preset;
+	const extras = preset.requires
+		.map((entry) => entry.env)
+		.filter((env) => env !== basicAuth.user && env !== basicAuth.secret);
+
+	return [basicAuth.into, ...extras];
 }
 
 export interface CredentialPlan {
@@ -132,6 +151,10 @@ async function runAdd(deps: {
 	const answers = new Map<string, string>();
 
 	for (const requirement of replace ? preset.requires : []) {
+		if (requirement.helpUrl) {
+			console.log(`  ${requirement.helpUrl}`);
+		}
+
 		const value =
 			requirement.secret === false
 				? await prompt.ask(`${requirement.label}: `)
