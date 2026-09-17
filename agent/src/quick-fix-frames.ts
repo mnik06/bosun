@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { CommitOutcomeSchema } from './commit-outcome';
 
 // Mirrors `be/src/types/quick-fix-frames.ts`. Kept out of `protocol.ts` only for its length.
 
@@ -13,14 +14,9 @@ export const QuickFixStartMsgSchema = z.object({
 
 export type QuickFixStart = z.infer<typeof QuickFixStartMsgSchema>;
 
-export const QuickFixDoneMsgSchema = z.object({
+export const QuickFixDoneMsgSchema = CommitOutcomeSchema.extend({
 	type: z.literal('quickfix.done'),
-	quickFixId: z.string(),
-	commitSha: z.string().nullable(),
-	report: z.string(),
-	changedFiles: z.array(z.string()).default([]),
-	pushed: z.boolean().default(false),
-	pushError: z.string().nullable().default(null)
+	quickFixId: z.string()
 });
 
 export const QuickFixErrorMsgSchema = z.object({

@@ -1,5 +1,7 @@
+import { normalizeRelativePath } from '~/shared/lib'
+
 export function envFilePath (path: string): string {
-	const relative = path.trim().replace(/^\/+/, '').replace(/\/+$/, '')
+	const relative = normalizeRelativePath(path)
 
 	return relative === '' || relative === '.' ? '.env' : `${relative}/.env`
 }

@@ -28,6 +28,7 @@ import {
 } from './build-frames';
 import { FootprintSchema } from './footprint';
 import { ProjectProfileSchema } from './project-profile';
+import { CommitOutcomeSchema } from './commit-outcome';
 import { QuickFixDoneMsgSchema, QuickFixErrorMsgSchema, QuickFixStartMsgSchema } from './quick-fix-frames';
 
 export {
@@ -204,16 +205,9 @@ export const ExecQuestionMsgSchema = z.object({
 	questions: z.array(PlanQuestionSchema).min(1)
 });
 
-// `changedFiles` is what the landed commit touched; `pushed` is whether the branch
-// reached the remote after it, which is what lets a dependent start elsewhere.
-export const ExecDoneMsgSchema = z.object({
+export const ExecDoneMsgSchema = CommitOutcomeSchema.extend({
 	type: z.literal('exec.done'),
-	runId: z.string(),
-	commitSha: z.string().nullable(),
-	report: z.string(),
-	changedFiles: z.array(z.string()).default([]),
-	pushed: z.boolean().default(false),
-	pushError: z.string().nullable().default(null)
+	runId: z.string()
 });
 
 export const ExecErrorMsgSchema = z.object({

@@ -97,6 +97,57 @@ export function commandList(entries: { label: string; cwd?: string; run: string 
 	return entries.map((entry) => `  - ${entry.label}: \`${entry.run}\`${entry.cwd === undefined ? '' : ` in \`${entry.cwd}\``}`).join('\n');
 }
 
+// The toolchain line, identical wherever a config is rendered: a plan bullet, a
+// verify pass or a quick fix all run on whatever node bosun provisioned.
+export function toolchainSection(config: ProjectConfig): string {
+	const toolchain = config.toolchain;
+
+	return toolchain === undefined
+		? ''
+		: `- Toolchain: node ${toolchain.node}${toolchain.packageManager === undefined ? '' : `, ${toolchain.packageManager}`} — provisioned by bosun and already first on your PATH. Never install or switch another.`;
+}
+
+// The setup block. A quick fix has no dev-stack re-run to mention, so it takes the
+// shorter of the two — the plain fact that setup already ran in this worktree —
+// while a plan bullet also says setup is kept current for it as watched files change.
+export function setupSection(config: ProjectConfig, opts: { rerun: boolean }): string {
+	if (config.setup.length === 0) {
+		return '';
+	}
+
+	const commands = commandList(config.setup.map((step) => ({ label: step.name, cwd: step.cwd, run: step.run })));
+
+	return opts.rerun
+		? `- Setup, already run in this worktree and re-run by bosun whenever its watched files change:\n${commands}`
+		: `- Setup, already run in this worktree:\n${commands}`;
+}
+
+export function codegenSection(config: ProjectConfig): string {
+	const apps = Object.entries(config.apps);
+
+	return apps.some(([, app]) => app.codegen !== undefined)
+		? `- Code generation:\n${commandList(apps.filter(([, app]) => app.codegen !== undefined).map(([name, app]) => ({ label: name, cwd: app.cwd, run: app.codegen! })))}`
+		: '';
+}
+
+export function migrateSection(config: ProjectConfig): string {
+	const apps = Object.entries(config.apps);
+
+	return apps.some(([, app]) => app.migrate !== undefined)
+		? `- Migrations:\n${commandList(apps.filter(([, app]) => app.migrate !== undefined).map(([name, app]) => ({ label: name, cwd: app.cwd, run: app.migrate! })))}`
+		: '';
+}
+
+export function checksSection(config: ProjectConfig): string {
+	return config.checks.length === 0
+		? ''
+		: `- The project's checks — the core of your loop:\n${commandList(config.checks.map((check, index) => ({ label: check.name ?? `check ${index + 1}`, cwd: check.cwd, run: check.run })))}`;
+}
+
+export function notesSection(config: ProjectConfig): string {
+	return config.notes === undefined ? '' : `- Notes: ${config.notes.trim()}`;
+}
+
 // Everything a session used to rediscover an hour into a bullet, written down once
 // and proven by onboarding. It is the starting point, not the ceiling: a check the
 // config does not name is still worth running when the session finds one.
@@ -109,31 +160,20 @@ export function configuredProject(context: RunContext): string[] {
 
 	const ports = appPorts(config, context.portBase);
 	const apps = Object.entries(config.apps);
-	const toolchain = config.toolchain;
 
 	return [
-		toolchain === undefined
-			? ''
-			: `- Toolchain: node ${toolchain.node}${toolchain.packageManager === undefined ? '' : `, ${toolchain.packageManager}`} — provisioned by bosun and already first on your PATH. Never install or switch another.`,
-		config.setup.length === 0
-			? ''
-			: `- Setup, already run in this worktree and re-run by bosun whenever its watched files change:\n${commandList(config.setup.map((step) => ({ label: step.name, cwd: step.cwd, run: step.run })))}`,
+		toolchainSection(config),
+		setupSection(config, { rerun: true }),
 		apps.length === 0
 			? ''
 			: `- Apps, started only with the \`stack_up\` tool — never by running their start command yourself:\n${apps.map(([name, app]) => `  - \`${name}\` on port ${ports[name]} (http://127.0.0.1:${ports[name]})${app.cwd === undefined ? '' : ` in \`${app.cwd}\``}${app.dependsOn === undefined ? '' : `, after ${app.dependsOn.join(', ')}`}`).join('\n')}`,
-		apps.some(([, app]) => app.codegen !== undefined)
-			? `- Code generation:\n${commandList(apps.filter(([, app]) => app.codegen !== undefined).map(([name, app]) => ({ label: name, cwd: app.cwd, run: app.codegen! })))}`
-			: '',
-		apps.some(([, app]) => app.migrate !== undefined)
-			? `- Migrations:\n${commandList(apps.filter(([, app]) => app.migrate !== undefined).map(([name, app]) => ({ label: name, cwd: app.cwd, run: app.migrate! })))}`
-			: '',
-		config.checks.length === 0
-			? ''
-			: `- The project's checks — the core of your loop:\n${commandList(config.checks.map((check, index) => ({ label: check.name ?? `check ${index + 1}`, cwd: check.cwd, run: check.run })))}`,
+		codegenSection(config),
+		migrateSection(config),
+		checksSection(config),
 		config.testAccounts.length === 0
 			? ''
 			: `- Test accounts: ${config.testAccounts.map((account) => `${account.role} signs in at ${renderTemplate(account.signIn, { app: null, ports })} with ${account.secrets.map((key) => `\`$${key}\``).join(' and ')} from your environment`).join('; ')}. Read them with \`printenv\` when you need them and never print, quote or write down their values.`,
-		config.notes === undefined ? '' : `- Notes: ${config.notes.trim()}`,
+		notesSection(config),
 		`- \`${PROJECT_CONFIG_PATH}\` describes this code and travels with the branch. If your work changes how the project installs, generates, migrates, starts or proves itself, update it in this bullet — it is validated before the bullet is committed, and a file you leave invalid fails the bullet.`
 	].filter(Boolean);
 }

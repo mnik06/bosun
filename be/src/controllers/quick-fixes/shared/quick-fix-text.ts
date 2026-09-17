@@ -1,8 +1,6 @@
-const SUMMARY_CHARS = 72;
+import { clip } from 'src/utils/general';
 
-function clip(text: string, max: number): string {
-	return text.length <= max ? text : `${text.slice(0, max - 1)}…`;
-}
+const SUMMARY_CHARS = 72;
 
 // The first line of whatever the submitter pasted — a sentence, a stack trace, a
 // client's own words — capped so it reads as a title or a notification line

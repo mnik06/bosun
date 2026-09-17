@@ -3,6 +3,7 @@ import { awaitingRepository } from 'src/controllers/repositories/shared/config-d
 import { type MachineRepo } from 'src/repos/machines/machine.repo';
 import { type SocketRegistry } from 'src/services/sockets/registry.service';
 import { type Machine } from 'src/types/MachineSchema';
+import { orNotFound } from 'src/utils/general';
 
 const REQUIRED_CHECKS = ['claude'];
 
@@ -40,14 +41,13 @@ export async function requireHost(opts: {
 	machineId: string;
 	projectId: string;
 }): Promise<Machine> {
-	const machine = await opts.machineRepo.getOwnedById({
-		id: opts.machineId,
-		projectId: opts.projectId
-	});
-
-	if (!machine) {
-		throw new HttpError(404, 'Machine not found');
-	}
+	const machine = await orNotFound(
+		opts.machineRepo.getOwnedById({
+			id: opts.machineId,
+			projectId: opts.projectId
+		}),
+		'Machine not found'
+	);
 
 	const refusal = hostingRefusal(machine);
 

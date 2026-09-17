@@ -1,6 +1,5 @@
 import { type LineDeps } from 'src/controllers/line/line-deps';
-import { admit, type Admission } from 'src/controllers/line/shared/memory-budget';
-import { BUILD_SLOT_STATUSES, LANE_STATUSES } from 'src/controllers/line/shared/next-job';
+import { admit, loadForMachine, type Admission } from 'src/controllers/line/shared/memory-budget';
 import { type Machine } from 'src/types/MachineSchema';
 
 // A quick fix is admitted like a fix session: sized and counted as a build-class
@@ -8,19 +7,23 @@ import { type Machine } from 'src/types/MachineSchema';
 // never gated by the leader's build cap — that ceiling counts concurrent plans,
 // and a quick fix is not one.
 export async function quickFixAdmission(deps: LineDeps, opts: { machine: Machine }): Promise<Admission> {
-	const [slots, lanes, onboardingRuns, quickFixes] = await Promise.all([
-		deps.buildRepo.listForMachine({ machineId: opts.machine.id, statuses: BUILD_SLOT_STATUSES }),
-		deps.buildRepo.listForMachine({ machineId: opts.machine.id, statuses: LANE_STATUSES }),
-		deps.onboardingRunRepo.listActiveForMachine(opts.machine.id),
-		deps.quickFixRepo.listActiveForMachine(opts.machine.id)
+	// A build-class admission with a `waiting_verify` build on the machine has to
+	// leave the lane's reservation free (see `admit`'s comment on `verifyWaiting`).
+	// The line itself only counts a `waiting_verify` build once its dependencies are
+	// verified, which needs the whole repository snapshot; a quick fix has no
+	// snapshot to read, so it reserves for any `waiting_verify` build on the
+	// machine — a superset of the line's own condition, never a narrower one.
+	const [load, waitingVerify] = await Promise.all([
+		loadForMachine(deps, opts.machine.id),
+		deps.buildRepo.listForMachine({ machineId: opts.machine.id, statuses: ['waiting_verify'] })
 	]);
 
 	return admit({
 		memory: deps.machineMemory.get(opts.machine.id),
 		jobClass: 'quickFix',
-		load: { build: slots.length, lane: lanes.length, onboarding: onboardingRuns.length, quickFix: quickFixes.length },
+		load,
 		verifyLanes: opts.machine.verifyLanes,
-		verifyWaiting: false,
+		verifyWaiting: waitingVerify.length > 0,
 		buildCap: null,
 		ignoreMemoryBudget: opts.machine.ignoreMemoryBudget
 	});

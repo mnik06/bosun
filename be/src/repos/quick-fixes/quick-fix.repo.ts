@@ -41,12 +41,6 @@ export function getQuickFixRepo(db: DbOrTx) {
 			return QuickFixSchema.parse(row);
 		},
 
-		async getById(id: string): Promise<QuickFix | null> {
-			const [row] = await db.select(columns).from(quickFixes).where(eq(quickFixes.id, id));
-
-			return row ? QuickFixSchema.parse(row) : null;
-		},
-
 		// Reached from an agent frame: the machine is part of the lookup, so a session
 		// cannot settle another machine's quick fix by naming its id.
 		async getForMachine(opts: { id: string; machineId: string }): Promise<QuickFix | null> {

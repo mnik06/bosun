@@ -8,6 +8,7 @@ import { type SocketRegistry } from 'src/services/sockets/registry.service';
 import { type EnvVarInput } from 'src/types/env-sets';
 import { type Machine } from 'src/types/MachineSchema';
 import { normalizeEnvPath } from 'src/utils/env-path';
+import { orNotFound } from 'src/utils/general';
 
 const REPLY_TIMEOUT_MS = 15_000;
 
@@ -76,14 +77,12 @@ export async function relayEnvFrame(
 	}
 
 	const saved = await deps.machineRepo.saveEnvSets({ id: target.id, envSets: result.envSets });
-	const machine =
+	const machine = await orNotFound(
 		result.sessionSecrets === undefined
-			? saved
-			: await deps.machineRepo.saveSessionSecrets({ id: target.id, sessionSecrets: result.sessionSecrets });
-
-	if (!machine) {
-		throw new HttpError(404, 'Machine not found');
-	}
+			? Promise.resolve(saved)
+			: deps.machineRepo.saveSessionSecrets({ id: target.id, sessionSecrets: result.sessionSecrets }),
+		'Machine not found'
+	);
 
 	announceMachine({ socketRegistry: deps.socketRegistry, machine });
 

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { CommitOutcomeSchema } from 'src/types/commit-outcome';
 
 // Starts a one-shot fix session with no plan behind it: a branch, a base ref and a
 // bug description, none of the plan/slice/AC shape `exec.start` carries. The
@@ -16,14 +17,9 @@ export const QuickFixStartMsgSchema = z.object({
 
 // Mirrors `exec.done`'s shape minus everything that makes a bullet part of a
 // plan: no AC gating, because a quick fix has no criteria to score against.
-export const QuickFixDoneMsgSchema = z.object({
+export const QuickFixDoneMsgSchema = CommitOutcomeSchema.extend({
 	type: z.literal('quickfix.done'),
-	quickFixId: z.string(),
-	commitSha: z.string().nullable(),
-	report: z.string(),
-	changedFiles: z.array(z.string()).default([]),
-	pushed: z.boolean().default(false),
-	pushError: z.string().nullable().default(null)
+	quickFixId: z.string()
 });
 
 export const QuickFixErrorMsgSchema = z.object({

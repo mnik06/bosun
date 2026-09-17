@@ -124,20 +124,6 @@ export function getPlanRepo(db: DbOrTx) {
 			return row ? PlanSchema.parse(row) : null;
 		},
 
-		async listOwnedByIds(opts: { projectId: string; ids: string[] }): Promise<Plan[]> {
-			if (opts.ids.length === 0) {
-				return [];
-			}
-
-			const rows = await db
-				.select(planColumns)
-				.from(plans)
-				.where(and(eq(plans.projectId, opts.projectId), inArray(plans.id, opts.ids)))
-				.orderBy(asc(plans.number));
-
-			return rows.map((row) => PlanSchema.parse(row));
-		},
-
 		async getByIdForMachine(opts: { id: string; machineId: string }): Promise<Plan | null> {
 			const [row] = await db
 				.select(planColumns)

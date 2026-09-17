@@ -1,14 +1,14 @@
 import { prepareRunEnvironment } from '../execution/run-environment';
 import { exitMessage } from '../execution/session';
-import { PROJECT_CONFIG_PATH, type ProjectConfig } from '../project-config';
+import { type ProjectConfig } from '../project-config';
 import { type AgentMsg, type QuickFixStart } from '../protocol';
 import { quickFixPrompt } from '../prompts/quick-fix';
 import { resolveProjectConfig } from '../services/config-resolution';
 import { type Services } from '../services/index';
-import { describeApplied, envFileFor } from '../services/project-env.service';
 import { startSessionMcpServer, type SessionMcpServer } from '../sessions/mcp-server';
 import { spawnClaudeSession, type ClaudeSession } from '../sessions/process';
 import { createStreamParser } from '../planning/stream-parser';
+import { configGate, writeEnvFiles } from '../sessions/run-support';
 import { createStderrTail, logDroppedFrame, reportStartFailure } from '../sessions/turn-support';
 
 const STDERR_KEPT_CHARS = 500;
@@ -90,25 +90,6 @@ export function createQuickFixSessions(opts: {
 		teardown(quickFixId);
 	};
 
-	// The same refusal a plan bullet gets when it left `.bosun/project.yaml`
-	// invalid: committing it would fail the next thing that reads it, somewhere
-	// far from the change that broke it.
-	const configGate = async (worktreePath: string): Promise<string | null> => {
-		const changed = await opts.services.exec.run(
-			'git',
-			['-C', worktreePath, 'status', '--porcelain', '--', PROJECT_CONFIG_PATH],
-			{ timeoutMs: 30_000 }
-		);
-
-		if (!changed.ok || changed.stdout === '') {
-			return null;
-		}
-
-		const resolved = resolveProjectConfig({ treePath: worktreePath, draft: null });
-
-		return resolved.source === 'invalid' ? `the fix left ${resolved.detail}` : null;
-	};
-
 	// The commit and push happen here rather than in the session, for the same
 	// reason a plan bullet's do: a model that commits its own work leaves no
 	// single sha bosun can point a pull request at.
@@ -123,7 +104,7 @@ export function createQuickFixSessions(opts: {
 
 		try {
 			const worktreePath = opts.services.worktree.pathFor(msg.quickFixId);
-			const gate = await configGate(worktreePath);
+			const gate = await configGate({ exec: opts.services.exec, worktreePath, actor: 'fix' });
 
 			if (gate !== null) {
 				opts.send({ type: 'quickfix.error', quickFixId: msg.quickFixId, message: gate });
@@ -207,31 +188,6 @@ export function createQuickFixSessions(opts: {
 		return ensured.worktreePath;
 	};
 
-	const writeEnvFiles = (opts2: { quickFixId: string; worktreePath: string; run: Run }): { path: string; keys: string[] }[] => {
-		let applied: { written: string[]; skipped: string[] };
-
-		try {
-			applied = opts.services.projectEnv.applyTo(opts2.worktreePath);
-		} catch (error) {
-			throw new Error(
-				`could not write the provided env files: ${error instanceof Error ? error.message : 'unknown error'}`
-			);
-		}
-
-		const line = describeApplied(applied);
-
-		if (line !== null) {
-			console.log(`[${opts2.quickFixId}] ${line}`);
-		}
-
-		opts2.run.envFiles = applied.written;
-
-		return opts.services.projectEnv
-			.summary()
-			.filter((set) => applied.written.includes(envFileFor(set.path)))
-			.map((set) => ({ path: set.path, keys: set.keys }));
-	};
-
 	// Resolved from the tree the session runs in, after its branch is checked out —
 	// the same rule a plan bullet follows. Null when the repository has never been
 	// onboarded: the session then works out its own checks, same as it would on a
@@ -279,7 +235,11 @@ export function createQuickFixSessions(opts: {
 			return;
 		}
 
-		const providedEnv = writeEnvFiles({ quickFixId: msg.quickFixId, worktreePath, run });
+		const written = writeEnvFiles({ projectEnv: opts.services.projectEnv, worktreePath, id: msg.quickFixId });
+
+		run.envFiles = written.written;
+
+		const providedEnv = written.providedEnv;
 		const project = await prepareProject(msg, worktreePath);
 
 		if (run.cancelled) {

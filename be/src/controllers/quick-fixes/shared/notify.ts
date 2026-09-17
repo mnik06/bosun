@@ -1,4 +1,5 @@
 import { dispatchNotification } from 'src/controllers/notifications/dispatch-notification';
+import { resolveRecipients } from 'src/controllers/notifications/shared/resolve-recipients';
 import { type LineDeps } from 'src/controllers/line/line-deps';
 import { quickFixSummary } from 'src/controllers/quick-fixes/shared/quick-fix-text';
 import { type NotificationKind } from 'src/types/NotificationSchema';
@@ -8,18 +9,6 @@ const KIND: Record<'pushed' | 'failed', NotificationKind> = {
 	pushed: 'quickfix.pushed',
 	failed: 'quickfix.failed'
 };
-
-// Whoever asked for it, the same as a plan falls back to every leader only
-// when its own `createdByUserId` has gone null (a user deleted after the
-// fact) — never the whole project, since nobody else was waiting on this one
-// the way a project's leaders wait on an onboarding run.
-async function resolveRecipients(deps: LineDeps, quickFix: QuickFix): Promise<string[]> {
-	if (quickFix.createdByUserId) {
-		return [quickFix.createdByUserId];
-	}
-
-	return deps.projectMemberRepo.listLeaders(quickFix.projectId);
-}
 
 // A no-op for `running`: this is reached only from a terminal settle, but the
 // type admits every status a quick fix has. Every other notification kind's

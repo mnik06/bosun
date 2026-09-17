@@ -1,5 +1,16 @@
 import { PROJECT_CONFIG_PATH, type ProjectConfig } from '../project-config';
-import { agentConfigRule, commandList, loopRules, providedEnv, unattended } from './shared';
+import {
+	agentConfigRule,
+	checksSection,
+	codegenSection,
+	loopRules,
+	migrateSection,
+	notesSection,
+	providedEnv,
+	setupSection,
+	toolchainSection,
+	unattended
+} from './shared';
 
 export interface QuickFixContext {
 	description: string;
@@ -21,24 +32,13 @@ function configuredChecks(config: ProjectConfig | null): string {
 		return '_Nothing configured for this repository yet — everything above is yours to discover._';
 	}
 
-	const apps = Object.entries(config.apps);
 	const lines = [
-		config.toolchain === undefined
-			? ''
-			: `- Toolchain: node ${config.toolchain.node}${config.toolchain.packageManager === undefined ? '' : `, ${config.toolchain.packageManager}`} — provisioned by bosun and already first on your PATH. Never install or switch another.`,
-		config.setup.length === 0
-			? ''
-			: `- Setup, already run in this worktree:\n${commandList(config.setup.map((step) => ({ label: step.name, cwd: step.cwd, run: step.run })))}`,
-		apps.some(([, app]) => app.codegen !== undefined)
-			? `- Code generation:\n${commandList(apps.filter(([, app]) => app.codegen !== undefined).map(([name, app]) => ({ label: name, cwd: app.cwd, run: app.codegen! })))}`
-			: '',
-		apps.some(([, app]) => app.migrate !== undefined)
-			? `- Migrations:\n${commandList(apps.filter(([, app]) => app.migrate !== undefined).map(([name, app]) => ({ label: name, cwd: app.cwd, run: app.migrate! })))}`
-			: '',
-		config.checks.length === 0
-			? ''
-			: `- The project's checks — the core of your loop:\n${commandList(config.checks.map((check, index) => ({ label: check.name ?? `check ${index + 1}`, cwd: check.cwd, run: check.run })))}`,
-		config.notes === undefined ? '' : `- Notes: ${config.notes.trim()}`
+		toolchainSection(config),
+		setupSection(config, { rerun: false }),
+		codegenSection(config),
+		migrateSection(config),
+		checksSection(config),
+		notesSection(config)
 	].filter(Boolean);
 
 	return lines.length === 0

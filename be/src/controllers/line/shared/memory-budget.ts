@@ -1,3 +1,7 @@
+import { BUILD_SLOT_STATUSES, LANE_STATUSES } from 'src/controllers/line/shared/next-job';
+import { type BuildRepo } from 'src/repos/builds/build.repo';
+import { type OnboardingRunRepo } from 'src/repos/onboarding/onboarding-run.repo';
+import { type QuickFixRepo } from 'src/repos/quick-fixes/quick-fix.repo';
 import { type MachineMemory } from 'src/types/machine-memory';
 
 const GIB = 1024 ** 3;
@@ -33,6 +37,28 @@ export interface MachineLoad {
 	lane: number;
 	onboarding: number;
 	quickFix: number;
+}
+
+export interface LoadRepos {
+	buildRepo: Pick<BuildRepo, 'listForMachine'>;
+	onboardingRunRepo: Pick<OnboardingRunRepo, 'listActiveForMachine'>;
+	quickFixRepo: Pick<QuickFixRepo, 'listActiveForMachine'>;
+}
+
+// What a quick fix and an onboarding run both admit against: every slot, lane,
+// onboarding run and quick fix a machine holds right now. A plan build reuses its
+// own already-fetched build/lane counts instead (see `schedule.ts`), so this is not
+// the only place a `MachineLoad` is assembled — just the one two unrelated callers
+// were assembling identically.
+export async function loadForMachine(deps: LoadRepos, machineId: string): Promise<MachineLoad> {
+	const [slots, lanes, onboardingRuns, quickFixes] = await Promise.all([
+		deps.buildRepo.listForMachine({ machineId, statuses: BUILD_SLOT_STATUSES }),
+		deps.buildRepo.listForMachine({ machineId, statuses: LANE_STATUSES }),
+		deps.onboardingRunRepo.listActiveForMachine(machineId),
+		deps.quickFixRepo.listActiveForMachine(machineId)
+	]);
+
+	return { build: slots.length, lane: lanes.length, onboarding: onboardingRuns.length, quickFix: quickFixes.length };
 }
 
 // Swap counts for half: it turns a spike into a slowdown instead of a kill, but a
