@@ -82,7 +82,7 @@ export function heldBytes(opts: { load: MachineLoad; usable: number }): number {
 	);
 }
 
-type Admission = { admitted: true; limitBytes: number | null } | { admitted: false };
+export type Admission = { admitted: true; limitBytes: number | null } | { admitted: false };
 
 function idle(load: MachineLoad): boolean {
 	return load.build + load.lane + load.onboarding + load.quickFix === 0;
