@@ -174,6 +174,8 @@ ${configured.length === 0 ? '_The operator configured nothing — everything abo
 
 ${portsRule(context)}
 
+${agentConfigRule()}
+
 ${migrationRule(context)}
 
 ## How the loop runs — once per iteration, by you, one command at a time
@@ -211,6 +213,17 @@ export function portsRule(context: Pick<RunContext, 'portBase'>): string {
 running their own copies of this project at the same time, from their own worktrees. Any listener you
 start must be inside that range — take a port outside it and you take one another plan is using, and
 both stacks break in ways neither session can explain.`;
+}
+
+// The agent re-reads its config on every call, so a session that enrolls over it
+// moves the whole machine onto another identity mid-run. One did, driving a plan
+// that needed an enrolled agent, and every plan on the box failed after it.
+export function agentConfigRule(): string {
+	return `**The bosun agent running this session is not yours.** Outside your own worktree, nothing under
+\`~/.bosun\` is: never edit, move or replace \`~/.bosun/config.json\`, and never run \`bosun-agent enroll\`,
+\`setup\` or \`mcp add\` against it. Every plan on this machine runs through that config, and replacing it
+takes their repository and credentials away mid-run. If the work needs an enrolled agent, enroll one
+with \`--config\` pointing inside your worktree, and pass that same \`--config\` to every command after.`;
 }
 
 // The database belongs to the lane. Every worktree gets the same env, so a bullet

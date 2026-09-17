@@ -31,7 +31,8 @@ export function getServices(opts: { config: AgentConfig; configPath: string; env
 	const workspace = getWorkspaceService({
 		exec,
 		configPath: opts.configPath,
-		defaultConfigPath: defaultConfigPath()
+		defaultConfigPath: defaultConfigPath(),
+		machineId: opts.config.machineId
 	});
 	// Read through the workspace on every call, so a repository attached while the
 	// agent runs is the one every service works in from that moment.
