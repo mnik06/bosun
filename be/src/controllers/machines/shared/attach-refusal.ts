@@ -1,6 +1,7 @@
 import { type BuildRepo } from 'src/repos/builds/build.repo';
 import { type SocketRegistry } from 'src/services/sockets/registry.service';
 import { type Machine } from 'src/types/MachineSchema';
+import { type RepositoryProvider } from 'src/types/RepositorySchema';
 import { compareVersions } from 'src/utils/general';
 
 // The release that carries `repo.attach`, the credential helper, the toolchain and
@@ -8,13 +9,19 @@ import { compareVersions } from 'src/utils/general';
 // the browser would wait on a clone that is never going to start.
 export const MIN_REPOSITORY_AGENT_VERSION = '3.0.0';
 
-// Provider-agnostic: nothing here differs between a GitHub and an Azure DevOps
-// attach, so both `attachGithubRepository` and `attachAzureRepository` share it.
+// The release whose credential helper and workspace config first answer for
+// `dev.azure.com` (AC-35, AC-36). An agent between the two minimums clones a
+// GitHub repository fine but would silently fail to authenticate against Azure.
+export const MIN_AZURE_REPOSITORY_AGENT_VERSION = '4.0.2';
+
+// Shared by both `attachGithubRepository` and `attachAzureRepository`; only the
+// version floor differs between the two providers.
 export async function attachRefusal(opts: {
 	buildRepo: BuildRepo;
 	socketRegistry: SocketRegistry;
 	machine: Machine;
 	projectId: string;
+	provider: RepositoryProvider;
 }): Promise<string | null> {
 	const { machine } = opts;
 
@@ -22,8 +29,12 @@ export async function attachRefusal(opts: {
 		return 'machine offline';
 	}
 
-	if (machine.agentVersion === null || compareVersions(machine.agentVersion, MIN_REPOSITORY_AGENT_VERSION) < 0) {
-		return `This machine's agent (${machine.agentVersion ?? 'unknown'}) is older than ${MIN_REPOSITORY_AGENT_VERSION} and cannot clone a repository — upgrade it with Refresh first`;
+	const minVersion = opts.provider === 'azure_devops' ? MIN_AZURE_REPOSITORY_AGENT_VERSION : MIN_REPOSITORY_AGENT_VERSION;
+
+	if (machine.agentVersion === null || compareVersions(machine.agentVersion, minVersion) < 0) {
+		const kind = opts.provider === 'azure_devops' ? 'an Azure DevOps' : 'a GitHub';
+
+		return `This machine's agent (${machine.agentVersion ?? 'unknown'}) is older than ${minVersion} and cannot clone ${kind} repository — upgrade it with Refresh first`;
 	}
 
 	// A build's worktree is a worktree of the clone it was made from. Moving the

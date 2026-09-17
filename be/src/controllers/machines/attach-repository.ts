@@ -82,7 +82,7 @@ export async function attachGithubRepository(opts: {
 	githubRepoId: number;
 }): Promise<void> {
 	const machine = await getMachine({ machineRepo: opts.machineRepo, id: opts.id, projectId: opts.projectId });
-	const refused = await attachRefusal({ ...opts, machine });
+	const refused = await attachRefusal({ ...opts, machine, provider: 'github' });
 
 	if (refused !== null) {
 		throw new HttpError(409, refused);

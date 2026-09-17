@@ -32,10 +32,9 @@ async function dispatchAzureAttach(opts: { socketRegistry: SocketRegistry; machi
 // Mirrors `attachGithubRepository`: the repository is named by organization +
 // Azure project id + repository GUID and resolved against what the connection's
 // PAT grants right now, so an id nobody's token can see cannot be attached by
-// typing it (AC-29, AC-30). The clone itself is not expected to succeed yet —
-// the agent's credential helper does not answer for `dev.azure.com` until a
-// later bullet — but the row, the machine's attachment and the dispatched frame
-// all behave exactly as GitHub's do.
+// typing it (AC-29, AC-30). `attachRefusal` gates this on the agent version that
+// first answers for `dev.azure.com`, so the clone dispatched below only ever
+// reaches a machine that can actually authenticate it.
 export async function attachAzureRepository(opts: {
 	machineRepo: MachineRepo;
 	repositoryRepo: RepositoryRepo;
@@ -52,7 +51,7 @@ export async function attachAzureRepository(opts: {
 	azureRepoId: string;
 }): Promise<void> {
 	const machine = await getMachine({ machineRepo: opts.machineRepo, id: opts.id, projectId: opts.projectId });
-	const refused = await attachRefusal({ ...opts, machine });
+	const refused = await attachRefusal({ ...opts, machine, provider: 'azure_devops' });
 
 	if (refused !== null) {
 		throw new HttpError(409, refused);

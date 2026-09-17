@@ -33,6 +33,11 @@ function readStdin(input: NodeJS.ReadableStream): Promise<string> {
 	});
 }
 
+// The two hosts a machine's clone can ever point at. Azure DevOps accepts any
+// non-empty username alongside the PAT, so the same literal answers for both —
+// nothing here needs to know which provider the calling repository actually is.
+const SUPPORTED_HOSTS = new Set(['github.com', 'dev.azure.com']);
+
 // Called by git, never by a person. Nothing is written to disk and nothing is
 // cached here: the backend mints a token for the one repository this machine is
 // attached to, and it goes straight into git's pipe. Answering with nothing is
@@ -46,7 +51,7 @@ export async function gitCredential(opts: {
 }): Promise<void> {
 	const request = parseCredentialRequest(await readStdin(opts.input ?? process.stdin));
 
-	if (opts.operation !== 'get' || request.protocol !== 'https' || request.host !== 'github.com') {
+	if (opts.operation !== 'get' || request.protocol !== 'https' || !SUPPORTED_HOSTS.has(request.host)) {
 		return;
 	}
 
@@ -62,6 +67,6 @@ export async function gitCredential(opts: {
 
 		(opts.output ?? process.stdout).write(`username=x-access-token\npassword=${token}\n\n`);
 	} catch (error) {
-		console.error(`bosun: no GitHub credential — ${error instanceof Error ? error.message : 'unknown error'}`);
+		console.error(`bosun: no git credential for ${request.host} — ${error instanceof Error ? error.message : 'unknown error'}`);
 	}
 }
