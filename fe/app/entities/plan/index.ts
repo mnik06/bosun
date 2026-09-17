@@ -1,7 +1,16 @@
+export {
+	bugfixKeys,
+	fetchBugfixMessages,
+	fetchPlanBugs,
+	useBugfixMessagesQuery,
+	usePlanBugsQuery
+} from './api/bugfix.queries'
 export { fetchLine, fetchNeedsYou, lineKeys, needsYouKeys, useLineQuery, useNeedsYouQuery } from './api/line.queries'
 export { fetchPlan, fetchPlans, planKeys, usePlanQuery, usePlansQuery } from './api/plan.queries'
 export { BOARD_COLUMNS, boardColumn, HISTORY_STATES, type BoardColumn } from './lib/board-column'
+export { bugfixBlockReason } from './lib/bugfix-block'
 export {
+	appendBugfixMessage,
 	appendPlanMessage,
 	dropPlan,
 	patchPlan,
@@ -37,6 +46,16 @@ export {
 	type SliceRunStatus,
 	type VerifyFinding
 } from './model/build'
+export {
+	BugfixMessageSchema,
+	PlanBugSchema,
+	PlanBugStatusSchema,
+	type BugfixMessage,
+	type BugfixMessageRole,
+	type PlanBug,
+	type PlanBugStatus
+} from './model/bugfix'
+export { BugfixUiMsgSchema, type BugfixUiMsg } from './model/bugfix-message'
 export type { ConsumedPiece, ContractChange, Footprint, ModuleChange, SchemaChange } from './model/footprint'
 export type { Line, LineBuild, MachineCapacity, NeedsYouItem } from './model/line'
 export {
@@ -69,6 +88,7 @@ export {
 } from './model/plan'
 export { PlanUiMsgSchema, type PlanUiMsg } from './model/plan-message'
 export { PlansSocketProvider, useIntegrationActivity, useRunActivity } from './model/plans-socket'
+export { useBugfixStream, type BugfixStream } from './model/use-bugfix-stream'
 export { usePlanStream, type PlanStream } from './model/use-plan-stream'
 export { AnsweredQuestion } from './ui/answered-question'
 export { IntegrationCard } from './ui/integration-card'

@@ -1,7 +1,9 @@
 import type { QueryClient } from '@tanstack/react-query'
 
+import { bugfixKeys } from '~/entities/plan/api/bugfix.queries'
 import { lineKeys, needsYouKeys } from '~/entities/plan/api/line.queries'
 import { planKeys } from '~/entities/plan/api/plan.queries'
+import type { BugfixMessage } from '~/entities/plan/model/bugfix'
 import type {
 	Ac,
 	Plan,
@@ -76,8 +78,30 @@ export function refreshAfterBuild (opts: { queryClient: QueryClient, planId: str
 	}
 }
 
+// A bug's status has no push of its own — the only nudge a `report_bugs`/
+// `update_bug_status` call ends on is the same `plan.changed` every other
+// agent-authorized write already sends, so the bug list refetches alongside
+// the rest of the plan's detail rather than needing a frame of its own.
 export function refreshPlanDetail (queryClient: QueryClient, planId: string): void {
 	refetchQuery(queryClient, planKeys.detail(planId))
+	refetchQuery(queryClient, bugfixKeys.bugs(planId))
+}
+
+// Appended by id rather than blindly, on the same terms as `appendPlanMessage`:
+// the same message arrives both on the push and in the refetch a reconnect
+// triggers.
+export function appendBugfixMessage (opts: {
+	queryClient: QueryClient
+	planId: string
+	message: BugfixMessage
+}): void {
+	opts.queryClient.setQueryData<BugfixMessage[]>(bugfixKeys.messages(opts.planId), (previous) => {
+		if (previous === undefined || previous.some((entry) => entry.id === opts.message.id)) {
+			return previous
+		}
+
+		return [...previous, opts.message]
+	})
 }
 
 export function refreshNeedsYou (queryClient: QueryClient): void {

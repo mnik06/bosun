@@ -1,6 +1,6 @@
 import type { PlanDetail, PlanState } from '~/entities/plan/model/plan'
 
-export type PlanTab = 'chat' | 'plan' | 'execution' | 'changes' | 'sync' | 'verification'
+export type PlanTab = 'chat' | 'plan' | 'execution' | 'changes' | 'sync' | 'verification' | 'bugfix'
 
 export const PLAN_TAB_LABEL: Record<PlanTab, string> = {
 	chat: 'Chat',
@@ -8,7 +8,8 @@ export const PLAN_TAB_LABEL: Record<PlanTab, string> = {
 	execution: 'Execution',
 	changes: 'Changes',
 	sync: 'Sync',
-	verification: 'Verification'
+	verification: 'Verification',
+	bugfix: 'Bug Fixing'
 }
 
 type TabSource = Pick<PlanDetail, 'plan' | 'slices' | 'build' | 'runs' | 'integrations' | 'findings'>
@@ -27,6 +28,10 @@ export function visiblePlanTabs (detail: TabSource): PlanTab[] {
 		detail.runs.some(
 			(run) => (run.phase === 'drive' || run.phase === 'recheck') && run.status !== 'pending'
 		)
+	// Once opened, a pull request stays open for inspection whatever the plan
+	// does next — merged, cancelled, a fresh bug-fixing round — so this tab, like
+	// Changes, never disappears again once it has appeared.
+	const hasPr = detail.build?.prUrl != null
 
 	return [
 		'chat',
@@ -34,7 +39,8 @@ export function visiblePlanTabs (detail: TabSource): PlanTab[] {
 		...(approved ? (['execution'] as const) : []),
 		...(committed ? (['changes'] as const) : []),
 		...(detail.integrations.length > 0 ? (['sync'] as const) : []),
-		...(driven ? (['verification'] as const) : [])
+		...(driven ? (['verification'] as const) : []),
+		...(hasPr ? (['bugfix'] as const) : [])
 	]
 }
 
@@ -50,6 +56,7 @@ const PREFERRED: Record<PlanState, PlanTab[]> = {
 	failed: ['execution', 'chat'],
 	cancelled: ['execution', 'plan'],
 	in_review: ['verification', 'changes', 'execution'],
+	fixing_bugs: ['bugfix', 'changes', 'execution'],
 	merged: ['verification', 'changes', 'execution']
 }
 

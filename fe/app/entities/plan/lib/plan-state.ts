@@ -9,13 +9,14 @@ export const PLAN_STATE_LABEL: Record<PlanState, { label: string, color: string 
 	integrating: { label: 'syncing', color: 'cyan' },
 	verifying: { label: 'verifying', color: 'indigo' },
 	in_review: { label: 'in review', color: 'green' },
+	fixing_bugs: { label: 'fixing bugs', color: 'pink' },
 	merged: { label: 'merged', color: 'teal' },
 	needs_you: { label: 'needs you', color: 'orange' },
 	failed: { label: 'failed', color: 'red' },
 	cancelled: { label: 'cancelled', color: 'gray' }
 }
 
-export const WORKING_STATES: PlanState[] = ['building', 'integrating', 'verifying']
+export const WORKING_STATES: PlanState[] = ['building', 'integrating', 'verifying', 'fixing_bugs']
 
 // Only reached for a row pushed without its derived state, so it says the little
 // the plan row alone can support rather than guessing at a build.

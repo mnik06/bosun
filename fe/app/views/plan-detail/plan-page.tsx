@@ -6,9 +6,11 @@ import {
 	defaultPlanTab,
 	PLAN_TAB_LABEL,
 	resolvePlanState,
+	useBugfixStream,
 	usePlanQuery,
 	usePlanStream,
 	visiblePlanTabs,
+	type BugfixStream,
 	type PlanDetail,
 	type PlanStream,
 	type PlanTab
@@ -16,6 +18,7 @@ import {
 import { useMarkPlanNotificationsRead } from '~/features/mark-notification-read'
 import { QueryErrorAlert, SectionLoader } from '~/shared/ui'
 import { PlanArtifact } from '~/widgets/plan-artifact'
+import { PlanBugfix } from '~/widgets/plan-bugfix'
 import { PlanChanges } from '~/widgets/plan-changes'
 import { PlanChat } from '~/widgets/plan-chat'
 import { PlanExecution } from '~/widgets/plan-execution'
@@ -25,7 +28,7 @@ import { PlanVerification } from '~/widgets/plan-verification'
 
 import type { Route } from './+types/plan-page'
 
-function Scrolled ({ tab, detail }: { tab: Exclude<PlanTab, 'chat'>, detail: PlanDetail }) {
+function Scrolled ({ tab, detail }: { tab: Exclude<PlanTab, 'chat' | 'bugfix'>, detail: PlanDetail }) {
 	switch (tab) {
 		case 'plan':
 			return (
@@ -50,7 +53,17 @@ function Scrolled ({ tab, detail }: { tab: Exclude<PlanTab, 'chat'>, detail: Pla
 	}
 }
 
-function TabBody ({ tab, detail, stream }: { tab: PlanTab, detail: PlanDetail, stream: PlanStream }) {
+function TabBody ({
+	tab,
+	detail,
+	stream,
+	bugfixStream
+}: {
+	tab: PlanTab
+	detail: PlanDetail
+	stream: PlanStream
+	bugfixStream: BugfixStream
+}) {
 	if (tab === 'chat') {
 		return (
 			<div className="flex min-h-0 grow flex-col">
@@ -62,6 +75,10 @@ function TabBody ({ tab, detail, stream }: { tab: PlanTab, detail: PlanDetail, s
 				/>
 			</div>
 		)
+	}
+
+	if (tab === 'bugfix') {
+		return <PlanBugfix detail={detail} stream={bugfixStream} />
 	}
 
 	return (
@@ -76,6 +93,7 @@ export default function PlanPage ({ params }: Route.ComponentProps) {
 	const { planId } = params
 	const { data, isPending, error } = usePlanQuery(planId)
 	const stream = usePlanStream(planId)
+	const bugfixStream = useBugfixStream({ planId, buildId: data?.build?.id ?? null })
 	const { mutate: markPlanNotificationsRead } = useMarkPlanNotificationsRead()
 	const [searchParams] = useSearchParams()
 
@@ -122,7 +140,7 @@ export default function PlanPage ({ params }: Route.ComponentProps) {
 						The plan appears here, whole, the moment the session publishes it.
 					</Text>
 				) : (
-					<TabBody tab={active} detail={data} stream={stream} />
+					<TabBody tab={active} detail={data} stream={stream} bugfixStream={bugfixStream} />
 				)}
 			</Tabs>
 		</div>

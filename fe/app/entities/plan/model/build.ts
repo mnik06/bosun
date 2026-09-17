@@ -16,6 +16,7 @@ export const BuildStatusSchema = z.enum([
 	'fixing',
 	'rechecking',
 	'in_review',
+	'fixing_bugs',
 	'merged',
 	'needs_you',
 	'failed',

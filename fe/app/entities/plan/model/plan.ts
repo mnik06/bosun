@@ -31,6 +31,7 @@ export const PlanStateSchema = z.enum([
 	'integrating',
 	'verifying',
 	'in_review',
+	'fixing_bugs',
 	'merged',
 	'needs_you',
 	'failed',
