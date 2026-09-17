@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { boardColumn } from '~/entities/plan/lib/board-column'
 
-const progress = (bulletsDone: number) => ({ bulletsDone, bulletsTotal: 3 })
+const progress = (bulletsDone: number) => ({ bulletsDone, bulletsTotal: 3, needsYouReason: null })
 
 describe('boardColumn', () => {
 	it.each([
@@ -11,7 +11,7 @@ describe('boardColumn', () => {
 		['scheduled', 'scheduled'],
 		['held', 'scheduled'],
 		['building', 'building'],
-		['integrating', 'building'],
+		['integrating', 'syncing'],
 		['verifying', 'verifying'],
 		['in_review', 'in_review']
 	] as const)('puts %s in %s', (state, column) => {
@@ -39,5 +39,15 @@ describe('boardColumn', () => {
 
 	it('puts an overlap decision made before any build in scheduled', () => {
 		expect(boardColumn({ state: 'needs_you', build: null })).toBe('scheduled')
+	})
+
+	// A failed sync leaves every bullet done, so without this check the bullet-count
+	// fallback below would silently drop it into Verifying.
+	it.each(['needs_you', 'failed'] as const)('routes a %s build stopped on a failed sync to syncing', (state) => {
+		expect(boardColumn({ state, build: { bulletsDone: 3, bulletsTotal: 3, needsYouReason: 'integration' } })).toBe('syncing')
+	})
+
+	it('routes a sync failure to syncing even before any bullet lands', () => {
+		expect(boardColumn({ state: 'needs_you', build: { bulletsDone: 0, bulletsTotal: 3, needsYouReason: 'integration' } })).toBe('syncing')
 	})
 })
