@@ -1,5 +1,5 @@
 {
-  "id": "dbaa0a56-d44f-4383-99a2-26e581bae696",
+  "id": "32b183ef-cede-4a98-9dc5-a999e458e5de",
   "prevId": "e515625a-9e4c-44e5-ac45-ef8656381383",
   "version": "7",
   "dialect": "postgresql",
@@ -714,6 +714,92 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.chat_attachments": {
+      "name": "chat_attachments",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "plan_id": {
+          "name": "plan_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "media_type": {
+          "name": "media_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "size": {
+          "name": "size",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "data": {
+          "name": "data",
+          "type": "bytea",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "chat_attachments_plan_id_idx": {
+          "name": "chat_attachments_plan_id_idx",
+          "columns": [
+            {
+              "expression": "plan_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "chat_attachments_plan_id_plans_id_fk": {
+          "name": "chat_attachments_plan_id_plans_id_fk",
+          "tableFrom": "chat_attachments",
+          "tableTo": "plans",
+          "columnsFrom": [
+            "plan_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.github_installations": {
       "name": "github_installations",
       "schema": "",
@@ -796,108 +882,6 @@
           ]
         }
       },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.github_pat_connections": {
-      "name": "github_pat_connections",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "project_id": {
-          "name": "project_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "github_login": {
-          "name": "github_login",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "token_type": {
-          "name": "token_type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "encrypted_token": {
-          "name": "encrypted_token",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'active'"
-        },
-        "last_error": {
-          "name": "last_error",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "broken_at": {
-          "name": "broken_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_by_user_id": {
-          "name": "created_by_user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "github_pat_connections_project_id_projects_id_fk": {
-          "name": "github_pat_connections_project_id_projects_id_fk",
-          "tableFrom": "github_pat_connections",
-          "tableTo": "projects",
-          "columnsFrom": [
-            "project_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "github_pat_connections_created_by_user_id_users_id_fk": {
-          "name": "github_pat_connections_created_by_user_id_users_id_fk",
-          "tableFrom": "github_pat_connections",
-          "tableTo": "users",
-          "columnsFrom": [
-            "created_by_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -2837,30 +2821,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "github_pat_connection_id": {
-          "name": "github_pat_connection_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "webhook_secret_encrypted": {
-          "name": "webhook_secret_encrypted",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "github_webhook_id": {
-          "name": "github_webhook_id",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "sync_mode": {
-          "name": "sync_mode",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "azure_connection_id": {
           "name": "azure_connection_id",
           "type": "text",
@@ -2958,19 +2918,6 @@
           "tableTo": "github_installations",
           "columnsFrom": [
             "installation_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "repositories_github_pat_connection_id_github_pat_connections_id_fk": {
-          "name": "repositories_github_pat_connection_id_github_pat_connections_id_fk",
-          "tableFrom": "repositories",
-          "tableTo": "github_pat_connections",
-          "columnsFrom": [
-            "github_pat_connection_id"
           ],
           "columnsTo": [
             "id"
