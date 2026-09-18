@@ -44,3 +44,8 @@ stranded by the kernel killing the agent is reported as out of memory rather tha
   the `memory` preflight check goes red to say so.
 - **Planning, ask and summary sessions** stay unscoped. Integration sessions are scoped like bullets:
   they run a project's checks. They read; they do not run a project's loop.
+- **Git runs from the agent itself**, in `bosun-agent.service`, so a repository's hooks would run with
+  no limit. `pushHead` pushes with `--no-verify`: a pre-push hook running a full build on a 7.6 GB box
+  was killed for memory and git refused the push, surfacing only as `Killed`. Scoping the push was
+  rejected — the hook would still die, just in a scope. The project's checks already ran under a limit
+  before any push. Git LFS is uploaded by name, since its hook is the one that moves data.

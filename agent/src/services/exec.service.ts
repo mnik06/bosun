@@ -23,6 +23,12 @@ function failureReason(error: unknown, timeoutMs: number): string {
 		return `timed out after ${timeoutMs / 1000}s`;
 	}
 
+	// Nothing here sends SIGKILL, so it is the kernel's out-of-memory killer; left
+	// alone it surfaces as "exited with null".
+	if (detail.signal === 'SIGKILL') {
+		return 'killed: the machine ran out of memory';
+	}
+
 	if (detail.code === 'ENOENT') {
 		return 'not found on the service PATH';
 	}

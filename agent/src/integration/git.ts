@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { networkGitEnv } from '../execution/commit';
+import { networkGitEnv, pushHead } from '../execution/commit';
 import { type ExecService } from '../services/exec.service';
 
 const GIT_TIMEOUT_MS = 60_000;
@@ -216,7 +216,7 @@ export function getIntegrationGit(deps: { exec: ExecService; worktreePath: strin
 		},
 
 		async push(branch: string): Promise<Step> {
-			const pushed = await git(['push', '-u', 'origin', `HEAD:refs/heads/${branch}`], NETWORK_TIMEOUT_MS);
+			const pushed = await pushHead({ exec: deps.exec, worktreePath: deps.worktreePath, branch });
 
 			return pushed.ok ? { ok: true } : { ok: false, detail: `could not push ${branch}: ${pushed.reason}` };
 		},

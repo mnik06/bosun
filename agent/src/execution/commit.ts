@@ -1,4 +1,4 @@
-import { type ExecService } from '../services/exec.service';
+import { type ExecResult, type ExecService } from '../services/exec.service';
 
 const NETWORK_TIMEOUT_MS = 180_000;
 
@@ -7,6 +7,35 @@ const NETWORK_TIMEOUT_MS = 180_000;
 // hang instead of git's own "could not read Username".
 export function networkGitEnv(): NodeJS.ProcessEnv {
 	return { ...process.env, GIT_TERMINAL_PROMPT: '0' };
+}
+
+// A repository's pre-push hook runs whatever it chose — a build, a full type-check —
+// inside the agent's own unit, outside every memory scope, and on a small machine the
+// kernel killed it and git refused the push. The project's checks have already run
+// under a limit by then. Git LFS is the one hook that does more than check: it
+// uploads the large files the pushed commits point at, so it is run by name.
+export async function pushHead(opts: { exec: ExecService; worktreePath: string; branch: string }): Promise<ExecResult> {
+	const git = (args: string[]) =>
+		opts.exec.run('git', ['-C', opts.worktreePath, ...args], { env: networkGitEnv(), timeoutMs: NETWORK_TIMEOUT_MS });
+	const tracksLfs = await opts.exec.run('git', [
+		'-C',
+		opts.worktreePath,
+		'grep',
+		'-q',
+		'filter=lfs',
+		'--',
+		':(glob)**/.gitattributes'
+	]);
+
+	if (tracksLfs.ok) {
+		const uploaded = await git(['lfs', 'push', 'origin', 'HEAD']);
+
+		if (!uploaded.ok) {
+			return uploaded;
+		}
+	}
+
+	return git(['push', '--no-verify', '-u', 'origin', `HEAD:refs/heads/${opts.branch}`]);
 }
 
 export interface CommitResult {
@@ -390,11 +419,7 @@ export function getCommitService(deps: { exec: ExecService }) {
 				return { ok: false, detail: `could not push ${opts.branch}: ${synced.detail}` };
 			}
 
-			const pushed = await deps.exec.run(
-				'git',
-				['-C', opts.worktreePath, 'push', '-u', 'origin', `HEAD:refs/heads/${opts.branch}`],
-				{ env: networkGitEnv(), timeoutMs: NETWORK_TIMEOUT_MS }
-			);
+			const pushed = await pushHead({ exec: deps.exec, worktreePath: opts.worktreePath, branch: opts.branch });
 
 			return pushed.ok ? { ok: true, detail: 'pushed' } : { ok: false, detail: `could not push ${opts.branch}: ${pushed.reason}` };
 		},
