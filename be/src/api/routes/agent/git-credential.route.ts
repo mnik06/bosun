@@ -11,6 +11,7 @@ const routes: FastifyPluginAsync = async function (f) {
 			machineRepo: fastify.repos.machineRepo,
 			repositoryRepo: fastify.repos.repositoryRepo,
 			githubInstallationRepo: fastify.repos.githubInstallationRepo,
+			githubPatConnectionRepo: fastify.repos.githubPatConnectionRepo,
 			azureConnectionRepo: fastify.repos.azureConnectionRepo,
 			githubApp: fastify.services.githubApp,
 			patEncryption: fastify.services.patEncryption,
