@@ -1,6 +1,7 @@
 import { HttpError } from 'src/api/errors/HttpError';
 import { listAvailableRepositories } from 'src/controllers/github/list-available-repositories';
 import { toGithubHttpError } from 'src/controllers/github/shared/github-errors';
+import { type GithubWebhookSyncDeps, ensureGithubWebhookOnAttach } from 'src/controllers/github/shared/webhook';
 import { getMachine } from 'src/controllers/machines/get-machine';
 import { attachRefusal } from 'src/controllers/machines/shared/attach-refusal';
 import { finishAttach } from 'src/controllers/machines/shared/finish-attach';
@@ -12,7 +13,6 @@ import { type BuildRepo } from 'src/repos/builds/build.repo';
 import { type PatEncryptionService } from 'src/services/crypto/pat-encryption.service';
 import { type GithubAppService } from 'src/services/github/github-app.service';
 import { type GithubPatService } from 'src/services/github/github-pat.service';
-import { type IdService } from 'src/services/ids/id.service';
 import { type SocketRegistry } from 'src/services/sockets/registry.service';
 import { toRepositorySlug, type Repository } from 'src/types/RepositorySchema';
 
@@ -23,6 +23,49 @@ import { toRepositorySlug, type Repository } from 'src/types/RepositorySchema';
 // listing (`listAvailableRepositories`) already just confirmed.
 function githubPatCloneUrl(fullName: string): string {
 	return `https://github.com/${fullName}.git`;
+}
+
+// AC-61, AC-62: called before `upsert` overwrites the row's connection columns,
+// while the previous connection and its webhook id are still readable. A
+// switch to the App, or to a *different* PAT connection, both leave the old
+// webhook behind on GitHub's side, and — for a PAT-to-PAT switch specifically
+// — leave its id/secret/syncMode stale on the row, since `upsert` itself only
+// clears those columns for the App branch. Both are cleared here regardless
+// of whether GitHub's own deletion succeeds: a webhook GitHub refuses to
+// delete is its own orphan to clean up, but the *local* row must never keep
+// claiming a webhook that either no longer exists or belongs to a connection
+// this repository is leaving — `ensureGithubWebhookOnAttach`'s idempotency
+// check would otherwise mistake it for the new connection's own webhook and
+// skip creating one.
+async function removeStaleGithubWebhook(opts: {
+	repositoryRepo: RepositoryRepo;
+	githubPatConnectionRepo: GithubPatConnectionRepo;
+	githubPat: GithubPatService;
+	patEncryption: PatEncryptionService;
+	repository: Repository;
+}): Promise<void> {
+	if (opts.repository.githubPatConnectionId === null) {
+		return;
+	}
+
+	const [webhookId, oldConnection] = await Promise.all([
+		opts.repositoryRepo.getGithubWebhookIdById(opts.repository.id),
+		opts.githubPatConnectionRepo.getById(opts.repository.githubPatConnectionId)
+	]);
+
+	if (webhookId === null) {
+		return;
+	}
+
+	await opts.repositoryRepo.clearGithubWebhookState(opts.repository.id);
+
+	const encryptedToken = oldConnection ? await opts.githubPatConnectionRepo.getEncryptedTokenById({ id: oldConnection.id, projectId: oldConnection.projectId }) : null;
+
+	if (encryptedToken === null) {
+		return;
+	}
+
+	await opts.githubPat.deleteWebhook({ pat: opts.patEncryption.decrypt(encryptedToken), fullName: opts.repository.fullName, webhookId });
 }
 
 async function remoteFor(opts: {
@@ -99,21 +142,17 @@ export async function dispatchAttach(opts: {
 // `repositoryId` is written before the frame goes out, not when the clone lands:
 // the clone asks the credential route for a token, and that route answers only for
 // the repository the machine is attached to.
-export async function attachGithubRepository(opts: {
-	machineRepo: MachineRepo;
-	repositoryRepo: RepositoryRepo;
-	githubInstallationRepo: GithubInstallationRepo;
-	githubPatConnectionRepo: GithubPatConnectionRepo;
-	buildRepo: BuildRepo;
-	githubApp: GithubAppService;
-	githubPat: GithubPatService;
-	patEncryption: PatEncryptionService;
-	idService: IdService;
-	socketRegistry: SocketRegistry;
-	id: string;
-	projectId: string;
-	githubRepoId: number;
-}): Promise<void> {
+export async function attachGithubRepository(
+	opts: GithubWebhookSyncDeps & {
+		machineRepo: MachineRepo;
+		githubInstallationRepo: GithubInstallationRepo;
+		buildRepo: BuildRepo;
+		githubApp: GithubAppService;
+		id: string;
+		projectId: string;
+		githubRepoId: number;
+	}
+): Promise<void> {
 	const machine = await getMachine({ machineRepo: opts.machineRepo, id: opts.id, projectId: opts.projectId });
 	const refused = await attachRefusal({ ...opts, machine, provider: 'github' });
 
@@ -127,6 +166,13 @@ export async function attachGithubRepository(opts: {
 		throw new HttpError(404, 'No GitHub account connected to this project grants that repository');
 	}
 
+	const existing = await opts.repositoryRepo.getOwnedByGithubRepoId({ projectId: opts.projectId, githubRepoId: opts.githubRepoId });
+	const newConnectionId = granted.connection.kind === 'pat' ? granted.connection.connectionId : null;
+
+	if (existing && existing.githubPatConnectionId !== null && existing.githubPatConnectionId !== newConnectionId) {
+		await removeStaleGithubWebhook({ ...opts, repository: existing });
+	}
+
 	const base = {
 		id: opts.idService.createRepositoryId(),
 		projectId: opts.projectId,
@@ -137,6 +183,15 @@ export async function attachGithubRepository(opts: {
 	const repository = await opts.repositoryRepo.upsert(
 		granted.connection.kind === 'app' ? { ...base, installationId: granted.connection.installationId } : { ...base, githubPatConnectionId: granted.connection.connectionId }
 	);
+
+	if (granted.connection.kind === 'pat') {
+		const connection = await opts.githubPatConnectionRepo.getById(granted.connection.connectionId);
+		const encryptedToken = connection ? await opts.githubPatConnectionRepo.getEncryptedTokenById({ id: connection.id, projectId: opts.projectId }) : null;
+
+		if (connection && encryptedToken !== null) {
+			await ensureGithubWebhookOnAttach(opts, { repository, connection, pat: opts.patEncryption.decrypt(encryptedToken) });
+		}
+	}
 
 	await finishAttach({
 		machineRepo: opts.machineRepo,

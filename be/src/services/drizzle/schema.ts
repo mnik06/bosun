@@ -191,7 +191,9 @@ export const repositories = pgTable(
 		configOnDefault: boolean().notNull().default(false),
 		autoResolveConflicts: boolean().notNull().default(true),
 		// Azure has no equivalent of a GitHub webhook installation event to announce
-		// a first successful sync, so the UI reads this instead.
+		// a first successful sync, so the UI reads this instead — a PAT-connected
+		// GitHub repository writes it too, from the same webhook delivery or the
+		// sync job's poll. Null for an App-connected GitHub repository.
 		lastSyncedAt: timestamp({ withTimezone: true }),
 		// Azure only — null for GitHub and for an Azure repository not yet reconciled
 		// even once. Set from what attach/reconcile actually achieved with Azure

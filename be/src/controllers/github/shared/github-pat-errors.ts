@@ -12,6 +12,11 @@ const STATUS_BY_KIND: Record<GithubPatErrorKind, number> = {
 	org_restricted: 422,
 	pending_approval: 422,
 	no_repositories: 422,
+	rate_limited: 429,
+	// Never reaches connect/rotate — only `createWebhook` throws it, and its own
+	// caller (`ensureGithubWebhookOnAttach`) always catches it rather than
+	// letting it reach this mapper. Kept for `STATUS_BY_KIND`'s exhaustiveness.
+	webhook_exists: 502,
 	unreachable: 502,
 	other: 502
 };

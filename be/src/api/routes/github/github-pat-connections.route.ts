@@ -63,6 +63,8 @@ const routes: FastifyPluginAsync = async function (f) {
 			githubPatConnectionRepo: fastify.repos.githubPatConnectionRepo,
 			repositoryRepo: fastify.repos.repositoryRepo,
 			machineRepo: fastify.repos.machineRepo,
+			githubPat: fastify.services.githubPat,
+			patEncryption: fastify.services.patEncryption,
 			socketRegistry: fastify.services.socketRegistry,
 			id: req.params.id,
 			projectId: req.membership!.projectId

@@ -32,11 +32,12 @@ function githubSyncDescription (repository: Repository, patConnections: GithubPa
 	}
 
 	const owner = patConnections?.find((connection) => connection.id === repository.githubPatConnectionId)?.githubLogin ?? 'its owner'
+	const lastSynced = `Last synced ${formatRelativeTime(repository.lastSyncedAt)}.`
 	const sync = repository.syncMode === 'polling'
 		? `Webhooks could not be set up for this token, so bosun polls for changes ${POLL_INTERVAL_LABEL}.`
 		: `Synced via webhook, with a polling check ${POLL_INTERVAL_LABEL} as a backup.`
 
-	return `Cloned into ~/.bosun/repos on the machine. Fetches and pushes use ${owner}'s personal access token, and pull requests are opened as ${owner} — nothing to set up on the box. ${sync}`
+	return `Cloned into ~/.bosun/repos on the machine. Fetches and pushes use ${owner}'s personal access token, and pull requests are opened as ${owner} — nothing to set up on the box. ${lastSynced} ${sync}`
 }
 
 function syncDescription (repository: Repository | undefined, patConnections: GithubPatConnection[] | undefined): string {

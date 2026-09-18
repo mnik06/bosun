@@ -44,8 +44,10 @@ export const RepositorySchema = z.object({
 	// Whether an integration may hand a real conflict to a session. Off, a conflict
 	// outside `regenerate` paths goes straight to needs you.
 	autoResolveConflicts: z.boolean(),
-	// Azure only — the UI's "last synced" line. Null for a GitHub repository and
-	// for an Azure one bosun has not yet reconciled.
+	// The UI's "last synced" line — Azure, and a PAT-connected GitHub repository,
+	// both write it (a webhook delivery or the sync job's poll). Null for an
+	// App-connected GitHub repository, which has no equivalent "last synced"
+	// moment, and for either provider before its first sync.
 	lastSyncedAt: z.date().nullable(),
 	// Azure only — whether bosun's webhook subscriptions are healthy or it fell
 	// back to polling. Null for GitHub and for an Azure repository not yet

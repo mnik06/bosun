@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { gitProviderFor, type GitProviderResolverDeps } from 'src/controllers/line/shared/git-provider-for';
+import { GithubError } from 'src/services/github/github-app.service';
+import { getGithubPatConnectionGuardService } from 'src/services/github/github-pat-connection-guard.service';
 import { type Repository } from 'src/types/RepositorySchema';
 
 const BASE: Repository = {
@@ -43,6 +45,7 @@ function deps(overrides: Partial<GitProviderResolverDeps> = {}): GitProviderReso
 		azureDevOps: { getRepository: vi.fn() } as unknown as GitProviderResolverDeps['azureDevOps'],
 		patEncryption: { decrypt: vi.fn((value: string) => `decrypted:${value}`) } as unknown as GitProviderResolverDeps['patEncryption'],
 		azureConnectionGuard: { isRateLimited: vi.fn().mockReturnValue(false), run: (_id: string, run: () => unknown) => run() } as unknown as GitProviderResolverDeps['azureConnectionGuard'],
+		githubPatConnectionGuard: getGithubPatConnectionGuardService(),
 		projectMemberRepo: { list: vi.fn().mockResolvedValue([]) } as unknown as GitProviderResolverDeps['projectMemberRepo'],
 		notificationRepo: { create: vi.fn() } as unknown as GitProviderResolverDeps['notificationRepo'],
 		pushSubscriptionRepo: { listByUserIds: vi.fn().mockResolvedValue([]) } as unknown as GitProviderResolverDeps['pushSubscriptionRepo'],
@@ -91,6 +94,40 @@ describe('gitProviderFor', () => {
 
 		expect(githubPatConnectionRepo.getEncryptedTokenById).toHaveBeenCalledWith({ id: 'gpc_1', projectId: 'prj_1' });
 		expect(githubApp.getRepository).toHaveBeenCalledWith({ token: 'decrypted:encrypted-pat', githubRepoId: 7 });
+	});
+
+	it('marks a PAT connection broken when an operation on it fails with an invalid-token error (AC-43)', async () => {
+		const markBroken = vi.fn().mockResolvedValue({ id: 'gpc_1', status: 'broken' });
+		const githubPatConnectionRepo = {
+			getById: vi.fn().mockResolvedValue({ id: 'gpc_1', projectId: 'prj_1', githubLogin: 'octocat', status: 'active' }),
+			getEncryptedTokenById: vi.fn().mockResolvedValue('encrypted-pat'),
+			markBroken
+		};
+		const githubApp = { getRepository: vi.fn().mockRejectedValue(new GithubError(401, 'Bad credentials')) };
+		const provider = await gitProviderFor(
+			deps({ githubPatConnectionRepo, githubApp } as unknown as Partial<GitProviderResolverDeps>),
+			{ ...BASE, githubPatConnectionId: 'gpc_1', githubRepoId: 7 }
+		);
+
+		await expect(provider.getRepository()).rejects.toBeInstanceOf(GithubError);
+		expect(markBroken).toHaveBeenCalledWith({ id: 'gpc_1', lastError: expect.stringContaining('Bad credentials') });
+	});
+
+	it('never marks a PAT connection broken on a repository-scoped 403 (AC-70)', async () => {
+		const markBroken = vi.fn();
+		const githubPatConnectionRepo = {
+			getById: vi.fn().mockResolvedValue({ id: 'gpc_1', projectId: 'prj_1', githubLogin: 'octocat', status: 'active' }),
+			getEncryptedTokenById: vi.fn().mockResolvedValue('encrypted-pat'),
+			markBroken
+		};
+		const githubApp = { getRepository: vi.fn().mockRejectedValue(new GithubError(403, 'Resource not accessible by personal access token')) };
+		const provider = await gitProviderFor(
+			deps({ githubPatConnectionRepo, githubApp } as unknown as Partial<GitProviderResolverDeps>),
+			{ ...BASE, githubPatConnectionId: 'gpc_1', githubRepoId: 7 }
+		);
+
+		await expect(provider.getRepository()).rejects.toBeInstanceOf(GithubError);
+		expect(markBroken).not.toHaveBeenCalled();
 	});
 
 	it('refuses a GitHub repository whose PAT connection is gone', async () => {

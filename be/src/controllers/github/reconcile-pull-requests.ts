@@ -1,5 +1,6 @@
 import { type FastifyBaseLogger } from 'fastify';
 import { reconcileAzureRepositories } from 'src/controllers/azure/reconcile-repositories';
+import { reconcileGithubPatRepositories } from 'src/controllers/github/reconcile-repositories';
 import { type LineDeps } from 'src/controllers/line/line-deps';
 import { scheduleRepository } from 'src/controllers/line/schedule';
 import { queueIntegration } from 'src/controllers/line/shared/lifecycle';
@@ -57,12 +58,14 @@ export async function reconcilePullRequests(deps: LineDeps, opts: { log: Fastify
 	}
 }
 
-// One timer, two jobs — Azure's webhook-subscription health check and
-// branch-refs poll (AC-64, AC-65, AC-66) ride the same interval as pull request
-// reconciliation rather than a second one of their own.
+// One timer, three jobs — Azure's webhook-subscription health check and
+// branch-refs poll, and now GitHub PAT connections' own webhook health check
+// and branch poll (AC-38, AC-39, AC-40, AC-55), ride the same interval as pull
+// request reconciliation rather than a second one of their own.
 async function reconcile(deps: LineDeps, opts: { log: FastifyBaseLogger }): Promise<void> {
 	await reconcilePullRequests(deps, opts);
 	await reconcileAzureRepositories(deps, opts);
+	await reconcileGithubPatRepositories(deps, opts);
 }
 
 export function startPullRequestReconcile(opts: { deps: LineDeps; log: FastifyBaseLogger }): () => void {

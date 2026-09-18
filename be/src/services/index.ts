@@ -6,6 +6,8 @@ import { getAzureConnectionGuardService } from 'src/services/azure/azure-connect
 import { getAzureDevOpsService } from 'src/services/azure/azure-devops.service';
 import { getPatEncryptionService } from 'src/services/crypto/pat-encryption.service';
 import { getGithubAppService } from 'src/services/github/github-app.service';
+import { getGithubBranchSnapshotService } from 'src/services/github/github-branch-snapshot.service';
+import { getGithubPatConnectionGuardService } from 'src/services/github/github-pat-connection-guard.service';
 import { getGithubPatService } from 'src/services/github/github-pat.service';
 import { getIdService } from 'src/services/ids/id.service';
 import { getInstallerService } from 'src/services/installer/installer.service';
@@ -43,7 +45,9 @@ export function getServices(opts: { env: Env }) {
 			clientSecret: opts.env.GITHUB_APP_CLIENT_SECRET,
 			privateKey: opts.env.GITHUB_APP_PRIVATE_KEY
 		}),
+		githubBranchSnapshot: getGithubBranchSnapshotService(),
 		githubPat: getGithubPatService({}),
+		githubPatConnectionGuard: getGithubPatConnectionGuardService(),
 		idService: getIdService(),
 		installerService: getInstallerService(),
 		keyService,

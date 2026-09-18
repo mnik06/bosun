@@ -82,6 +82,19 @@ export function getGithubPatConnectionRepo(db: DbOrTx) {
 			return row ? GithubPatConnectionSchema.parse(row) : null;
 		},
 
+		// Flips `active` to `broken` — and only from `active`: a second caller
+		// racing the same dead token sees `null` back, which is what keeps the
+		// broken-connection notification to exactly once (AC-69).
+		async markBroken(opts: { id: string; lastError: string }): Promise<GithubPatConnection | null> {
+			const [row] = await db
+				.update(githubPatConnections)
+				.set({ status: 'broken', lastError: opts.lastError, brokenAt: new Date() })
+				.where(and(eq(githubPatConnections.id, opts.id), eq(githubPatConnections.status, 'active')))
+				.returning(columns);
+
+			return row ? GithubPatConnectionSchema.parse(row) : null;
+		},
+
 		// Cascades to every repository the connection owns, the same blast radius
 		// deleting an `azure_connections` or `github_installations` row already has.
 		async deleteOwned(opts: { id: string; projectId: string }): Promise<boolean> {

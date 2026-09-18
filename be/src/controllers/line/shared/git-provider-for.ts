@@ -2,13 +2,16 @@ import { type FastifyInstance } from 'fastify';
 import { HttpError } from 'src/api/errors/HttpError';
 import { runAzureConnectionCall, type AzureConnectionGuardDeps } from 'src/controllers/azure/shared/connection-guard';
 import { resolveGithubToken } from 'src/controllers/github/shared/resolve-github-token';
+import { runGithubPatConnectionCall } from 'src/controllers/github/shared/pat-connection-guard';
 import { type GithubInstallationRepo } from 'src/repos/github/github-installation.repo';
 import { type GithubPatConnectionRepo } from 'src/repos/github/github-pat-connection.repo';
 import { type AzureDevOpsService } from 'src/services/azure/azure-devops.service';
 import { type PatEncryptionService } from 'src/services/crypto/pat-encryption.service';
 import { type GitProvider } from 'src/services/git/git-provider';
 import { type GithubAppService } from 'src/services/github/github-app.service';
+import { type GithubPatConnectionGuardService } from 'src/services/github/github-pat-connection-guard.service';
 import { type AzureConnection } from 'src/types/AzureSchema';
+import { type GithubPatConnection } from 'src/types/GithubPatSchema';
 import { type Repository } from 'src/types/RepositorySchema';
 import { clip } from 'src/utils/general';
 
@@ -84,6 +87,29 @@ export interface GitProviderResolverDeps extends AzureConnectionGuardDeps {
 	githubApp: GithubAppService;
 	azureDevOps: AzureDevOpsService;
 	patEncryption: PatEncryptionService;
+	githubPatConnectionGuard: GithubPatConnectionGuardService;
+}
+
+// Every call a PAT-connected repository's `GitProvider` makes rides through
+// the same guard the sync job uses (AC-43, AC-44, AC-46, AC-70), so a break
+// noticed mid pull-request or branch operation flips the connection broken and
+// notifies the project exactly as reactively as a background poll would —
+// `repositoryToken` is excluded, the same way Azure's `azureNotBuilt` methods
+// are: it is `resolveGithubToken`'s own, already-guarded-at-the-route-level
+// path, not one this seam calls.
+function githubPatProvider(opts: { deps: GitProviderResolverDeps; connection: GithubPatConnection; base: GitProvider }): GitProvider {
+	const guarded = <T>(run: () => Promise<T>): Promise<T> => runGithubPatConnectionCall(opts.deps, opts.connection, run);
+
+	return {
+		getRepository: () => guarded(() => opts.base.getRepository()),
+		readFile: (fileOpts) => guarded(() => opts.base.readFile(fileOpts)),
+		proposeFile: (fileOpts) => guarded(() => opts.base.proposeFile(fileOpts)),
+		pointBranch: (branchOpts) => guarded(() => opts.base.pointBranch(branchOpts)),
+		openOrUpdatePullRequest: (prOpts) => guarded(() => opts.base.openOrUpdatePullRequest(prOpts)),
+		getPullRequest: (prOpts) => guarded(() => opts.base.getPullRequest(prOpts)),
+		editPullRequest: (prOpts) => guarded(() => opts.base.editPullRequest(prOpts)),
+		repositoryToken: opts.base.repositoryToken
+	};
 }
 
 async function githubProviderFor(deps: GitProviderResolverDeps, repository: Repository): Promise<GitProvider> {
@@ -121,8 +147,9 @@ async function githubProviderFor(deps: GitProviderResolverDeps, repository: Repo
 
 		const githubRepoId = repository.githubRepoId;
 		const token = deps.patEncryption.decrypt(encryptedToken);
+		const base = githubProvider({ githubApp: deps.githubApp, githubRepoId, token, repositoryToken });
 
-		return githubProvider({ githubApp: deps.githubApp, githubRepoId, token, repositoryToken });
+		return githubPatProvider({ deps, connection, base });
 	}
 
 	throw new HttpError(409, 'This repository is no longer connected to a GitHub installation or personal access token');
@@ -179,6 +206,7 @@ export function bindGitProviderFor(fastify: FastifyInstance): (repository: Repos
 				azureDevOps: fastify.services.azureDevOps,
 				patEncryption: fastify.services.patEncryption,
 				azureConnectionGuard: fastify.services.azureConnectionGuard,
+				githubPatConnectionGuard: fastify.services.githubPatConnectionGuard,
 				projectMemberRepo: fastify.repos.projectMemberRepo,
 				notificationRepo: fastify.repos.notificationRepo,
 				pushSubscriptionRepo: fastify.repos.pushSubscriptionRepo,

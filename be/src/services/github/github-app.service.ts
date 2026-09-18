@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { z } from 'zod';
+import { parseSsoUrl } from 'src/services/github/parse-sso-url';
 
 const API = 'https://api.github.com';
 const OAUTH_TOKEN_URL = 'https://github.com/login/oauth/access_token';
@@ -13,11 +14,17 @@ const STATE_TTL_MS = 30 * 60 * 1000;
 
 export class GithubError extends Error {
 	public readonly status: number;
+	// Set only when GitHub's `X-GitHub-SSO` header names one — carried through so
+	// a caller marking a PAT connection broken over this same error (a PR or
+	// branch operation, not `github-pat.service.ts`'s own calls) can still surface
+	// the authorization link, the same as a break noticed by that service would.
+	public readonly ssoUrl?: string;
 
-	constructor(status: number, message: string) {
+	constructor(status: number, message: string, opts?: { ssoUrl?: string }) {
 		super(message);
 		this.name = 'GithubError';
 		this.status = status;
+		this.ssoUrl = opts?.ssoUrl;
 	}
 }
 
@@ -195,7 +202,7 @@ export function getGithubAppService(deps: {
 		token: string;
 		scheme?: 'Bearer' | 'token';
 		body?: unknown;
-	}): Promise<{ status: number; json: unknown }> {
+	}): Promise<{ status: number; json: unknown; headers: Headers }> {
 		const response = await fetchImpl(opts.url, {
 			method: opts.method ?? 'GET',
 			headers: {
@@ -210,14 +217,19 @@ export function getGithubAppService(deps: {
 		});
 		const json: unknown = await response.json().catch(() => null);
 
-		return { status: response.status, json };
+		return { status: response.status, json, headers: response.headers };
 	}
 
-	function failure(what: string, result: { status: number; json: unknown }): GithubError {
+	function failure(what: string, result: { status: number; json: unknown; headers: Headers }): GithubError {
 		const said = githubReasons(result.json);
 		const reasons = said === null || said.reasons.length === 0 ? '' : ` (${said.reasons.join('; ')})`;
+		const ssoUrl = parseSsoUrl(result.headers.get('x-github-sso'));
 
-		return new GithubError(result.status, `${what}: GitHub answered ${result.status}${said === null ? '' : ` — ${said.message}${reasons}`}`);
+		return new GithubError(
+			result.status,
+			`${what}: GitHub answered ${result.status}${said === null ? '' : ` — ${said.message}${reasons}`}`,
+			ssoUrl === null ? undefined : { ssoUrl }
+		);
 	}
 
 	async function mint(opts: {

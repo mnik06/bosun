@@ -1,4 +1,4 @@
-import { FastifyPluginAsync } from 'fastify';
+import { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { MachineIdParamsSchema } from 'src/api/routes/schemas/machines/MachineIdParamsSchema';
 import {
@@ -11,6 +11,32 @@ import { attachGithubRepository } from 'src/controllers/machines/attach-reposito
 import { saveMachinePolicy } from 'src/controllers/machines/save-machine-policy';
 import { onboardingDeps } from 'src/controllers/onboarding/onboarding-deps';
 import { MachineSchema } from 'src/types/MachineSchema';
+
+// Split out of the route handler below only to keep it under the file's
+// max-lines-per-function limit — every field here is the same fastify
+// decorator `attachGithubRepository`'s own deps type already names.
+function githubAttachDeps(fastify: FastifyInstance) {
+	return {
+		machineRepo: fastify.repos.machineRepo,
+		repositoryRepo: fastify.repos.repositoryRepo,
+		githubInstallationRepo: fastify.repos.githubInstallationRepo,
+		githubPatConnectionRepo: fastify.repos.githubPatConnectionRepo,
+		projectMemberRepo: fastify.repos.projectMemberRepo,
+		notificationRepo: fastify.repos.notificationRepo,
+		pushSubscriptionRepo: fastify.repos.pushSubscriptionRepo,
+		buildRepo: fastify.repos.buildRepo,
+		githubApp: fastify.services.githubApp,
+		githubPat: fastify.services.githubPat,
+		patEncryption: fastify.services.patEncryption,
+		keyService: fastify.services.keyService,
+		githubPatConnectionGuard: fastify.services.githubPatConnectionGuard,
+		idService: fastify.services.idService,
+		socketRegistry: fastify.services.socketRegistry,
+		webPush: fastify.services.webPush,
+		appUrl: fastify.env.PUBLIC_APP_URL,
+		serverUrl: fastify.env.PUBLIC_SERVER_URL
+	};
+}
 
 const routes: FastifyPluginAsync = async function (f) {
 	const fastify = f.withTypeProvider<ZodTypeProvider>();
@@ -28,16 +54,7 @@ const routes: FastifyPluginAsync = async function (f) {
 		async (req, reply) => {
 			if (req.body.provider === 'github') {
 				await attachGithubRepository({
-					machineRepo: fastify.repos.machineRepo,
-					repositoryRepo: fastify.repos.repositoryRepo,
-					githubInstallationRepo: fastify.repos.githubInstallationRepo,
-					githubPatConnectionRepo: fastify.repos.githubPatConnectionRepo,
-					buildRepo: fastify.repos.buildRepo,
-					githubApp: fastify.services.githubApp,
-					githubPat: fastify.services.githubPat,
-					patEncryption: fastify.services.patEncryption,
-					idService: fastify.services.idService,
-					socketRegistry: fastify.services.socketRegistry,
+					...githubAttachDeps(fastify),
 					id: req.params.id,
 					projectId: req.membership!.projectId,
 					githubRepoId: req.body.githubRepoId

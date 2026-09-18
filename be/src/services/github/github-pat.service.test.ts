@@ -104,4 +104,96 @@ describe('validateAndListRepositories', () => {
 
 		await expect(getGithubPatService({ fetchImpl }).validateAndListRepositories({ pat: 'bad' })).rejects.toMatchObject({ kind: 'missing_scope' });
 	});
+
+	it('classifies a 403 carrying a primary rate-limit signal as rate_limited, ahead of the SSO/org checks', async () => {
+		const reset = Math.floor(Date.now() / 1000) + 30;
+		const fetchImpl = (async () =>
+			reply(403, { message: 'API rate limit exceeded' }, { 'x-ratelimit-remaining': '0', 'x-ratelimit-reset': String(reset) })) as typeof fetch;
+
+		const error = await getGithubPatService({ fetchImpl })
+			.validateAndListRepositories({ pat: 'bad' })
+			.catch((caught: unknown) => caught);
+
+		expect(error).toMatchObject({ kind: 'rate_limited' });
+		expect((error as { retryAfterMs: number }).retryAfterMs).toBeGreaterThan(0);
+	});
+
+	it('classifies a 403 carrying a Retry-After header as rate_limited using that value', async () => {
+		const fetchImpl = (async () => reply(403, { message: 'secondary rate limit' }, { 'retry-after': '5' })) as typeof fetch;
+
+		const error = await getGithubPatService({ fetchImpl })
+			.validateAndListRepositories({ pat: 'bad' })
+			.catch((caught: unknown) => caught);
+
+		expect(error).toMatchObject({ kind: 'rate_limited', retryAfterMs: 5_000 });
+	});
+});
+
+describe('createWebhook', () => {
+	it('creates a webhook covering push and pull_request, and returns its id', async () => {
+		const calls: { url: string; body: unknown }[] = [];
+		const fetchImpl = (async (input: string | URL, init?: RequestInit) => {
+			calls.push({ url: String(input), body: init?.body ? JSON.parse(init.body as string) : null });
+
+			return reply(201, { id: 42 });
+		}) as typeof fetch;
+
+		const result = await getGithubPatService({ fetchImpl }).createWebhook({ pat: 'p', fullName: 'acme/app', url: 'https://bosun.example/github/webhook/repo_1', secret: 's3cret' });
+
+		expect(result).toEqual({ githubWebhookId: 42 });
+		expect(calls[0].url).toBe('https://api.github.com/repos/acme/app/hooks');
+		expect(calls[0].body).toMatchObject({ events: ['push', 'pull_request'], config: { url: 'https://bosun.example/github/webhook/repo_1', secret: 's3cret' } });
+	});
+
+	it('throws webhook_exists on a 422, distinct from any other failure', async () => {
+		const fetchImpl = (async () => reply(422, { message: 'Hook already exists on this repository' })) as typeof fetch;
+
+		await expect(
+			getGithubPatService({ fetchImpl }).createWebhook({ pat: 'p', fullName: 'acme/app', url: 'https://x/y', secret: 's' })
+		).rejects.toMatchObject({ kind: 'webhook_exists' });
+	});
+
+	it('throws invalid_token on a 401, the same as every other authenticated call', async () => {
+		const fetchImpl = (async () => reply(401, { message: 'Bad credentials' })) as typeof fetch;
+
+		await expect(
+			getGithubPatService({ fetchImpl }).createWebhook({ pat: 'p', fullName: 'acme/app', url: 'https://x/y', secret: 's' })
+		).rejects.toMatchObject({ kind: 'invalid_token' });
+	});
+});
+
+describe('getWebhook', () => {
+	it('returns null for a hook GitHub no longer has, rather than throwing', async () => {
+		const fetchImpl = (async () => reply(404, null)) as typeof fetch;
+
+		await expect(getGithubPatService({ fetchImpl }).getWebhook({ pat: 'p', fullName: 'acme/app', webhookId: 1 })).resolves.toBeNull();
+	});
+
+	it('reports whether an existing hook is active', async () => {
+		const fetchImpl = (async () => reply(200, { active: false })) as typeof fetch;
+
+		await expect(getGithubPatService({ fetchImpl }).getWebhook({ pat: 'p', fullName: 'acme/app', webhookId: 1 })).resolves.toEqual({ active: false });
+	});
+});
+
+describe('listBranchHeads', () => {
+	it('returns null on a 304 without touching the branch list', async () => {
+		const fetchImpl = (async () => new Response(null, { status: 304 })) as typeof fetch;
+
+		await expect(getGithubPatService({ fetchImpl }).listBranchHeads({ pat: 'p', fullName: 'acme/app', etag: '"abc"' })).resolves.toBeNull();
+	});
+
+	it('sends the previous etag as If-None-Match and returns the new one with every branch head on a 200', async () => {
+		let sentHeaders: HeadersInit | undefined;
+		const fetchImpl = (async (_input: string | URL, init?: RequestInit) => {
+			sentHeaders = init?.headers;
+
+			return reply(200, [{ name: 'main', commit: { sha: 'sha1' } }], { etag: '"new-etag"' });
+		}) as typeof fetch;
+
+		const result = await getGithubPatService({ fetchImpl }).listBranchHeads({ pat: 'p', fullName: 'acme/app', etag: '"old-etag"' });
+
+		expect(result).toEqual({ etag: '"new-etag"', heads: [{ branch: 'main', sha: 'sha1' }] });
+		expect((sentHeaders as Record<string, string>)['if-none-match']).toBe('"old-etag"');
+	});
 });
