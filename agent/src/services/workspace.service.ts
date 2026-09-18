@@ -51,6 +51,9 @@ export function getWorkspaceService(deps: {
 	exec: ExecService;
 	configPath: string;
 	defaultConfigPath: string;
+	// The machine this agent process authenticated as. The file is re-read on
+	// every call, so it is checked against this rather than trusted.
+	machineId: string;
 	homeDir?: string;
 	execPath?: string;
 	scriptPath?: string;
@@ -71,8 +74,21 @@ export function getWorkspaceService(deps: {
 	// Read from disk each time, like every other file under ~/.bosun: an attach
 	// rewrites it, and every service that works in the repository has to see the
 	// new clone from that moment on without the agent restarting.
+	//
+	// A file naming another machine was overwritten under the running agent — an
+	// `enroll` run on this box by hand or by a session. Its repository, if any,
+	// is not this machine's, and reading on would report "no repository" for what
+	// is a config this agent no longer owns.
 	function config(): AgentConfig {
-		return readConfig(deps.configPath);
+		const found = readConfig(deps.configPath);
+
+		if (found.machineId !== deps.machineId) {
+			throw new Error(
+				`${deps.configPath} now belongs to machine ${found.machineId}, not ${deps.machineId} that this agent runs as — it was overwritten while the agent ran; restore it and restart the agent`
+			);
+		}
+
+		return found;
 	}
 
 	async function git(args: string[], opts?: { timeoutMs?: number }) {
@@ -163,12 +179,11 @@ export function getWorkspaceService(deps: {
 		reposRoot,
 		helper,
 
+		// Null only for a config that names no repository. One that cannot be read,
+		// or belongs to another machine, throws with why: swallowed, it read as "this
+		// machine has no repository attached" and sent the operator to attach one.
 		repoPath(): string | null {
-			try {
-				return workingRepoPath(config());
-			} catch {
-				return null;
-			}
+			return workingRepoPath(config());
 		},
 
 		repositoryId(): string | null {
@@ -221,7 +236,17 @@ export function getWorkspaceService(deps: {
 	// Idempotent: attaching the repository the machine already has fetches it and
 	// rewrites its helper rather than cloning a second copy.
 	async function attachOnce(msg: RepoAttach): Promise<AttachResult> {
-			const current = config();
+			let current: AgentConfig;
+
+			// Refused rather than thrown: nothing awaits an attach but the frame that
+			// asked for it, and a config this agent does not own must never be
+			// rewritten with a repository added to it.
+			try {
+				current = config();
+			} catch (error) {
+				return { ok: false, detail: error instanceof Error ? error.message : String(error) };
+			}
+
 			const target = path.join(reposRoot, msg.slug);
 
 			if (current.repository !== undefined && current.repository.id !== msg.repositoryId) {

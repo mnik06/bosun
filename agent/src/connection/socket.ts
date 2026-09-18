@@ -10,6 +10,7 @@ const UPGRADE_SWEEP_MS = 15_000;
 import { parseServerFrame, routeServerFrame, type AgentState } from './router';
 import { type AgentConfig } from '../config/config';
 import { createAskSessions } from '../ask/session';
+import { createBugfixSessions, type BugfixSessions } from '../bugfix/session';
 import { createExecutionSessions, type ExecutionSessions } from '../execution/session';
 import { createIntegrationSessions, type IntegrationSessions } from '../integration/session';
 import { createOnboardingSessions, type OnboardingSessions } from '../onboarding/session';
@@ -17,6 +18,7 @@ import { watchBosunFiles } from './file-watch';
 import { createPlanningSessions, type PlanningSessions } from '../planning/session';
 import { planningPrompt, revisionPrompt } from '../prompts/planning';
 import { summaryPrompt } from '../prompts/summary';
+import { createQuickFixSessions, type QuickFixSessions } from '../quick-fix/session';
 import { createSummarySessions } from '../summary/session';
 import { type AgentMsg } from '../protocol';
 import { type Services } from '../services/index';
@@ -49,6 +51,8 @@ interface ConnectionDeps {
 	integrations: IntegrationSessions;
 	sessions: PlanningSessions;
 	onboarding: OnboardingSessions;
+	bugfix: BugfixSessions;
+	quickFixes: QuickFixSessions;
 	// The current connection's announce, so a file changing under ~/.bosun reaches
 	// whichever socket is open, and nothing at all while none is.
 	announcer: { current: ((reason: 'change') => Promise<void>) | null };
@@ -62,6 +66,19 @@ function publicKeyOf(services: Services): string | undefined {
 		return services.inputsKey.ensure().publicKey;
 	} catch (error) {
 		console.error(`inputs key: ${error instanceof Error ? error.message : 'unreadable'}`);
+
+		return undefined;
+	}
+}
+
+// A config this agent no longer owns is logged and left out of `hello`, not thrown:
+// the announce is what keeps the machine visible, and its preflight carries the
+// reason to the browser.
+function announcedRepoPath(services: Services): string | undefined {
+	try {
+		return services.workspace.repoPath() ?? undefined;
+	} catch (error) {
+		console.error(`config: ${error instanceof Error ? error.message : 'unreadable'}`);
 
 		return undefined;
 	}
@@ -84,7 +101,7 @@ function createAnnouncer(deps: ConnectionDeps & { socket: WebSocket }) {
 				type: 'hello',
 				agentVersion: AGENT_VERSION,
 				hostname: os.hostname(),
-				repoPath: deps.services.workspace.repoPath() ?? undefined,
+				repoPath: announcedRepoPath(deps.services),
 				reason,
 				// Every run whose outcome this agent is still going to report: the ones
 				// it is building, and the ones that settled while the connection was
@@ -103,6 +120,9 @@ function createAnnouncer(deps: ConnectionDeps & { socket: WebSocket }) {
 				],
 				integrationIds: [
 					...new Set([...deps.integrations.held(), ...deps.sink.pendingIntegrationIds()])
+				],
+				bugfixSessionIds: [
+					...new Set([...deps.bugfix.held(), ...deps.sink.pendingBugfixSessionIds()])
 				],
 				uptimeMs: Math.round(process.uptime() * 1000),
 				// What the scheduler budgets this machine's bullets against, and how the
@@ -175,7 +195,12 @@ async function connectOnce(deps: ConnectionDeps): Promise<void> {
 			null;
 
 		const sessionsRunning = (): number =>
-			sessions.running() + deps.executions.running() + deps.integrations.running() + deps.onboarding.running();
+			sessions.running() +
+			deps.executions.running() +
+			deps.integrations.running() +
+			deps.onboarding.running() +
+			deps.bugfix.running() +
+			deps.quickFixes.running();
 
 		const install = async (target: {
 			version: string;
@@ -186,6 +211,7 @@ async function connectOnce(deps: ConnectionDeps): Promise<void> {
 			// they are detached processes, so exiting without this leaves a `claude`
 			// per idle grill running against a worktree with nobody listening.
 			sessions.endIdle();
+			deps.bugfix.endIdle();
 
 			try {
 				await deps.services.upgrade.apply(target);
@@ -311,14 +337,20 @@ async function connectOnce(deps: ConnectionDeps): Promise<void> {
 					executions: deps.executions,
 					integrations: deps.integrations,
 					onboarding: deps.onboarding,
+					quickFixes: deps.quickFixes,
 					summaries,
 					asks,
+					bugfix: deps.bugfix,
 					sink: deps.sink.send,
 					announce,
 					onUpgrade
 				},
 				msg
-			);
+			).catch((error: unknown) => {
+				// Nothing awaits a frame, so a handler that throws is otherwise an
+				// unhandled rejection — and that ends the agent and every session on it.
+				console.error(`${msg.type}: ${error instanceof Error ? error.message : String(error)}`);
+			});
 		});
 
 		socket.on('unexpected-response', (_req, res) => {
@@ -388,6 +420,14 @@ export async function holdConnection(opts: {
 	// merge, a regenerate and a check run in a worktree, none of which needs bosun
 	// listening until it has something to say.
 	const integrations = createIntegrationSessions({ services: opts.services, send: sink.send });
+	// A bug-fixing session outlives the socket on the same terms as a grill: a
+	// person pastes more bugs into the same chat later, and the warm `claude`
+	// process is what answers.
+	const bugfix = createBugfixSessions({ services: opts.services, send: sink.send });
+	// A quick fix outlives the socket for the same reason a bullet does: it is a
+	// branch, a fix and a push in a worktree, none of which needs bosun listening
+	// until it has something to say.
+	const quickFixes = createQuickFixSessions({ services: opts.services, send: sink.send });
 	const announcer: ConnectionDeps['announcer'] = { current: null };
 
 	// Stacks are reaped here too: an app a session started runs in a process group
@@ -398,6 +438,8 @@ export async function holdConnection(opts: {
 			executions.cancelAll();
 			integrations.cancelAll();
 			onboarding.cancelAll();
+			bugfix.cancelAll();
+			quickFixes.cancelAll();
 			void opts.services.stack.downAll().finally(() => {
 				process.exit(0);
 			});
@@ -415,7 +457,7 @@ export async function holdConnection(opts: {
 
 	for (;;) {
 		try {
-			await connectOnce({ ...opts, state, sink, executions, integrations, sessions, onboarding, announcer });
+			await connectOnce({ ...opts, state, sink, executions, integrations, sessions, onboarding, bugfix, quickFixes, announcer });
 			console.log('connection closed');
 			attempt = 0;
 		} catch (error) {

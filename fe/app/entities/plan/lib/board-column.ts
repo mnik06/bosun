@@ -1,7 +1,15 @@
 import type { BuildSummary } from '~/entities/plan/model/build'
 import type { PlanState } from '~/entities/plan/model/plan'
 
-export type BoardColumn = 'drafting' | 'needs_approval' | 'scheduled' | 'building' | 'syncing' | 'verifying' | 'in_review'
+export type BoardColumn =
+	| 'drafting'
+	| 'needs_approval'
+	| 'scheduled'
+	| 'building'
+	| 'syncing'
+	| 'verifying'
+	| 'in_review'
+	| 'bug_fixing'
 
 export const BOARD_COLUMNS: { value: BoardColumn, label: string }[] = [
 	{ value: 'drafting', label: 'Drafting' },
@@ -10,7 +18,8 @@ export const BOARD_COLUMNS: { value: BoardColumn, label: string }[] = [
 	{ value: 'building', label: 'Building' },
 	{ value: 'syncing', label: 'Syncing' },
 	{ value: 'verifying', label: 'Verifying' },
-	{ value: 'in_review', label: 'In review' }
+	{ value: 'in_review', label: 'In review' },
+	{ value: 'bug_fixing', label: 'Bug Fixing' }
 ]
 
 export const HISTORY_STATES: PlanState[] = ['merged', 'failed', 'cancelled']
@@ -23,7 +32,8 @@ const DIRECT: Partial<Record<PlanState, BoardColumn>> = {
 	building: 'building',
 	integrating: 'syncing',
 	verifying: 'verifying',
-	in_review: 'in_review'
+	in_review: 'in_review',
+	fixing_bugs: 'bug_fixing'
 }
 
 // A plan that stopped — on a decision, or on a failure — has no column of its own:

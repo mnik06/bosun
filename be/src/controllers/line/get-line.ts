@@ -1,23 +1,26 @@
-import { HttpError } from 'src/api/errors/HttpError';
-import { type LineBuild, type MachineCapacity } from 'src/api/routes/schemas/line/LineSchemas';
+import { type MachineCapacity } from 'src/api/routes/schemas/line/LineSchemas';
 import { type LineDeps } from 'src/controllers/line/line-deps';
 import { verifyLine } from 'src/controllers/line/schedule';
 import { loadRepositorySnapshot, type RepositorySnapshot } from 'src/controllers/line/shared/line-snapshot';
 import { heldBytes, usableBytes } from 'src/controllers/line/shared/memory-budget';
 import { BUILD_SLOT_STATUSES, LANE_STATUSES } from 'src/controllers/line/shared/next-job';
-import { describeReason } from 'src/controllers/line/shared/reason';
+import { getOwnedRepository } from 'src/controllers/repositories/shared/announce-repository';
 import { type Machine } from 'src/types/MachineSchema';
 import { type Repository } from 'src/types/RepositorySchema';
 
 async function capacityOf(deps: LineDeps, opts: { machine: Machine; snapshot: RepositorySnapshot | undefined }): Promise<MachineCapacity> {
 	const { machine, snapshot } = opts;
 	const mine = (snapshot?.states ?? []).filter((state) => state.build.machineId === machine.id);
-	const onboarding = await deps.onboardingRunRepo.listActiveForMachine(machine.id);
+	const [onboarding, quickFixes] = await Promise.all([
+		deps.onboardingRunRepo.listActiveForMachine(machine.id),
+		deps.quickFixRepo.listActiveForMachine(machine.id)
+	]);
 	const memory = deps.machineMemory.get(machine.id);
 	const load = {
 		build: mine.filter((state) => BUILD_SLOT_STATUSES.includes(state.build.status)).length,
 		lane: mine.filter((state) => LANE_STATUSES.includes(state.build.status)).length,
-		onboarding: onboarding.length
+		onboarding: onboarding.length,
+		quickFix: quickFixes.length
 	};
 	const usable = memory === null ? null : usableBytes(memory);
 
@@ -31,22 +34,12 @@ async function capacityOf(deps: LineDeps, opts: { machine: Machine; snapshot: Re
 		buildsRunning: load.build,
 		buildCap: machine.buildCap,
 		verifyLanes: machine.verifyLanes,
+		ignoreMemoryBudget: machine.ignoreMemoryBudget,
 		lane: mine
 			.filter((state) => LANE_STATUSES.includes(state.build.status))
 			.map((state) => ({ planId: state.plan.id, planNumber: state.plan.number, status: state.build.status })),
 		verifyWaiting: snapshot ? verifyLine(snapshot).filter((state) => state.build.machineId === machine.id).length : 0
 	};
-}
-
-function lineBuilds(snapshot: RepositorySnapshot): LineBuild[] {
-	const verify = verifyLine(snapshot);
-
-	return snapshot.states.map((state) => ({
-		...state.build,
-		planNumber: state.plan.number,
-		planTitle: state.plan.title,
-		reason: describeReason({ state, snapshot, verifyLine: verify })
-	}));
 }
 
 // Every repository's line in the project, or one of them, with what each machine
@@ -55,17 +48,17 @@ function lineBuilds(snapshot: RepositorySnapshot): LineBuild[] {
 export async function getLine(
 	deps: LineDeps,
 	opts: { projectId: string; repositoryId?: string }
-): Promise<{ builds: LineBuild[]; capacity: MachineCapacity[] }> {
+): Promise<{ capacity: MachineCapacity[] }> {
 	let repositories: Repository[];
 
 	if (opts.repositoryId === undefined) {
 		repositories = await deps.repositoryRepo.listForProject(opts.projectId);
 	} else {
-		const repository = await deps.repositoryRepo.getOwnedById({ id: opts.repositoryId, projectId: opts.projectId });
-
-		if (!repository) {
-			throw new HttpError(404, 'Repository not found');
-		}
+		const repository = await getOwnedRepository({
+			repositoryRepo: deps.repositoryRepo,
+			id: opts.repositoryId,
+			projectId: opts.projectId
+		});
 
 		repositories = [repository];
 	}
@@ -79,7 +72,6 @@ export async function getLine(
 	);
 
 	return {
-		builds: snapshots.flatMap(lineBuilds),
 		capacity: await Promise.all(machines.map(async (machine) => capacityOf(deps, { machine, snapshot: byRepository.get(machine.repositoryId!) })))
 	};
 }

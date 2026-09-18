@@ -8,9 +8,17 @@ export function McpPresetSummary ({ preset }: { preset: McpPreset }) {
 		<Stack gap={4}>
 			<Group gap="xs" align="center">
 				<Text fw={600}>{preset.name}</Text>
+			</Group>
 
+			<Group gap="xs" align="center">
 				{preset.requires.map((requirement) => (
-					<Badge key={requirement.env} size="xs" variant="light" color="yellow">
+					<Badge
+						key={requirement.env}
+						size="xs"
+						variant="light"
+						color="yellow"
+						classNames={{ root: 'h-auto max-w-full py-1', label: 'whitespace-normal text-left' }}
+					>
 						needs {requirement.label}
 					</Badge>
 				))}

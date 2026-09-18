@@ -1,14 +1,6 @@
 import { z } from 'zod'
 
-import { BuildSchema, BuildStatusSchema, NeedsYouReasonSchema } from '~/entities/plan/model/build'
-
-export const LineBuildSchema = BuildSchema.extend({
-	planNumber: z.number().int(),
-	planTitle: z.string().nullable(),
-	reason: z.string().nullable()
-})
-
-export type LineBuild = z.infer<typeof LineBuildSchema>
+import { BuildStatusSchema, NeedsYouReasonSchema } from '~/entities/plan/model/build'
 
 export const MachineCapacitySchema = z.object({
 	machineId: z.string(),
@@ -20,6 +12,8 @@ export const MachineCapacitySchema = z.object({
 	buildsRunning: z.number().int(),
 	buildCap: z.number().int().nullable(),
 	verifyLanes: z.number().int(),
+	// Optional so a board served before the backend that sends it still parses.
+	ignoreMemoryBudget: z.boolean().optional(),
 	lane: z.array(
 		z.object({ planId: z.string(), planNumber: z.number().int(), status: BuildStatusSchema })
 	),
@@ -29,7 +23,6 @@ export const MachineCapacitySchema = z.object({
 export type MachineCapacity = z.infer<typeof MachineCapacitySchema>
 
 export const LineSchema = z.object({
-	builds: z.array(LineBuildSchema),
 	capacity: z.array(MachineCapacitySchema)
 })
 

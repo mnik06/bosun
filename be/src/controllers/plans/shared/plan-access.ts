@@ -1,4 +1,6 @@
+import { type BuildRepo } from 'src/repos/builds/build.repo';
 import { type PlanRepo } from 'src/repos/plans/plan.repo';
+import { type Build } from 'src/types/BuildSchema';
 import { type Plan } from 'src/types/PlanSchema';
 import { orNotFound } from 'src/utils/general';
 
@@ -18,4 +20,13 @@ export async function getMachinePlan(opts: {
 	machineId: string;
 }): Promise<Plan> {
 	return orNotFound(opts.planRepo.getByIdForMachine({ id: opts.id, machineId: opts.machineId }), 'Plan not found');
+}
+
+export async function getLatestBuildForPlan(opts: {
+	buildRepo: Pick<BuildRepo, 'latestForPlans'>;
+	planId: string;
+}): Promise<Build | null> {
+	const latest = await opts.buildRepo.latestForPlans([opts.planId]);
+	
+	return latest.get(opts.planId) ?? null;
 }

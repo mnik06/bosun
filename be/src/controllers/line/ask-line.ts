@@ -3,6 +3,7 @@ import { type LineDeps } from 'src/controllers/line/line-deps';
 import { loadRepositorySnapshot } from 'src/controllers/line/shared/line-snapshot';
 import { describeReason } from 'src/controllers/line/shared/reason';
 import { verifyLine } from 'src/controllers/line/schedule';
+import { getOwnedRepository } from 'src/controllers/repositories/shared/announce-repository';
 import { type RepositoryMessage } from 'src/types/BuildSchema';
 import { type AgentMsg } from 'src/types/protocol';
 
@@ -13,13 +14,7 @@ type AnswerFrame = Extract<AgentMsg, { type: `line.answer.${string}` }>;
 const TRANSCRIPT_KEPT = 12;
 
 async function ownedRepository(deps: LineDeps, opts: { repositoryId: string; projectId: string }) {
-	const repository = await deps.repositoryRepo.getOwnedById({ id: opts.repositoryId, projectId: opts.projectId });
-
-	if (!repository) {
-		throw new HttpError(404, 'Repository not found');
-	}
-
-	return repository;
+	return getOwnedRepository({ repositoryRepo: deps.repositoryRepo, id: opts.repositoryId, projectId: opts.projectId });
 }
 
 // What bosun knows and the repository does not say: which plans are where, on which

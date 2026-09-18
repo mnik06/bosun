@@ -2,10 +2,13 @@ import { type FastifyInstance } from 'fastify';
 import { bindGitProviderFor } from 'src/controllers/line/shared/git-provider-for';
 import { type AzureConnectionRepo } from 'src/repos/azure/azure-connection.repo';
 import { type AzureWebhookSubscriptionRepo } from 'src/repos/azure/azure-webhook-subscription.repo';
+import { type BugfixMessageRepo } from 'src/repos/builds/bugfix-message.repo';
+import { type BugfixSessionRepo } from 'src/repos/builds/bugfix-session.repo';
 import { type BuildRepo } from 'src/repos/builds/build.repo';
 import { type IntegrationRepo } from 'src/repos/builds/integration.repo';
 import { type OverlapDecisionRepo } from 'src/repos/builds/overlap-decision.repo';
 import { type PlanAmendmentRepo } from 'src/repos/builds/plan-amendment.repo';
+import { type PlanBugRepo } from 'src/repos/builds/plan-bug.repo';
 import { type PlanDependencyRepo } from 'src/repos/builds/plan-dependency.repo';
 import { type RepositoryMessageRepo } from 'src/repos/builds/repository-message.repo';
 import { type SliceRunRepo } from 'src/repos/builds/slice-run.repo';
@@ -22,6 +25,7 @@ import { type PlanMessageRepo } from 'src/repos/plans/plan-message.repo';
 import { type PlanRepo } from 'src/repos/plans/plan.repo';
 import { type SliceRepo } from 'src/repos/plans/slice.repo';
 import { type ProjectMemberRepo } from 'src/repos/projects/project-member.repo';
+import { type QuickFixRepo } from 'src/repos/quick-fixes/quick-fix.repo';
 import { type UserRepo } from 'src/repos/users/user.repo';
 import { type AzureBranchSnapshotService } from 'src/services/azure/azure-branch-snapshot.service';
 import { type AzureConnectionGuardService } from 'src/services/azure/azure-connection-guard.service';
@@ -49,6 +53,9 @@ export interface LineDeps {
 	sliceRunRepo: SliceRunRepo;
 	integrationRepo: IntegrationRepo;
 	verifyFindingRepo: VerifyFindingRepo;
+	bugfixSessionRepo: BugfixSessionRepo;
+	planBugRepo: PlanBugRepo;
+	bugfixMessageRepo: BugfixMessageRepo;
 	planDependencyRepo: PlanDependencyRepo;
 	planAmendmentRepo: PlanAmendmentRepo;
 	overlapDecisionRepo: OverlapDecisionRepo;
@@ -68,6 +75,7 @@ export interface LineDeps {
 	projectMemberRepo: ProjectMemberRepo;
 	notificationRepo: NotificationRepo;
 	pushSubscriptionRepo: PushSubscriptionRepo;
+	quickFixRepo: QuickFixRepo;
 	idService: IdService;
 	githubApp: GithubAppService;
 	azureDevOps: AzureDevOpsService;
@@ -98,6 +106,9 @@ export function lineDeps(fastify: FastifyInstance): LineDeps {
 		sliceRunRepo: fastify.repos.sliceRunRepo,
 		integrationRepo: fastify.repos.integrationRepo,
 		verifyFindingRepo: fastify.repos.verifyFindingRepo,
+		bugfixSessionRepo: fastify.repos.bugfixSessionRepo,
+		planBugRepo: fastify.repos.planBugRepo,
+		bugfixMessageRepo: fastify.repos.bugfixMessageRepo,
 		planDependencyRepo: fastify.repos.planDependencyRepo,
 		planAmendmentRepo: fastify.repos.planAmendmentRepo,
 		overlapDecisionRepo: fastify.repos.overlapDecisionRepo,
@@ -117,6 +128,7 @@ export function lineDeps(fastify: FastifyInstance): LineDeps {
 		projectMemberRepo: fastify.repos.projectMemberRepo,
 		notificationRepo: fastify.repos.notificationRepo,
 		pushSubscriptionRepo: fastify.repos.pushSubscriptionRepo,
+		quickFixRepo: fastify.repos.quickFixRepo,
 		idService: fastify.services.idService,
 		githubApp: fastify.services.githubApp,
 		azureDevOps: fastify.services.azureDevOps,

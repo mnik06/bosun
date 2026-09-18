@@ -50,7 +50,11 @@ export const McpPresetSchema = z.object({
 	docsUrl: z.url().optional(),
 	requires: z.array(McpRequirementSchema),
 	basicAuth: McpBasicAuthSchema.optional(),
-	server: McpServerDefSchema
+	server: McpServerDefSchema,
+	// Gates GET /agent/mcp-presets/:id against the calling machine's last-known
+	// agentVersion. Internal only — the response schemas that actually serve this
+	// catalogue always omit it, so it never travels to the agent or the browser.
+	minAgentVersion: z.string().optional()
 });
 
 export type McpPreset = z.infer<typeof McpPresetSchema>;

@@ -22,7 +22,11 @@ const SETTLING = new Set([
 	'build.worktree.ready',
 	'build.worktree.error',
 	'integrate.done',
-	'integrate.needs_you'
+	'integrate.needs_you',
+	'bugfix.done',
+	'bugfix.error',
+	'quickfix.done',
+	'quickfix.error'
 ]);
 
 export interface FrameSink {
@@ -33,6 +37,7 @@ export interface FrameSink {
 	pendingPlanIds(): string[];
 	pendingOnboardingRunIds(): string[];
 	pendingIntegrationIds(): string[];
+	pendingBugfixSessionIds(): string[];
 }
 
 // An execution session outlives the socket it was dispatched over: `claude` keeps
@@ -98,6 +103,10 @@ export function createFrameSink(): FrameSink {
 
 		pendingIntegrationIds(): string[] {
 			return pending.flatMap((message) => ('integrationId' in message ? [message.integrationId] : []));
+		},
+
+		pendingBugfixSessionIds(): string[] {
+			return pending.flatMap((message) => ('sessionId' in message ? [message.sessionId] : []));
 		},
 
 		// The same argument for a grill: a session that published and settled while

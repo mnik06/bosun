@@ -18,10 +18,10 @@ export const NotificationKindSchema = z.enum([
 	'build.cancelled',
 	'machine.online',
 	'machine.offline',
-	'repository.connection_broken'
+	'repository.connection_broken',
+	'quickfix.pushed',
+	'quickfix.failed'
 ])
-
-export type NotificationKind = z.infer<typeof NotificationKindSchema>
 
 export const NotificationSchema = z.object({
 	id: z.string(),

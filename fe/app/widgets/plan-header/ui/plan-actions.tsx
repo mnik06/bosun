@@ -33,6 +33,7 @@ export function PrimaryAction ({ detail, state }: { detail: Detail, state: PlanS
 		case 'failed':
 			return <BuildActionButton buildId={build.id} control="retry" />
 		case 'in_review':
+		case 'fixing_bugs':
 		case 'merged':
 			return build.prUrl === null ? null : (
 				<Button
@@ -87,6 +88,7 @@ function menuItems (opts: { detail: Detail, state: PlanState }): ReactNode[] {
 		case 'verifying':
 		case 'needs_you':
 		case 'failed':
+		case 'fixing_bugs':
 			return [cancel]
 		case 'in_review':
 			return foundationShippable(opts.detail)

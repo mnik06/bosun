@@ -4,6 +4,7 @@ import { type RepositoryRepo } from 'src/repos/github/repository.repo';
 import { type SocketRegistry } from 'src/services/sockets/registry.service';
 import { describeIssues, parseProjectConfig } from 'src/types/ProjectConfigSchema';
 import { type Repository } from 'src/types/RepositorySchema';
+import { orNotFound } from 'src/utils/general';
 
 // Validated on write, so a draft that reaches a machine is one its schema accepts
 // and a session never discovers the typo an hour into a bullet.
@@ -24,11 +25,10 @@ export async function saveConfigDraft(opts: {
 		});
 	}
 
-	const repository = await opts.repositoryRepo.saveConfigDraft({ id: opts.id, configDraft: opts.yaml });
-
-	if (!repository) {
-		throw new HttpError(404, 'Repository not found');
-	}
+	const repository = await orNotFound(
+		opts.repositoryRepo.saveConfigDraft({ id: opts.id, configDraft: opts.yaml }),
+		'Repository not found'
+	);
 
 	announceRepository({ socketRegistry: opts.socketRegistry, repository });
 

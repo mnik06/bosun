@@ -3,7 +3,6 @@ export {
 	McpPresetListSchema,
 	McpPresetSchema,
 	McpRequirementSchema,
-	type McpPreset,
-	type McpRequirement
+	type McpPreset
 } from './model/mcp-preset'
 export { McpPresetSummary } from './ui/mcp-preset-summary'

@@ -7,12 +7,13 @@ import { removeWorktree, stopRunningJobs } from 'src/controllers/line/shared/lif
 import { nextJob, waitingStatus } from 'src/controllers/line/shared/next-job';
 import { notifyBuildStatus } from 'src/controllers/line/shared/notify';
 import { type Build, type BuildStatus } from 'src/types/BuildSchema';
+import { orNotFound } from 'src/utils/general';
 
 export type BuildAction = 'hold' | 'release' | 'cancel' | 'front' | 'retry';
 
 const HOLDABLE: BuildStatus[] = ['scheduled', 'building', 'waiting_answer', 'integrating', 'waiting_verify', 'driving', 'fixing', 'rechecking'];
 
-const CANCELLABLE: BuildStatus[] = [...HOLDABLE, 'held', 'in_review', 'needs_you', 'failed'];
+const CANCELLABLE: BuildStatus[] = [...HOLDABLE, 'held', 'in_review', 'fixing_bugs', 'needs_you', 'failed'];
 
 // A needs-you a retry can clear. An overlap is cleared by its decision, and a failed
 // re-check by fix again or accept.
@@ -92,11 +93,7 @@ const ACTIONS: Record<BuildAction, (deps: LineDeps, build: Build) => Promise<Bui
 
 export async function controlBuild(deps: LineDeps, opts: { id: string; projectId: string; action: BuildAction }): Promise<Build> {
 	const { build, plan } = await getOwnedBuild(deps, opts);
-	const updated = await ACTIONS[opts.action](deps, build);
-
-	if (!updated) {
-		throw new HttpError(404, 'Build not found');
-	}
+	const updated = await orNotFound(ACTIONS[opts.action](deps, build), 'Build not found');
 
 	announceBuild({ socketRegistry: deps.socketRegistry, projectId: plan.projectId, build: updated });
 

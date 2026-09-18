@@ -1,5 +1,5 @@
+import { requireHost } from 'src/controllers/machines/shared/require-host';
 import { announcePlan } from 'src/controllers/plans/shared/plan-broadcast';
-import { requireHost } from 'src/controllers/plans/shared/plan-hosting';
 import { notifyPlanStatus, type PlanNotifyDeps } from 'src/controllers/plans/shared/notify';
 import { configDraftFor } from 'src/controllers/repositories/shared/config-draft';
 import { type RepositoryRepo } from 'src/repos/github/repository.repo';

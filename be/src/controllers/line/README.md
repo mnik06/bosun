@@ -61,6 +61,13 @@ too small for a drive beside a build, a plan between its bullets gives its slot 
 (`holderBlocksLane`) and resumes ahead of every plan not yet started; without that the wait is every
 bullet the plan has left rather than one. A machine running nothing always takes a job.
 
+`build_cap` and `verify_lanes` only lower what memory admits — unless the machine has
+`ignore_memory_budget`, set by a leader who wants the counts taken as given. Then a lane is admitted
+up to its count beside anything, a build up to the cap with nothing held back for a waiting verify,
+and no holder yields its slot. A build with no cap still waits for memory: nothing else would say how
+many. Every session keeps its per-job limit, so the overcommit lands on swap, and lanes still share
+the machine's one development database.
+
 **The verify line** is ordered by every provider verified, then `built_at`, then position. A plan
 never drives against a provider whose own verify could still change it.
 

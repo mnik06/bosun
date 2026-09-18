@@ -6,7 +6,6 @@ import { PlanDecisionSchema, type PlanDecision } from 'src/types/PlanSchema';
 const columns = {
 	id: planDecisions.id,
 	planId: planDecisions.planId,
-	sliceId: planDecisions.sliceId,
 	fork: planDecisions.fork,
 	options: planDecisions.options,
 	chose: planDecisions.chose,
@@ -20,7 +19,6 @@ export function getPlanDecisionRepo(db: DbOrTx) {
 		async create(opts: {
 			id: string;
 			planId: string;
-			sliceId: string | null;
 			fork: string;
 			options: string | null;
 			chose: string;

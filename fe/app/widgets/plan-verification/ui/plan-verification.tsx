@@ -1,7 +1,8 @@
-import { Badge, Card, Divider, Group, Stack, Text } from '@mantine/core'
+import { Badge, Divider, Group, Stack, Text } from '@mantine/core'
 
 import { useProjectMembersQuery, useActiveProject } from '~/entities/project'
 import { RunRow, type PlanDetail, type VerifyFinding } from '~/entities/plan'
+import { StatusCard, type StatusCardBadge } from '~/shared/ui'
 import { criterionVerdict } from '~/widgets/plan-verification/lib/verdict'
 
 const SEVERITY_COLOR: Record<VerifyFinding['severity'], string> = { high: 'red', medium: 'orange', low: 'gray' }
@@ -14,40 +15,20 @@ const STATUS_COLOR: Record<VerifyFinding['status'], string> = {
 }
 
 function FindingCard ({ finding, acceptedBy }: { finding: VerifyFinding, acceptedBy: string | null }) {
+	const badges: StatusCardBadge[] = [
+		{ label: finding.kind, variant: 'outline' },
+		...(finding.acCode === null ? [] : [{ label: finding.acCode, variant: 'light' as const }]),
+		{ label: finding.severity, color: SEVERITY_COLOR[finding.severity], variant: 'light' },
+		{ label: finding.status, color: STATUS_COLOR[finding.status], variant: 'filled' }
+	]
+
 	return (
-		<Card withBorder padding="sm" radius="md">
-			<Stack gap={4}>
-				<Group gap="xs">
-					<Badge size="xs" variant="outline">
-						{finding.kind}
-					</Badge>
-					{finding.acCode === null ? null : (
-						<Badge size="xs" variant="light">
-							{finding.acCode}
-						</Badge>
-					)}
-					<Badge size="xs" variant="light" color={SEVERITY_COLOR[finding.severity]}>
-						{finding.severity}
-					</Badge>
-					<Badge size="xs" variant="filled" color={STATUS_COLOR[finding.status]}>
-						{finding.status}
-					</Badge>
-				</Group>
-				<Text size="sm" className="whitespace-pre-wrap">
-					{finding.reproduction}
-				</Text>
-				{finding.note === null ? null : (
-					<Text size="xs" c="dimmed" className="whitespace-pre-wrap">
-						{finding.note}
-					</Text>
-				)}
-				{acceptedBy === null ? null : (
-					<Text size="xs" c="orange">
-						Accepted by {acceptedBy}
-					</Text>
-				)}
-			</Stack>
-		</Card>
+		<StatusCard
+			badges={badges}
+			body={finding.reproduction}
+			note={finding.note}
+			footer={acceptedBy === null ? null : `Accepted by ${acceptedBy}`}
+		/>
 	)
 }
 

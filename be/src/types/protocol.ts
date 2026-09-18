@@ -15,7 +15,16 @@ import {
 	PlanQuestionMsgSchema,
 	PlanTextMsgSchema
 } from 'src/types/plan-stream';
+import { BugfixCancelMsgSchema, BugfixSayMsgSchema, BugfixStartMsgSchema } from 'src/types/bugfix-frames';
+import {
+	BugfixActivityMsgSchema,
+	BugfixBugsMsgSchema,
+	BugfixDoneMsgSchema,
+	BugfixErrorMsgSchema,
+	BugfixTextMsgSchema
+} from 'src/types/bugfix-stream';
 import { MachineMemorySchema } from 'src/types/machine-memory';
+import { CommitOutcomeSchema } from 'src/types/commit-outcome';
 import {
 	EnvDeleteMsgSchema,
 	EnvErrorMsgSchema,
@@ -51,6 +60,11 @@ import {
 	LineAskMsgSchema
 } from 'src/types/build-frames';
 import { FindingKindSchema, FindingSeveritySchema, RunPhaseSchema } from 'src/types/BuildSchema';
+import {
+	QuickFixDoneMsgSchema,
+	QuickFixErrorMsgSchema,
+	QuickFixStartMsgSchema
+} from 'src/types/quick-fix-frames';
 
 export {
 	PlanActivityMsgSchema,
@@ -81,6 +95,11 @@ export const HelloMsgSchema = z.object({
 	onboardingRunIds: z.array(z.string()).optional(),
 	// The integrations still held, on the same terms.
 	integrationIds: z.array(z.string()).optional(),
+	// The bug-fixing sessions still held, on the same terms. Not yet reconciled
+	// against `bugfix_sessions` on reconnect — see `bugfix-idle-sweep.ts`, which
+	// is what recovers a build stranded in `fixing_bugs` by an agent that never
+	// comes back, on a longer clock.
+	bugfixSessionIds: z.array(z.string()).optional(),
 	// How long that agent process has been alive. A dropped socket and a restarted
 	// agent are indistinguishable here otherwise, and only one of them means every
 	// session on the machine is gone.
@@ -110,12 +129,6 @@ export const PreflightMsgSchema = z.object({
 	checks: z.array(PreflightCheckSchema)
 });
 
-export const PongMsgSchema = z.object({
-	type: z.literal('pong'),
-	id: z.string(),
-	at: z.number()
-});
-
 export const ExecTextMsgSchema = z.object({
 	type: z.literal('exec.text'),
 	runId: z.string(),
@@ -137,14 +150,9 @@ export const ExecQuestionMsgSchema = z.object({
 
 // `changedFiles` is what the landed commit touched; `pushed` is whether the branch
 // reached the remote after it, which is what lets a dependent start elsewhere.
-export const ExecDoneMsgSchema = z.object({
+export const ExecDoneMsgSchema = CommitOutcomeSchema.extend({
 	type: z.literal('exec.done'),
-	runId: z.string(),
-	commitSha: z.string().nullable(),
-	report: z.string(),
-	changedFiles: z.array(z.string()).default([]),
-	pushed: z.boolean().default(false),
-	pushError: z.string().nullable().default(null)
+	runId: z.string()
 });
 
 export const ExecErrorMsgSchema = z.object({
@@ -171,7 +179,6 @@ export const UpgradeDeclinedMsgSchema = z.object({
 export const AgentMsgSchema = z.discriminatedUnion('type', [
 	HelloMsgSchema,
 	PreflightMsgSchema,
-	PongMsgSchema,
 	UpgradeDeclinedMsgSchema,
 	PlanTextMsgSchema,
 	PlanActivityMsgSchema,
@@ -196,7 +203,14 @@ export const AgentMsgSchema = z.discriminatedUnion('type', [
 	RepoAttachedMsgSchema,
 	RepoErrorMsgSchema,
 	OnboardingDoneMsgSchema,
-	OnboardingErrorMsgSchema
+	OnboardingErrorMsgSchema,
+	BugfixTextMsgSchema,
+	BugfixActivityMsgSchema,
+	BugfixBugsMsgSchema,
+	BugfixDoneMsgSchema,
+	BugfixErrorMsgSchema,
+	QuickFixDoneMsgSchema,
+	QuickFixErrorMsgSchema
 ]);
 
 export type AgentMsg = z.infer<typeof AgentMsgSchema>;
@@ -331,7 +345,11 @@ export const ServerMsgSchema = z.discriminatedUnion('type', [
 	SecretsSetMsgSchema,
 	RepoAttachMsgSchema,
 	OnboardingStartMsgSchema,
-	OnboardingCancelMsgSchema
+	OnboardingCancelMsgSchema,
+	BugfixStartMsgSchema,
+	BugfixSayMsgSchema,
+	BugfixCancelMsgSchema,
+	QuickFixStartMsgSchema
 ]);
 
 export type ServerMsg = z.infer<typeof ServerMsgSchema>;

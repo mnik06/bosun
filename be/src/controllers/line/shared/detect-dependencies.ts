@@ -6,7 +6,7 @@ import {
 	type FootprintPiece
 } from 'src/types/FootprintSchema';
 
-export interface FootprintSlice {
+interface FootprintSlice {
 	id: string;
 	ordinal: number;
 	foundation: boolean;
@@ -25,20 +25,20 @@ export interface ProviderPlan extends FootprintPlan {
 	foundationBuilt: boolean;
 }
 
-export interface DetectedDependency {
+interface DetectedDependency {
 	providerPlanId: string;
 	providerSliceId: string | null;
 	reason: string;
 }
 
-export interface DetectedAmendment {
+interface DetectedAmendment {
 	sourcePlanId: string;
 	sliceId: string;
 	key: string;
 	text: string;
 }
 
-export interface DetectedOverlap {
+interface DetectedOverlap {
 	providerPlanId: string;
 	sliceId: string;
 	item: OverlapItem;

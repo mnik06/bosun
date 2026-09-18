@@ -28,6 +28,7 @@ ALTER TABLE "repositories" ADD COLUMN "azure_connection_id" text;--> statement-b
 ALTER TABLE "repositories" ADD COLUMN "azure_project_id" text;--> statement-breakpoint
 ALTER TABLE "repositories" ADD COLUMN "azure_repo_id" text;--> statement-breakpoint
 ALTER TABLE "repositories" ADD COLUMN "last_synced_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "repositories" ADD COLUMN "azure_sync_mode" text;--> statement-breakpoint
 ALTER TABLE "azure_connections" ADD CONSTRAINT "azure_connections_project_id_projects_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."projects"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "azure_connections" ADD CONSTRAINT "azure_connections_created_by_user_id_users_id_fk" FOREIGN KEY ("created_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "azure_webhook_subscriptions" ADD CONSTRAINT "azure_webhook_subscriptions_repository_id_repositories_id_fk" FOREIGN KEY ("repository_id") REFERENCES "public"."repositories"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint

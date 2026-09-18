@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import {
-	BuildSchema,
 	BuildStatusSchema,
 	NeedsYouReasonSchema,
 	OverlapChoiceSchema,
@@ -33,15 +32,6 @@ export const AnswerRunReqSchema = z.object({
 	answers: z.array(PlanAnswerSchema).min(1)
 });
 
-export const LineBuildSchema = BuildSchema.extend({
-	planNumber: z.number().int(),
-	planTitle: z.string().nullable(),
-	// The one line a board card carries: what it waits for, or where it stands.
-	reason: z.string().nullable()
-});
-
-export type LineBuild = z.infer<typeof LineBuildSchema>;
-
 export const LaneOccupantSchema = z.object({
 	planId: z.string(),
 	planNumber: z.number().int(),
@@ -59,6 +49,7 @@ export const MachineCapacitySchema = z.object({
 	buildsRunning: z.number().int(),
 	buildCap: z.number().int().nullable(),
 	verifyLanes: z.number().int(),
+	ignoreMemoryBudget: z.boolean(),
 	lane: z.array(LaneOccupantSchema),
 	verifyWaiting: z.number().int()
 });
@@ -66,7 +57,6 @@ export const MachineCapacitySchema = z.object({
 export type MachineCapacity = z.infer<typeof MachineCapacitySchema>;
 
 export const LineRespSchema = z.object({
-	builds: z.array(LineBuildSchema),
 	capacity: z.array(MachineCapacitySchema)
 });
 
@@ -95,6 +85,7 @@ export const UpdateRepositoryReqSchema = z.object({ autoResolveConflicts: z.bool
 export const UpdateMachineCapacityReqSchema = z
 	.object({
 		verifyLanes: z.number().int().min(0).max(4),
-		buildCap: z.number().int().min(1).max(32).nullable()
+		buildCap: z.number().int().min(1).max(32).nullable(),
+		ignoreMemoryBudget: z.boolean()
 	})
 	.partial();

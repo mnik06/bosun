@@ -9,6 +9,8 @@ import { recordRepoFrame } from 'src/controllers/machines/record-repo-frame';
 import { onboardingDeps } from 'src/controllers/onboarding/onboarding-deps';
 import { recordOnboardingFrame } from 'src/controllers/onboarding/record-onboarding-frame';
 import { recordPlanFrame } from 'src/controllers/plans/record-plan-frame';
+import { recordBugfixFrame } from 'src/controllers/plans/bugfix/record-bugfix-frame';
+import { recordQuickFixFrame } from 'src/controllers/quick-fixes/record-quick-fix-frame';
 import { applyMachineFrame } from 'src/api/routes/agent/ws.route';
 import { type AgentMsg } from 'src/types/protocol';
 
@@ -20,6 +22,13 @@ type AnswerFrame = Extract<AgentMsg, { type: `line.answer.${string}` }>;
 type EnvReplyFrame = Extract<AgentMsg, { type: 'env.saved' | 'env.error' }>;
 type RepoFrame = Extract<AgentMsg, { type: `repo.${string}` }>;
 type OnboardingFrame = Extract<AgentMsg, { type: `onboarding.${string}` }>;
+type QuickFixFrame = Extract<AgentMsg, { type: `quickfix.${string}` }>;
+
+type BugfixFrame = Extract<AgentMsg, { type: `bugfix.${string}` }>;
+
+function isBugfixFrame(msg: AgentMsg): msg is BugfixFrame {
+	return msg.type.startsWith('bugfix.');
+}
 
 function isRepoFrame(msg: AgentMsg): msg is RepoFrame {
 	return msg.type.startsWith('repo.');
@@ -27,6 +36,10 @@ function isRepoFrame(msg: AgentMsg): msg is RepoFrame {
 
 function isOnboardingFrame(msg: AgentMsg): msg is OnboardingFrame {
 	return msg.type.startsWith('onboarding.');
+}
+
+function isQuickFixFrame(msg: AgentMsg): msg is QuickFixFrame {
+	return msg.type.startsWith('quickfix.');
 }
 
 function isPlanFrame(msg: AgentMsg): msg is PlanFrame {
@@ -55,9 +68,11 @@ function isEnvReplyFrame(msg: AgentMsg): msg is EnvReplyFrame {
 
 // Frames that settle work are handled one at a time, in arrival order: a run's
 // `exec.done` and the integration the build starts next both move one build, and a
-// transcript's appends collide when they overlap.
+// transcript's appends collide when they overlap. A bug-fixing session's transcript
+// is the same collision waiting to happen: two text deltas racing on the same
+// build's `max(seq) + 1` insert.
 export function isOrderedFrame(msg: AgentMsg): boolean {
-	return isPlanFrame(msg) || isExecFrame(msg) || isWorktreeFrame(msg) || isIntegrateFrame(msg);
+	return isPlanFrame(msg) || isExecFrame(msg) || isWorktreeFrame(msg) || isIntegrateFrame(msg) || isBugfixFrame(msg);
 }
 
 function settleEnvReply(opts: {
@@ -184,10 +199,6 @@ export async function handleAgentFrame(opts: {
 }): Promise<void> {
 	const { msg } = opts;
 
-	if (msg.type === 'pong') {
-		return;
-	}
-
 	if (msg.type === 'upgrade.declined' || isEnvReplyFrame(msg)) {
 		settleReply({ ...opts, msg });
 
@@ -196,6 +207,12 @@ export async function handleAgentFrame(opts: {
 
 	if (isRepoFrame(msg) || isOnboardingFrame(msg)) {
 		await handleRepositoryFrame({ fastify: opts.fastify, machineId: opts.machineId, projectId: opts.projectId, msg });
+
+		return;
+	}
+
+	if (isQuickFixFrame(msg)) {
+		await recordQuickFixFrame(lineDeps(opts.fastify), { machineId: opts.machineId, frame: msg });
 
 		return;
 	}
@@ -224,6 +241,12 @@ export async function handleAgentFrame(opts: {
 			machineId: opts.machineId,
 			frame: msg
 		});
+
+		return;
+	}
+
+	if (isBugfixFrame(msg)) {
+		await recordBugfixFrame(lineDeps(opts.fastify), { machineId: opts.machineId, frame: msg });
 
 		return;
 	}

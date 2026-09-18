@@ -40,6 +40,15 @@ describe('visiblePlanTabs', () => {
 		expect(visiblePlanTabs({ ...empty, build, runs: [run({ phase: 'drive' })] })).not.toContain('verification')
 		expect(visiblePlanTabs({ ...empty, build, runs: [run({ phase: 'drive', status: 'running' })] })).toContain('verification')
 	})
+
+	// Once opened, a pull request stays open for inspection whatever the plan
+	// does next, so the tab never disappears again once it has appeared.
+	it('adds bug fixing once a pull request has ever opened, and keeps it after merging', () => {
+		expect(visiblePlanTabs({ ...empty, build: { ...build, prUrl: 'https://x' } })).toContain(
+			'bugfix'
+		)
+		expect(visiblePlanTabs(empty)).not.toContain('bugfix')
+	})
 })
 
 describe('defaultPlanTab', () => {
@@ -48,7 +57,9 @@ describe('defaultPlanTab', () => {
 		['needs_approval', ['chat', 'plan'], 'plan'],
 		['building', ['chat', 'plan', 'execution'], 'execution'],
 		['in_review', ['chat', 'plan', 'execution', 'changes', 'verification'], 'verification'],
-		['in_review', ['chat', 'plan', 'execution', 'changes'], 'changes']
+		['in_review', ['chat', 'plan', 'execution', 'changes'], 'changes'],
+		['fixing_bugs', ['chat', 'execution', 'changes', 'bugfix'], 'bugfix'],
+		['fixing_bugs', ['chat', 'execution', 'changes'], 'changes']
 	] as const)('opens %s on the tab its state makes relevant', (state, tabs, expected) => {
 		expect(defaultPlanTab({ state, tabs: [...tabs] })).toBe(expected)
 	})

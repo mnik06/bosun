@@ -26,7 +26,8 @@ export async function putSessionSecrets (opts: { machineId: string, vars: Sealed
 export async function patchMachineCapacity (opts: {
 	machineId: string,
 	verifyLanes?: number,
-	buildCap?: number | null
+	buildCap?: number | null,
+	ignoreMemoryBudget?: boolean
 }): Promise<Machine> {
 	const { machineId, ...body } = opts
 	const { data } = await apiClient.patch<unknown>(`/machines/${machineId}`, body)

@@ -45,8 +45,6 @@ export const MachinePolicySchema = z.object({
 	confirmed: z.boolean().default(false)
 })
 
-export type MachinePolicy = z.infer<typeof MachinePolicySchema>
-
 export const MachineSchema = z.object({
 	id: z.string(),
 	name: z.string(),
@@ -68,6 +66,7 @@ export const MachineSchema = z.object({
 	// Nullish for the same reason: a backend older than the line omits both.
 	verifyLanes: z.number().int().nullish(),
 	buildCap: z.number().int().nullish(),
+	ignoreMemoryBudget: z.boolean().nullish(),
 	createdAt: z.iso.datetime()
 })
 

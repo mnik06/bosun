@@ -160,7 +160,8 @@ async function blocksWaitingVerify(pass: Pass): Promise<boolean> {
 		memory: pass.deps.machineMemory.get(pass.machine.id),
 		load: await machineLoad(pass),
 		verifyLanes: pass.machine.verifyLanes,
-		buildCap: pass.machine.buildCap
+		buildCap: pass.machine.buildCap,
+		ignoreMemoryBudget: pass.machine.ignoreMemoryBudget
 	});
 }
 
@@ -177,12 +178,16 @@ async function yieldSlot(pass: Pass, state: BuildState): Promise<boolean> {
 }
 
 async function machineLoad(pass: Pass): Promise<MachineLoad> {
-	const onboarding = await pass.deps.onboardingRunRepo.listActiveForMachine(pass.machine.id);
+	const [onboarding, quickFixes] = await Promise.all([
+		pass.deps.onboardingRunRepo.listActiveForMachine(pass.machine.id),
+		pass.deps.quickFixRepo.listActiveForMachine(pass.machine.id)
+	]);
 
 	return {
 		build: pass.mine.filter((state) => BUILD_SLOT_STATUSES.includes(state.build.status)).length,
 		lane: pass.mine.filter((state) => LANE_STATUSES.includes(state.build.status)).length,
-		onboarding: onboarding.length
+		onboarding: onboarding.length,
+		quickFix: quickFixes.length
 	};
 }
 
@@ -277,7 +282,13 @@ async function admitNext(pass: Pass): Promise<boolean> {
 	const { machine } = pass;
 	const load = await machineLoad(pass);
 	const lane = verifyLine(pass.snapshot);
-	const base = { memory: pass.deps.machineMemory.get(machine.id), load, verifyLanes: machine.verifyLanes, buildCap: machine.buildCap };
+	const base = {
+		memory: pass.deps.machineMemory.get(machine.id),
+		load,
+		verifyLanes: machine.verifyLanes,
+		buildCap: machine.buildCap,
+		ignoreMemoryBudget: machine.ignoreMemoryBudget
+	};
 	const buildAdmission = admit({ ...base, jobClass: 'build', verifyWaiting: lane.some((state) => state.build.machineId === machine.id) });
 	const laneAdmission = admit({ ...base, jobClass: 'lane', verifyWaiting: true });
 	const buildLimit = buildAdmission.admitted ? buildAdmission.limitBytes : null;

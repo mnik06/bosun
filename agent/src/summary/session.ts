@@ -4,7 +4,7 @@ import { type Services } from '../services/index';
 import { spawnClaudeSession, type ClaudeSession } from '../sessions/process';
 import { startSessionMcpServer, type SessionMcpServer } from '../sessions/mcp-server';
 import { teardownSession } from '../sessions/teardown';
-import { createStderrTail } from '../sessions/turn-support';
+import { createStderrTail, pipeSessionOutput } from '../sessions/turn-support';
 import { createStreamParser } from '../planning/stream-parser';
 import { createSummaryDispatch, SUMMARY_TOOL_DEFINITIONS } from './mcp/tools';
 
@@ -79,6 +79,8 @@ export function createSummarySessions(opts: {
 			onDropped: () => {}
 		});
 
+		const pipe = pipeSessionOutput({ parser, stderr });
+
 		session.process = spawnClaudeSession({
 			// The worktree, not the machine's checkout: the branch only exists here.
 			cwd: msg.worktreePath,
@@ -92,14 +94,10 @@ export function createSummarySessions(opts: {
 			userServerNames: [],
 			tools: SUMMARY_TOOLS,
 			claudeAuth: opts.services.claudeAuth,
-			onStdout: (chunk) => {
-				parser.push(chunk);
-			},
-			onStderr: (chunk) => {
-				stderr.push(chunk);
-			},
+			onStdout: pipe.onStdout,
+			onStderr: pipe.onStderr,
 			onExit: (code) => {
-				parser.flush();
+				pipe.onExit();
 
 				if (sessions.has(msg.planId)) {
 					console.error(

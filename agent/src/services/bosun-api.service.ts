@@ -20,6 +20,19 @@ const PlanCriteriaRespSchema = z.array(
 	})
 );
 
+const PlanBugRespSchema = z.object({
+	id: z.string(),
+	buildId: z.string(),
+	seq: z.number().int(),
+	description: z.string(),
+	status: z.enum(['pending', 'fixing', 'fixed', 'failed']),
+	note: z.string().nullable(),
+	createdAt: z.string(),
+	updatedAt: z.string()
+});
+
+export type PlanBugResp = z.infer<typeof PlanBugRespSchema>;
+
 const McpRequirementSchema = z.object({
 	env: z.string(),
 	label: z.string(),
@@ -90,8 +103,11 @@ export function getBosunApiService(deps: { serverUrl: string; machineKey?: strin
 			return z.array(McpPresetSchema).parse(await get('/mcp-presets'));
 		},
 
+		// Authenticated: some presets gate on the calling machine's agentVersion, so
+		// fetching one by id has to prove which machine is asking. The list at
+		// /mcp-presets stays open — nothing there depends on who is reading it.
 		async getMcpPreset(id: string): Promise<McpPreset> {
-			return McpPresetSchema.parse(await get(`/mcp-presets/${encodeURIComponent(id)}`));
+			return McpPresetSchema.parse(await get(`/agent/mcp-presets/${encodeURIComponent(id)}`, true));
 		},
 
 		async enroll(opts: { token: string; repoPath: string | null }) {
@@ -157,7 +173,6 @@ export function getBosunApiService(deps: { serverUrl: string; machineKey?: strin
 
 		async recordPlanDecision(opts: {
 			planId: string;
-			sliceId: string | null;
 			fork: string;
 			options: string | null;
 			chose: string;
@@ -250,6 +265,21 @@ export function getBosunApiService(deps: { serverUrl: string; machineKey?: strin
 			const { findingId, ...body } = opts;
 
 			return post({ path: `/agent/findings/${encodeURIComponent(findingId)}/resolve`, body, authorized: true });
+		},
+
+		// Parses to rows with backend-assigned ids and seq, returned in the same turn
+		// so the orchestrator can reference them from `update_bug_status` without a
+		// round trip of its own.
+		async reportBugs(opts: { buildId: string; sessionId: string; descriptions: string[] }): Promise<PlanBugResp[]> {
+			const { buildId, ...body } = opts;
+
+			return z.array(PlanBugRespSchema).parse(await post({ path: `/agent/builds/${encodeURIComponent(buildId)}/bugs`, body, authorized: true }));
+		},
+
+		async updateBugStatus(opts: { bugId: string; sessionId: string; status: 'fixing' | 'fixed' | 'failed'; note?: string }): Promise<PlanBugResp> {
+			const { bugId, ...body } = opts;
+
+			return PlanBugRespSchema.parse(await post({ path: `/agent/bugs/${encodeURIComponent(bugId)}/status`, body, authorized: true }));
 		}
 	};
 }

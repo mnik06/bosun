@@ -5,16 +5,16 @@ import { drivePrompt } from '../prompts/drive';
 import { executionPrompt } from '../prompts/execution';
 import { fixPrompt } from '../prompts/fix';
 import { type RunContext, type RunMode } from '../prompts/shared';
-import { PROJECT_CONFIG_PATH, type ProjectConfig } from '../project-config';
+import { type ProjectConfig } from '../project-config';
 import { type AgentMsg, type ExecStart, type PlanAnswer } from '../protocol';
 import { resolveProjectConfig } from '../services/config-resolution';
 import { type Services } from '../services/index';
 import { formatGib, type SessionScope } from '../services/memory.service';
-import { describeApplied, envFileFor } from '../services/project-env.service';
 import { runShell } from '../services/setup-steps.service';
 import { startSessionMcpServer, type SessionMcpServer } from '../sessions/mcp-server';
 import { spawnClaudeSession, type ClaudeSession, type SessionExit } from '../sessions/process';
-import { createStderrTail, logDroppedFrame, reportStartFailure } from '../sessions/turn-support';
+import { configGate, writeEnvFiles } from '../sessions/run-support';
+import { createStderrTail, logDroppedFrame, pipeSessionOutput, reportStartFailure } from '../sessions/turn-support';
 import { commitMessageFor, mergeBranches } from './commit';
 import {
 	createExecutionDispatch,
@@ -191,23 +191,6 @@ export function createExecutionSessions(opts: {
 		teardown(runId);
 	};
 
-	// A bullet that touched `.bosun/project.yaml` is refused rather than committed
-	// when it left the file invalid: the next bullet on this branch would stop on
-	// it anyway, somewhere far from the change that broke it.
-	const configGate = async (worktreePath: string): Promise<string | null> => {
-		const changed = await opts.services.exec.run('git', ['-C', worktreePath, 'status', '--porcelain', '--', PROJECT_CONFIG_PATH], {
-			timeoutMs: 30_000
-		});
-
-		if (!changed.ok || changed.stdout === '') {
-			return null;
-		}
-
-		const resolved = resolveProjectConfig({ treePath: worktreePath, draft: null });
-
-		return resolved.source === 'invalid' ? `the bullet left ${resolved.detail}` : null;
-	};
-
 	// A lane session keeps nothing: what a drive left behind must not reach the fix
 	// session's commit, and a finding is a row, not a file.
 	const finishLane = async (msg: ExecStart, run: Run): Promise<void> => {
@@ -228,7 +211,9 @@ export function createExecutionSessions(opts: {
 	// no single sha to record against the slice. The push follows every commit:
 	// a provider's foundation on the remote is what a dependent stacks on.
 	const finishWriting = async (msg: ExecStart, run: Run): Promise<void> => {
-		const gate = run.repository ? await configGate(msg.worktreePath) : null;
+		const gate = run.repository
+			? await configGate({ exec: opts.services.exec, worktreePath: msg.worktreePath, actor: 'bullet' })
+			: null;
 
 		if (gate !== null) {
 			opts.send({ type: 'exec.error', runId: msg.runId, message: gate });
@@ -413,36 +398,6 @@ export function createExecutionSessions(opts: {
 		}
 	};
 
-	// After the branch step, whose `git clean -fd` takes an untracked `.env` with
-	// it, and before anything reads the worktree. A session that starts without its
-	// connection is a session that builds a database of its own in /tmp.
-	const writeEnvFiles = (msg: ExecStart, run: Run): { path: string; keys: string[] }[] => {
-		let applied: { written: string[]; skipped: string[] };
-
-		try {
-			applied = opts.services.projectEnv.applyTo(msg.worktreePath);
-		} catch (error) {
-			throw new Error(
-				`could not write the provided env files: ${error instanceof Error ? error.message : 'unknown error'}`
-			);
-		}
-
-		const envLine = describeApplied(applied);
-
-		if (envLine !== null) {
-			console.log(`[${msg.runId}] ${envLine}`);
-		}
-
-		run.envFiles = applied.written;
-
-		// Only what was written. A set skipped for a directory this branch lacks,
-		// named in the prompt, sends the session after a connection that is not there.
-		return opts.services.projectEnv
-			.summary()
-			.filter((set) => applied.written.includes(envFileFor(set.path)))
-			.map((set) => ({ path: set.path, keys: set.keys }));
-	};
-
 	const stackFor = (opts2: {
 		msg: ExecStart;
 		project: Project;
@@ -479,7 +434,11 @@ export function createExecutionSessions(opts: {
 			return;
 		}
 
-		const providedEnv = writeEnvFiles(msg, run);
+		const written = writeEnvFiles({ projectEnv: opts.services.projectEnv, worktreePath: msg.worktreePath, id: msg.runId });
+
+		run.envFiles = written.written;
+
+		const providedEnv = written.providedEnv;
 		const project = await prepareProject(msg);
 
 		run.repository = project.repository;
@@ -510,7 +469,6 @@ export function createExecutionSessions(opts: {
 			createDispatch: createExecutionDispatch({
 				toolSet,
 				planId: msg.planId,
-				sliceId: msg.sliceId,
 				buildId: msg.buildId,
 				runId: msg.runId,
 				bosunApi: opts.services.bosunApi,
@@ -559,6 +517,8 @@ export function createExecutionSessions(opts: {
 			onDropped: logDroppedFrame
 		});
 
+		const pipe = pipeSessionOutput({ parser, stderr, tag: msg.runId });
+
 		run.process = spawnClaudeSession({
 			cwd: msg.worktreePath,
 			prompt: promptFor({
@@ -591,15 +551,10 @@ export function createExecutionSessions(opts: {
 					label: 'A command ran out of memory'
 				});
 			},
-			onStdout: (chunk) => {
-				parser.push(chunk);
-			},
-			onStderr: (chunk) => {
-				stderr.push(chunk);
-				console.error(`[${msg.runId}] ${chunk.trimEnd()}`);
-			},
+			onStdout: pipe.onStdout,
+			onStderr: pipe.onStderr,
 			onExit: (code, exit) => {
-				parser.flush();
+				pipe.onExit();
 
 				if (run.cancelled) {
 					return;
