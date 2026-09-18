@@ -37,11 +37,13 @@ async function remoteFor(opts: {
 		throw new HttpError(409, 'The GitHub installation this repository came from is no longer connected');
 	}
 
-	return opts.githubApp
-		.getRepository({ installationId: installation.installationId, githubRepoId: opts.githubRepoId })
-		.catch((error: unknown) => {
-			throw toGithubHttpError(error);
-		});
+	try {
+		const token = await opts.githubApp.metadataToken({ installationId: installation.installationId, githubRepoId: opts.githubRepoId });
+
+		return await opts.githubApp.getRepository({ token, githubRepoId: opts.githubRepoId });
+	} catch (error) {
+		throw toGithubHttpError(error);
+	}
 }
 
 export async function dispatchAttach(opts: {

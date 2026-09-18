@@ -281,9 +281,12 @@ export function getGithubAppService(deps: {
 		return all;
 	}
 
-	async function repository(opts: { installationId: number; githubRepoId: number }) {
-		const { token } = await mint({ ...opts, githubRepoIds: [opts.githubRepoId], permissions: { metadata: 'read' } });
-		const result = await call({ url: `${API}/repositories/${opts.githubRepoId}`, token });
+	// Every metadata-only read (this, and the repo lookup every write below opens
+	// with) rides whatever token the caller already resolved — `metadata: read` is
+	// granted to every installation token regardless of its other permissions, so
+	// there is nothing narrower to mint here.
+	async function repository(opts: { token: string; githubRepoId: number }) {
+		const result = await call({ url: `${API}/repositories/${opts.githubRepoId}`, token: opts.token });
 
 		if (result.status !== 200) {
 			throw failure('could not read the repository', result);
@@ -292,33 +295,16 @@ export function getGithubAppService(deps: {
 		return RepoSchema.parse(result.json);
 	}
 
-	async function pullToken(opts: { installationId: number; githubRepoId: number }): Promise<string> {
-		const { token } = await mint({
-			installationId: opts.installationId,
-			githubRepoIds: [opts.githubRepoId],
-			permissions: { pull_requests: 'write' }
-		});
-
-		return token;
-	}
-
 	async function openOrUpdatePullRequest(opts: {
-		installationId: number;
+		token: string;
 		githubRepoId: number;
 		head: string;
 		base: string;
 		title: string;
 		body: string;
 	}): Promise<{ url: string; number: number; updated: boolean }> {
+		const { token } = opts;
 		const repo = await repository(opts);
-		// Contents read as well: GitHub resolves the head and base branches with the
-		// token's own access, and a pull-requests-only token is refused with "not
-		// all refs are readable".
-		const { token } = await mint({
-			installationId: opts.installationId,
-			githubRepoIds: [opts.githubRepoId],
-			permissions: { pull_requests: 'write', contents: 'read' }
-		});
 		const created = await call({
 			method: 'POST',
 			url: `${API}/repos/${repo.full_name}/pulls`,
@@ -359,10 +345,10 @@ export function getGithubAppService(deps: {
 		return { url: existing.html_url, number: existing.number, updated: true };
 	}
 
-	async function getPullRequest(opts: { installationId: number; githubRepoId: number; number: number }) {
+	async function getPullRequest(opts: { token: string; githubRepoId: number; number: number }) {
 		const result = await call({
 			url: `${API}/repositories/${opts.githubRepoId}/pulls/${opts.number}`,
-			token: await pullToken(opts)
+			token: opts.token
 		});
 
 		if (result.status !== 200) {
@@ -383,7 +369,7 @@ export function getGithubAppService(deps: {
 	}
 
 	async function editPullRequest(opts: {
-		installationId: number;
+		token: string;
 		githubRepoId: number;
 		number: number;
 		base?: string;
@@ -392,7 +378,7 @@ export function getGithubAppService(deps: {
 		const result = await call({
 			method: 'PATCH',
 			url: `${API}/repositories/${opts.githubRepoId}/pulls/${opts.number}`,
-			token: await pullToken(opts),
+			token: opts.token,
 			body: { ...(opts.base === undefined ? {} : { base: opts.base }), ...(opts.body === undefined ? {} : { body: opts.body }) }
 		});
 
@@ -403,13 +389,9 @@ export function getGithubAppService(deps: {
 
 	// Created, or force-moved when it already exists: re-shipping a foundation after
 	// its bullet was re-run points the branch at the new commit.
-	async function pointBranch(opts: { installationId: number; githubRepoId: number; branch: string; sha: string }): Promise<void> {
+	async function pointBranch(opts: { token: string; githubRepoId: number; branch: string; sha: string }): Promise<void> {
+		const { token } = opts;
 		const repo = await repository(opts);
-		const { token } = await mint({
-			installationId: opts.installationId,
-			githubRepoIds: [opts.githubRepoId],
-			permissions: { contents: 'write' }
-		});
 		const created = await call({
 			method: 'POST',
 			url: `${API}/repos/${repo.full_name}/git/refs`,
@@ -502,28 +484,22 @@ export function getGithubAppService(deps: {
 			}));
 		},
 
-		async getRepository(opts: { installationId: number; githubRepoId: number }) {
+		async getRepository(opts: { token: string; githubRepoId: number }) {
 			const repo = await repository(opts);
 
 			return { fullName: repo.full_name, defaultBranch: repo.default_branch, cloneUrl: repo.clone_url };
 		},
 
-		// Null when the file is not there. Read with a token that can read one
-		// repository's contents and nothing else.
+		// Null when the file is not there.
 		async readFile(opts: {
-			installationId: number;
+			token: string;
 			githubRepoId: number;
 			path: string;
 			ref: string;
 		}): Promise<string | null> {
-			const { token } = await mint({
-				installationId: opts.installationId,
-				githubRepoIds: [opts.githubRepoId],
-				permissions: { contents: 'read' }
-			});
 			const result = await call({
 				url: `${API}/repositories/${opts.githubRepoId}/contents/${opts.path}?ref=${encodeURIComponent(opts.ref)}`,
-				token
+				token: opts.token
 			});
 
 			if (result.status === 404) {
@@ -539,6 +515,20 @@ export function getGithubAppService(deps: {
 			return Buffer.from(file.data.content, 'base64').toString('utf8');
 		},
 
+		// The narrowest mint this module offers: read-only, for a caller that only
+		// needs to confirm a repository is still reachable (the attach flow's
+		// defensive re-check) without any of the write access `installationToken`
+		// below carries.
+		async metadataToken(opts: { installationId: number; githubRepoId: number }): Promise<string> {
+			const { token } = await mint({
+				installationId: opts.installationId,
+				githubRepoIds: [opts.githubRepoId],
+				permissions: { metadata: 'read' }
+			});
+
+			return token;
+		},
+
 		// What a machine's git credential helper receives: one repository, contents
 		// write, and nothing broader.
 		async repositoryToken(opts: { installationId: number; githubRepoId: number }): Promise<{ token: string; expiresAt: Date }> {
@@ -551,6 +541,24 @@ export function getGithubAppService(deps: {
 			return { token: minted.token, expiresAt: new Date(minted.expiresAt) };
 		},
 
+		// What every other call in this module takes once resolved: pull requests
+		// (read and write) plus contents (read and write) on one repository — the
+		// union every operation below needs, since GitHub scopes "Pull requests" and
+		// "Contents" separately and a token minted for one alone is refused calling
+		// the other ("not all refs are readable" on a pull-requests-only token, a
+		// plain 403 on a contents-only one calling `/pulls`). `repositoryToken`
+		// above stays on its own, narrower mint: a machine's git credential has no
+		// business calling the Pulls API at all.
+		async installationToken(opts: { installationId: number; githubRepoId: number }): Promise<string> {
+			const { token } = await mint({
+				installationId: opts.installationId,
+				githubRepoIds: [opts.githubRepoId],
+				permissions: { contents: 'write', pull_requests: 'write' }
+			});
+
+			return token;
+		},
+
 		openOrUpdatePullRequest,
 		getPullRequest,
 		editPullRequest,
@@ -560,7 +568,7 @@ export function getGithubAppService(deps: {
 		// one file. Force-moved back to the base first, so re-proposing after an edit
 		// never stacks a second commit or carries anything else along.
 		async proposeFile(opts: {
-			installationId: number;
+			token: string;
 			githubRepoId: number;
 			branch: string;
 			path: string;
@@ -569,12 +577,8 @@ export function getGithubAppService(deps: {
 			title: string;
 			body: string;
 		}): Promise<{ url: string }> {
+			const { token } = opts;
 			const repo = await repository(opts);
-			const { token } = await mint({
-				installationId: opts.installationId,
-				githubRepoIds: [opts.githubRepoId],
-				permissions: { contents: 'write' }
-			});
 			const base = await call({ url: `${API}/repos/${repo.full_name}/git/ref/heads/${repo.default_branch}`, token });
 
 			if (base.status !== 200) {
@@ -624,7 +628,7 @@ export function getGithubAppService(deps: {
 			}
 
 			const pull = await openOrUpdatePullRequest({
-				installationId: opts.installationId,
+				token,
 				githubRepoId: opts.githubRepoId,
 				head: opts.branch,
 				base: repo.default_branch,

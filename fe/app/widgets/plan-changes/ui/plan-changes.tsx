@@ -2,11 +2,30 @@ import { Anchor, Badge, Card, Group, Stack, Text } from '@mantine/core'
 import { ExternalLink } from 'lucide-react'
 
 import { PlanStatusBadge, type PlanDetail } from '~/entities/plan'
+import { useGithubPatConnectionsQuery, useRepositoriesQuery } from '~/entities/repository'
+import { useActiveProject } from '~/entities/project'
 import { formatRelativeTime } from '~/shared/lib'
 import { ChangeMap } from '~/widgets/plan-changes/ui/change-map'
 
+// Only leaders can list PAT connections (`/github` is leader-only), so a
+// developer sees the pull request without the attribution line rather than a
+// failed request — the same boundary `github-settings.tsx` already draws.
+function usePatOwner (repositoryId: string): string | null {
+	const { isLeader } = useActiveProject()
+	const repositories = useRepositoriesQuery()
+	const patConnections = useGithubPatConnectionsQuery({ enabled: isLeader })
+	const repository = repositories.data?.find((entry) => entry.id === repositoryId)
+
+	if (repository?.githubPatConnectionId == null) {
+		return null
+	}
+
+	return patConnections.data?.find((connection) => connection.id === repository.githubPatConnectionId)?.githubLogin ?? null
+}
+
 function PullRequest ({ detail }: { detail: PlanDetail }) {
 	const { build } = detail
+	const patOwner = usePatOwner(build?.repositoryId ?? '')
 
 	if (build === null) {
 		return null
@@ -40,6 +59,18 @@ function PullRequest ({ detail }: { detail: PlanDetail }) {
 						{build.branch}
 						{build.baseBranch === null ? '' : ` → ${build.baseBranch}`}
 					</Text>
+				)}
+
+				{build.prUrl === null || patOwner === null ? null : (
+					<Stack gap={0}>
+						<Text size="xs" c="dimmed">
+							Opened by {patOwner} via personal token.
+						</Text>
+						<Text size="xs" c="dimmed">
+							Branch protection may block {patOwner} from approving their own pull request — merge it
+							yourself if so.
+						</Text>
+					</Stack>
 				)}
 
 				{build.mergedAt === null ? null : (

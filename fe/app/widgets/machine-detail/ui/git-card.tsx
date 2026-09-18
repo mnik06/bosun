@@ -1,21 +1,50 @@
 import { Anchor, Card, Divider, Group, Stack, Text } from '@mantine/core'
 
 import { machineKind, type Machine } from '~/entities/machine'
-import { repositoryHostUrl, useRepositoriesQuery, type Repository } from '~/entities/repository'
+import {
+	repositoryHostUrl,
+	useGithubPatConnectionsQuery,
+	useRepositoriesQuery,
+	type GithubPatConnection,
+	type Repository
+} from '~/entities/repository'
 import { SetupGithubButton } from '~/features/setup-github'
 import { formatRelativeTime } from '~/shared/lib'
 
 // Same interval `RECONCILE_MS` runs on the backend (be/src/controllers/github/reconcile-pull-requests.ts).
-const AZURE_POLL_INTERVAL_LABEL = 'every 5 minutes'
+const POLL_INTERVAL_LABEL = 'every 5 minutes'
 
 function azureSyncDescription (repository: Repository): string {
 	const lastSynced = `Last synced ${formatRelativeTime(repository.lastSyncedAt)}.`
 
 	if (repository.azureSyncMode === 'polling') {
-		return `${lastSynced} Webhooks could not be set up for this token, so bosun polls for changes ${AZURE_POLL_INTERVAL_LABEL}.`
+		return `${lastSynced} Webhooks could not be set up for this token, so bosun polls for changes ${POLL_INTERVAL_LABEL}.`
 	}
 
-	return `${lastSynced} Synced via webhook, with a polling check ${AZURE_POLL_INTERVAL_LABEL} as a backup.`
+	return `${lastSynced} Synced via webhook, with a polling check ${POLL_INTERVAL_LABEL} as a backup.`
+}
+
+// Machine detail is leader-only (`leader-layout.tsx`), the same boundary
+// `/github/pat-connections` itself draws, so this can fetch unconditionally.
+function githubSyncDescription (repository: Repository, patConnections: GithubPatConnection[] | undefined): string {
+	if (repository.githubPatConnectionId === null) {
+		return 'Cloned into ~/.bosun/repos on the machine. Fetches and pushes use an hour-long token for this one repository, and pull requests are opened through the GitHub App — nothing to set up on the box.'
+	}
+
+	const owner = patConnections?.find((connection) => connection.id === repository.githubPatConnectionId)?.githubLogin ?? 'its owner'
+	const sync = repository.syncMode === 'polling'
+		? `Webhooks could not be set up for this token, so bosun polls for changes ${POLL_INTERVAL_LABEL}.`
+		: `Synced via webhook, with a polling check ${POLL_INTERVAL_LABEL} as a backup.`
+
+	return `Cloned into ~/.bosun/repos on the machine. Fetches and pushes use ${owner}'s personal access token, and pull requests are opened as ${owner} — nothing to set up on the box. ${sync}`
+}
+
+function syncDescription (repository: Repository | undefined, patConnections: GithubPatConnection[] | undefined): string {
+	if (repository === undefined) {
+		return 'Cloned into ~/.bosun/repos on the machine. Fetches and pushes use an hour-long token for this one repository, and pull requests are opened through the GitHub App — nothing to set up on the box.'
+	}
+
+	return repository.provider === 'azure_devops' ? azureSyncDescription(repository) : githubSyncDescription(repository, patConnections)
 }
 
 // One provider today. The card is a list because the second one — GitLab,
@@ -52,6 +81,7 @@ function LegacyProviders ({ machineName }: { machineName: string }) {
 
 function AttachedRepository ({ machine }: { machine: Machine }) {
 	const repositories = useRepositoriesQuery()
+	const patConnections = useGithubPatConnectionsQuery()
 
 	if (machine.repositoryId == null) {
 		return (
@@ -83,9 +113,7 @@ function AttachedRepository ({ machine }: { machine: Machine }) {
 				</Anchor>
 			)}
 			<Text size="xs" c="dimmed">
-				{repository?.provider === 'azure_devops'
-					? azureSyncDescription(repository)
-					: 'Cloned into ~/.bosun/repos on the machine. Fetches and pushes use an hour-long token for this one repository, and pull requests are opened through the GitHub App — nothing to set up on the box.'}
+				{syncDescription(repository, patConnections.data)}
 			</Text>
 		</Stack>
 	)

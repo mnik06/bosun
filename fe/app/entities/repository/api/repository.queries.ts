@@ -124,10 +124,11 @@ export function useGithubInstallationsQuery () {
 	})
 }
 
-export function useGithubPatConnectionsQuery () {
+export function useGithubPatConnectionsQuery (opts: { enabled: boolean } = { enabled: true }) {
 	return useQuery({
 		queryKey: repositoryKeys.patConnections(),
-		queryFn: fetchGithubPatConnections
+		queryFn: fetchGithubPatConnections,
+		enabled: opts.enabled
 	})
 }
 

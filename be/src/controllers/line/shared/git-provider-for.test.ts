@@ -26,12 +26,20 @@ const BASE: Repository = {
 function deps(overrides: Partial<GitProviderResolverDeps> = {}): GitProviderResolverDeps {
 	return {
 		githubInstallationRepo: { getById: vi.fn().mockResolvedValue(null) } as unknown as GitProviderResolverDeps['githubInstallationRepo'],
+		githubPatConnectionRepo: {
+			getById: vi.fn().mockResolvedValue(null),
+			getEncryptedTokenById: vi.fn().mockResolvedValue(null)
+		} as unknown as GitProviderResolverDeps['githubPatConnectionRepo'],
 		azureConnectionRepo: {
 			getById: vi.fn().mockResolvedValue(null),
 			getEncryptedPatById: vi.fn().mockResolvedValue(null),
 			markBroken: vi.fn()
 		} as unknown as GitProviderResolverDeps['azureConnectionRepo'],
-		githubApp: { getRepository: vi.fn() } as unknown as GitProviderResolverDeps['githubApp'],
+		githubApp: {
+			getRepository: vi.fn(),
+			installationToken: vi.fn().mockResolvedValue('minted-token'),
+			repositoryToken: vi.fn()
+		} as unknown as GitProviderResolverDeps['githubApp'],
 		azureDevOps: { getRepository: vi.fn() } as unknown as GitProviderResolverDeps['azureDevOps'],
 		patEncryption: { decrypt: vi.fn((value: string) => `decrypted:${value}`) } as unknown as GitProviderResolverDeps['patEncryption'],
 		azureConnectionGuard: { isRateLimited: vi.fn().mockReturnValue(false), run: (_id: string, run: () => unknown) => run() } as unknown as GitProviderResolverDeps['azureConnectionGuard'],
@@ -49,7 +57,10 @@ function deps(overrides: Partial<GitProviderResolverDeps> = {}): GitProviderReso
 describe('gitProviderFor', () => {
 	it('resolves a GitHub repository to a provider bound to its installation', async () => {
 		const githubInstallationRepo = { getById: vi.fn().mockResolvedValue({ id: 'ghi_1', installationId: 42 }) };
-		const githubApp = { getRepository: vi.fn().mockResolvedValue({ fullName: 'acme/app', defaultBranch: 'main', cloneUrl: 'https://github.com/acme/app' }) };
+		const githubApp = {
+			getRepository: vi.fn().mockResolvedValue({ fullName: 'acme/app', defaultBranch: 'main', cloneUrl: 'https://github.com/acme/app' }),
+			installationToken: vi.fn().mockResolvedValue('minted-token')
+		};
 		const provider = await gitProviderFor(
 			deps({ githubInstallationRepo, githubApp } as unknown as Partial<GitProviderResolverDeps>),
 			{ ...BASE, installationId: 'ghi_1', githubRepoId: 7 }
@@ -57,11 +68,52 @@ describe('gitProviderFor', () => {
 
 		await provider.getRepository();
 
-		expect(githubApp.getRepository).toHaveBeenCalledWith({ installationId: 42, githubRepoId: 7 });
+		expect(githubApp.installationToken).toHaveBeenCalledWith({ installationId: 42, githubRepoId: 7 });
+		expect(githubApp.getRepository).toHaveBeenCalledWith({ token: 'minted-token', githubRepoId: 7 });
 	});
 
 	it('refuses a GitHub repository whose installation is gone', async () => {
 		await expect(gitProviderFor(deps(), { ...BASE, installationId: 'ghi_missing', githubRepoId: 7 })).rejects.toMatchObject({ statusCode: 409 });
+	});
+
+	it('resolves a GitHub repository connected by a personal access token to a provider that decrypts it', async () => {
+		const githubPatConnectionRepo = {
+			getById: vi.fn().mockResolvedValue({ id: 'gpc_1', projectId: 'prj_1', status: 'active' }),
+			getEncryptedTokenById: vi.fn().mockResolvedValue('encrypted-pat')
+		};
+		const githubApp = { getRepository: vi.fn().mockResolvedValue({ fullName: 'acme/app', defaultBranch: 'main', cloneUrl: 'https://github.com/acme/app' }) };
+		const provider = await gitProviderFor(
+			deps({ githubPatConnectionRepo, githubApp } as unknown as Partial<GitProviderResolverDeps>),
+			{ ...BASE, githubPatConnectionId: 'gpc_1', githubRepoId: 7 }
+		);
+
+		await provider.getRepository();
+
+		expect(githubPatConnectionRepo.getEncryptedTokenById).toHaveBeenCalledWith({ id: 'gpc_1', projectId: 'prj_1' });
+		expect(githubApp.getRepository).toHaveBeenCalledWith({ token: 'decrypted:encrypted-pat', githubRepoId: 7 });
+	});
+
+	it('refuses a GitHub repository whose PAT connection is gone', async () => {
+		await expect(gitProviderFor(deps(), { ...BASE, githubPatConnectionId: 'gpc_missing', githubRepoId: 7 })).rejects.toMatchObject({ statusCode: 409 });
+	});
+
+	it("refuses a GitHub repository whose PAT connection's token is broken", async () => {
+		const githubPatConnectionRepo = {
+			getById: vi.fn().mockResolvedValue({ id: 'gpc_1', projectId: 'prj_1', status: 'broken' }),
+			getEncryptedTokenById: vi.fn()
+		};
+
+		await expect(
+			gitProviderFor(
+				deps({ githubPatConnectionRepo } as unknown as Partial<GitProviderResolverDeps>),
+				{ ...BASE, githubPatConnectionId: 'gpc_1', githubRepoId: 7 }
+			)
+		).rejects.toMatchObject({ statusCode: 409 });
+		expect(githubPatConnectionRepo.getEncryptedTokenById).not.toHaveBeenCalled();
+	});
+
+	it('refuses a GitHub repository connected to neither an installation nor a PAT', async () => {
+		await expect(gitProviderFor(deps(), { ...BASE, githubRepoId: 7 })).rejects.toMatchObject({ statusCode: 409 });
 	});
 
 	it('resolves an Azure repository to a provider that decrypts the connection PAT', async () => {
