@@ -1,4 +1,4 @@
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, sql } from 'drizzle-orm';
 import { type DbOrTx } from 'src/services/drizzle/drizzle.service';
 import { repositories } from 'src/services/drizzle/schema';
 import { RepositorySchema, type Repository } from 'src/types/RepositorySchema';
@@ -13,7 +13,9 @@ const columns = {
 	azureProjectId: repositories.azureProjectId,
 	azureRepoId: repositories.azureRepoId,
 	fullName: repositories.fullName,
-	defaultBranch: repositories.defaultBranch,
+	defaultBranch: sql<string>`coalesce(${repositories.defaultBranchOverride}, ${repositories.defaultBranch})`,
+	providerDefaultBranch: repositories.defaultBranch,
+	defaultBranchOverride: repositories.defaultBranchOverride,
 	configDraft: repositories.configDraft,
 	configOnDefault: repositories.configOnDefault,
 	autoResolveConflicts: repositories.autoResolveConflicts,
@@ -136,6 +138,16 @@ export function getRepositoryRepo(db: DbOrTx) {
 			const [row] = await db
 				.update(repositories)
 				.set({ autoResolveConflicts: opts.autoResolveConflicts })
+				.where(and(eq(repositories.id, opts.id), eq(repositories.projectId, opts.projectId)))
+				.returning(columns);
+
+			return row ? RepositorySchema.parse(row) : null;
+		},
+
+		async saveDefaultBranchOverride(opts: { id: string; projectId: string; defaultBranchOverride: string | null }): Promise<Repository | null> {
+			const [row] = await db
+				.update(repositories)
+				.set({ defaultBranchOverride: opts.defaultBranchOverride })
 				.where(and(eq(repositories.id, opts.id), eq(repositories.projectId, opts.projectId)))
 				.returning(columns);
 

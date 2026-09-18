@@ -509,17 +509,26 @@ UNIT
 	note "agent running. Follow it with: journalctl --user -u bosun-agent -f"
 }
 
+# Once per file; the trailing marker is how a re-run knows the line is there.
+append_to_rc_files() {
+	for rc in "$HOME/.bashrc" "$HOME/.profile"; do
+		! grep -qF "$2" "$rc" 2>/dev/null || continue
+		printf '\n%s %s\n' "$1" "$2" >> "$rc"
+	done
+}
+
 # Only a login shell puts ~/.local/bin on the PATH, and only where ~/.profile
 # says so. `su <user>` without `-` keeps root's PATH and reads ~/.bashrc alone, so
-# `bosun-agent` was not found there although the agent itself was running.
+# `bosun-agent` was not found there although the agent itself was running. The
+# same shell has no XDG_RUNTIME_DIR, or root's, and every `systemctl --user` this
+# script prints fails with "Failed to connect to user scope bus".
 add_to_shell_path() {
-	rc_marker='# added by the bosun-agent installer'
-	rc_line="case \":\$PATH:\" in *\":$INSTALL_DIR:\"*) ;; *) PATH=\"$INSTALL_DIR:\$PATH\" ;; esac $rc_marker"
-
-	for rc in "$HOME/.bashrc" "$HOME/.profile"; do
-		! grep -qF "$rc_marker" "$rc" 2>/dev/null || continue
-		printf '\n%s\n' "$rc_line" >> "$rc"
-	done
+	append_to_rc_files \
+		"case \":\$PATH:\" in *\":$INSTALL_DIR:\"*) ;; *) PATH=\"$INSTALL_DIR:\$PATH\" ;; esac" \
+		'# added by the bosun-agent installer'
+	append_to_rc_files \
+		'[ "${XDG_RUNTIME_DIR:-}" = "/run/user/$(id -u)" ] || [ ! -d "/run/user/$(id -u)" ] || export XDG_RUNTIME_DIR="/run/user/$(id -u)"' \
+		'# bosun-agent installer: user manager'
 
 	case ":$PATH:" in
 		*":$INSTALL_DIR:"*) ;;

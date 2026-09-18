@@ -55,7 +55,7 @@ export async function dispatchAttach(opts: {
 			type: 'repo.attach',
 			repositoryId: opts.repository.id,
 			cloneUrl: remote.cloneUrl,
-			defaultBranch: remote.defaultBranch,
+			defaultBranch: opts.repository.defaultBranchOverride ?? remote.defaultBranch,
 			slug: toRepositorySlug(remote.fullName)
 		}
 	});

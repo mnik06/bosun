@@ -63,6 +63,9 @@ turned the first step of onboarding into "create a user and log in again". The i
 - A marked `PATH` line for the install directory in `~/.bashrc` and `~/.profile`, once. The binary
   lives in `~/.local/bin`, which only a login shell adds, so after `su <user>` without `-` —
   root's `PATH`, `~/.bashrc` only — `bosun-agent` was "command not found" while the agent ran fine.
+  A second marked line points `XDG_RUNTIME_DIR` at `/run/user/<uid>` when it is unset or someone
+  else's and that directory exists, so the `systemctl --user` commands the script prints work from
+  the same shell instead of failing with "Failed to connect to user scope bus".
 - `bosun-agent setup </dev/tty` when `/dev/tty` opens — stdin is the `curl` pipe, so the prompts
   cannot read from it. Without a terminal the command is printed and the script exits 0.
 

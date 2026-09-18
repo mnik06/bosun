@@ -119,6 +119,21 @@ them in while you work, and verify starts sooner.
 
 ${existingSection(opts)}
 
+# The branch you onboard
+
+You start on the branch bosun treats as the default, and that is the branch you onboard: verify, every
+worktree and every pull request run on it. Stay on it — unless it plainly is not where the project
+lives: a bootstrap stub with a README and no code, a branch development moved away from long ago, one
+the CI workflows never build. If so, and **one** other branch plainly is the line of development — it
+carries the application, CI builds it, recent work lands there (\`git branch -r\`, \`git log -3
+origin/<branch>\`) — call \`suggest_base_branch\` with it and what you saw. The tool switches this
+checkout to that branch; onboard the tree it leaves you on.
+
+**Never read or onboard another branch without calling it.** A config written for a tree verify never
+runs on fails there, and the operator cannot tell why. Do not suggest a branch for being newer or
+busier: a default branch that carries the project is the one to onboard, and with two plausible
+candidates you onboard the default and record an assumption naming the other.
+
 # Find out
 
 Read the repository — the root and every package in it. \`package.json\` scripts, the lockfiles, the
@@ -158,7 +173,7 @@ project's own account of how it is built; they outrank your habits. Find:
 
 # Try what you can
 
-You are in a scratch checkout of the default branch that nothing else uses. Run the installs, and
+You are in a scratch checkout that nothing else uses. Run the installs, and
 nothing else: they confirm the toolchain and the package manager you are about to write.
 
 **Do not run a typecheck, lint, tests, code generation, a migration or any server** — not to confirm a

@@ -33,6 +33,17 @@ verify:                    needs_input ──► verifying ──► ready
   started in between fails on the machine at once with "this machine has no repository attached".
   `cloned_repository_id` is what the agent last reported holding — set by `repo.attached` and by
   every `hello` that names a repository — so a reply lost with its socket is repaired on reconnect.
+- **Verify runs on bosun's default branch, and waits while a discovery onboarded another one**
+  (`shared/base-branch.ts`). A discovery that finds the provider's default branch is a stub records
+  `suggested_base_branch` and writes its config for that branch; until a leader makes it the
+  repository's `default_branch_override`, `maybeStartVerify` does nothing and an explicit verify is
+  refused, because the config would run on a tree it was not written for. `repositories.default_branch`
+  stays the provider's and is refreshed on every attach; the repo layer returns
+  `coalesce(override, default_branch)` as `defaultBranch`, so plans, worktrees, pull requests and
+  onboarding all follow the override without knowing it exists. Changing it re-sends the attach to
+  every clone (to re-point `origin/HEAD`) and names the branch on `onboarding.start`, so a verify
+  started meanwhile does not race the re-point. An agent older than `MIN_BASE_BRANCH_AGENT_VERSION`
+  ignores both and is refused onboarding while an override is set.
 - **One active run per machine.** Onboarding owns the fixed port range 3900–3909, below every build's
   range, which is only collision-free because of this.
 - **A run is admitted like a drive** (`onboardingAdmission`), against every slot and lane the

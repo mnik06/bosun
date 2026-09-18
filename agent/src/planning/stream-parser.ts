@@ -75,13 +75,40 @@ export function eventsFromFrame(value: unknown): StreamEvent[] {
 	return [];
 }
 
+// The CLI's opening `system`/`init` frame names every MCP server and whether it
+// connected. One that did not — a stdio server still downloading through npx
+// past MCP_TIMEOUT, one that crashed on start — is simply absent from the
+// session's tools, and the model reports "no tracker tools configured" with
+// nothing anywhere saying why.
+export function failedMcpServers(value: unknown): string[] {
+	const frame = value as { type?: unknown; subtype?: unknown; mcp_servers?: unknown };
+
+	if (frame.type !== 'system' || frame.subtype !== 'init' || !Array.isArray(frame.mcp_servers)) {
+		return [];
+	}
+
+	return frame.mcp_servers
+		.filter(
+			(server: { name?: unknown; status?: unknown }) =>
+				typeof server?.name === 'string' && server.status !== 'connected'
+		)
+		.map((server: { name: string; status?: unknown }) => `${server.name} (${String(server.status)})`);
+}
+
 // The CLI's stream-json shape is a looser contract than an npm package, so an
 // unparseable or unrecognised line is reported and dropped rather than allowed
 // to end the session — a new event type must not be able to kill a grill.
 export function createStreamParser(opts: {
 	onEvent: (event: StreamEvent) => void;
 	onDropped: (line: string) => void;
+	// Defaults to the journal, so every session type reports it without wiring.
+	onMcpFailed?: (servers: string[]) => void;
 }): StreamParser {
+	const onMcpFailed =
+		opts.onMcpFailed ??
+		((servers: string[]) => {
+			console.error(`mcp servers did not connect, their tools are missing: ${servers.join(', ')}`);
+		});
 	let buffer = '';
 
 	const handleLine = (line: string): void => {
@@ -99,6 +126,12 @@ export function createStreamParser(opts: {
 			opts.onDropped(trimmed);
 
 			return;
+		}
+
+		const failed = failedMcpServers(frame);
+
+		if (failed.length > 0) {
+			onMcpFailed(failed);
 		}
 
 		for (const event of eventsFromFrame(frame)) {

@@ -99,6 +99,8 @@ export const OnboardingRunSchema = z.object({
 	// The config this run published, kept beside the draft it became so a report
 	// can show what the run concluded after the draft has been edited since.
 	config: z.string().nullable(),
+	suggestedBaseBranch: z.string().nullable(),
+	suggestedBaseBranchReason: z.string().nullable(),
 	failureReason: z.string().nullable(),
 	startedAt: z.date(),
 	finishedAt: z.date().nullable()

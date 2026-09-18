@@ -89,6 +89,19 @@ describe('setupChecklist', () => {
 			.toEqual(['todo', 'start-onboarding'])
 	})
 
+	// Discovery published a draft, but for another branch than the default one:
+	// the config row is not done until that branch is chosen, and verify waits.
+	it('holds verify on a base branch discovery suggested', () => {
+		const machine = { status: 'online' as const, capabilities: green, repositoryId: 'repo_1' }
+		const suggested = onboarding({ status: 'needs_input', suggestedBaseBranch: 'develop' })
+		const pending = states({ machine, repository: { ...repository, configDraft: 'version: 1' }, onboarding: suggested })
+
+		expect(pending.config).toEqual(['todo', 'choose-base-branch'])
+		expect(pending.verified).toEqual(['blocked', null])
+		expect(states({ machine, repository: { ...repository, defaultBranch: 'develop', configDraft: 'version: 1' }, onboarding: suggested }).config)
+			.toEqual(['done', null])
+	})
+
 	it('asks for inputs while any are missing, and waits for them before verify', () => {
 		const missing = [{ kind: 'env' as const, path: 'be', key: 'DATABASE_URL', why: 'db', evidence: 'be/.env.example', optional: false }]
 		const result = states({

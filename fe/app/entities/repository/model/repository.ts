@@ -42,7 +42,11 @@ export const RepositorySchema = z.object({
 	azureProjectId: z.string().nullable(),
 	azureRepoId: z.string().nullable(),
 	fullName: z.string(),
+	// The branch bosun treats as the default: the override when one is set.
 	defaultBranch: z.string(),
+	// Nullish: a backend older than base-branch overrides omits both.
+	providerDefaultBranch: z.string().nullish(),
+	defaultBranchOverride: z.string().nullish(),
 	configDraft: z.string().nullable(),
 	configOnDefault: z.boolean(),
 	autoResolveConflicts: z.boolean(),
@@ -135,6 +139,9 @@ export const OnboardingRunSchema = z.object({
 	requirements: z.array(OnboardingRequirementSchema),
 	assumptions: z.array(OnboardingAssumptionSchema),
 	config: z.string().nullable(),
+	// Nullish for the same reason as the repository's override fields.
+	suggestedBaseBranch: z.string().nullish(),
+	suggestedBaseBranchReason: z.string().nullish(),
 	failureReason: z.string().nullable(),
 	startedAt: z.iso.datetime(),
 	finishedAt: z.iso.datetime().nullable()

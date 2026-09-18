@@ -2,15 +2,29 @@ import { describe, expect, it, vi } from 'vitest';
 import { createDiscoveryDispatch, describePublishAnswer, ReportRequirementArgsSchema } from './tools';
 import { type BosunApiService } from '../../services/bosun-api.service';
 
-function dispatchWith(answer: unknown) {
+function dispatchWith(answer: unknown, branches: string[] = []) {
 	const onPublished = vi.fn();
+	const calls: string[] = [];
 	const bosunApi = {
 		publishOnboardingConfig: vi.fn().mockResolvedValue(answer),
-		reportOnboardingRequirement: vi.fn().mockResolvedValue({ ok: true })
-	} as unknown as BosunApiService;
-	const dispatch = createDiscoveryDispatch({ runId: 'onb_1', bosunApi, onPublished, advance: () => null })(new Map());
+		reportOnboardingRequirement: vi.fn().mockResolvedValue({ ok: true }),
+		suggestOnboardingBaseBranch: vi.fn().mockImplementation(() => {
+			calls.push('suggest');
 
-	return { dispatch, onPublished, bosunApi };
+			return Promise.resolve({ ok: true });
+		})
+	} as unknown as BosunApiService;
+	const scratch = {
+		exists: vi.fn((branch: string) => Promise.resolve(branches.includes(branch))),
+		checkout: vi.fn(() => {
+			calls.push('checkout');
+
+			return Promise.resolve(null);
+		})
+	};
+	const dispatch = createDiscoveryDispatch({ runId: 'onb_1', bosunApi, scratch, onPublished, advance: () => null })(new Map());
+
+	return { dispatch, onPublished, bosunApi, scratch, calls };
 }
 
 describe('publish_config', () => {
@@ -47,5 +61,35 @@ describe('report_requirement', () => {
 		await dispatch('report_requirement', { kind: 'policy', key: 'applyMigrations', why: 'w', evidence: 'e' });
 
 		expect(bosunApi.reportOnboardingRequirement).toHaveBeenCalledWith(expect.objectContaining({ path: null, kind: 'policy' }));
+	});
+});
+
+describe('suggest_base_branch', () => {
+	type ToolResult = { content: { text: string }[]; isError: boolean };
+
+	it('refuses a branch origin does not have, without recording or switching', async () => {
+		const { dispatch, bosunApi, scratch } = dispatchWith(null, ['develop']);
+		const result = (await dispatch('suggest_base_branch', { branch: 'devlop', reason: 'main is a stub' })) as ToolResult;
+
+		expect(result.isError).toBe(true);
+		expect(bosunApi.suggestOnboardingBaseBranch).not.toHaveBeenCalled();
+		expect(scratch.checkout).not.toHaveBeenCalled();
+	});
+
+	// A tree switched to before bosun knows is a config written for a branch that
+	// verify never runs on.
+	it('records the suggestion before switching the checkout', async () => {
+		const { dispatch, calls } = dispatchWith(null, ['develop']);
+		const result = (await dispatch('suggest_base_branch', { branch: 'develop', reason: 'main is a stub' })) as ToolResult;
+
+		expect(result.isError).toBe(false);
+		expect(calls).toEqual(['suggest', 'checkout']);
+	});
+
+	it.each(['--upload-pack=x', '-b', 'main/', 'a..b', 'x.lock'])('refuses %s before it reaches git', async (branch) => {
+		const { dispatch, scratch } = dispatchWith(null, [branch]);
+
+		await expect(dispatch('suggest_base_branch', { branch, reason: 'r' })).rejects.toThrow();
+		expect(scratch.exists).not.toHaveBeenCalled();
 	});
 });

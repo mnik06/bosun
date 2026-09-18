@@ -17,6 +17,7 @@ export {
 	useRepositoryConfigQuery,
 	useRepositoryMessagesQuery
 } from './api/repository.queries'
+export { pendingBaseBranch } from './lib/base-branch'
 export { configSource, describeConfigSource, type ConfigSource } from './lib/config-source'
 export { machinePickerLabel } from './lib/machine-label'
 export { onboardingProgress, type OnboardingProgress } from './lib/onboarding-progress'

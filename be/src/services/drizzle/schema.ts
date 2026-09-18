@@ -154,7 +154,12 @@ export const repositories = pgTable(
 		// other identifier this table carries for a remote repository is text too.
 		azureRepoId: text(),
 		fullName: text().notNull(),
+		// What the provider calls the default branch, refreshed on every attach.
 		defaultBranch: text().notNull(),
+		// The branch bosun treats as the default instead, when the provider's is not
+		// where the project lives — a bootstrap stub nobody moved on from. Kept apart
+		// from `defaultBranch` so a re-attach refreshing that one cannot undo it.
+		defaultBranchOverride: text(),
 		// Held only until `.bosun/project.yaml` exists on a branch. Validated on write,
 		// so a draft that reaches a machine is one the schema accepts.
 		configDraft: text(),
@@ -258,6 +263,11 @@ export const onboardingRuns = pgTable(
 		requirements: jsonb().$type<OnboardingRequirement[]>().notNull().default([]),
 		assumptions: jsonb().$type<OnboardingAssumption[]>().notNull().default([]),
 		config: text(),
+		// A discovery that found the project on another branch than the default one
+		// onboards that branch and says so here; verify waits until it is the
+		// repository's default branch in bosun.
+		suggestedBaseBranch: text(),
+		suggestedBaseBranchReason: text(),
 		failureReason: text(),
 		startedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
 		finishedAt: timestamp({ withTimezone: true })

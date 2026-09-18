@@ -39,6 +39,10 @@ and `gh`, unchanged.
   reaches everything its owner can.
 - **Attaching again is a fetch, not a second clone.** The same repository is refreshed in place; a
   different repository is refused, because one machine works on one repository.
+- **`origin/HEAD` is the branch the attach names, not the remote's default.** Planning's read tree,
+  onboarding without a named branch and `configOnDefault` all read `origin/HEAD`, and a leader can
+  point bosun's default branch away from the provider's. The backend re-sends the attach when that
+  changes; `--auto` is only the fallback for a branch `origin` does not have.
 - **The read tree is dropped when a legacy machine is attached.** It was a worktree of the operator's
   checkout and would otherwise point at another repository's objects.
 

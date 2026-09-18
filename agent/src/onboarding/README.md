@@ -21,6 +21,22 @@ When the default branch already carries the file, discovery starts from it and p
 as it should be, recording each change as an assumption (AC-38). The published config becomes the
 repository's draft; the pull request is what proposes it.
 
+## The branch a run reads
+
+The scratch checkout is cut from the `baseBranch` the backend names — bosun's default branch, which a
+leader may have pointed away from the provider's — not from the clone's `origin/HEAD`. The attach that
+re-points `origin/HEAD` is re-sent when the override changes, and a verify started right after would
+otherwise race it onto the old branch. A backend that names none gets `origin/HEAD`.
+
+A discovery that finds the default branch is not where the project lives — a bootstrap stub nobody
+moved on from — calls `suggest_base_branch`. The tool refuses a branch `origin` does not have, records
+the suggestion with the backend **before** switching the scratch checkout, then force-checks-out that
+branch. The order matters: a config written for a tree bosun was never told about is one verify runs
+on a branch it was not written for, and fails with nothing on the page saying why. The backend holds
+verify until the suggestion is the repository's default branch in bosun; the prompt tells the session
+never to read another branch without the tool, and to stay on the default when two branches are
+plausible.
+
 ## Why verify is run by the agent
 
 "Ready" has to mean the config ran, not that a session believed it would. Verify resolves the config

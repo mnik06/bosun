@@ -45,7 +45,10 @@ export const OnboardingStartMsgSchema = z.object({
 	// discovery published, even where the default branch already carries a file.
 	preferDraft: z.boolean().default(false),
 	applyMigrations: z.boolean(),
-	memoryMaxBytes: z.number().int().positive().nullable()
+	memoryMaxBytes: z.number().int().positive().nullable(),
+	// The branch the scratch checkout is cut from. Absent from a backend older than
+	// base branches, which only ever meant the clone's `origin/HEAD`.
+	baseBranch: z.string().optional()
 });
 
 export type OnboardingStart = z.infer<typeof OnboardingStartMsgSchema>;

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createStreamParser, eventsFromFrame, type StreamEvent } from './stream-parser';
+import { createStreamParser, eventsFromFrame, failedMcpServers, type StreamEvent } from './stream-parser';
 
 function collect(chunks: string[]): { events: StreamEvent[]; dropped: string[] } {
 	const events: StreamEvent[] = [];
@@ -91,5 +91,44 @@ describe('parser wiring', () => {
 		parser.push(`${textFrame('x')}\n`);
 
 		expect(onDropped).not.toHaveBeenCalled();
+	});
+});
+
+describe('failedMcpServers', () => {
+	const init = (servers: unknown) => ({ type: 'system', subtype: 'init', mcp_servers: servers });
+
+	// A server that missed MCP_TIMEOUT is reported here and nowhere else; its tools
+	// are just absent.
+	it('names every server that did not connect, with its status', () => {
+		const frame = init([
+			{ name: 'bosun', status: 'connected' },
+			{ name: 'azure-devops', status: 'failed' },
+			{ name: 'slow', status: 'pending' }
+		]);
+
+		expect(failedMcpServers(frame)).toEqual(['azure-devops (failed)', 'slow (pending)']);
+	});
+
+	it('yields nothing when every server connected or the frame is not init', () => {
+		expect(failedMcpServers(init([{ name: 'bosun', status: 'connected' }]))).toEqual([]);
+		expect(failedMcpServers({ type: 'system', subtype: 'hook_started' })).toEqual([]);
+		expect(failedMcpServers(init('not an array'))).toEqual([]);
+	});
+
+	it('reports through onMcpFailed without emitting an event or a drop', () => {
+		const failed: string[][] = [];
+		const events: StreamEvent[] = [];
+		const dropped: string[] = [];
+		const parser = createStreamParser({
+			onEvent: (event) => events.push(event),
+			onDropped: (line) => dropped.push(line),
+			onMcpFailed: (servers) => failed.push(servers)
+		});
+
+		parser.push(`${JSON.stringify(init([{ name: 'azure-devops', status: 'failed' }]))}\n`);
+
+		expect(failed).toEqual([['azure-devops (failed)']]);
+		expect(events).toEqual([]);
+		expect(dropped).toEqual([]);
 	});
 });

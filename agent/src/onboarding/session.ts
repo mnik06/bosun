@@ -141,7 +141,7 @@ export function createOnboardingSessions(opts: { services: Services; send: (mess
 	// A detached checkout of the default branch that nothing else writes to. The
 	// machine's clone gains only worktree metadata; every file a run writes lands
 	// here, and the directory goes when the run settles.
-	async function createScratch(runId: string, run: Run): Promise<string> {
+	async function createScratch(msg: OnboardingStart, run: Run): Promise<string> {
 		const repoPath = services.workspace.repoPath();
 
 		if (repoPath === null) {
@@ -150,13 +150,13 @@ export function createOnboardingSessions(opts: { services: Services; send: (mess
 
 		await services.repo.fetch();
 
-		const ref = await services.repo.baseRef();
+		const ref = msg.baseBranch === undefined ? await services.repo.baseRef() : `origin/${msg.baseBranch}`;
 
 		if (ref === null) {
 			throw new Error(`${repoPath} has no default branch to onboard from`);
 		}
 
-		const target = path.join(root, runId);
+		const target = path.join(root, msg.runId);
 
 		fs.mkdirSync(root, { recursive: true, mode: 0o700 });
 		fs.rmSync(target, { recursive: true, force: true });
@@ -312,6 +312,16 @@ export function createOnboardingSessions(opts: { services: Services; send: (mess
 			createDispatch: createDiscoveryDispatch({
 				runId: msg.runId,
 				bosunApi: services.bosunApi,
+				scratch: {
+					exists: async (branch) => (await git(['-C', scratch, 'rev-parse', '--verify', '--quiet', `refs/remotes/origin/${branch}`])).ok,
+					// Forced: the installs discovery ran may have touched tracked files, and
+					// nothing in a scratch checkout is anyone's work.
+					checkout: async (branch) => {
+						const switched = await git(['-C', scratch, 'checkout', '--force', '--detach', `origin/${branch}`]);
+
+						return switched.ok ? null : switched.reason;
+					}
+				},
 				onPublished: () => {
 					if (!published) {
 						report({ runId: msg.runId, run, label: 'Config accepted by bosun', status: 'passed', detail: null, estimate: 0.85 });
@@ -656,7 +666,7 @@ export function createOnboardingSessions(opts: { services: Services; send: (mess
 			let outcome: Outcome;
 
 			try {
-				const scratch = await createScratch(msg.runId, run);
+				const scratch = await createScratch(msg, run);
 
 				outcome = msg.phase === 'discover' ? await discover(msg, run, scratch) : await verify(msg, run, scratch);
 			} catch (error) {
