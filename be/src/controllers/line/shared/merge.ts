@@ -1,10 +1,11 @@
 import { type LineDeps } from 'src/controllers/line/line-deps';
 import { announceBuild } from 'src/controllers/line/shared/announce';
 import { recheckDependencyRelease } from 'src/controllers/line/shared/dependency-release';
+import { gitProviderFailureMessage } from 'src/controllers/line/shared/git-provider-error';
 import { queueIntegration, removeWorktree, stopRunningJobs } from 'src/controllers/line/shared/lifecycle';
 import { notifyBuildStatus } from 'src/controllers/line/shared/notify';
-import { GithubError } from 'src/services/github/github-app.service';
 import { UNMERGED_BUILT_STATUSES, type Build } from 'src/types/BuildSchema';
+import { type Repository } from 'src/types/RepositorySchema';
 
 async function dependentBuilds(deps: LineDeps, build: Build): Promise<Build[]> {
 	const dependencies = await deps.planDependencyRepo.listByProviders([build.planId]);
@@ -32,23 +33,22 @@ export async function notifyDependents(deps: LineDeps, opts: { build: Build }): 
 	}
 }
 
-async function retarget(deps: LineDeps, opts: { dependent: Build; defaultBranch: string; githubRepoId: number; installationId: number }): Promise<Build> {
+async function retarget(deps: LineDeps, opts: { dependent: Build; repository: Repository; defaultBranch: string }): Promise<Build> {
 	let failureReason: string | null = null;
 
 	if (opts.dependent.prNumber !== null) {
 		try {
-			await deps.githubApp.editPullRequest({
-				installationId: opts.installationId,
-				githubRepoId: opts.githubRepoId,
-				number: opts.dependent.prNumber,
-				base: opts.defaultBranch
-			});
+			const provider = await deps.gitProviderFor(opts.repository);
+
+			await provider.editPullRequest({ number: opts.dependent.prNumber, base: opts.defaultBranch });
 		} catch (error) {
-			if (!(error instanceof GithubError)) {
+			const message = gitProviderFailureMessage(error);
+
+			if (message === null) {
 				throw error;
 			}
 
-			failureReason = `its provider merged, but the pull request could not be retargeted: ${error.message}`;
+			failureReason = `its provider merged, but the pull request could not be retargeted: ${message}`;
 		}
 	}
 
@@ -69,7 +69,6 @@ export async function markMerged(deps: LineDeps, opts: { build: Build }): Promis
 		deps.repositoryRepo.getById(opts.build.repositoryId),
 		deps.planRepo.getById(opts.build.planId)
 	]);
-	const installation = repository ? await deps.githubInstallationRepo.getById(repository.installationId) : null;
 
 	if (!repository || !plan || opts.build.status === 'merged') {
 		return;
@@ -88,11 +87,11 @@ export async function markMerged(deps: LineDeps, opts: { build: Build }): Promis
 	});
 
 	for (const dependent of await dependentBuilds(deps, opts.build)) {
-		if (dependent.baseBranch !== opts.build.branch || !installation) {
+		if (dependent.baseBranch !== opts.build.branch) {
 			continue;
 		}
 
-		const moved = await retarget(deps, { dependent, defaultBranch: repository.defaultBranch, githubRepoId: repository.githubRepoId, installationId: installation.installationId });
+		const moved = await retarget(deps, { dependent, repository, defaultBranch: repository.defaultBranch });
 		const dependentPlan = await deps.planRepo.getById(moved.planId);
 
 		if (dependentPlan && UNMERGED_BUILT_STATUSES.includes(moved.status)) {

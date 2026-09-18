@@ -11,11 +11,23 @@ export const GithubInstallationSchema = z.object({
 
 export type GithubInstallation = z.infer<typeof GithubInstallationSchema>;
 
+export const RepositoryProviderSchema = z.enum(['github', 'azure_devops']);
+
+export type RepositoryProvider = z.infer<typeof RepositoryProviderSchema>;
+
+// `installationId`/`githubRepoId` and `azureConnectionId`/`azureProjectId`/
+// `azureRepoId` are mutually exclusive, set by `provider` — enforced by the two
+// repo-layer upserts (`upsert` for github, `upsertAzure` for azure_devops) never
+// the other side's columns, not by a database constraint.
 export const RepositorySchema = z.object({
 	id: z.string(),
 	projectId: z.string(),
-	installationId: z.string(),
-	githubRepoId: z.number().int(),
+	provider: RepositoryProviderSchema,
+	installationId: z.string().nullable(),
+	githubRepoId: z.number().int().nullable(),
+	azureConnectionId: z.string().nullable(),
+	azureProjectId: z.string().nullable(),
+	azureRepoId: z.string().nullable(),
 	fullName: z.string(),
 	defaultBranch: z.string(),
 	configDraft: z.string().nullable(),
@@ -25,6 +37,13 @@ export const RepositorySchema = z.object({
 	// Whether an integration may hand a real conflict to a session. Off, a conflict
 	// outside `regenerate` paths goes straight to needs you.
 	autoResolveConflicts: z.boolean(),
+	// Azure only — the UI's "last synced" line. Null for a GitHub repository and
+	// for an Azure one bosun has not yet reconciled.
+	lastSyncedAt: z.date().nullable(),
+	// Azure only — whether bosun's webhook subscriptions are healthy or it fell
+	// back to polling. Null for GitHub and for an Azure repository not yet
+	// reconciled even once.
+	azureSyncMode: z.enum(['webhook', 'polling']).nullable(),
 	createdAt: z.date()
 });
 

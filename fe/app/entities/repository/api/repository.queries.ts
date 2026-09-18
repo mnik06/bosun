@@ -3,13 +3,17 @@ import { isAxiosError } from 'axios'
 import { z } from 'zod'
 
 import {
+	AvailableAzureRepositorySchema,
 	AvailableRepositorySchema,
+	AzureConnectionSchema,
 	GithubInstallationSchema,
 	MachineOnboardingSchema,
 	RepositoryConfigSchema,
 	RepositoryMessageSchema,
 	RepositorySchema,
+	type AvailableAzureRepository,
 	type AvailableRepository,
+	type AzureConnection,
 	type GithubInstallation,
 	type MachineOnboarding,
 	type Repository,
@@ -23,6 +27,8 @@ export const repositoryKeys = {
 	list: () => [...repositoryKeys.all(), 'list'] as const,
 	installations: () => [...repositoryKeys.all(), 'installations'] as const,
 	available: () => [...repositoryKeys.all(), 'available'] as const,
+	azureConnections: () => [...repositoryKeys.all(), 'azure-connections'] as const,
+	availableAzure: () => [...repositoryKeys.all(), 'available-azure'] as const,
 	config: (repositoryId: string) => [...repositoryKeys.all(), 'config', repositoryId] as const,
 	onboarding: () => [...repositoryKeys.all(), 'onboarding'] as const,
 	machineOnboarding: (machineId: string) => [...repositoryKeys.onboarding(), 'machine', machineId] as const,
@@ -59,6 +65,18 @@ export async function fetchAvailableRepositories (): Promise<AvailableRepository
 	const { data } = await apiClient.get<unknown>('/github/repositories')
 
 	return z.array(AvailableRepositorySchema).parse(data)
+}
+
+export async function fetchAzureConnections (): Promise<AzureConnection[]> {
+	const { data } = await apiClient.get<unknown>('/azure/connections')
+
+	return z.array(AzureConnectionSchema).parse(data)
+}
+
+export async function fetchAvailableAzureRepositories (): Promise<AvailableAzureRepository[]> {
+	const { data } = await apiClient.get<unknown>('/azure/repositories')
+
+	return z.array(AvailableAzureRepositorySchema).parse(data)
 }
 
 export async function fetchRepositoryConfig (repositoryId: string): Promise<RepositoryConfig> {
@@ -101,6 +119,21 @@ export function useAvailableRepositoriesQuery (opts: { enabled: boolean }) {
 	return useQuery({
 		queryKey: repositoryKeys.available(),
 		queryFn: fetchAvailableRepositories,
+		enabled: opts.enabled
+	})
+}
+
+export function useAzureConnectionsQuery () {
+	return useQuery({
+		queryKey: repositoryKeys.azureConnections(),
+		queryFn: fetchAzureConnections
+	})
+}
+
+export function useAvailableAzureRepositoriesQuery (opts: { enabled: boolean }) {
+	return useQuery({
+		queryKey: repositoryKeys.availableAzure(),
+		queryFn: fetchAvailableAzureRepositories,
 		enabled: opts.enabled
 	})
 }

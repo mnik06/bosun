@@ -10,6 +10,16 @@ const REPOS_DIRNAME = 'repos';
 
 const CLONE_TIMEOUT_MS = 30 * 60 * 1000;
 
+const AZURE_HOST = 'dev.azure.com';
+
+// A GitHub noreply address on an Azure DevOps commit is just wrong, not merely
+// unhelpful — Azure has its own noreply convention and nothing here is a GitHub
+// identity. Derived from the clone URL because `RepoAttach` carries no separate
+// provider field; the URL's host already says which one this is.
+function noreplyEmailFor(cloneUrl: string): string {
+	return new URL(cloneUrl).hostname === AZURE_HOST ? 'bosun@users.noreply.dev.azure.com' : 'bosun@users.noreply.github.com';
+}
+
 function shellQuote(value: string): string {
 	return `'${value.replace(/'/g, "'\\''")}'`;
 }
@@ -91,15 +101,19 @@ export function getWorkspaceService(deps: {
 	// Set in the clone's own `.git/config`, which its worktrees share. The empty
 	// helper first clears whatever a global config added — a `gh` helper left on
 	// the box would otherwise answer before bosun's, with a credential that
-	// reaches every repository its owner can.
-	async function configure(repoPath: string): Promise<string | null> {
+	// reaches every repository its owner can. Both hosts are registered regardless
+	// of which one this repository actually is: an unused helper line for the
+	// other host is inert, and it keeps this function from needing to know the
+	// provider at all.
+	async function configure(opts: { repoPath: string; cloneUrl: string }): Promise<string | null> {
 		const settings: [string, string][] = [
 			['credential.helper', ''],
-			['credential.https://github.com.helper', helper]
+			['credential.https://github.com.helper', helper],
+			[`credential.https://${AZURE_HOST}.helper`, helper]
 		];
 
 		for (const [key, value] of settings) {
-			const result = await git(['-C', repoPath, 'config', '--replace-all', key, value]);
+			const result = await git(['-C', opts.repoPath, 'config', '--replace-all', key, value]);
 
 			if (!result.ok) {
 				return `could not set ${key}: ${result.reason}`;
@@ -107,11 +121,11 @@ export function getWorkspaceService(deps: {
 		}
 
 		// A fresh box has no git identity, and every bullet's commit would fail on it.
-		const email = await git(['-C', repoPath, 'config', '--get', 'user.email']);
+		const email = await git(['-C', opts.repoPath, 'config', '--get', 'user.email']);
 
 		if (!email.ok || email.stdout === '') {
-			await git(['-C', repoPath, 'config', 'user.name', 'bosun']);
-			await git(['-C', repoPath, 'config', 'user.email', 'bosun@users.noreply.github.com']);
+			await git(['-C', opts.repoPath, 'config', 'user.name', 'bosun']);
+			await git(['-C', opts.repoPath, 'config', 'user.email', noreplyEmailFor(opts.cloneUrl)]);
 		}
 
 		return null;
@@ -129,6 +143,8 @@ export function getWorkspaceService(deps: {
 				'credential.helper=',
 				'-c',
 				`credential.https://github.com.helper=${helper}`,
+				'-c',
+				`credential.https://${AZURE_HOST}.helper=${helper}`,
 				'clone',
 				'--branch',
 				opts.msg.defaultBranch,
@@ -240,7 +256,7 @@ export function getWorkspaceService(deps: {
 			const failure = fs.existsSync(path.join(target, '.git'))
 				? await refresh({ msg, target })
 				: await clone({ msg, target });
-			const configured = failure ?? (await configure(target));
+			const configured = failure ?? (await configure({ repoPath: target, cloneUrl: msg.cloneUrl }));
 
 			if (configured !== null) {
 				return { ok: false, detail: configured };

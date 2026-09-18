@@ -1,8 +1,22 @@
 import { Anchor, Card, Divider, Group, Stack, Text } from '@mantine/core'
 
 import { machineKind, type Machine } from '~/entities/machine'
-import { useRepositoriesQuery } from '~/entities/repository'
+import { repositoryHostUrl, useRepositoriesQuery, type Repository } from '~/entities/repository'
 import { SetupGithubButton } from '~/features/setup-github'
+import { formatRelativeTime } from '~/shared/lib'
+
+// Same interval `RECONCILE_MS` runs on the backend (be/src/controllers/github/reconcile-pull-requests.ts).
+const AZURE_POLL_INTERVAL_LABEL = 'every 5 minutes'
+
+function azureSyncDescription (repository: Repository): string {
+	const lastSynced = `Last synced ${formatRelativeTime(repository.lastSyncedAt)}.`
+
+	if (repository.azureSyncMode === 'polling') {
+		return `${lastSynced} Webhooks could not be set up for this token, so bosun polls for changes ${AZURE_POLL_INTERVAL_LABEL}.`
+	}
+
+	return `${lastSynced} Synced via webhook, with a polling check ${AZURE_POLL_INTERVAL_LABEL} as a backup.`
+}
 
 // One provider today. The card is a list because the second one — GitLab,
 // Bitbucket — is a row here and nothing else, rather than a rewrite of the card.
@@ -58,7 +72,7 @@ function AttachedRepository ({ machine }: { machine: Machine }) {
 				</Text>
 			) : (
 				<Anchor
-					href={`https://github.com/${repository.fullName}`}
+					href={repositoryHostUrl(repository)}
 					target="_blank"
 					rel="noreferrer"
 					size="sm"
@@ -69,9 +83,9 @@ function AttachedRepository ({ machine }: { machine: Machine }) {
 				</Anchor>
 			)}
 			<Text size="xs" c="dimmed">
-				Cloned into ~/.bosun/repos on the machine. Fetches and pushes use an hour-long token for this
-				one repository, and pull requests are opened through the GitHub App — nothing to set up on the
-				box.
+				{repository?.provider === 'azure_devops'
+					? azureSyncDescription(repository)
+					: 'Cloned into ~/.bosun/repos on the machine. Fetches and pushes use an hour-long token for this one repository, and pull requests are opened through the GitHub App — nothing to set up on the box.'}
 			</Text>
 		</Stack>
 	)

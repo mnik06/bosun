@@ -1,11 +1,10 @@
-import { HttpError } from 'src/api/errors/HttpError';
-import { toGithubHttpError } from 'src/controllers/github/shared/github-errors';
+import { toGitProviderHttpError } from 'src/controllers/line/shared/git-provider-error';
 import { announceRepository, getOwnedRepository } from 'src/controllers/repositories/shared/announce-repository';
-import { type GithubInstallationRepo } from 'src/repos/github/github-installation.repo';
 import { type RepositoryRepo } from 'src/repos/github/repository.repo';
-import { type GithubAppService } from 'src/services/github/github-app.service';
+import { type GitProvider } from 'src/services/git/git-provider';
 import { type SocketRegistry } from 'src/services/sockets/registry.service';
 import { PROJECT_CONFIG_PATH } from 'src/types/ProjectConfigSchema';
+import { type Repository } from 'src/types/RepositorySchema';
 
 export interface RepositoryConfig {
 	defaultBranch: string;
@@ -14,35 +13,28 @@ export interface RepositoryConfig {
 	source: 'file' | 'draft' | 'none';
 }
 
-// The file is read from GitHub each time rather than kept: it changes on merges
-// bosun never hears about, and a copy would be a second, staler answer to what
-// every session on the default branch is running. What it finds also corrects
-// `config_on_default`, which otherwise only moves when an agent next announces.
+// The file is read from the provider each time rather than kept: it changes on
+// merges bosun never hears about, and a copy would be a second, staler answer to
+// what every session on the default branch is running. What it finds also
+// corrects `config_on_default`, which otherwise only moves when an agent next
+// announces.
 export async function getRepositoryConfig(opts: {
 	repositoryRepo: RepositoryRepo;
-	githubInstallationRepo: GithubInstallationRepo;
-	githubApp: GithubAppService;
 	socketRegistry: SocketRegistry;
+	gitProviderFor: (repository: Repository) => Promise<GitProvider>;
 	id: string;
 	projectId: string;
 }): Promise<RepositoryConfig> {
 	const repository = await getOwnedRepository(opts);
-	const installation = await opts.githubInstallationRepo.getById(repository.installationId);
+	let file: string | null;
 
-	if (!installation) {
-		throw new HttpError(409, 'The GitHub installation this repository came from is no longer connected');
+	try {
+		const provider = await opts.gitProviderFor(repository);
+
+		file = await provider.readFile({ path: PROJECT_CONFIG_PATH, ref: repository.defaultBranch });
+	} catch (error) {
+		throw toGitProviderHttpError(error);
 	}
-
-	const file = await opts.githubApp
-		.readFile({
-			installationId: installation.installationId,
-			githubRepoId: repository.githubRepoId,
-			path: PROJECT_CONFIG_PATH,
-			ref: repository.defaultBranch
-		})
-		.catch((error: unknown) => {
-			throw toGithubHttpError(error);
-		});
 
 	if ((file !== null) !== repository.configOnDefault) {
 		const updated = await opts.repositoryRepo.saveConfigOnDefault({ id: repository.id, configOnDefault: file !== null });

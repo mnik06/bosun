@@ -18,6 +18,7 @@ export const NotificationKindSchema = z.enum([
 	'build.cancelled',
 	'machine.online',
 	'machine.offline',
+	'repository.connection_broken',
 	'quickfix.pushed',
 	'quickfix.failed'
 ]);

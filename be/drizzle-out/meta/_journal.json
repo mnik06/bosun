@@ -225,6 +225,13 @@
       "when": 1789674102641,
       "tag": "0031_verify_drop_dead_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1789720720257,
+      "tag": "0032_wooden_wolverine",
+      "breakpoints": true
     }
   ]
 }

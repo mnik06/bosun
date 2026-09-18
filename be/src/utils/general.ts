@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { HttpError } from 'src/api/errors/HttpError';
 
 const BEARER_PREFIX = 'Bearer ';
@@ -49,6 +50,17 @@ export function clip(text: string, max: number): string {
 
 export function countLabel(count: number, singular: string): string {
 	return `${count} ${singular}${count === 1 ? '' : 's'}`;
+}
+
+export function hexDigestsEqual(a: string, b: string): boolean {
+	const left = Buffer.from(a, 'hex');
+	const right = Buffer.from(b, 'hex');
+
+	if (left.length !== right.length) {
+		return false;
+	}
+
+	return crypto.timingSafeEqual(left, right);
 }
 
 export function findDuplicate(values: string[]): string | null {

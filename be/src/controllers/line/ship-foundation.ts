@@ -1,7 +1,7 @@
 import { HttpError } from 'src/api/errors/HttpError';
 import { type LineDeps } from 'src/controllers/line/line-deps';
 import { getOwnedBuild } from 'src/controllers/line/shared/build-access';
-import { toGithubHttpError } from 'src/controllers/github/shared/github-errors';
+import { toGitProviderHttpError } from 'src/controllers/line/shared/git-provider-error';
 import { footprintPieces } from 'src/types/FootprintSchema';
 
 // A pull request holding only a provider's foundation commits, so the plans stacked
@@ -15,7 +15,6 @@ export async function shipFoundation(deps: LineDeps, opts: { id: string; project
 	]);
 	const foundation = slices.find((slice) => slice.foundation);
 	const landed = foundation ? runs.find((run) => run.sliceId === foundation.id && run.phase === null && run.status === 'done') : undefined;
-	const installation = repository ? await deps.githubInstallationRepo.getById(repository.installationId) : null;
 
 	if (!foundation) {
 		throw new HttpError(409, 'This plan has no foundation bullet');
@@ -25,19 +24,19 @@ export async function shipFoundation(deps: LineDeps, opts: { id: string; project
 		throw new HttpError(409, 'The foundation has not landed yet');
 	}
 
-	if (!repository || !installation) {
-		throw new HttpError(409, 'This repository is no longer connected to a GitHub installation');
+	if (!repository) {
+		throw new HttpError(409, 'This repository is no longer connected');
 	}
 
 	const branch = `${build.branch}-foundation`;
 	const pieces = footprintPieces(foundation.footprint).map((piece) => `- ${piece.kind}: \`${piece.label}\``);
 
 	try {
-		await deps.githubApp.pointBranch({ installationId: installation.installationId, githubRepoId: repository.githubRepoId, branch, sha: landed.commitSha });
+		const provider = await deps.gitProviderFor(repository);
 
-		const opened = await deps.githubApp.openOrUpdatePullRequest({
-			installationId: installation.installationId,
-			githubRepoId: repository.githubRepoId,
+		await provider.pointBranch({ branch, sha: landed.commitSha });
+
+		const opened = await provider.openOrUpdatePullRequest({
 			head: branch,
 			base: repository.defaultBranch,
 			title: `#${plan.number} foundation — ${foundation.title}`,
@@ -52,6 +51,6 @@ export async function shipFoundation(deps: LineDeps, opts: { id: string; project
 
 		return { prUrl: opened.url };
 	} catch (error) {
-		throw toGithubHttpError(error);
+		throw toGitProviderHttpError(error);
 	}
 }

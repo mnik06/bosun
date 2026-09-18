@@ -15,8 +15,10 @@ export function getLoggerOptions(env: Env): FastifyLoggerOptions {
 	const opts: FastifyLoggerOptions & { redact: string[] } = {
 		level: 'trace',
 		// The generated password is returned in exactly one response and must not be
-		// recoverable from a log line afterwards.
-		redact: ['req.headers.authorization', 'res.password', 'password'],
+		// recoverable from a log line afterwards. The same containment for the Azure
+		// PAT a connect/rotate request body carries (AC-21) — never logged, in memory
+		// only for the moment it is validated and encrypted.
+		redact: ['req.headers.authorization', 'res.password', 'password', 'req.body.pat', 'pat'],
 		serializers: {
 			req(request) {
 				return {

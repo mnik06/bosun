@@ -13,9 +13,9 @@ export async function publishPullRequestToGithub(
 	opts: { repositoryId: string; branch: string; baseBranch: string; title: string; body: string }
 ): Promise<PublishPullRequestResult> {
 	const repository = await deps.repositoryRepo.getById(opts.repositoryId);
-	const installation = repository ? await deps.githubInstallationRepo.getById(repository.installationId) : null;
+	const installation = repository?.installationId ? await deps.githubInstallationRepo.getById(repository.installationId) : null;
 
-	if (!repository || !installation) {
+	if (!repository || repository.installationId === null || repository.githubRepoId === null || !installation) {
 		return { ok: false, error: `${opts.branch} is pushed, but this repository is no longer connected to a GitHub installation` };
 	}
 

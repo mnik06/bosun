@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import {
-	BuildSchema,
 	BuildStatusSchema,
 	NeedsYouReasonSchema,
 	OverlapChoiceSchema,
@@ -33,15 +32,6 @@ export const AnswerRunReqSchema = z.object({
 	answers: z.array(PlanAnswerSchema).min(1)
 });
 
-export const LineBuildSchema = BuildSchema.extend({
-	planNumber: z.number().int(),
-	planTitle: z.string().nullable(),
-	// The one line a board card carries: what it waits for, or where it stands.
-	reason: z.string().nullable()
-});
-
-export type LineBuild = z.infer<typeof LineBuildSchema>;
-
 export const LaneOccupantSchema = z.object({
 	planId: z.string(),
 	planNumber: z.number().int(),
@@ -67,7 +57,6 @@ export const MachineCapacitySchema = z.object({
 export type MachineCapacity = z.infer<typeof MachineCapacitySchema>;
 
 export const LineRespSchema = z.object({
-	builds: z.array(LineBuildSchema),
 	capacity: z.array(MachineCapacitySchema)
 });
 

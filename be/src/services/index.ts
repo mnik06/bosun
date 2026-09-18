@@ -1,6 +1,10 @@
 import { getAgentReleaseService } from 'src/services/agent-release/agent-release.service';
 import { getSupabaseAdmin } from 'src/services/auth/supabase-admin.service';
 import { getSupabaseAuth } from 'src/services/auth/supabase-auth.service';
+import { getAzureBranchSnapshotService } from 'src/services/azure/azure-branch-snapshot.service';
+import { getAzureConnectionGuardService } from 'src/services/azure/azure-connection-guard.service';
+import { getAzureDevOpsService } from 'src/services/azure/azure-devops.service';
+import { getPatEncryptionService } from 'src/services/crypto/pat-encryption.service';
 import { getGithubAppService } from 'src/services/github/github-app.service';
 import { getIdService } from 'src/services/ids/id.service';
 import { getInstallerService } from 'src/services/installer/installer.service';
@@ -27,6 +31,9 @@ export function getServices(opts: { env: Env }) {
 			latestReleaseUrl: opts.env.AGENT_LATEST_RELEASE_URL,
 			downloadBaseUrl: opts.env.AGENT_DOWNLOAD_BASE_URL
 		}),
+		azureBranchSnapshot: getAzureBranchSnapshotService(),
+		azureConnectionGuard: getAzureConnectionGuardService(),
+		azureDevOps: getAzureDevOpsService({}),
 		disconnectGrace: getDisconnectGraceService(),
 		githubApp: getGithubAppService({
 			appId: opts.env.GITHUB_APP_ID,
@@ -41,6 +48,7 @@ export function getServices(opts: { env: Env }) {
 		lineLock: getLineLockService(),
 		machineMemory: getMachineMemoryService(),
 		mcpPresets: getMcpPresetService(),
+		patEncryption: getPatEncryptionService({ key: opts.env.AZURE_PAT_ENCRYPTION_KEY }),
 		pendingEnvRequests: getPendingEnvRequestsService(),
 		pendingUpgrades: getPendingUpgradesService(),
 		planTextService: getPlanTextService(),

@@ -22,11 +22,18 @@ and `gh`, unchanged.
   a service holding the path it was built with would keep working in the old checkout until a restart.
 - **The clone is renamed into place only once it is whole.** It is cloned to `<slug>.cloning` and
   renamed, so an interrupted clone is never mistaken for the repository on the next attempt.
-- **No GitHub token touches the disk.** The clone's own `.git/config` names the agent as git's
-  credential helper for `https://github.com`. git calls `bosun-agent git-credential get` on every fetch
-  and push; the command asks `POST /agent/git-credential` with the machine key and prints the token
-  into git's pipe. The backend mints it for the one repository this machine is attached to, with
-  `contents: write`, and it expires within the hour.
+- **No token touches the disk, for either provider.** The clone's own `.git/config` names the agent as
+  git's credential helper for both `https://github.com` and `https://dev.azure.com`, regardless of
+  which one the repository actually is — the unused line is inert, and it keeps the workspace service
+  from needing to know the provider. git calls `bosun-agent git-credential get` on every fetch and
+  push; the command asks `POST /agent/git-credential` with the machine key and prints the token into
+  git's pipe. The backend mints it for the one repository this machine is attached to: a GitHub
+  installation token, scoped with `contents: write` and expiring within the hour, or a decrypted Azure
+  DevOps PAT, which has no such expiry.
+- **The commit identity's noreply address follows the host.** A repository whose clone URL is
+  `dev.azure.com` gets `bosun@users.noreply.dev.azure.com` instead of GitHub's noreply address, when
+  `user.email` is otherwise unset — `RepoAttach` carries no separate provider field, so this is read
+  off the clone URL rather than threaded through as its own field.
 - **The empty `credential.helper` comes first.** It clears every helper a global config added — a
   `gh auth setup-git` left on the box would otherwise answer before bosun's with a credential that
   reaches everything its owner can.

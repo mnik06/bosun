@@ -26,7 +26,9 @@ export async function reconcileRepository(opts: {
 
 	const repository = await opts.repositoryRepo.getById(opts.machine.repositoryId);
 
-	if (!repository) {
+	// Azure repositories do not clone yet (no credential helper support), so there
+	// is nothing this reconnect-safety resend should do for one until that lands.
+	if (!repository || repository.provider !== 'github') {
 		return;
 	}
 

@@ -1,16 +1,17 @@
 import crypto from 'crypto';
+import { hexDigestsEqual } from 'src/utils/general';
 
 function randomToken(bytes: number): string {
 	return crypto.randomBytes(bytes).toString('base64url');
 }
 
-export function getKeyService() {
-	function hashMachineKey(key: string): string {
-		return crypto.createHash('sha256').update(key).digest('hex');
-	}
+function sha256Hex(input: string): string {
+	return crypto.createHash('sha256').update(input).digest('hex');
+}
 
+export function getKeyService() {
 	return {
-		hashMachineKey,
+		hashMachineKey: sha256Hex,
 
 		generateEnrollmentToken: (): string => randomToken(24),
 
@@ -20,7 +21,18 @@ export function getKeyService() {
 		// rather than hex: the same entropy in fewer characters to transcribe.
 		generateMemberPassword: (): string => randomToken(18),
 
-		generateMachineKey: (): string => crypto.randomBytes(32).toString('hex')
+		generateMachineKey: (): string => crypto.randomBytes(32).toString('hex'),
+
+		// One secret shared by both of a repository's Azure webhook subscriptions
+		// (AC-56) — only its hash is stored, the same "never the plaintext" rule
+		// `hashMachineKey` follows.
+		generateWebhookSecret: (): string => randomToken(32),
+
+		hashWebhookSecret: sha256Hex,
+
+		webhookSecretMatchesHash(opts: { secret: string; hash: string }): boolean {
+			return hexDigestsEqual(sha256Hex(opts.secret), opts.hash);
+		}
 	};
 }
 

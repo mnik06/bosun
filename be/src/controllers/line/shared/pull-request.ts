@@ -1,5 +1,5 @@
-import { publishPullRequestToGithub } from 'src/controllers/github/shared/publish-pull-request';
 import { type LineDeps } from 'src/controllers/line/line-deps';
+import { gitProviderFailureMessage } from 'src/controllers/line/shared/git-provider-error';
 import { pullRequestBody } from 'src/controllers/line/shared/pull-request-body';
 import { type Build } from 'src/types/BuildSchema';
 import { type Plan } from 'src/types/PlanSchema';
@@ -52,30 +52,32 @@ export async function pullRequestText(deps: LineDeps, opts: { plan: Plan; build:
 // pushed and nothing about the work is in doubt.
 export async function publishPullRequest(deps: LineDeps, opts: { plan: Plan; build: Build }): Promise<Build> {
 	const { build } = opts;
+	const repository = await deps.repositoryRepo.getById(build.repositoryId);
 
-	if (build.branch === null || build.baseBranch === null) {
-		return (await deps.buildRepo.update({ id: build.id, failureReason: 'the branch is pushed, but this repository is no longer connected to a GitHub installation' })) ?? build;
+	if (!repository || build.branch === null || build.baseBranch === null) {
+		return (await deps.buildRepo.update({ id: build.id, failureReason: 'the branch is pushed, but this repository is no longer connected' })) ?? build;
 	}
 
-	const text = await pullRequestText(deps, opts);
-	const published = await publishPullRequestToGithub(deps, {
-		repositoryId: build.repositoryId,
-		branch: build.branch,
-		baseBranch: build.baseBranch,
-		...text
-	});
+	try {
+		const provider = await deps.gitProviderFor(repository);
+		const text = await pullRequestText(deps, opts);
+		const opened = await provider.openOrUpdatePullRequest({ head: build.branch, base: build.baseBranch, ...text });
+		const updated = await deps.buildRepo.update({ id: build.id, prNumber: opened.number, prUrl: opened.url, failureReason: null });
 
-	if (!published.ok) {
-		return (await deps.buildRepo.update({ id: build.id, failureReason: published.error })) ?? build;
+		if (build.prNumber === null) {
+			summarize(deps, { plan: opts.plan, build });
+		}
+
+		return updated ?? build;
+	} catch (error) {
+		const message = gitProviderFailureMessage(error);
+
+		if (message === null) {
+			throw error;
+		}
+
+		return (await deps.buildRepo.update({ id: build.id, failureReason: `${build.branch} is pushed, but the pull request failed: ${message}` })) ?? build;
 	}
-
-	const updated = await deps.buildRepo.update({ id: build.id, prNumber: published.number, prUrl: published.url, failureReason: null });
-
-	if (build.prNumber === null) {
-		summarize(deps, { plan: opts.plan, build });
-	}
-
-	return updated ?? build;
 }
 
 // After the pull request, never instead of it: the branch is the deliverable and
