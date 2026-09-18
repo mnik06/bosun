@@ -218,6 +218,10 @@ export const machines = pgTable(
 		// A column rather than a join table: one repository per machine is the design.
 		// Set when an attach is asked for, so the credential route answers the clone.
 		repositoryId: text().references(() => repositories.id, { onDelete: 'set null' }),
+		// The repository the agent last said it holds a clone of. `repositoryId` is
+		// written the moment an attach is asked for, minutes before the clone lands,
+		// so it alone cannot say whether a session has a tree to run in.
+		clonedRepositoryId: text().references(() => repositories.id, { onDelete: 'set null' }),
 		// The agent's own key, reported in `hello`. What the browser seals values to.
 		publicKey: text(),
 		policy: jsonb().$type<MachinePolicy>().notNull().default({ applyMigrations: true, confirmed: false }),

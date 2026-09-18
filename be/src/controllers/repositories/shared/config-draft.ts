@@ -20,3 +20,9 @@ export async function configDraftFor(opts: {
 export function awaitingRepository(machine: Pick<Machine, 'repositoryId' | 'repoPath'>): boolean {
 	return machine.repositoryId === null && machine.repoPath === null;
 }
+
+// Attached but not yet cloned. Until the agent reports the clone, it has no tree
+// for the repository and refuses every session with "no repository attached".
+export function repositoryCloning(machine: Pick<Machine, 'repositoryId' | 'clonedRepositoryId'>): boolean {
+	return machine.repositoryId !== null && machine.clonedRepositoryId !== machine.repositoryId;
+}

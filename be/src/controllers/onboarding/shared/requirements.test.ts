@@ -16,6 +16,7 @@ function machine(overrides: Partial<Machine>): Machine {
 		capabilities: null,
 		envSets: null,
 		repositoryId: 'repo_1',
+		clonedRepositoryId: 'repo_1',
 		publicKey: 'key',
 		policy: { applyMigrations: true, confirmed: false },
 		sessionSecrets: null,

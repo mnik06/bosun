@@ -77,6 +77,18 @@ describe('setupChecklist', () => {
 			.toEqual(['failed', 'start-onboarding'])
 	})
 
+	// `repositoryId` is set the moment the attach is asked for; onboarding started
+	// before the clone lands fails on the machine with "no repository attached".
+	it('holds onboarding until the clone lands', () => {
+		const machine = { status: 'online' as const, capabilities: green, repositoryId: 'repo_1' }
+		const cloning = states({ machine: { ...machine, clonedRepositoryId: null }, repository, onboarding: null })
+
+		expect(cloning.repository).toEqual(['running', null])
+		expect(cloning.config).toEqual(['blocked', null])
+		expect(states({ machine: { ...machine, clonedRepositoryId: 'repo_1' }, repository, onboarding: null }).config)
+			.toEqual(['todo', 'start-onboarding'])
+	})
+
 	it('asks for inputs while any are missing, and waits for them before verify', () => {
 		const missing = [{ kind: 'env' as const, path: 'be', key: 'DATABASE_URL', why: 'db', evidence: 'be/.env.example', optional: false }]
 		const result = states({

@@ -8,6 +8,7 @@ export async function markMachineOnline(opts: {
 	agentVersion: string;
 	repoPath?: string;
 	publicKey?: string;
+	clonedRepositoryId?: string | null;
 	envSets?: EnvSetSummary[];
 	sessionSecrets?: string[];
 }): Promise<{ machine: Machine; wasOnline: boolean } | null> {
@@ -16,6 +17,7 @@ export async function markMachineOnline(opts: {
 		agentVersion: opts.agentVersion,
 		repoPath: opts.repoPath,
 		publicKey: opts.publicKey,
+		clonedRepositoryId: opts.clonedRepositoryId,
 		now: new Date()
 	});
 

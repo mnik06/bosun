@@ -18,6 +18,7 @@ import {
 	nextJob,
 	WAITING_STATUSES
 } from 'src/controllers/line/shared/next-job';
+import { repositoryCloning } from 'src/controllers/repositories/shared/config-draft';
 import { type Machine } from 'src/types/MachineSchema';
 import { type Repository } from 'src/types/RepositorySchema';
 
@@ -341,7 +342,15 @@ export async function scheduleMachine(deps: LineDeps, opts: { machineId: string 
 	await deps.lineLock.run(opts.machineId, async () => {
 		const machine = await deps.machineRepo.getById(opts.machineId);
 
-		if (!machine || machine.status !== 'online' || machine.repositoryId === null || !deps.socketRegistry.getAgentSocket(machine.id)) {
+		// A machine still cloning has no tree to cut a worktree from; the clone
+		// landing schedules it (`handleRepositoryFrame`).
+		if (
+			!machine ||
+			machine.status !== 'online' ||
+			machine.repositoryId === null ||
+			repositoryCloning(machine) ||
+			!deps.socketRegistry.getAgentSocket(machine.id)
+		) {
 			return;
 		}
 

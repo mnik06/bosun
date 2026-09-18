@@ -232,6 +232,13 @@
       "when": 1789720720257,
       "tag": "0032_wooden_wolverine",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1789725224650,
+      "tag": "0033_amazing_iron_monger",
+      "breakpoints": true
     }
   ]
 }

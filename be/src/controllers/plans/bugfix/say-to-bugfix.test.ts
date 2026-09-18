@@ -67,6 +67,7 @@ function machine(overrides: Partial<Machine> = {}): Machine {
 		status: 'online',
 		capabilities: [{ name: 'claude', ok: true }],
 		repositoryId: PLAN.repositoryId,
+		clonedRepositoryId: PLAN.repositoryId,
 		verifyLanes: 1,
 		buildCap: null,
 		ignoreMemoryBudget: false,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeAzureOrganization } from 'src/types/AzureSchema';
+import { azureRepositoryFullName, azureRepositoryNames, normalizeAzureOrganization } from 'src/types/AzureSchema';
 
 describe('normalizeAzureOrganization', () => {
 	it('accepts a bare organization name unchanged', () => {
@@ -20,5 +20,17 @@ describe('normalizeAzureOrganization', () => {
 		expect(normalizeAzureOrganization('not a valid org!')).toBeNull();
 		expect(normalizeAzureOrganization('https://dev.azure.com/my-org/extra/path')).toBeNull();
 		expect(normalizeAzureOrganization('https://github.com/my-org')).toBeNull();
+	});
+});
+
+describe('azureRepositoryNames', () => {
+	it('splits back what azureRepositoryFullName joined, spaces included', () => {
+		const fullName = azureRepositoryFullName({ organization: 'dealerpilot', projectName: 'Lotus 2021', repoName: 'Front-End' });
+
+		expect(azureRepositoryNames(fullName)).toEqual({ projectName: 'Lotus 2021', repoName: 'Front-End' });
+	});
+
+	it.each(['dealerpilot/Lotus 2021', 'dealerpilot/Lotus 2021/Front-End/extra', 'dealerpilot//Front-End', 'Front-End'])('refuses %s', (fullName) => {
+		expect(azureRepositoryNames(fullName)).toBeNull();
 	});
 });

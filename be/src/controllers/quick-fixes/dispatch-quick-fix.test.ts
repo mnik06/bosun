@@ -31,6 +31,7 @@ function machine(overrides: Partial<Machine> & { status: MachineStatus }): Machi
 		agentVersion: '1.2.0',
 		capabilities: GREEN,
 		repositoryId: 'repo_1',
+		clonedRepositoryId: 'repo_1',
 		verifyLanes: 1,
 		buildCap: null,
 		createdAt: new Date('2026-01-01T00:00:00.000Z'),
@@ -127,6 +128,16 @@ describe('dispatchQuickFix refusals', () => {
 		const { create, run } = build({ found: machine({ status: 'online', repositoryId: null }) });
 
 		await expect(run()).rejects.toThrow(new HttpError(409, 'this machine has no repository attached'));
+		expect(create).not.toHaveBeenCalled();
+	});
+
+	// `repositoryId` is written when the attach is asked for; the agent has no tree
+	// until the clone lands, and would fail the session with "no repository attached".
+	it('refuses a machine whose repository is still cloning', async () => {
+		connect();
+		const { create, run } = build({ found: machine({ status: 'online', clonedRepositoryId: null }) });
+
+		await expect(run()).rejects.toThrow(new HttpError(409, 'this machine is still cloning its repository'));
 		expect(create).not.toHaveBeenCalled();
 	});
 

@@ -1,4 +1,4 @@
-import type { Machine, PreflightCheck } from '~/entities/machine'
+import { repositoryCloning, type Machine, type PreflightCheck } from '~/entities/machine'
 import { configSource, type MachineOnboarding, type Repository } from '~/entities/repository'
 
 export type ChecklistRowId = 'agent' | 'claude' | 'browser' | 'repository' | 'config' | 'inputs' | 'verified'
@@ -25,7 +25,7 @@ export interface ChecklistRow {
 }
 
 export interface ChecklistInput {
-	machine: Pick<Machine, 'status' | 'capabilities' | 'repositoryId'>
+	machine: Pick<Machine, 'status' | 'capabilities' | 'repositoryId' | 'clonedRepositoryId'>
 	repository: Pick<Repository, 'fullName' | 'configOnDefault' | 'configDraft' | 'defaultBranch'> | null
 	onboarding: MachineOnboarding | null
 }
@@ -48,9 +48,23 @@ function checkRow (checks: PreflightCheck[] | null, name: string): Row {
 		: { state: 'todo', detail: check.detail ?? 'failed', action: 'run-setup' }
 }
 
+function repositoryRow ({ machine, repository }: ChecklistInput): Row {
+	if (machine.repositoryId == null) {
+		return { state: 'todo', detail: 'none attached', action: 'attach-repository' }
+	}
+
+	return repositoryCloning(machine)
+		? { state: 'running', detail: `cloning ${repository?.fullName ?? 'the repository'} on the machine`, action: null }
+		: { state: 'done', detail: repository?.fullName ?? 'attached', action: null }
+}
+
 function configRow ({ machine, repository, onboarding }: ChecklistInput): Row {
 	if (machine.repositoryId == null) {
 		return { state: 'blocked', detail: 'attach a repository first', action: null }
+	}
+
+	if (repositoryCloning(machine)) {
+		return { state: 'blocked', detail: 'waiting for the clone', action: null }
 	}
 
 	const source = repository === null ? 'none' : configSource(repository)
@@ -121,7 +135,7 @@ function verifiedRow ({ repository, onboarding }: ChecklistInput): Row {
 }
 
 export function setupChecklist (input: ChecklistInput): ChecklistRow[] {
-	const { machine, repository } = input
+	const { machine } = input
 
 	return [
 		{
@@ -136,9 +150,7 @@ export function setupChecklist (input: ChecklistInput): ChecklistRow[] {
 		{
 			id: 'repository',
 			label: 'Repository',
-			...(machine.repositoryId == null
-				? { state: 'todo', detail: 'none attached', action: 'attach-repository' }
-				: { state: 'done', detail: repository?.fullName ?? 'attached', action: null })
+			...repositoryRow(input)
 		},
 		{ id: 'config', label: 'Config', ...configRow(input) },
 		{ id: 'inputs', label: 'Inputs', ...inputsRow(input) },

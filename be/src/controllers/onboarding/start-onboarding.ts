@@ -8,6 +8,7 @@ import {
 } from 'src/controllers/onboarding/shared/onboarding-runs';
 import { notifyOnboardingStatus } from 'src/controllers/onboarding/shared/notify';
 import { maybeStartVerify } from 'src/controllers/onboarding/shared/start-verify';
+import { repositoryCloning } from 'src/controllers/repositories/shared/config-draft';
 import { type Machine } from 'src/types/MachineSchema';
 import { type OnboardingPhase, type OnboardingRun } from 'src/types/OnboardingSchema';
 import { type Repository } from 'src/types/RepositorySchema';
@@ -19,6 +20,10 @@ function refusal(opts: { machine: Machine; connected: boolean }): string | null 
 
 	if (opts.machine.repositoryId === null) {
 		return 'attach a repository to this machine first';
+	}
+
+	if (repositoryCloning(opts.machine)) {
+		return 'this machine is still cloning its repository — start onboarding once the clone lands';
 	}
 
 	return opts.machine.capabilities?.find((check) => check.name === 'claude')?.ok

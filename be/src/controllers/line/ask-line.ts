@@ -4,6 +4,7 @@ import { loadRepositorySnapshot } from 'src/controllers/line/shared/line-snapsho
 import { describeReason } from 'src/controllers/line/shared/reason';
 import { verifyLine } from 'src/controllers/line/schedule';
 import { getOwnedRepository } from 'src/controllers/repositories/shared/announce-repository';
+import { repositoryCloning } from 'src/controllers/repositories/shared/config-draft';
 import { type RepositoryMessage } from 'src/types/BuildSchema';
 import { type AgentMsg } from 'src/types/protocol';
 
@@ -56,7 +57,7 @@ export async function listRepositoryMessages(deps: LineDeps, opts: { repositoryI
 export async function askLine(deps: LineDeps, opts: { repositoryId: string; projectId: string; question: string }): Promise<RepositoryMessage> {
 	const repository = await ownedRepository(deps, opts);
 	const machine = (await deps.machineRepo.listByRepository(repository.id)).find(
-		(entry) => entry.status === 'online' && deps.socketRegistry.getAgentSocket(entry.id) !== null
+		(entry) => entry.status === 'online' && !repositoryCloning(entry) && deps.socketRegistry.getAgentSocket(entry.id) !== null
 	);
 
 	if (!machine) {

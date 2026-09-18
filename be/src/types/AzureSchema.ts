@@ -78,6 +78,14 @@ export function azureRepositoryFullName(opts: { organization: string; projectNam
 	return `${opts.organization}/${opts.projectName}/${opts.repoName}`;
 }
 
+// The inverse of `azureRepositoryFullName`. Azure refuses `/` in organization,
+// project and repository names, so the three segments split back unambiguously.
+export function azureRepositoryNames(fullName: string): { projectName: string; repoName: string } | null {
+	const [organization, projectName, repoName, ...rest] = fullName.split('/');
+
+	return organization && projectName && repoName && rest.length === 0 ? { projectName, repoName } : null;
+}
+
 // Deterministic — Azure's own `remoteUrl` carries a `{org}@` prefix meant for
 // interactive git, which a machine's credential helper never needs (AC-32).
 export function azureCloneUrl(opts: { organization: string; projectName: string; repoName: string }): string {
