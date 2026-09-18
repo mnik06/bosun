@@ -184,7 +184,12 @@ export const repositories = pgTable(
 		// other identifier this table carries for a remote repository is text too.
 		azureRepoId: text(),
 		fullName: text().notNull(),
+		// What the provider calls the default branch, refreshed on every attach.
 		defaultBranch: text().notNull(),
+		// The branch bosun treats as the default instead, when the provider's is not
+		// where the project lives — a bootstrap stub nobody moved on from. Kept apart
+		// from `defaultBranch` so a re-attach refreshing that one cannot undo it.
+		defaultBranchOverride: text(),
 		// Held only until `.bosun/project.yaml` exists on a branch. Validated on write,
 		// so a draft that reaches a machine is one the schema accepts.
 		configDraft: text(),
@@ -250,6 +255,10 @@ export const machines = pgTable(
 		// A column rather than a join table: one repository per machine is the design.
 		// Set when an attach is asked for, so the credential route answers the clone.
 		repositoryId: text().references(() => repositories.id, { onDelete: 'set null' }),
+		// The repository the agent last said it holds a clone of. `repositoryId` is
+		// written the moment an attach is asked for, minutes before the clone lands,
+		// so it alone cannot say whether a session has a tree to run in.
+		clonedRepositoryId: text().references(() => repositories.id, { onDelete: 'set null' }),
 		// The agent's own key, reported in `hello`. What the browser seals values to.
 		publicKey: text(),
 		policy: jsonb().$type<MachinePolicy>().notNull().default({ applyMigrations: true, confirmed: false }),
@@ -286,6 +295,11 @@ export const onboardingRuns = pgTable(
 		requirements: jsonb().$type<OnboardingRequirement[]>().notNull().default([]),
 		assumptions: jsonb().$type<OnboardingAssumption[]>().notNull().default([]),
 		config: text(),
+		// A discovery that found the project on another branch than the default one
+		// onboards that branch and says so here; verify waits until it is the
+		// repository's default branch in bosun.
+		suggestedBaseBranch: text(),
+		suggestedBaseBranchReason: text(),
 		failureReason: text(),
 		startedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
 		finishedAt: timestamp({ withTimezone: true })

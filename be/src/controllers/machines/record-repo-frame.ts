@@ -38,11 +38,13 @@ export async function recordRepoFrame(opts: {
 		return;
 	}
 
-	const machine = await opts.machineRepo.getById(opts.machineId);
+	const machine = await opts.machineRepo.markClonedIf({ id: opts.machineId, repositoryId: opts.frame.repositoryId });
 
-	if (machine?.repositoryId !== opts.frame.repositoryId) {
+	if (!machine) {
 		return;
 	}
+
+	announceMachine({ socketRegistry: opts.socketRegistry, machine });
 
 	const repository = await opts.repositoryRepo.saveConfigOnDefault({
 		id: opts.frame.repositoryId,

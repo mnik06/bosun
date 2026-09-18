@@ -4,6 +4,7 @@ import {
 	OnboardingRequirementSchema,
 	OnboardingStepInputSchema
 } from 'src/types/OnboardingSchema';
+import { GitBranchNameSchema } from 'src/types/RepositorySchema';
 
 export const RunIdParamsSchema = z.object({ runId: z.string().min(1) });
 
@@ -19,6 +20,11 @@ export const OnboardingConfigRespSchema = z.union([
 export const OnboardingRequirementReqSchema = OnboardingRequirementSchema;
 
 export const OnboardingAssumptionReqSchema = OnboardingAssumptionInputSchema;
+
+export const OnboardingBaseBranchReqSchema = z.object({
+	branch: GitBranchNameSchema,
+	reason: z.string().trim().min(1).max(500)
+});
 
 export const OkRespSchema = z.object({ ok: z.literal(true) });
 

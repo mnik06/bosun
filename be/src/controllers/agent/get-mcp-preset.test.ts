@@ -32,6 +32,7 @@ function machine(agentVersion: string | null): Machine {
 		projectProfile: null,
 		envSets: [],
 		repositoryId: null,
+		clonedRepositoryId: null,
 		publicKey: null,
 		policy: null,
 		sessionSecrets: [],

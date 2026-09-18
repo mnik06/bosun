@@ -1,4 +1,5 @@
 import { type OnboardingDeps } from 'src/controllers/onboarding/onboarding-deps';
+import { baseBranchRefusal, pendingBaseBranch } from 'src/controllers/onboarding/shared/base-branch';
 import { missingRequirements } from 'src/controllers/onboarding/shared/requirements';
 import { notifyOnboardingStatus } from 'src/controllers/onboarding/shared/notify';
 import {
@@ -8,7 +9,7 @@ import {
 } from 'src/controllers/onboarding/shared/onboarding-runs';
 
 // Called wherever an input can land — an env set, a session secret, the policy,
-// a discovery finishing, the machine reconnecting — so the operator fills the form
+// a discovery finishing, the machine reconnecting, a base branch chosen — so the operator fills the form
 // once and never presses a button to go on. Quietly does nothing whenever the run
 // cannot start yet; the next of those events asks again.
 export async function maybeStartVerify(deps: OnboardingDeps, opts: { machineId: string }): Promise<void> {
@@ -35,7 +36,13 @@ export async function maybeStartVerify(deps: OnboardingDeps, opts: { machineId: 
 		deps.repositoryRepo.getById(run.repositoryId)
 	]);
 
-	if (!admission.admitted || !repository) {
+	if (!admission.admitted || !repository || baseBranchRefusal({ machine, repository }) !== null) {
+		return;
+	}
+
+	const discovery = run.phase === 'discover' ? run : await deps.onboardingRunRepo.latestDiscoveryForRepository(run.repositoryId);
+
+	if (pendingBaseBranch({ discovery, repository }) !== null) {
 		return;
 	}
 
@@ -56,7 +63,8 @@ export async function maybeStartVerify(deps: OnboardingDeps, opts: { machineId: 
 			configDraft: proposed ? run.config : repository.configDraft,
 			preferDraft: proposed,
 			applyMigrations: machine.policy.applyMigrations,
-			memoryMaxBytes: admission.limitBytes
+			memoryMaxBytes: admission.limitBytes,
+			baseBranch: repository.defaultBranch
 		}
 	});
 	const settled = sent ? started : await deps.onboardingRunRepo.update({ id: run.id, status: 'needs_input' });

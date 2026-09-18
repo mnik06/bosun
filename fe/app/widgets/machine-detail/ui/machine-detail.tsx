@@ -138,6 +138,12 @@ export function MachineDetail ({
 				action={<SetupClaudeButton machineName={data.name} />}
 			/>
 
+			<SetupCard
+				title="MCP servers"
+				description="Extra tools for planning sessions, configured on the machine itself."
+				action={<AddMcpServerButton machineName={data.name} />}
+			/>
+
 			<GitCard machine={data} />
 
 			{kind === 'repository' ? (
@@ -149,12 +155,6 @@ export function MachineDetail ({
 					<MachineCapacityForm machine={data} />
 				</SetupCard>
 			) : null}
-
-			<SetupCard
-				title="MCP servers"
-				description="Extra tools for planning sessions, configured on the machine itself."
-				action={<AddMcpServerButton machineName={data.name} />}
-			/>
 
 			{kind === 'legacy' ? <ProjectSetupCard machine={data} /> : null}
 		</Stack>

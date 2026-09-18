@@ -8,6 +8,7 @@ import {
 	type GithubPatConnection,
 	type Repository
 } from '~/entities/repository'
+import { BaseBranchButton } from '~/features/set-base-branch'
 import { SetupGithubButton } from '~/features/setup-github'
 import { formatRelativeTime } from '~/shared/lib'
 
@@ -116,7 +117,29 @@ function AttachedRepository ({ machine }: { machine: Machine }) {
 			<Text size="xs" c="dimmed">
 				{syncDescription(repository, patConnections.data)}
 			</Text>
+			{repository == null ? null : <BaseBranchOverride repository={repository} />}
 		</Stack>
+	)
+}
+
+function BaseBranchOverride ({ repository }: { repository: Repository }) {
+	if (repository.defaultBranchOverride == null || repository.providerDefaultBranch == null) {
+		return null
+	}
+
+	return (
+		<Group gap="sm" align="center" wrap="wrap">
+			<Text size="xs" c="dimmed">
+				Base branch {repository.defaultBranchOverride}, set in bosun over the repository&apos;s default{' '}
+				{repository.providerDefaultBranch}.
+			</Text>
+			<BaseBranchButton
+				repositoryId={repository.id}
+				branch={null}
+				variant="subtle"
+				label={`Use ${repository.providerDefaultBranch} again`}
+			/>
+		</Group>
 	)
 }
 

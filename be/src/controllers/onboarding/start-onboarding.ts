@@ -7,7 +7,9 @@ import {
 	ONBOARDING_PORT_BASE
 } from 'src/controllers/onboarding/shared/onboarding-runs';
 import { notifyOnboardingStatus } from 'src/controllers/onboarding/shared/notify';
+import { baseBranchRefusal, pendingBaseBranch } from 'src/controllers/onboarding/shared/base-branch';
 import { maybeStartVerify } from 'src/controllers/onboarding/shared/start-verify';
+import { repositoryCloning } from 'src/controllers/repositories/shared/config-draft';
 import { type Machine } from 'src/types/MachineSchema';
 import { type OnboardingPhase, type OnboardingRun } from 'src/types/OnboardingSchema';
 import { type Repository } from 'src/types/RepositorySchema';
@@ -19,6 +21,10 @@ function refusal(opts: { machine: Machine; connected: boolean }): string | null 
 
 	if (opts.machine.repositoryId === null) {
 		return 'attach a repository to this machine first';
+	}
+
+	if (repositoryCloning(opts.machine)) {
+		return 'this machine is still cloning its repository — start onboarding once the clone lands';
 	}
 
 	return opts.machine.capabilities?.find((check) => check.name === 'claude')?.ok
@@ -54,7 +60,8 @@ async function startDiscovery(
 			configDraft: opts.repository.configDraft,
 			preferDraft: false,
 			applyMigrations: opts.machine.policy.applyMigrations,
-			memoryMaxBytes: admission.limitBytes
+			memoryMaxBytes: admission.limitBytes,
+			baseBranch: opts.repository.defaultBranch
 		}
 	});
 
@@ -78,6 +85,12 @@ async function startVerify(
 
 	if (!discovery && opts.repository.configDraft === null && !opts.repository.configOnDefault) {
 		throw new HttpError(409, 'there is no config to verify yet — start onboarding to discover one');
+	}
+
+	const suggested = pendingBaseBranch({ discovery, repository: opts.repository });
+
+	if (suggested !== null) {
+		throw new HttpError(409, `discovery onboarded ${suggested}, not ${opts.repository.defaultBranch} — make ${suggested} the base branch before verifying`);
 	}
 
 	const run = await deps.onboardingRunRepo.create({
@@ -115,6 +128,12 @@ export async function startOnboarding(
 
 	if (!repository) {
 		throw new HttpError(409, 'the repository this machine was attached to is gone');
+	}
+
+	const outdated = baseBranchRefusal({ machine, repository });
+
+	if (outdated !== null) {
+		throw new HttpError(409, outdated);
 	}
 
 	if (active.length > 0) {

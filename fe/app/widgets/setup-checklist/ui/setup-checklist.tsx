@@ -37,6 +37,12 @@ function RowAction ({ row, machine }: { row: ChecklistRow, machine: Machine }) {
 			return <StartOnboardingButton machine={machine} phase="discover" again={row.state === 'failed'} />
 		case 'run-verify':
 			return <StartOnboardingButton machine={machine} phase="verify" again={row.state === 'failed'} />
+		case 'choose-base-branch':
+			return (
+				<Anchor component={Link} to="?tab=onboarding" replace size="sm">
+					Review it on Onboarding
+				</Anchor>
+			)
 		case 'provide-inputs':
 			return (
 				<Anchor component={Link} to="?tab=inputs" replace size="sm">

@@ -12,11 +12,13 @@ import { admit, holderBlocksLane, jobBytes, usableBytes, type JobClass, type Mac
 import { notifyBuildStatus } from 'src/controllers/line/shared/notify';
 import {
 	BUILD_SLOT_STATUSES,
+	hasBulletLeft,
 	hasRunningJob,
 	LANE_STATUSES,
 	nextJob,
 	WAITING_STATUSES
 } from 'src/controllers/line/shared/next-job';
+import { repositoryCloning } from 'src/controllers/repositories/shared/config-draft';
 import { type Machine } from 'src/types/MachineSchema';
 import { type Repository } from 'src/types/RepositorySchema';
 
@@ -119,7 +121,7 @@ async function continueHolder(pass: Pass, state: BuildState): Promise<boolean> {
 
 	// The last build bullet landed: the build keeps its slot into the integration
 	// that has to come before verify.
-	if (state.build.status === 'building' && state.build.builtAt === null && job?.kind !== 'bullet') {
+	if (state.build.status === 'building' && state.build.builtAt === null && !hasBulletLeft(state.runs)) {
 		await completeBuilding(pass.deps, state);
 
 		return true;
@@ -340,7 +342,15 @@ export async function scheduleMachine(deps: LineDeps, opts: { machineId: string 
 	await deps.lineLock.run(opts.machineId, async () => {
 		const machine = await deps.machineRepo.getById(opts.machineId);
 
-		if (!machine || machine.status !== 'online' || machine.repositoryId === null || !deps.socketRegistry.getAgentSocket(machine.id)) {
+		// A machine still cloning has no tree to cut a worktree from; the clone
+		// landing schedules it (`handleRepositoryFrame`).
+		if (
+			!machine ||
+			machine.status !== 'online' ||
+			machine.repositoryId === null ||
+			repositoryCloning(machine) ||
+			!deps.socketRegistry.getAgentSocket(machine.id)
+		) {
 			return;
 		}
 

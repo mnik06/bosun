@@ -230,6 +230,12 @@ export function getBosunApiService(deps: { serverUrl: string; machineKey?: strin
 			return post({ path: `/agent/onboarding/${encodeURIComponent(runId)}/assumptions`, body, authorized: true });
 		},
 
+		async suggestOnboardingBaseBranch(opts: { runId: string; branch: string; reason: string }): Promise<unknown> {
+			const { runId, ...body } = opts;
+
+			return post({ path: `/agent/onboarding/${encodeURIComponent(runId)}/base-branch`, body, authorized: true });
+		},
+
 		async setPlanBlockers(opts: { planId: string; blockedByNumbers: number[] }): Promise<unknown> {
 			return post({
 				path: `/agent/plans/${opts.planId}/blockers`,

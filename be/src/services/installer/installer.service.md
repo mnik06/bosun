@@ -56,6 +56,16 @@ turned the first step of onboarding into "create a user and log in again". The i
   with the command, since the next thing to fail would be a verify an hour later.
 - `~/.bosun/env`, `~/.bosun/mcp.json` and the unit, with bosun's node and `~/.local/bin` first on the
   unit's `PATH`. A re-run restarts the unit, so it runs the binary and config it just wrote.
+  `XDG_RUNTIME_DIR` is forced to `/run/user/<uid>` before any `systemctl --user`: `su <user>` without
+  `-` hands over root's `/run/user/0`, which this user cannot enter, and systemctl fails with
+  "Operation not permitted". Linger, when the user may enable it, gets the same socket wait as the
+  root phase.
+- A marked `PATH` line for the install directory in `~/.bashrc` and `~/.profile`, once. The binary
+  lives in `~/.local/bin`, which only a login shell adds, so after `su <user>` without `-` —
+  root's `PATH`, `~/.bashrc` only — `bosun-agent` was "command not found" while the agent ran fine.
+  A second marked line points `XDG_RUNTIME_DIR` at `/run/user/<uid>` when it is unset or someone
+  else's and that directory exists, so the `systemctl --user` commands the script prints work from
+  the same shell instead of failing with "Failed to connect to user scope bus".
 - `bosun-agent setup </dev/tty` when `/dev/tty` opens — stdin is the `curl` pipe, so the prompts
   cannot read from it. Without a terminal the command is printed and the script exits 0.
 

@@ -22,6 +22,8 @@ const columns = {
 	requirements: onboardingRuns.requirements,
 	assumptions: onboardingRuns.assumptions,
 	config: onboardingRuns.config,
+	suggestedBaseBranch: onboardingRuns.suggestedBaseBranch,
+	suggestedBaseBranchReason: onboardingRuns.suggestedBaseBranchReason,
 	failureReason: onboardingRuns.failureReason,
 	startedAt: onboardingRuns.startedAt,
 	finishedAt: onboardingRuns.finishedAt
@@ -134,6 +136,8 @@ export function getOnboardingRunRepo(db: DbOrTx) {
 			requirements?: OnboardingRequirement[];
 			assumptions?: OnboardingAssumption[];
 			config?: string | null;
+			suggestedBaseBranch?: string;
+			suggestedBaseBranchReason?: string;
 			failureReason?: string | null;
 			finishedAt?: Date | null;
 			steps?: OnboardingStep[];

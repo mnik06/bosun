@@ -1,8 +1,5 @@
-import { dispatchAttach } from 'src/controllers/machines/attach-repository';
-import { type GithubInstallationRepo } from 'src/repos/github/github-installation.repo';
+import { redispatchAttach, type RedispatchAttachDeps } from 'src/controllers/machines/shared/redispatch-attach';
 import { type RepositoryRepo } from 'src/repos/github/repository.repo';
-import { type GithubAppService } from 'src/services/github/github-app.service';
-import { type SocketRegistry } from 'src/services/sockets/registry.service';
 import { type Machine } from 'src/types/MachineSchema';
 
 // The row names a repository the agent says it does not have. The reply to an
@@ -12,30 +9,20 @@ import { type Machine } from 'src/types/MachineSchema';
 // Asking again is safe because the agent answers a repeat with the attach it is
 // already running. An agent too old to report a repository reports nothing, and
 // is left alone.
-export async function reconcileRepository(opts: {
-	repositoryRepo: RepositoryRepo;
-	githubInstallationRepo: GithubInstallationRepo;
-	githubApp: GithubAppService;
-	socketRegistry: SocketRegistry;
-	machine: Machine;
-	reportedRepositoryId: string | null | undefined;
-}): Promise<void> {
+export async function reconcileRepository(
+	opts: RedispatchAttachDeps & {
+		repositoryRepo: RepositoryRepo;
+		machine: Machine;
+		reportedRepositoryId: string | null | undefined;
+	}
+): Promise<void> {
 	if (opts.reportedRepositoryId !== null || opts.machine.repositoryId === null) {
 		return;
 	}
 
 	const repository = await opts.repositoryRepo.getById(opts.machine.repositoryId);
 
-	// Azure repositories do not clone yet (no credential helper support), so there
-	// is nothing this reconnect-safety resend should do for one until that lands.
-	if (!repository || repository.provider !== 'github') {
-		return;
-	}
-
-	try {
-		await dispatchAttach({ ...opts, machineId: opts.machine.id, repository });
-	} catch {
-		// GitHub unreachable or the installation gone: the next announce asks again,
-		// and the leader sees the machine still waiting on its clone meanwhile.
+	if (repository) {
+		await redispatchAttach(opts, { machineId: opts.machine.id, repository });
 	}
 }

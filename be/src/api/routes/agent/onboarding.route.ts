@@ -3,6 +3,7 @@ import { ZodTypeProvider } from 'fastify-type-provider-zod';
 import {
 	OkRespSchema,
 	OnboardingAssumptionReqSchema,
+	OnboardingBaseBranchReqSchema,
 	OnboardingConfigReqSchema,
 	OnboardingConfigRespSchema,
 	OnboardingRequirementReqSchema,
@@ -10,6 +11,7 @@ import {
 	RunIdParamsSchema
 } from 'src/api/routes/schemas/agent/AgentOnboardingSchemas';
 import { recordOnboardingAssumption } from 'src/controllers/onboarding/agent/record-onboarding-assumption';
+import { recordOnboardingBaseBranch } from 'src/controllers/onboarding/agent/record-onboarding-base-branch';
 import { recordOnboardingRequirement } from 'src/controllers/onboarding/agent/record-onboarding-requirement';
 import { recordOnboardingStep } from 'src/controllers/onboarding/agent/record-onboarding-step';
 import { saveOnboardingConfig } from 'src/controllers/onboarding/agent/save-onboarding-config';
@@ -70,6 +72,21 @@ const routes: FastifyPluginAsync = async function (f) {
 				machineId: req.agent!.machineId,
 				projectId: req.agent!.projectId,
 				assumption: req.body
+			});
+
+			return { ok: true as const };
+		}
+	);
+
+	fastify.post(
+		'/onboarding/:runId/base-branch',
+		{ schema: { params: RunIdParamsSchema, body: OnboardingBaseBranchReqSchema, response: { 200: OkRespSchema } } },
+		async (req) => {
+			await recordOnboardingBaseBranch(onboardingDeps(fastify), {
+				runId: req.params.runId,
+				machineId: req.agent!.machineId,
+				projectId: req.agent!.projectId,
+				...req.body
 			});
 
 			return { ok: true as const };

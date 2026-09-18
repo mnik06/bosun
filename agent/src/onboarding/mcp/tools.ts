@@ -32,6 +32,19 @@ export const RecordAssumptionArgsSchema = z.object({
 	evidence: z.string().trim().min(1).max(120)
 });
 
+// Held to what bosun accepts, and checked here too: the name reaches `git` as an
+// argument before bosun sees it, and a leading dash would read as an option.
+export const SuggestBaseBranchArgsSchema = z.object({
+	branch: z
+		.string()
+		.trim()
+		.min(1)
+		.max(200)
+		.regex(/^[A-Za-z0-9._/-]+$/)
+		.refine((name) => !/^[-/]|[/.]$|\.lock$|\.\.|\/\//.test(name), 'not a branch name bosun accepts'),
+	reason: z.string().trim().min(1).max(500)
+});
+
 export const ReportSignInArgsSchema = z.object({
 	role: z.string().trim().min(1).max(40),
 	ok: z.boolean(),
@@ -64,6 +77,12 @@ export const DISCOVERY_DEFINITIONS = [
 		description:
 			'List one input only the operator can give: an env key a package reads (kind env, with the path of the folder whose .env holds it), a secret a session needs in its environment such as a test-account password (kind secret), or whether this machine may apply migrations (kind policy, key applyMigrations). Say why it is needed and cite the file that told you. Set optional to true when the project starts and works without it — telemetry, a feature that switches off, a value with a default; verify waits for every input that is not optional.',
 		schema: ReportRequirementArgsSchema
+	}),
+	mcpToolDefinition({
+		name: 'suggest_base_branch',
+		description:
+			'Only when the default branch is plainly not where the project lives — a bootstrap stub, a branch abandoned while development moved on — and one other branch plainly is. Name that branch as it is on origin (e.g. develop) and give one or two sentences on what you saw: what the default branch holds, where the application and CI are instead. Bosun records it for the operator, and this checkout is switched to that branch; onboard the tree you are left on. Verify waits until the operator makes it the base branch.',
+		schema: SuggestBaseBranchArgsSchema
 	}),
 	mcpToolDefinition({
 		name: 'record_assumption',
@@ -113,9 +132,38 @@ export function unescapeEntities(text: string): string {
 	return text.replace(/&(?:lt|gt|quot|#39|amp);/g, (entity) => ENTITIES[entity] ?? entity);
 }
 
+export interface ScratchBranch {
+	exists: (branch: string) => Promise<boolean>;
+	// Null on success, else why the checkout could not be switched.
+	checkout: (branch: string) => Promise<string | null>;
+}
+
+async function suggestBaseBranch(opts: { runId: string; bosunApi: BosunApiService; scratch: ScratchBranch; args: unknown }) {
+	const parsed = SuggestBaseBranchArgsSchema.parse(opts.args);
+
+	if (!(await opts.scratch.exists(parsed.branch))) {
+		return textToolResult(`origin/${parsed.branch} does not exist — \`git branch -r\` lists the branches there are.`, true);
+	}
+
+	// Recorded before the switch: a tree onboarded from a branch bosun was never
+	// told about is a config verify runs somewhere it was not written for.
+	await opts.bosunApi.suggestOnboardingBaseBranch({ runId: opts.runId, branch: parsed.branch, reason: unescapeEntities(parsed.reason) });
+
+	const failed = await opts.scratch.checkout(parsed.branch);
+
+	if (failed !== null) {
+		return textToolResult(`Recorded, but this checkout could not be switched to origin/${parsed.branch}: ${failed}`, true);
+	}
+
+	return textToolResult(
+		`Recorded, and this checkout is now origin/${parsed.branch}. Onboard this tree — if it carries .bosun/project.yaml, start from that file. Verify waits until the operator makes ${parsed.branch} the base branch.`
+	);
+}
+
 export function createDiscoveryDispatch(opts: {
 	runId: string;
 	bosunApi: BosunApiService;
+	scratch: ScratchBranch;
 	onPublished: () => void;
 	// Turns the session's estimate into the progress bosun records: never backwards,
 	// never the whole bar before the run has actually finished.
@@ -163,6 +211,10 @@ export function createDiscoveryDispatch(opts: {
 				});
 
 				return textToolResult('recorded');
+			}
+
+			if (name === 'suggest_base_branch') {
+				return suggestBaseBranch({ runId: opts.runId, bosunApi: opts.bosunApi, scratch: opts.scratch, args });
 			}
 
 			if (name === 'record_assumption') {

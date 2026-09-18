@@ -26,6 +26,12 @@ vi.mock('../services/setup-steps.service', () => ({
 	runShell: vi.fn().mockResolvedValue({ ok: true, tail: '', detail: 'done' })
 }));
 
+vi.mock('./commit', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('./commit')>();
+
+	return { ...actual, mergeBranches: vi.fn() };
+});
+
 const START = {
 	type: 'exec.start',
 	runId: 'sr_1',
@@ -159,6 +165,33 @@ describe('createExecutionSessions', () => {
 
 		expect(spawnClaudeSession).not.toHaveBeenCalled();
 		expect(sessions.held()).toEqual([]);
+	});
+
+	// A provider that will not merge is the backend's to integrate onto, so the
+	// branch is named — and no session is handed the half-merged tree.
+	it('names the provider branch a stacked bullet could not merge, before any session starts', async () => {
+		const send = vi.fn();
+		const { mergeBranches } = await import('./commit');
+
+		vi.mocked(mergeBranches).mockResolvedValueOnce({
+			ok: false,
+			detail: 'merging origin/bosun/plan/3-avatars conflicts with this branch: CONFLICT',
+			conflictWith: 'bosun/plan/3-avatars'
+		});
+		await createExecutionSessions({ services: services(async () => ({ ok: true, detail: 'cleaned' })), send }).start({
+			...START,
+			mergeIn: ['bosun/plan/3-avatars']
+		});
+
+		const { spawnClaudeSession } = await import('../sessions/process');
+
+		expect(spawnClaudeSession).not.toHaveBeenCalled();
+		expect(send).toHaveBeenCalledWith({
+			type: 'exec.error',
+			runId: 'sr_1',
+			message: 'merging origin/bosun/plan/3-avatars conflicts with this branch: CONFLICT',
+			conflictWith: 'bosun/plan/3-avatars'
+		});
 	});
 
 	// The limit is what keeps one bullet running out of memory from reaching the

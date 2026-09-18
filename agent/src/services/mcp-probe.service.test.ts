@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { describeHttpStatus, readInitializeResponse } from './mcp-probe.service';
+import { describeHttpStatus, describeStderr, readInitializeResponse } from './mcp-probe.service';
 
 describe('readInitializeResponse', () => {
 	it('accepts a well-formed initialize result', () => {
@@ -46,5 +46,42 @@ describe('describeHttpStatus', () => {
 
 	it('falls back to the bare status', () => {
 		expect(describeHttpStatus(500)).toBe('HTTP 500');
+	});
+});
+
+describe('describeStderr', () => {
+	// What @azure-devops/mcp@2.10.0 printed on a headless box: the reason is above
+	// the stack, and a tail of the output kept only the frames.
+	it('picks the error line out of a node crash', () => {
+		const stderr = [
+			'npm warn deprecated prebuild-install@7.1.3: No longer maintained.',
+			'node:internal/modules/cjs/loader:1929',
+			'  return process.dlopen(module, path.toNamespacedPath(filename));',
+			'                 ^',
+			'',
+			'Error: libsecret-1.so.0: cannot open shared object file: No such file or directory',
+			'    at Object..node (node:internal/modules/cjs/loader:1929:14)',
+			'    at Module.load (node:internal/modules/cjs/loader:1651:32) {',
+			"  code: 'ERR_DLOPEN_FAILED'",
+			'}',
+			'',
+			'Node.js v24.21.0'
+		].join('\n');
+
+		expect(describeStderr(stderr)).toBe(
+			'Error: libsecret-1.so.0: cannot open shared object file: No such file or directory'
+		);
+	});
+
+	it('recognises named and coded errors', () => {
+		expect(describeStderr('TypeError: x is not a function\n    at y')).toBe('TypeError: x is not a function');
+		expect(describeStderr('Error [ERR_MODULE_NOT_FOUND]: Cannot find package')).toBe(
+			'Error [ERR_MODULE_NOT_FOUND]: Cannot find package'
+		);
+	});
+
+	it('falls back to the tail, then to "no output"', () => {
+		expect(describeStderr('invalid organization\n')).toBe('invalid organization');
+		expect(describeStderr('   ')).toBe('no output');
 	});
 });

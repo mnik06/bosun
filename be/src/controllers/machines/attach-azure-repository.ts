@@ -13,7 +13,7 @@ import { toRepositorySlug, type Repository } from 'src/types/RepositorySchema';
 
 // Deterministic from the org, the project and the repository's own name — unlike
 // GitHub's clone URL, nothing here needs a network round trip to Azure.
-async function dispatchAzureAttach(opts: { socketRegistry: SocketRegistry; machineId: string; repository: Repository; organization: string; azureProjectName: string; repoName: string }): Promise<boolean> {
+export async function dispatchAzureAttach(opts: { socketRegistry: SocketRegistry; machineId: string; repository: Repository; organization: string; azureProjectName: string; repoName: string }): Promise<boolean> {
 	return opts.socketRegistry.sendToAgent({
 		machineId: opts.machineId,
 		message: {

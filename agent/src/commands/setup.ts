@@ -1,7 +1,5 @@
 import { spawnSync } from 'child_process';
-import fs from 'fs';
 import os from 'os';
-import path from 'path';
 import { readConfig, type AgentConfig } from '../config/config';
 import { findBrowserExecutable, installDepsCommand, launchBrowser } from '../services/browser.service';
 import { getClaudeAuthService } from '../services/claude-auth.service';
@@ -11,6 +9,7 @@ import { getInputsKeyService } from '../services/inputs-key.service';
 import { getMcpConfigService } from '../services/mcp-config.service';
 import { browserCachePath } from '../services/preflight.service';
 import { getPromptService } from '../services/prompt.service';
+import { withLocalTools } from '../utils';
 import { setClaudeToken } from './auth';
 
 type StepResult = 'done' | 'already' | 'incomplete';
@@ -34,33 +33,6 @@ async function confirm(question: string): Promise<boolean> {
 	} finally {
 		prompt.close();
 	}
-}
-
-// Run straight after install.sh, the calling shell has not picked up
-// ~/.local/bin, where Claude Code installs itself, or the node bosun put under
-// ~/.bosun/toolchains. Without both every step below would report a tool as
-// missing that is sitting on disk.
-function withLocalTools(): void {
-	const home = os.homedir();
-	const toolchains = path.join(home, '.bosun', 'toolchains');
-	let nodes: string[] = [];
-
-	try {
-		nodes = fs
-			.readdirSync(toolchains)
-			.filter((entry) => entry.startsWith('node-'))
-			.sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
-	} catch {
-		nodes = [];
-	}
-
-	const current = (process.env.PATH ?? '').split(':').filter(Boolean);
-	const extra = [
-		...nodes.slice(0, 1).map((entry) => path.join(toolchains, entry, 'bin')),
-		path.join(home, '.local', 'bin')
-	].filter((dir) => fs.existsSync(dir) && !current.includes(dir));
-
-	process.env.PATH = [...extra, ...current].join(':');
 }
 
 async function claudeStep(): Promise<StepResult> {

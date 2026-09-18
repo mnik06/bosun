@@ -67,6 +67,18 @@ export function describeHttpStatus(status: number): string {
 	return `HTTP ${status}`;
 }
 
+// A crash on start ends in a stack trace and, for node, a version banner; the
+// line that says what went wrong — `Error: libsecret-1.so.0: cannot open shared
+// object file` — sits above both. A tail of stderr keeps the frames and loses the
+// reason, so the first error line is preferred and the tail is the fallback.
+const STDERR_KEPT_CHARS = 8_000;
+
+export function describeStderr(stderr: string): string {
+	const error = /^\s*(?:[A-Za-z]+Error|Error)(?: \[[A-Z_]+\])?: .+$/m.exec(stderr)?.[0].trim();
+
+	return error ?? (stderr.trim().slice(-200) || 'no output');
+}
+
 async function probeHttp(server: { url: string; headers?: Record<string, string> }): Promise<ProbeResult> {
 	let response: Response;
 
@@ -138,7 +150,7 @@ async function probeStdio(server: {
 		});
 
 		child.stderr.on('data', (chunk: string) => {
-			stderr = `${stderr}${chunk}`.slice(-200);
+			stderr = `${stderr}${chunk}`.slice(0, STDERR_KEPT_CHARS);
 		});
 
 		child.on('error', (error) => {
@@ -146,7 +158,7 @@ async function probeStdio(server: {
 		});
 
 		child.on('exit', (code) => {
-			settle({ ok: false, detail: `exited with ${code ?? 'a signal'}: ${stderr.trim() || 'no output'}` });
+			settle({ ok: false, detail: `exited with ${code ?? 'a signal'}: ${describeStderr(stderr)}` });
 		});
 
 		child.stdin.write(`${JSON.stringify(INITIALIZE)}\n`);

@@ -367,6 +367,7 @@ describe('a stacked plan', () => {
 
 		expect(merged.ok).toBe(false);
 		expect(merged.detail).toContain(`origin/${provider}`);
+		expect(merged.conflictWith).toBe(provider);
 		expect((await exec.run('git', ['-C', worktree, 'rev-parse', '-q', '--verify', 'MERGE_HEAD'], {})).ok).toBe(false);
 	});
 

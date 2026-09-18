@@ -155,10 +155,13 @@ export const ExecDoneMsgSchema = CommitOutcomeSchema.extend({
 	runId: z.string()
 });
 
+// `conflictWith` names the provider branch a bullet could not merge before it
+// started. Optional so an agent that predates it still fails the run as before.
 export const ExecErrorMsgSchema = z.object({
 	type: z.literal('exec.error'),
 	runId: z.string(),
-	message: z.string()
+	message: z.string(),
+	conflictWith: z.string().optional()
 });
 
 // The agent's answer to an upgrade it was offered and did not take. Without it

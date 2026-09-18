@@ -6,6 +6,7 @@ import { markMachineOffline } from 'src/controllers/machines/mark-machine-offlin
 import { markMachineOnline } from 'src/controllers/machines/mark-machine-online';
 import { reconcileRepository } from 'src/controllers/machines/reconcile-repository';
 import { saveMachinePreflight } from 'src/controllers/machines/save-machine-preflight';
+import { announceMachine } from 'src/controllers/machines/shared/announce';
 import { machineOfflineDeps, notifyMachineOffline } from 'src/controllers/machines/shared/notify-offline';
 import { machineOnlineDeps, notifyMachineOnline } from 'src/controllers/machines/shared/notify-online';
 import { lineDeps } from 'src/controllers/line/line-deps';
@@ -16,7 +17,6 @@ import { onboardingDeps } from 'src/controllers/onboarding/onboarding-deps';
 import { stallMachineOnboarding } from 'src/controllers/onboarding/stall-machine-onboarding';
 import { saveConfigOnDefault } from 'src/controllers/repositories/save-config-on-default';
 import { stallMachinePlans } from 'src/controllers/plans/stall-machine-plans';
-import { type SocketRegistry } from 'src/services/sockets/registry.service';
 import { type Machine } from 'src/types/MachineSchema';
 import { AgentMsgSchema, type AgentMsg } from 'src/types/protocol';
 import { handleAgentFrame, isOrderedFrame } from 'src/api/routes/agent/frame-router';
@@ -28,13 +28,6 @@ const MAX_MISSED = 2;
 // per machine per pong is a write every 15 seconds for a column read by eye.
 // A minute of resolution answers the question; the rest is load.
 const TOUCH_MS = 60_000;
-
-function announceUpdate(opts: { socketRegistry: SocketRegistry; machine: Machine }): void {
-	opts.socketRegistry.broadcastToUi({
-		projectId: opts.machine.projectId,
-		message: { type: 'machine.updated', machine: opts.machine }
-	});
-}
 
 // Protocol-level ping frames, not the application ping: this is what catches a
 // TCP connection that died without either side sending a close frame. The pong
@@ -198,6 +191,7 @@ async function settleHello(opts: {
 	await reconcileRepository({
 		repositoryRepo: fastify.repos.repositoryRepo,
 		githubInstallationRepo: fastify.repos.githubInstallationRepo,
+		azureConnectionRepo: fastify.repos.azureConnectionRepo,
 		githubApp: fastify.services.githubApp,
 		socketRegistry,
 		machine,
@@ -237,6 +231,7 @@ export async function applyMachineFrame(opts: {
 			agentVersion: opts.msg.agentVersion,
 			repoPath: opts.msg.repoPath,
 			publicKey: opts.msg.publicKey,
+			clonedRepositoryId: opts.msg.repositoryId,
 			envSets: opts.msg.envSets,
 			sessionSecrets: opts.msg.sessionSecrets
 		});
@@ -261,7 +256,7 @@ export async function applyMachineFrame(opts: {
 		return;
 	}
 
-	announceUpdate({ socketRegistry, machine });
+	announceMachine({ socketRegistry, machine });
 
 	// Before anything else this connection is told to do. Neither a bullet nor a
 	// grill dies with the socket it was dispatched over, so `hello` is the only
@@ -348,7 +343,7 @@ function handleClose(opts: {
 			return;
 		}
 
-		announceUpdate({ socketRegistry, machine });
+		announceMachine({ socketRegistry, machine });
 		await notifyMachineOffline(machineOfflineDeps(opts.fastify), { machine });
 	});
 	// Not settled here. The agent keeps its `claude` processes across a reconnect,

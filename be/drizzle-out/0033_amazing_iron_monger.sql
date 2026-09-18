@@ -1,0 +1,2 @@
+ALTER TABLE "machines" ADD COLUMN "cloned_repository_id" text;--> statement-breakpoint
+ALTER TABLE "machines" ADD CONSTRAINT "machines_cloned_repository_id_repositories_id_fk" FOREIGN KEY ("cloned_repository_id") REFERENCES "public"."repositories"("id") ON DELETE set null ON UPDATE no action;

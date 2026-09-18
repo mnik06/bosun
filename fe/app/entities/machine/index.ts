@@ -6,7 +6,7 @@ export {
 	useMachinesQuery
 } from './api/machine.queries'
 export { patchMachineCapacity, putEnvSet, putMachinePolicy, putSessionSecrets } from './api/machine.writes'
-export { machineKind } from './lib/machine-kind'
+export { machineKind, repositoryCloning } from './lib/machine-kind'
 export {
 	AGENT_TOO_OLD_FOR_INPUTS,
 	sealVars,

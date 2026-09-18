@@ -8,6 +8,7 @@ import {
 	describeConfigSource,
 	onboardingProgress,
 	OnboardingStatusBadge,
+	pendingBaseBranch,
 	useMachineOnboardingQuery,
 	useRepositoriesQuery,
 	type OnboardingAssumption,
@@ -15,6 +16,7 @@ import {
 	type Repository
 } from '~/entities/repository'
 import { OpenPullRequestButton } from '~/features/open-onboarding-pr'
+import { BaseBranchButton } from '~/features/set-base-branch'
 import { StartOnboardingButton } from '~/features/start-onboarding'
 import { formatRelativeTime } from '~/shared/lib'
 import { SectionLoader } from '~/shared/ui'
@@ -52,6 +54,33 @@ function ReportActions ({
 				<StartOnboardingButton machine={machine} phase="verify" label="Run verify again" again />
 			) : null}
 		</Group>
+	)
+}
+
+// Discovery found the project on another branch and onboarded that one. Its
+// config is for that tree, so verify waits here rather than failing on the default.
+function BaseBranchSuggestion ({ run, repository }: { run: OnboardingRun, repository: Repository | null }) {
+	const branch = pendingBaseBranch({ run, repository })
+
+	if (branch === null || repository === null) {
+		return null
+	}
+
+	return (
+		<Alert color="yellow" variant="light" title={`Discovery onboarded ${branch}, not ${repository.defaultBranch}`}>
+			<Stack gap="xs" align="start">
+				{run.suggestedBaseBranchReason == null ? null : (
+					<Text size="sm" className="break-words">
+						{run.suggestedBaseBranchReason}
+					</Text>
+				)}
+				<Text size="sm" c="dimmed">
+					Verify runs on the base branch, so it waits for this choice. Worktrees and pull requests follow the
+					base branch too.
+				</Text>
+				<BaseBranchButton repositoryId={repository.id} branch={branch} label={`Use ${branch} as the base branch`} />
+			</Stack>
+		</Alert>
 	)
 }
 
@@ -183,6 +212,8 @@ export function OnboardingReport ({ machine }: { machine: Machine }) {
 						</Text>
 					</Alert>
 				)}
+
+				<BaseBranchSuggestion run={run} repository={repository} />
 
 				{missing.length === 0 ? null : (
 					<Alert color="yellow" variant="light" title={`${countLabel(missing.length, 'input')} missing`}>

@@ -73,12 +73,12 @@ export function logDroppedFrame(line: string): void {
 export async function reportStartFailure(opts: {
 	attempt: () => Promise<void>;
 	teardown: () => void;
-	send: (message: string) => void;
+	send: (message: string, error: unknown) => void;
 }): Promise<void> {
 	try {
 		await opts.attempt();
 	} catch (error) {
 		opts.teardown();
-		opts.send(error instanceof Error ? error.message : 'could not start the session');
+		opts.send(error instanceof Error ? error.message : 'could not start the session', error);
 	}
 }

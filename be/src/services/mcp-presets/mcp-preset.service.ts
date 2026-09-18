@@ -57,7 +57,12 @@ const PRESETS: McpPreset[] = [
 		server: {
 			type: 'stdio',
 			command: 'npx',
-			args: ['-y', '@azure-devops/mcp@2.10.0', '${AZURE_DEVOPS_ORG}', '--authentication', 'pat', '-d', 'core', 'work-items'],
+			// 2.9.0, not 2.10.0: 2.10.0 imports @azure/msal-node-extensions at startup,
+			// which loads keytar (libsecret) and msal-node-runtime (webkit2gtk, gtk3,
+			// libsoup) even under PAT auth. A headless server has none of them, so it
+			// dies with ERR_DLOPEN_FAILED before answering `initialize`, and every
+			// session silently lacks the tracker tools. Same tool names, no natives.
+			args: ['-y', '@azure-devops/mcp@2.9.0', '${AZURE_DEVOPS_ORG}', '--authentication', 'pat', '-d', 'core', 'work-items'],
 			env: { PERSONAL_ACCESS_TOKEN: '${AZURE_DEVOPS_PAT_B64}' }
 		},
 		// Older than this, `mcp add` stores only AZURE_DEVOPS_PAT_B64 and drops

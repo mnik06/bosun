@@ -4,6 +4,7 @@ import { getEnvService } from '../services/env.service';
 import { getMcpConfigService } from '../services/mcp-config.service';
 import { getMcpProbeService } from '../services/mcp-probe.service';
 import { getPromptService } from '../services/prompt.service';
+import { withLocalTools } from '../utils';
 
 // base64(user:secret) is the one header shape `${VAR}` substitution cannot
 // express, so the agent composes it from two prompted values and stores only the
@@ -253,6 +254,10 @@ export function removeMcpServer(opts: { name: string }): void {
 }
 
 export async function checkMcpServers(): Promise<void> {
+	// Every default server is an `npx` command, and npx is on the unit's PATH, not
+	// this shell's.
+	withLocalTools();
+
 	const env = getEnvService({ baseEnv: process.env });
 	const mcpConfig = getMcpConfigService({ env });
 	const probe = getMcpProbeService();

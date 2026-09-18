@@ -144,12 +144,13 @@ async function resolveStartFrom(opts: {
 
 // A stacked plan is built on its providers' branches, merged rather than rebased
 // for the reason `syncWithRemote` gives. One already contained is skipped, so this
-// runs before every bullet at the cost of a fetch per provider.
+// runs before every bullet at the cost of a fetch per provider. A merge that fails
+// names the branch in `conflictWith`, so the backend can integrate onto it.
 export async function mergeBranches(opts: {
 	exec: ExecService;
 	worktreePath: string;
 	branches: string[];
-}): Promise<{ ok: boolean; detail: string }> {
+}): Promise<{ ok: boolean; detail: string; conflictWith?: string }> {
 	const git = (args: string[]) =>
 		opts.exec.run('git', ['-C', opts.worktreePath, ...args], { timeoutMs: 60_000 });
 	const merged: string[] = [];
@@ -170,7 +171,11 @@ export async function mergeBranches(opts: {
 		if (!result.ok) {
 			await git(['merge', '--abort']);
 
-			return { ok: false, detail: `merging ${remote} conflicts with this branch: ${result.stdout || result.reason}` };
+			return {
+				ok: false,
+				detail: `merging ${remote} conflicts with this branch: ${result.stdout || result.reason}`,
+				conflictWith: branch
+			};
 		}
 
 		merged.push(remote);

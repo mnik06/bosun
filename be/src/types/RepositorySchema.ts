@@ -36,7 +36,12 @@ export const RepositorySchema = z.object({
 	azureProjectId: z.string().nullable(),
 	azureRepoId: z.string().nullable(),
 	fullName: z.string(),
+	// The branch everything in bosun treats as the default: the override when a
+	// leader set one, else what the provider says. Plans, worktrees, pull requests
+	// and onboarding all read this one.
 	defaultBranch: z.string(),
+	providerDefaultBranch: z.string(),
+	defaultBranchOverride: z.string().nullable(),
 	configDraft: z.string().nullable(),
 	// Reported by an agent that has the clone, never looked up here: it is a fact
 	// about the default branch as that machine last fetched it.
@@ -57,6 +62,19 @@ export const RepositorySchema = z.object({
 });
 
 export type Repository = z.infer<typeof RepositorySchema>;
+
+// A branch a leader or a discovery names reaches `git` as an argument on the
+// machine. A leading dash would read as an option there; the rest is the subset
+// of `git check-ref-format` a real branch name never needs to leave.
+export const GitBranchNameSchema = z
+	.string()
+	.trim()
+	.min(1)
+	.max(200)
+	.regex(/^[A-Za-z0-9._/-]+$/, 'letters, digits, and . _ / - only')
+	.refine((name) => !name.startsWith('-') && !name.startsWith('/'), 'must not start with - or /')
+	.refine((name) => !name.endsWith('/') && !name.endsWith('.') && !name.endsWith('.lock'), 'must not end with /, . or .lock')
+	.refine((name) => !name.includes('..') && !name.includes('//'), 'must not contain .. or //');
 
 // What one connection grants, as GitHub reports it — either an installation or a
 // PAT connection. Not stored: the picker is asked fresh, so a repository removed

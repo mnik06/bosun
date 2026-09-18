@@ -262,7 +262,14 @@ export function getWorkspaceService(deps: {
 				return { ok: false, detail: configured };
 			}
 
-			await git(['-C', target, 'remote', 'set-head', 'origin', '--auto']);
+			// The branch bosun names rather than the one the remote calls its default: a
+			// leader can point bosun at another, and every session that reads
+			// `origin/HEAD` — planning, onboarding, config-on-default — has to follow.
+			const pointed = await git(['-C', target, 'remote', 'set-head', 'origin', msg.defaultBranch]);
+
+			if (!pointed.ok) {
+				await git(['-C', target, 'remote', 'set-head', 'origin', '--auto']);
+			}
 
 			// The read tree was a worktree of the checkout the machine used before. Left
 			// in place it points at another repository's objects and every planning

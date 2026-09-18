@@ -2,7 +2,8 @@
 
 An integration keeps one build's branch mergeable with what it lands on — the default branch, or its
 provider's branch while it is stacked. The backend starts one when a plan finishes building, and again
-whenever that base moves while the build is unmerged. It runs in a build slot, in the build's own
+whenever that base moves while the build is unmerged — or, while it is still building, when a bullet
+could not merge a provider's branch before it started. It runs in a build slot, in the build's own
 worktree, and at most one job runs in a worktree at a time: the backend never starts an integration
 beside a bullet, a drive or a fix session of the same build.
 
