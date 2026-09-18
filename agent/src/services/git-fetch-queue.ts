@@ -1,3 +1,4 @@
+import { sleep } from '../utils';
 import { type ExecResult, type ExecService } from './exec.service';
 
 const RACE_RETRY_MS = 1_000;
@@ -35,7 +36,7 @@ export function withSerializedFetches(exec: ExecService, opts: { retryMs?: numbe
 			return first;
 		}
 
-		await new Promise((resolve) => setTimeout(resolve, retryMs));
+		await sleep(retryMs);
 
 		return exec.run(...params);
 	};

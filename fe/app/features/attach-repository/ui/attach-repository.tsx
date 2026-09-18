@@ -9,6 +9,7 @@ import {
 	useAvailableRepositoriesQuery,
 	useAzureConnectionsQuery,
 	useGithubInstallationsQuery,
+	useGithubPatConnectionsQuery,
 	type AvailableAzureRepository,
 	type AvailableRepository
 } from '~/entities/repository'
@@ -17,10 +18,17 @@ import { useAttachRepository, type AttachRepositoryInput } from '~/features/atta
 const GITHUB_PREFIX = 'github:'
 const AZURE_PREFIX = 'azure:'
 
+// "GitHub App · {accountLogin}" / "Personal token · {githubLogin}" (AC-20).
+function connectionLabel (connection: AvailableRepository['connection']): string {
+	return connection.kind === 'app' ? `GitHub App · ${connection.accountLogin}` : `Personal token · ${connection.githubLogin}`
+}
+
 function githubOption (repository: AvailableRepository): { value: string, label: string } {
+	const name = repository.private ? `${repository.fullName} (private)` : repository.fullName
+
 	return {
 		value: `${GITHUB_PREFIX}${repository.githubRepoId}`,
-		label: repository.private ? `${repository.fullName} (private)` : repository.fullName
+		label: `${name} — ${connectionLabel(repository.connection)}`
 	}
 }
 
@@ -56,8 +64,9 @@ function inputFor (value: string): AttachRepositoryInput | null {
 
 export function AttachRepository ({ machine }: { machine: Pick<Machine, 'id' | 'status'> }) {
 	const installations = useGithubInstallationsQuery()
+	const patConnections = useGithubPatConnectionsQuery()
 	const azureConnections = useAzureConnectionsQuery()
-	const githubConnected = (installations.data ?? []).length > 0
+	const githubConnected = (installations.data ?? []).length > 0 || (patConnections.data ?? []).length > 0
 	const azureConnected = (azureConnections.data ?? []).length > 0
 	const connected = githubConnected || azureConnected
 	const available = useAvailableRepositoriesQuery({ enabled: githubConnected })
@@ -67,7 +76,7 @@ export function AttachRepository ({ machine }: { machine: Pick<Machine, 'id' | '
 	const offline = machine.status !== 'online'
 	const loading = (githubConnected && available.isFetching) || (azureConnected && availableAzure.isFetching)
 
-	if ((installations.isSuccess || azureConnections.isSuccess) && !connected) {
+	if ((installations.isSuccess || patConnections.isSuccess || azureConnections.isSuccess) && !connected) {
 		return (
 			<Anchor component={Link} to="/settings" size="sm">
 				Connect GitHub or Azure DevOps in Settings

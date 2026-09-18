@@ -3,6 +3,7 @@ export {
 	fetchAvailableRepositories,
 	fetchAzureConnections,
 	fetchGithubInstallations,
+	fetchGithubPatConnections,
 	fetchMachineOnboarding,
 	fetchRepositories,
 	fetchRepositoryConfig,
@@ -12,6 +13,7 @@ export {
 	useAvailableRepositoriesQuery,
 	useAzureConnectionsQuery,
 	useGithubInstallationsQuery,
+	useGithubPatConnectionsQuery,
 	useMachineOnboardingQuery,
 	useRepositoriesQuery,
 	useRepositoryConfigQuery,
@@ -28,6 +30,10 @@ export {
 	AzureConnectionSchema,
 	AzureConnectionStatusSchema,
 	GithubInstallationSchema,
+	GithubPatConnectionSchema,
+	GithubPatConnectionStatusSchema,
+	GithubRepositoryConnectionSchema,
+	GithubTokenTypeSchema,
 	MachineOnboardingSchema,
 	OnboardingAssumptionSchema,
 	OnboardingPhaseSchema,
@@ -42,8 +48,8 @@ export {
 	type AvailableAzureRepository,
 	type AvailableRepository,
 	type AzureConnection,
-	type AzureConnectionStatus,
 	type GithubInstallation,
+	type GithubPatConnection,
 	type MachineOnboarding,
 	type OnboardingAssumption,
 	type OnboardingPhase,
@@ -53,8 +59,7 @@ export {
 	type OnboardingStep,
 	type Repository,
 	type RepositoryConfig,
-	type RepositoryMessage,
-	type RepositoryProvider
+	type RepositoryMessage
 } from './model/repository'
 export { useRepositoryAnswer } from './model/use-repository-answer'
 export { OnboardingStatusBadge } from './ui/onboarding-status-badge'

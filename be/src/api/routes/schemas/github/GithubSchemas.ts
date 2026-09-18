@@ -1,7 +1,18 @@
 import { z } from 'zod';
+import { GithubPatConnectionSchema } from 'src/types/GithubPatSchema';
 import { AvailableRepositorySchema, GithubInstallationSchema } from 'src/types/RepositorySchema';
 
 export const InstallUrlRespSchema = z.object({ url: z.url(), authorizeUrl: z.url() });
+
+export const GithubPatConnectionIdParamsSchema = z.object({ id: z.string().min(1) });
+
+export const ConnectGithubPatConnectionReqSchema = z.object({ pat: z.string().min(1).max(4000) });
+
+export const RotateGithubPatConnectionReqSchema = z.object({ pat: z.string().min(1).max(4000) });
+
+export const GithubPatConnectionRespSchema = GithubPatConnectionSchema;
+
+export const GithubPatConnectionListRespSchema = z.array(GithubPatConnectionSchema);
 
 export const ImportInstallationsReqSchema = z.object({
 	code: z.string().min(1).max(200),

@@ -14,7 +14,7 @@ export interface StderrTail {
 // The tail of a session's stderr, kept to the last `maxChars` characters so a
 // runaway process cannot grow the string held for its eventual error message
 // without bound.
-export function createStderrTail(maxChars: number): StderrTail {
+export function createStderrTail(maxChars: number = 500): StderrTail {
 	let text = '';
 
 	return {

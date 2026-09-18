@@ -20,8 +20,9 @@ export async function publishPullRequestToGithub(
 	}
 
 	try {
+		const token = await deps.githubApp.installationToken({ installationId: installation.installationId, githubRepoId: repository.githubRepoId });
 		const opened = await deps.githubApp.openOrUpdatePullRequest({
-			installationId: installation.installationId,
+			token,
 			githubRepoId: repository.githubRepoId,
 			head: opts.branch,
 			base: opts.baseBranch,

@@ -139,6 +139,25 @@ export const azureConnections = pgTable(
 	(table) => [unique('azure_connections_project_organization_key').on(table.projectId, table.organization)]
 );
 
+// The PAT fallback for a GitHub App install a project member cannot get
+// approved. Several rows may share a `githubLogin`: a fine-grained token is
+// scoped to one organization, so the same person may hold one connection per
+// org — there is deliberately no uniqueness constraint on the pair.
+export const githubPatConnections = pgTable('github_pat_connections', {
+	id: text().primaryKey(),
+	projectId: text()
+		.notNull()
+		.references(() => projects.id, { onDelete: 'cascade' }),
+	githubLogin: text().notNull(),
+	tokenType: text().$type<'fine_grained' | 'classic'>().notNull(),
+	encryptedToken: text().notNull(),
+	status: text().$type<'active' | 'broken'>().notNull().default('active'),
+	lastError: text(),
+	brokenAt: timestamp({ withTimezone: true }),
+	createdByUserId: text().references(() => users.id, { onDelete: 'set null' }),
+	createdAt: timestamp({ withTimezone: true }).notNull().defaultNow()
+});
+
 export const repositories = pgTable(
 	'repositories',
 	{
@@ -149,6 +168,17 @@ export const repositories = pgTable(
 		provider: text().$type<'github' | 'azure_devops'>().notNull().default('github'),
 		installationId: text().references(() => githubInstallations.id, { onDelete: 'cascade' }),
 		githubRepoId: bigint({ mode: 'number' }),
+		// Mutually exclusive with `installationId` — set when this GitHub repository
+		// was attached through a personal access token connection instead of the App.
+		githubPatConnectionId: text().references(() => githubPatConnections.id, { onDelete: 'cascade' }),
+		// The per-repository webhook bosun created for a PAT-connected repository.
+		// Encrypted, not hashed: verifying `X-Hub-Signature-256` needs the plaintext
+		// back, unlike Azure's webhook secret which is only ever compared.
+		webhookSecretEncrypted: text(),
+		githubWebhookId: bigint({ mode: 'number' }),
+		// PAT-connected GitHub repositories only — null for an App-connected one
+		// (which always has a webhook) and for Azure. Mirrors `azureSyncMode`.
+		syncMode: text().$type<'webhook' | 'polling'>(),
 		azureConnectionId: text().references(() => azureConnections.id, { onDelete: 'cascade' }),
 		azureProjectId: text(),
 		// Azure's repository GUID. Stored as text: it is never arithmetic, and every
@@ -167,7 +197,9 @@ export const repositories = pgTable(
 		configOnDefault: boolean().notNull().default(false),
 		autoResolveConflicts: boolean().notNull().default(true),
 		// Azure has no equivalent of a GitHub webhook installation event to announce
-		// a first successful sync, so the UI reads this instead.
+		// a first successful sync, so the UI reads this instead — a PAT-connected
+		// GitHub repository writes it too, from the same webhook delivery or the
+		// sync job's poll. Null for an App-connected GitHub repository.
 		lastSyncedAt: timestamp({ withTimezone: true }),
 		// Azure only — null for GitHub and for an Azure repository not yet reconciled
 		// even once. Set from what attach/reconcile actually achieved with Azure

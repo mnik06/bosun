@@ -76,3 +76,55 @@ export function findDuplicate(values: string[]): string | null {
 
 	return null;
 }
+
+// A process-local Retry-After cooldown keyed by connection id, shared by every
+// provider whose rate-limit error carries its own retry hint — it does not need
+// to survive a restart, only to stop one connection's calls for the window the
+// provider itself named, without touching any other.
+export function createRateLimitCooldownGuard(opts: { retryAfterMs: (error: unknown) => number | undefined }) {
+	const rateLimitedUntil = new Map<string, number>();
+
+	return {
+		isRateLimited(connectionId: string): boolean {
+			const until = rateLimitedUntil.get(connectionId);
+
+			return until !== undefined && until > Date.now();
+		},
+
+		// Runs `run`, and if it fails with a rate-limited error, remembers the
+		// cooldown before letting the error through — the caller still sees the
+		// failure, only the next call to this connection is what gets short-circuited.
+		async run<T>(connectionId: string, run: () => Promise<T>): Promise<T> {
+			try {
+				return await run();
+			} catch (error) {
+				const retryAfterMs = opts.retryAfterMs(error);
+
+				if (retryAfterMs !== undefined) {
+					rateLimitedUntil.set(connectionId, Date.now() + retryAfterMs);
+				}
+
+				throw error;
+			}
+		}
+	};
+}
+
+// The identical diff every branch-head poller runs: every branch whose sha
+// changed since the last poll, empty when there is no previous snapshot to
+// compare against (the first poll after attach).
+export function diffBranchHeads(previous: Map<string, string> | undefined, current: Map<string, string>): { branch: string; sha: string }[] {
+	if (!previous) {
+		return [];
+	}
+
+	const changed: { branch: string; sha: string }[] = [];
+
+	for (const [branch, sha] of current) {
+		if (previous.get(branch) !== sha) {
+			changed.push({ branch, sha });
+		}
+	}
+
+	return changed;
+}

@@ -7,8 +7,6 @@ import { spawnClaudeSession, type ClaudeSession } from '../sessions/process';
 import { teardownSession } from '../sessions/teardown';
 import { createStderrTail, logDroppedFrame, pipeSessionOutput, reportStartFailure } from '../sessions/turn-support';
 
-const STDERR_KEPT_CHARS = 500;
-
 // Read plus git, and nothing else. `Bash(git *)` rather than `Bash` is the whole
 // guarantee: a session answering a question must not be able to run the project,
 // touch the database, or edit a file, and a prompt saying "do not" is not a
@@ -73,7 +71,7 @@ export function createAskSessions(opts: {
 
 		asks.set(msg.askId, ask);
 
-		const stderr = createStderrTail(STDERR_KEPT_CHARS);
+		const stderr = createStderrTail();
 		const parser = createStreamParser({
 			onEvent: (event) => {
 				if (event.kind === 'text') {

@@ -8,8 +8,6 @@ import { spawnClaudeSession, type ClaudeSession } from '../sessions/process';
 import { createStderrTail, logDroppedFrame, pipeSessionOutput, reportStartFailure } from '../sessions/turn-support';
 import { BUGFIX_MCP_TOOLS, BUGFIX_TOOL_DEFINITIONS, createBugfixDispatch } from './mcp/tools';
 
-const STDERR_KEPT_CHARS = 500;
-
 // Fixes, so it gets execution's write set rather than planning's read-only one —
 // but no `stack_up`: the person already tested the running product themselves,
 // and this session works from the worktree alone. See `prompts/bugfix.ts`.
@@ -139,7 +137,7 @@ export function createBugfixSessions(opts: { services: Services; send: (message:
 		opts.send({ type: 'bugfix.activity', sessionId: msg.sessionId, buildId: msg.buildId, label: 'Starting the session' });
 
 		const activity = createActivityTracker();
-		const stderr = createStderrTail(STDERR_KEPT_CHARS);
+		const stderr = createStderrTail();
 		const parser = createStreamParser({
 			onEvent: (event) => {
 				if (event.kind === 'text') {

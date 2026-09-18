@@ -31,11 +31,23 @@ what reaches a box is an installation token for one repository that expires with
   never offers the organization at all.
 - **The `state` names a user and a project and expires in 30 minutes.** An HMAC keyed off the client
   secret; a callback forwarded to someone else or replayed into another project is refused.
-- **Minted tokens name their repository by id and their permissions explicitly.** The machine's token
-  is `contents: write` on `repository_ids: [<one>]`. Tokens are cached in memory until five minutes
-  before expiry and never written anywhere.
+- **Minted tokens name their repository by id and their permissions explicitly.** Three shapes, each
+  as narrow as its caller allows: `metadataToken` (`metadata: read` — the attach flow's defensive
+  re-check, which only confirms a repository is still reachable), `repositoryToken` (`contents:
+  write` — a machine's git credential, which has no business calling the Pulls API), and
+  `installationToken` (`contents: write` + `pull_requests: write`, the union every other REST call in
+  this module needs — opening/editing a pull request, pointing a branch, reading or writing a file).
+  A caller resolves one of these once per repository and passes that same token into every call it
+  makes, rather than this module minting narrower per operation the way it used to. Tokens are cached
+  in memory until five minutes before expiry and never written anywhere.
 - **The credential route takes no repository argument.** It answers for the machine's own
   `repository_id`, so there is nothing a session could ask for that reaches somebody else's.
+- **This module never decides which token source a repository uses.** `installationToken` and
+  `repositoryToken` both take an `installationId` the caller already resolved — `gitProviderFor`
+  (`controllers/line/shared/git-provider-for.ts`) is what looks at a repository's own columns and
+  decides between minting here and decrypting a stored personal access token, then hands every REST
+  function in this module the same shape either way: `{ token, githubRepoId, ... }`. See
+  `github-pat.service.md` for the token this module never reads.
 
 ## Failure modes
 
@@ -45,10 +57,15 @@ what reaches a box is an installation token for one repository that expires with
 - A repository removed from the installation fails at the next mint with GitHub's 422, surfacing as
   the push failing on the machine and as the picker no longer listing it.
 
-## What was rejected
+## What was rejected — and the one exception since disclosed
 
-- **A personal token per project, stored encrypted.** Reaches every repository its owner can, and
-  would sit in the database.
+- **A personal token per project, stored encrypted, as the primary connection.** Reaches every
+  repository its owner can, and would sit in the database — rejected as the default path for exactly
+  that reason. Accepted as a disclosed **fallback**, for a project member who cannot get the App
+  installed: `github-pat.service.ts` validates and `github_pat_connections` stores the encrypted
+  token, never read by this module. `gitProviderFor` decides per repository whether a mint from here
+  or a decrypted PAT answers a call, and the connect screen names the long-lived-token risk this
+  module's own tokens never carry. See `github-pat.service.md`.
 - **Trusting `installation_id` after checking the installation's account against the project.**
   Accounts are not bosun's to vouch for; only the installing user's own authorization says they can
   reach the installation.

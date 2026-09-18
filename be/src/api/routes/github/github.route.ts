@@ -71,6 +71,9 @@ const routes: FastifyPluginAsync = async function (f) {
 		return listAvailableRepositories({
 			githubApp: fastify.services.githubApp,
 			githubInstallationRepo: fastify.repos.githubInstallationRepo,
+			githubPatConnectionRepo: fastify.repos.githubPatConnectionRepo,
+			githubPat: fastify.services.githubPat,
+			patEncryption: fastify.services.patEncryption,
 			projectId: req.membership!.projectId
 		});
 	});

@@ -1,10 +1,10 @@
-import { ActionIcon, Badge, Group, Menu } from '@mantine/core'
-import { EllipsisVertical, KeyRound } from 'lucide-react'
+import { Badge, Group } from '@mantine/core'
 import { useState } from 'react'
 
 import type { AzureConnection } from '~/entities/repository'
 import { DisconnectAzureMenuItem } from '~/features/connect-azure/ui/disconnect-azure-menu-item'
 import { RotateAzureModal } from '~/features/connect-azure/ui/rotate-azure-modal'
+import { ConnectionActionsMenu } from '~/shared/ui'
 
 export function AzureConnectionBadge ({ connection }: { connection: AzureConnection }) {
 	const [rotating, setRotating] = useState(false)
@@ -16,23 +16,11 @@ export function AzureConnectionBadge ({ connection }: { connection: AzureConnect
 				{connection.organization}
 			</Badge>
 
-			<Menu position="bottom-end" withinPortal>
-				<Menu.Target>
-					<ActionIcon variant="subtle" color="gray" size="sm" aria-label={`${connection.organization} actions`}>
-						<EllipsisVertical size={12} />
-					</ActionIcon>
-				</Menu.Target>
-
-				<Menu.Dropdown>
-					<Menu.Item leftSection={<KeyRound size={14} />} onClick={() => { setRotating(true) }}>
-						Replace token
-					</Menu.Item>
-
-					<Menu.Divider />
-
-					<DisconnectAzureMenuItem connection={connection} />
-				</Menu.Dropdown>
-			</Menu>
+			<ConnectionActionsMenu
+				ariaLabel={`${connection.organization} actions`}
+				onRotate={() => { setRotating(true) }}
+				disconnectItem={<DisconnectAzureMenuItem connection={connection} />}
+			/>
 
 			<RotateAzureModal connection={connection} opened={rotating} onClose={() => { setRotating(false) }} />
 		</Group>

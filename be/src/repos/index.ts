@@ -13,6 +13,7 @@ import { getRepositoryMessageRepo } from 'src/repos/builds/repository-message.re
 import { getSliceRunRepo } from 'src/repos/builds/slice-run.repo';
 import { getVerifyFindingRepo } from 'src/repos/builds/verify-finding.repo';
 import { getGithubInstallationRepo } from 'src/repos/github/github-installation.repo';
+import { getGithubPatConnectionRepo } from 'src/repos/github/github-pat-connection.repo';
 import { getRepositoryRepo } from 'src/repos/github/repository.repo';
 import { getMachineRepo } from 'src/repos/machines/machine.repo';
 import { getNotificationRepo } from 'src/repos/notifications/notification.repo';
@@ -39,6 +40,7 @@ export function getRepos(db: ReturnType<typeof getDb>) {
 		buildRepo: getBuildRepo(db),
 		chatAttachmentRepo: getChatAttachmentRepo(db),
 		githubInstallationRepo: getGithubInstallationRepo(db),
+		githubPatConnectionRepo: getGithubPatConnectionRepo(db),
 		integrationRepo: getIntegrationRepo(db),
 		machineRepo: getMachineRepo(db),
 		notificationRepo: getNotificationRepo(db),

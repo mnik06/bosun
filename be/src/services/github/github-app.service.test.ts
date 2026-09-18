@@ -81,31 +81,46 @@ describe('verifyWebhookSignature', () => {
 	});
 });
 
+describe('installationToken', () => {
+	// Every REST call in this module (PR writes, branch writes, file reads and
+	// writes) is made with whatever this mints, since the caller resolves it once
+	// and reuses it — so it has to carry the union every one of those needs, not
+	// just the one the next call happens to make.
+	it('mints with contents and pull-request write together', async () => {
+		let sentPermissions: Record<string, string> | undefined;
+		const fetchImpl = (async (_input: string | URL | Request, init?: RequestInit) => {
+			sentPermissions = (JSON.parse(String(init?.body)) as { permissions: Record<string, string> }).permissions;
+
+			return new Response(JSON.stringify({ token: 'minted-token', expires_at: new Date(NOW + 3_600_000).toISOString() }), { status: 201 });
+		}) as typeof fetch;
+		const github = getGithubAppService({ appId: '1', slug: 'bosun', clientId: 'client', clientSecret: 'secret', privateKey: pem, fetchImpl, now: () => NOW });
+
+		await expect(github.installationToken({ installationId: 1, githubRepoId: 7 })).resolves.toBe('minted-token');
+		expect(sentPermissions).toEqual({ contents: 'write', pull_requests: 'write' });
+	});
+});
+
 describe('openOrUpdatePullRequest', () => {
 	const UNREADABLE = { message: 'Validation Failed', errors: [{ resource: 'PullRequest', code: 'custom', message: 'not all refs are readable' }] };
-	const request = { installationId: 1, githubRepoId: 7, head: 'bosun/onboarding', base: 'main', title: 't', body: 'b' };
+	const request = { token: 'resolved-token', githubRepoId: 7, head: 'bosun/onboarding', base: 'main', title: 't', body: 'b' };
 
-	// Behaves as GitHub does: a token minted without contents access cannot resolve
-	// the branches a pull request names.
+	// The token is the caller's problem now (`installationToken` above, or a
+	// decrypted PAT) — this only proves the one handed in is what reaches GitHub,
+	// and that a refusal still carries GitHub's own reason and not only
+	// "Validation Failed".
 	function github(opts: { refuse: boolean }) {
 		const reply = (status: number, json: unknown) => new Response(JSON.stringify(json), { status });
 		const fetchImpl = (async (input: string | URL | Request, init?: RequestInit) => {
 			const url = String(input);
-
-			if (url.endsWith('/access_tokens')) {
-				const { permissions } = JSON.parse(String(init?.body)) as { permissions: Record<string, string> };
-
-				return reply(201, { token: permissions.contents ? 'reads-refs' : 'pulls-only', expires_at: new Date(NOW + 3_600_000).toISOString() });
-			}
 
 			if (url.endsWith('/repositories/7')) {
 				return reply(200, { id: 7, full_name: 'acme/app', default_branch: 'main', private: true, clone_url: 'https://github.com/acme/app.git' });
 			}
 
 			if (url.endsWith('/repos/acme/app/pulls') && init?.method === 'POST') {
-				const readsRefs = (init.headers as Record<string, string>).authorization === 'Bearer reads-refs';
+				const usedResolvedToken = (init.headers as Record<string, string>).authorization === 'Bearer resolved-token';
 
-				return opts.refuse || !readsRefs ? reply(422, UNREADABLE) : reply(201, { number: 12, html_url: 'https://github.com/acme/app/pull/12' });
+				return opts.refuse || !usedResolvedToken ? reply(422, UNREADABLE) : reply(201, { number: 12, html_url: 'https://github.com/acme/app/pull/12' });
 			}
 
 			return url.includes('/pulls?state=open') ? reply(200, []) : reply(404, { message: 'Not Found' });
@@ -114,7 +129,7 @@ describe('openOrUpdatePullRequest', () => {
 		return getGithubAppService({ appId: '1', slug: 'bosun', clientId: 'client', clientSecret: 'secret', privateKey: pem, fetchImpl, now: () => NOW });
 	}
 
-	it('opens it with a token that can read the branches it names', async () => {
+	it('opens it with the token the caller resolved', async () => {
 		await expect(github({ refuse: false }).openOrUpdatePullRequest(request)).resolves.toEqual({
 			url: 'https://github.com/acme/app/pull/12',
 			number: 12,

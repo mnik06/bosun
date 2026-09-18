@@ -14,6 +14,7 @@ import { type RepositoryMessageRepo } from 'src/repos/builds/repository-message.
 import { type SliceRunRepo } from 'src/repos/builds/slice-run.repo';
 import { type VerifyFindingRepo } from 'src/repos/builds/verify-finding.repo';
 import { type GithubInstallationRepo } from 'src/repos/github/github-installation.repo';
+import { type GithubPatConnectionRepo } from 'src/repos/github/github-pat-connection.repo';
 import { type RepositoryRepo } from 'src/repos/github/repository.repo';
 import { type MachineRepo } from 'src/repos/machines/machine.repo';
 import { type NotificationRepo } from 'src/repos/notifications/notification.repo';
@@ -34,7 +35,10 @@ import { type AzureDevOpsService } from 'src/services/azure/azure-devops.service
 import { type PatEncryptionService } from 'src/services/crypto/pat-encryption.service';
 import { type Db } from 'src/services/drizzle/drizzle.service';
 import { type GitProvider } from 'src/services/git/git-provider';
+import { type GithubBranchSnapshotService } from 'src/services/github/github-branch-snapshot.service';
 import { type GithubAppService } from 'src/services/github/github-app.service';
+import { type GithubPatConnectionGuardService } from 'src/services/github/github-pat-connection-guard.service';
+import { type GithubPatService } from 'src/services/github/github-pat.service';
 import { type IdService } from 'src/services/ids/id.service';
 import { type KeyService } from 'src/services/keys/key.service';
 import { type LineLockService } from 'src/services/line/line-lock.service';
@@ -70,6 +74,7 @@ export interface LineDeps {
 	machineRepo: MachineRepo;
 	repositoryRepo: RepositoryRepo;
 	githubInstallationRepo: GithubInstallationRepo;
+	githubPatConnectionRepo: GithubPatConnectionRepo;
 	azureConnectionRepo: AzureConnectionRepo;
 	azureWebhookSubscriptionRepo: AzureWebhookSubscriptionRepo;
 	onboardingRunRepo: OnboardingRunRepo;
@@ -80,11 +85,14 @@ export interface LineDeps {
 	quickFixRepo: QuickFixRepo;
 	idService: IdService;
 	githubApp: GithubAppService;
+	githubPat: GithubPatService;
 	azureDevOps: AzureDevOpsService;
 	patEncryption: PatEncryptionService;
 	keyService: KeyService;
 	azureConnectionGuard: AzureConnectionGuardService;
 	azureBranchSnapshot: AzureBranchSnapshotService;
+	githubPatConnectionGuard: GithubPatConnectionGuardService;
+	githubBranchSnapshot: GithubBranchSnapshotService;
 	socketRegistry: SocketRegistry;
 	webPush: WebPushService;
 	runActivity: RunActivityService;
@@ -124,6 +132,7 @@ export function lineDeps(fastify: FastifyInstance): LineDeps {
 		machineRepo: fastify.repos.machineRepo,
 		repositoryRepo: fastify.repos.repositoryRepo,
 		githubInstallationRepo: fastify.repos.githubInstallationRepo,
+		githubPatConnectionRepo: fastify.repos.githubPatConnectionRepo,
 		azureConnectionRepo: fastify.repos.azureConnectionRepo,
 		azureWebhookSubscriptionRepo: fastify.repos.azureWebhookSubscriptionRepo,
 		onboardingRunRepo: fastify.repos.onboardingRunRepo,
@@ -134,11 +143,14 @@ export function lineDeps(fastify: FastifyInstance): LineDeps {
 		quickFixRepo: fastify.repos.quickFixRepo,
 		idService: fastify.services.idService,
 		githubApp: fastify.services.githubApp,
+		githubPat: fastify.services.githubPat,
 		azureDevOps: fastify.services.azureDevOps,
 		patEncryption: fastify.services.patEncryption,
 		keyService: fastify.services.keyService,
 		azureConnectionGuard: fastify.services.azureConnectionGuard,
 		azureBranchSnapshot: fastify.services.azureBranchSnapshot,
+		githubPatConnectionGuard: fastify.services.githubPatConnectionGuard,
+		githubBranchSnapshot: fastify.services.githubBranchSnapshot,
 		socketRegistry: fastify.services.socketRegistry,
 		webPush: fastify.services.webPush,
 		runActivity: fastify.services.runActivity,

@@ -1,12 +1,17 @@
 import { type FastifyInstance } from 'fastify';
 import { HttpError } from 'src/api/errors/HttpError';
 import { runAzureConnectionCall, type AzureConnectionGuardDeps } from 'src/controllers/azure/shared/connection-guard';
+import { resolveGithubToken } from 'src/controllers/github/shared/resolve-github-token';
+import { runGithubPatConnectionCall } from 'src/controllers/github/shared/pat-connection-guard';
 import { type GithubInstallationRepo } from 'src/repos/github/github-installation.repo';
+import { type GithubPatConnectionRepo } from 'src/repos/github/github-pat-connection.repo';
 import { type AzureDevOpsService } from 'src/services/azure/azure-devops.service';
 import { type PatEncryptionService } from 'src/services/crypto/pat-encryption.service';
 import { type GitProvider } from 'src/services/git/git-provider';
 import { type GithubAppService } from 'src/services/github/github-app.service';
+import { type GithubPatConnectionGuardService } from 'src/services/github/github-pat-connection-guard.service';
 import { type AzureConnection } from 'src/types/AzureSchema';
+import { type GithubPatConnection } from 'src/types/GithubPatSchema';
 import { type Repository } from 'src/types/RepositorySchema';
 import { clip } from 'src/utils/general';
 
@@ -17,18 +22,31 @@ import { clip } from 'src/utils/general';
 // the top of the body — intact either way (AC-51).
 const AZURE_MAX_PR_BODY = 4_000;
 
-function githubProvider(opts: { githubApp: GithubAppService; installationId: number; githubRepoId: number }): GitProvider {
-	const { githubApp, installationId, githubRepoId } = opts;
+// One token, resolved once by the caller below and reused for every operation:
+// an App-connected repository's token already carries the union of permissions
+// every call here needs (`installationToken`'s own doc explains why), and a
+// PAT carries whatever its owner granted it — there is nothing left for this
+// module to mint per call. `repositoryToken` is the one exception, passed in
+// rather than derived from `token`: it is `resolveGithubToken`'s own narrower
+// mint (App) or the same PAT with a synthetic expiry (PAT), matching what a
+// machine's git credential is scoped to today.
+function githubProvider(opts: {
+	githubApp: GithubAppService;
+	githubRepoId: number;
+	token: string;
+	repositoryToken: () => Promise<{ token: string; expiresAt: Date }>;
+}): GitProvider {
+	const { githubApp, githubRepoId, token } = opts;
 
 	return {
-		getRepository: () => githubApp.getRepository({ installationId, githubRepoId }),
-		readFile: (fileOpts) => githubApp.readFile({ installationId, githubRepoId, ...fileOpts }),
-		proposeFile: (fileOpts) => githubApp.proposeFile({ installationId, githubRepoId, ...fileOpts }),
-		pointBranch: (branchOpts) => githubApp.pointBranch({ installationId, githubRepoId, ...branchOpts }),
-		openOrUpdatePullRequest: (prOpts) => githubApp.openOrUpdatePullRequest({ installationId, githubRepoId, ...prOpts }),
-		getPullRequest: (prOpts) => githubApp.getPullRequest({ installationId, githubRepoId, ...prOpts }),
-		editPullRequest: (prOpts) => githubApp.editPullRequest({ installationId, githubRepoId, ...prOpts }),
-		repositoryToken: () => githubApp.repositoryToken({ installationId, githubRepoId })
+		getRepository: () => githubApp.getRepository({ token, githubRepoId }),
+		readFile: (fileOpts) => githubApp.readFile({ token, githubRepoId, ...fileOpts }),
+		proposeFile: (fileOpts) => githubApp.proposeFile({ token, githubRepoId, ...fileOpts }),
+		pointBranch: (branchOpts) => githubApp.pointBranch({ token, githubRepoId, ...branchOpts }),
+		openOrUpdatePullRequest: (prOpts) => githubApp.openOrUpdatePullRequest({ token, githubRepoId, ...prOpts }),
+		getPullRequest: (prOpts) => githubApp.getPullRequest({ token, githubRepoId, ...prOpts }),
+		editPullRequest: (prOpts) => githubApp.editPullRequest({ token, githubRepoId, ...prOpts }),
+		repositoryToken: opts.repositoryToken
 	};
 }
 
@@ -65,9 +83,76 @@ function azureProvider(opts: { deps: GitProviderResolverDeps; connection: AzureC
 
 export interface GitProviderResolverDeps extends AzureConnectionGuardDeps {
 	githubInstallationRepo: GithubInstallationRepo;
+	githubPatConnectionRepo: GithubPatConnectionRepo;
 	githubApp: GithubAppService;
 	azureDevOps: AzureDevOpsService;
 	patEncryption: PatEncryptionService;
+	githubPatConnectionGuard: GithubPatConnectionGuardService;
+}
+
+// Every call a PAT-connected repository's `GitProvider` makes rides through
+// the same guard the sync job uses (AC-43, AC-44, AC-46, AC-70), so a break
+// noticed mid pull-request or branch operation flips the connection broken and
+// notifies the project exactly as reactively as a background poll would —
+// `repositoryToken` is excluded, the same way Azure's `azureNotBuilt` methods
+// are: it is `resolveGithubToken`'s own, already-guarded-at-the-route-level
+// path, not one this seam calls.
+function githubPatProvider(opts: { deps: GitProviderResolverDeps; connection: GithubPatConnection; base: GitProvider }): GitProvider {
+	const guarded = <T>(run: () => Promise<T>): Promise<T> => runGithubPatConnectionCall(opts.deps, opts.connection, run);
+
+	return {
+		getRepository: () => guarded(() => opts.base.getRepository()),
+		readFile: (fileOpts) => guarded(() => opts.base.readFile(fileOpts)),
+		proposeFile: (fileOpts) => guarded(() => opts.base.proposeFile(fileOpts)),
+		pointBranch: (branchOpts) => guarded(() => opts.base.pointBranch(branchOpts)),
+		openOrUpdatePullRequest: (prOpts) => guarded(() => opts.base.openOrUpdatePullRequest(prOpts)),
+		getPullRequest: (prOpts) => guarded(() => opts.base.getPullRequest(prOpts)),
+		editPullRequest: (prOpts) => guarded(() => opts.base.editPullRequest(prOpts)),
+		repositoryToken: opts.base.repositoryToken
+	};
+}
+
+async function githubProviderFor(deps: GitProviderResolverDeps, repository: Repository): Promise<GitProvider> {
+	const repositoryToken = () => resolveGithubToken(repository, deps);
+
+	if (repository.installationId !== null) {
+		const installation = await deps.githubInstallationRepo.getById(repository.installationId);
+
+		if (!installation || repository.githubRepoId === null) {
+			throw new HttpError(409, 'The GitHub installation this repository came from is no longer connected');
+		}
+
+		const githubRepoId = repository.githubRepoId;
+		const token = await deps.githubApp.installationToken({ installationId: installation.installationId, githubRepoId });
+
+		return githubProvider({ githubApp: deps.githubApp, githubRepoId, token, repositoryToken });
+	}
+
+	if (repository.githubPatConnectionId !== null) {
+		const connection = await deps.githubPatConnectionRepo.getById(repository.githubPatConnectionId);
+
+		if (!connection || repository.githubRepoId === null) {
+			throw new HttpError(409, 'The personal access token this repository came from is no longer connected');
+		}
+
+		if (connection.status === 'broken') {
+			throw new HttpError(409, "This repository's personal access token is broken — replace it in Settings before bosun can reach this repository");
+		}
+
+		const encryptedToken = await deps.githubPatConnectionRepo.getEncryptedTokenById({ id: connection.id, projectId: connection.projectId });
+
+		if (encryptedToken === null) {
+			throw new HttpError(409, 'The personal access token this repository came from is no longer connected');
+		}
+
+		const githubRepoId = repository.githubRepoId;
+		const token = deps.patEncryption.decrypt(encryptedToken);
+		const base = githubProvider({ githubApp: deps.githubApp, githubRepoId, token, repositoryToken });
+
+		return githubPatProvider({ deps, connection, base });
+	}
+
+	throw new HttpError(409, 'This repository is no longer connected to a GitHub installation or personal access token');
 }
 
 // Resolves the `GitProvider` for one already-attached repository, from
@@ -76,13 +161,7 @@ export interface GitProviderResolverDeps extends AzureConnectionGuardDeps {
 // refuses here rather than at the first call the caller happens to make.
 export async function gitProviderFor(deps: GitProviderResolverDeps, repository: Repository): Promise<GitProvider> {
 	if (repository.provider === 'github') {
-		const installation = repository.installationId === null ? null : await deps.githubInstallationRepo.getById(repository.installationId);
-
-		if (!installation || repository.githubRepoId === null) {
-			throw new HttpError(409, 'The GitHub installation this repository came from is no longer connected');
-		}
-
-		return githubProvider({ githubApp: deps.githubApp, installationId: installation.installationId, githubRepoId: repository.githubRepoId });
+		return githubProviderFor(deps, repository);
 	}
 
 	const connection = repository.azureConnectionId === null ? null : await deps.azureConnectionRepo.getById(repository.azureConnectionId);
@@ -121,11 +200,13 @@ export function bindGitProviderFor(fastify: FastifyInstance): (repository: Repos
 		gitProviderFor(
 			{
 				githubInstallationRepo: fastify.repos.githubInstallationRepo,
+				githubPatConnectionRepo: fastify.repos.githubPatConnectionRepo,
 				azureConnectionRepo: fastify.repos.azureConnectionRepo,
 				githubApp: fastify.services.githubApp,
 				azureDevOps: fastify.services.azureDevOps,
 				patEncryption: fastify.services.patEncryption,
 				azureConnectionGuard: fastify.services.azureConnectionGuard,
+				githubPatConnectionGuard: fastify.services.githubPatConnectionGuard,
 				projectMemberRepo: fastify.repos.projectMemberRepo,
 				notificationRepo: fastify.repos.notificationRepo,
 				pushSubscriptionRepo: fastify.repos.pushSubscriptionRepo,

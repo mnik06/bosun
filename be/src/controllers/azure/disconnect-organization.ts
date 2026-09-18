@@ -1,5 +1,5 @@
 import { HttpError } from 'src/api/errors/HttpError';
-import { announceMachine } from 'src/controllers/machines/shared/announce';
+import { announceMachines, listAffectedMachines } from 'src/controllers/machines/shared/announce';
 import { type AzureConnectionRepo } from 'src/repos/azure/azure-connection.repo';
 import { type AzureWebhookSubscriptionRepo } from 'src/repos/azure/azure-webhook-subscription.repo';
 import { type RepositoryRepo } from 'src/repos/github/repository.repo';
@@ -48,9 +48,7 @@ export async function disconnectAzureOrganization(opts: {
 		}
 	}
 
-	const affectedMachines = (
-		await Promise.all(repositories.map((repository) => opts.machineRepo.listByRepository(repository.id)))
-	).flat();
+	const affectedMachines = await listAffectedMachines(opts, repositories);
 
 	const deleted = await opts.azureConnectionRepo.deleteOwned({ id: connection.id, projectId: opts.projectId });
 
@@ -58,11 +56,5 @@ export async function disconnectAzureOrganization(opts: {
 		throw new HttpError(404, 'Azure DevOps connection not found');
 	}
 
-	for (const machine of affectedMachines) {
-		const refreshed = await opts.machineRepo.getById(machine.id);
-
-		if (refreshed) {
-			announceMachine({ socketRegistry: opts.socketRegistry, machine: refreshed });
-		}
-	}
+	await announceMachines(opts, affectedMachines);
 }

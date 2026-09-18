@@ -18,13 +18,20 @@ export type RepositoryProvider = z.infer<typeof RepositoryProviderSchema>;
 // `installationId`/`githubRepoId` and `azureConnectionId`/`azureProjectId`/
 // `azureRepoId` are mutually exclusive, set by `provider` — enforced by the two
 // repo-layer upserts (`upsert` for github, `upsertAzure` for azure_devops) never
-// the other side's columns, not by a database constraint.
+// the other side's columns, not by a database constraint. Within `provider ===
+// 'github'`, `installationId` and `githubPatConnectionId` are themselves mutually
+// exclusive, enforced the same way by `upsert`.
 export const RepositorySchema = z.object({
 	id: z.string(),
 	projectId: z.string(),
 	provider: RepositoryProviderSchema,
 	installationId: z.string().nullable(),
 	githubRepoId: z.number().int().nullable(),
+	githubPatConnectionId: z.string().nullable(),
+	// PAT-connected GitHub repositories only — whether bosun's webhook is healthy
+	// or it fell back to polling. Null for an App-connected repository (which
+	// always has a webhook) and for Azure. Mirrors `azureSyncMode`.
+	syncMode: z.enum(['webhook', 'polling']).nullable(),
 	azureConnectionId: z.string().nullable(),
 	azureProjectId: z.string().nullable(),
 	azureRepoId: z.string().nullable(),
@@ -42,8 +49,10 @@ export const RepositorySchema = z.object({
 	// Whether an integration may hand a real conflict to a session. Off, a conflict
 	// outside `regenerate` paths goes straight to needs you.
 	autoResolveConflicts: z.boolean(),
-	// Azure only — the UI's "last synced" line. Null for a GitHub repository and
-	// for an Azure one bosun has not yet reconciled.
+	// The UI's "last synced" line — Azure, and a PAT-connected GitHub repository,
+	// both write it (a webhook delivery or the sync job's poll). Null for an
+	// App-connected GitHub repository, which has no equivalent "last synced"
+	// moment, and for either provider before its first sync.
 	lastSyncedAt: z.date().nullable(),
 	// Azure only — whether bosun's webhook subscriptions are healthy or it fell
 	// back to polling. Null for GitHub and for an Azure repository not yet
@@ -67,14 +76,24 @@ export const GitBranchNameSchema = z
 	.refine((name) => !name.endsWith('/') && !name.endsWith('.') && !name.endsWith('.lock'), 'must not end with /, . or .lock')
 	.refine((name) => !name.includes('..') && !name.includes('//'), 'must not contain .. or //');
 
-// What an installation grants, as GitHub reports it. Not stored: the picker is
-// asked fresh, so a repository removed from the installation disappears from it.
+// What one connection grants, as GitHub reports it — either an installation or a
+// PAT connection. Not stored: the picker is asked fresh, so a repository removed
+// from the connection disappears from it.
+export const GithubRepositoryConnectionSchema = z.discriminatedUnion('kind', [
+	z.object({ kind: z.literal('app'), installationId: z.string(), accountLogin: z.string() }),
+	z.object({ kind: z.literal('pat'), connectionId: z.string(), githubLogin: z.string() })
+]);
+
+export type GithubRepositoryConnection = z.infer<typeof GithubRepositoryConnectionSchema>;
+
+// The merged picker: every repository an App installation or a PAT connection
+// grants, deduped by `githubRepoId` with the App winning (AC-22).
 export const AvailableRepositorySchema = z.object({
 	githubRepoId: z.number().int(),
 	fullName: z.string(),
 	defaultBranch: z.string(),
 	private: z.boolean(),
-	installationId: z.string()
+	connection: GithubRepositoryConnectionSchema
 });
 
 export type AvailableRepository = z.infer<typeof AvailableRepositorySchema>;

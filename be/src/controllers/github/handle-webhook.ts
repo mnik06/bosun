@@ -50,6 +50,12 @@ export async function handleGithubWebhook(deps: LineDeps, opts: { event: string 
 			await onPullRequest(deps, { repository, payload: pull.data });
 		}
 
+		// AC-42: only meaningful for a PAT-connected repository — an App-connected
+		// one has no "last synced" line to update (`lastSyncedAt`'s own doc note).
+		if (repository.githubPatConnectionId !== null) {
+			await deps.repositoryRepo.markSynced(repository.id);
+		}
+
 		await scheduleRepository(deps, { repositoryId: repository.id });
 	}
 }
