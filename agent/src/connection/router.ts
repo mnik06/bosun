@@ -272,6 +272,7 @@ export async function routeServerFrame(deps: RouterDeps, msg: ServerMsg): Promis
 			await deps.sessions.say({
 				planId: msg.planId,
 				text: msg.text,
+				attachments: msg.attachments,
 				notes: msg.notes,
 				configDraft: msg.configDraft,
 				plan: msg.plan

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ChatAttachmentSchema } from 'src/types/ChatAttachmentSchema';
 
 export const BugfixSessionStatusSchema = z.enum(['running', 'closed']);
 
@@ -48,7 +49,12 @@ export const BugfixMessageRoleSchema = z.enum(['user', 'assistant', 'system']);
 
 export type BugfixMessageRole = z.infer<typeof BugfixMessageRoleSchema>;
 
-export const BugfixMessageContentSchema = z.object({ text: z.string() });
+// `attachments` is only ever set on a person's own turn, and is optional on the
+// same terms as a plan chat's user turn.
+export const BugfixMessageContentSchema = z.object({
+	text: z.string(),
+	attachments: z.array(ChatAttachmentSchema).optional()
+});
 
 export type BugfixMessageContent = z.infer<typeof BugfixMessageContentSchema>;
 

@@ -257,7 +257,7 @@ describe('routeServerFrame', () => {
 	it('refuses to start a bug-fixing session while paused, and tells the backend why', async () => {
 		const { send, bugfix, route } = build({ paused: true });
 
-		await route({ type: 'bugfix.start', sessionId: 'bfs_1', buildId: 'bld_1', worktreePath: '/tree', branch: 'b', planNumber: 1, planTitle: 't', planBodyMd: 'body', acs: [], text: 'bug list' });
+		await route({ type: 'bugfix.start', sessionId: 'bfs_1', buildId: 'bld_1', worktreePath: '/tree', branch: 'b', planNumber: 1, planTitle: 't', planBodyMd: 'body', acs: [], text: 'bug list', attachments: [] });
 
 		expect(bugfix.start).not.toHaveBeenCalled();
 		expect(sent(send)).toEqual([
@@ -267,7 +267,7 @@ describe('routeServerFrame', () => {
 
 	it('starts a bug-fixing session when not paused', async () => {
 		const { bugfix, route } = build();
-		const msg = { type: 'bugfix.start' as const, sessionId: 'bfs_1', buildId: 'bld_1', worktreePath: '/tree', branch: 'b', planNumber: 1, planTitle: 't', planBodyMd: 'body', acs: [], text: 'bug list' };
+		const msg = { type: 'bugfix.start' as const, sessionId: 'bfs_1', buildId: 'bld_1', worktreePath: '/tree', branch: 'b', planNumber: 1, planTitle: 't', planBodyMd: 'body', acs: [], text: 'bug list', attachments: [] };
 
 		await route(msg);
 
@@ -277,10 +277,10 @@ describe('routeServerFrame', () => {
 	it('routes a say and a cancel to the bug-fixing session', async () => {
 		const { bugfix, route } = build();
 
-		await route({ type: 'bugfix.say', sessionId: 'bfs_1', buildId: 'bld_1', text: 'more bugs' });
+		await route({ type: 'bugfix.say', sessionId: 'bfs_1', buildId: 'bld_1', text: 'more bugs', attachments: [] });
 		await route({ type: 'bugfix.cancel', sessionId: 'bfs_1', buildId: 'bld_1' });
 
-		expect(bugfix.say).toHaveBeenCalledWith({ type: 'bugfix.say', sessionId: 'bfs_1', buildId: 'bld_1', text: 'more bugs' });
+		expect(bugfix.say).toHaveBeenCalledWith({ type: 'bugfix.say', sessionId: 'bfs_1', buildId: 'bld_1', text: 'more bugs', attachments: [] });
 		expect(bugfix.cancel).toHaveBeenCalledWith('bfs_1');
 	});
 

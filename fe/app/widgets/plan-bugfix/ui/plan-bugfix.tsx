@@ -55,6 +55,7 @@ export function PlanBugfix ({ detail, stream }: { detail: PlanDetail, stream: Bu
 					) : (
 						<Stack gap="lg" pr="md">
 							<BugfixTranscript
+								planId={plan.id}
 								messages={messages.data ?? []}
 								streamingText={stream.streamingText}
 								activity={stream.activity}

@@ -9,6 +9,7 @@ export { fetchLine, fetchNeedsYou, lineKeys, needsYouKeys, useLineQuery, useNeed
 export { fetchPlan, fetchPlans, planKeys, usePlanQuery, usePlansQuery } from './api/plan.queries'
 export { BOARD_COLUMNS, boardColumn, HISTORY_STATES, type BoardColumn } from './lib/board-column'
 export { bugfixBlockReason } from './lib/bugfix-block'
+export { CHAT_ATTACHMENT_LIMITS, encodeChatAttachments } from './lib/chat-attachments'
 export {
 	appendBugfixMessage,
 	appendPlanMessage,
@@ -51,6 +52,7 @@ export {
 	type PlanBug
 } from './model/bugfix'
 export { BugfixUiMsgSchema, type BugfixUiMsg } from './model/bugfix-message'
+export { ChatAttachmentSchema, type ChatAttachment } from './model/chat-attachment'
 export type { Footprint } from './model/footprint'
 export type { Line, MachineCapacity, NeedsYouItem } from './model/line'
 export {
@@ -84,6 +86,7 @@ export { PlansSocketProvider, useIntegrationActivity, useRunActivity } from './m
 export { useBugfixStream, type BugfixStream } from './model/use-bugfix-stream'
 export { usePlanStream, type PlanStream } from './model/use-plan-stream'
 export { AnsweredQuestion } from './ui/answered-question'
+export { ChatAttachments, UserChatTurn } from './ui/chat-attachments'
 export { IntegrationCard } from './ui/integration-card'
 export { PlanRowCard } from './ui/plan-row-card'
 export { PlanSearchableList } from './ui/plan-searchable-list'

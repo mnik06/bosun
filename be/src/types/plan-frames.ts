@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ChatAttachmentSchema } from 'src/types/ChatAttachmentSchema';
 import { FootprintSchema } from 'src/types/FootprintSchema';
 import { PlanAnswerSchema } from 'src/types/PlanSchema';
 
@@ -46,13 +47,17 @@ export const PlanSnapshotSchema = z.object({
 	)
 });
 
+export type PlanSnapshot = z.infer<typeof PlanSnapshotSchema>;
+
 // A line the person typed into the plan's chat. It reaches a live session as
 // another turn on its stdin; when the session is already over it starts a
-// revision session with the published plan in front of it.
+// revision session with the published plan in front of it. Attached files travel
+// by reference, on the same terms as `bugfix.start`'s.
 export const PlanSayMsgSchema = z.object({
 	type: z.literal('plan.say'),
 	planId: z.string(),
 	text: z.string(),
+	attachments: z.array(ChatAttachmentSchema).default([]),
 	notes: z.string().nullable().default(null),
 	configDraft: z.string().nullable().default(null),
 	plan: PlanSnapshotSchema

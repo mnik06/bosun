@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ChatAttachmentSchema } from './chat-attachment';
 
 // Mirrors `be/src/types/bugfix-frames.ts` and `be/src/types/bugfix-stream.ts`.
 
@@ -12,7 +13,8 @@ export const BugfixStartMsgSchema = z.object({
 	planTitle: z.string(),
 	planBodyMd: z.string(),
 	acs: z.array(z.object({ code: z.string(), text: z.string() })),
-	text: z.string()
+	text: z.string(),
+	attachments: z.array(ChatAttachmentSchema).default([])
 });
 
 export type BugfixStart = z.infer<typeof BugfixStartMsgSchema>;
@@ -21,7 +23,8 @@ export const BugfixSayMsgSchema = z.object({
 	type: z.literal('bugfix.say'),
 	sessionId: z.string(),
 	buildId: z.string(),
-	text: z.string()
+	text: z.string(),
+	attachments: z.array(ChatAttachmentSchema).default([])
 });
 
 export type BugfixSay = z.infer<typeof BugfixSayMsgSchema>;

@@ -12,6 +12,7 @@ import {
 	SliceRunSchema,
 	VerifyFindingSchema
 } from '~/entities/plan/model/build'
+import { ChatAttachmentSchema } from '~/entities/plan/model/chat-attachment'
 import { FootprintSchema } from '~/entities/plan/model/footprint'
 import { PlanAnswerSchema, PlanQuestionSchema } from '~/entities/plan/model/question'
 
@@ -106,8 +107,10 @@ const messageBase = {
 
 const TextContentSchema = z.object({ text: z.string() })
 
+const UserContentSchema = TextContentSchema.extend({ attachments: z.array(ChatAttachmentSchema).default([]) })
+
 export const PlanMessageSchema = z.discriminatedUnion('role', [
-	z.object({ ...messageBase, role: z.literal('user'), content: TextContentSchema }),
+	z.object({ ...messageBase, role: z.literal('user'), content: UserContentSchema }),
 	z.object({ ...messageBase, role: z.literal('assistant'), content: TextContentSchema }),
 	z.object({ ...messageBase, role: z.literal('activity'), content: z.object({ label: z.string() }) }),
 	z.object({

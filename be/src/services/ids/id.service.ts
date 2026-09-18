@@ -29,6 +29,7 @@ export function getIdService() {
 		createBugfixSessionId: (): string => `bfs_${nanoid(12)}`,
 		createPlanBugId: (): string => `bug_${nanoid(12)}`,
 		createBugfixMessageId: (): string => `bfm_${nanoid(12)}`,
+		createChatAttachmentId: (): string => `att_${nanoid(12)}`,
 		createQuickFixId: (): string => `qf_${nanoid(12)}`
 	};
 }

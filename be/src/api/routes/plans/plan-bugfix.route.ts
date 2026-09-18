@@ -1,7 +1,7 @@
 import { FastifyPluginAsync } from 'fastify';
 import { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { BugfixMessageListRespSchema, PlanBugListRespSchema } from 'src/api/routes/schemas/plans/BugfixRespSchemas';
-import { PlanIdParamsSchema, SayToPlanReqSchema } from 'src/api/routes/schemas/plans/PlanReqSchemas';
+import { CHAT_MESSAGE_BODY_LIMIT, PlanIdParamsSchema, SayToPlanReqSchema } from 'src/api/routes/schemas/plans/PlanReqSchemas';
 import { lineDeps } from 'src/controllers/line/line-deps';
 import { closeBugfixSession } from 'src/controllers/plans/bugfix/close-bugfix';
 import { listBugfixMessages } from 'src/controllers/plans/bugfix/list-bugfix-messages';
@@ -14,6 +14,7 @@ const routes: FastifyPluginAsync = async function (f) {
 	fastify.post(
 		'/:id/bugfix/messages',
 		{
+			bodyLimit: CHAT_MESSAGE_BODY_LIMIT,
 			schema: {
 				params: PlanIdParamsSchema,
 				body: SayToPlanReqSchema
@@ -24,7 +25,8 @@ const routes: FastifyPluginAsync = async function (f) {
 				id: req.params.id,
 				projectId: req.membership!.projectId,
 				userId: req.user!.id,
-				text: req.body.text
+				text: req.body.text,
+				attachments: req.body.attachments
 			});
 
 			return reply.status(202).send(undefined);

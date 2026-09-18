@@ -27,6 +27,11 @@ interface Entry {
 	// a later message continues it — but it is doing nothing, on the same terms
 	// `running()` excludes an idle planning session for.
 	idle: boolean;
+	// The start, then every later message, in the order they arrived — see the
+	// same field on a planning session. A say that lands while the first turn's
+	// files are still downloading waits for the process instead of being told
+	// there is none.
+	turns: Promise<void>;
 }
 
 export interface BugfixSessions {
@@ -62,6 +67,7 @@ export function createBugfixSessions(opts: { services: Services; send: (message:
 		entries.delete(sessionId);
 		entry?.process?.kill();
 		void entry?.mcp?.close();
+		services.attachments.release(sessionId);
 	};
 
 	const fail = (opts2: { sessionId: string; buildId: string; message: string }): void => {
@@ -108,19 +114,20 @@ export function createBugfixSessions(opts: { services: Services; send: (message:
 		opts.send({ type: 'bugfix.done', sessionId: opts2.sessionId, buildId: opts2.buildId });
 	};
 
-	const startProcess = async (msg: BugfixStart): Promise<void> => {
-		const entry: Entry = {
-			buildId: msg.buildId,
-			worktreePath: msg.worktreePath,
-			branch: msg.branch,
-			planTitle: msg.planTitle,
-			process: null,
-			mcp: null,
-			cancelled: false,
-			idle: false
-		};
+	const startProcess = async (msg: BugfixStart, entry: Entry): Promise<void> => {
+		if (msg.attachments.length > 0) {
+			opts.send({ type: 'bugfix.activity', sessionId: msg.sessionId, buildId: msg.buildId, label: 'Fetching the attached files' });
+		}
 
-		entries.set(msg.sessionId, entry);
+		const turn = await services.attachments.stageTurn({ key: msg.sessionId, text: msg.text, attachments: msg.attachments });
+
+		// Cancelled while the files were fetched. Spawning now would leave a
+		// `claude` running that nothing holds a handle to.
+		if (entry.cancelled) {
+			services.attachments.release(msg.sessionId);
+
+			return;
+		}
 
 		const mcp = await startSessionMcpServer({
 			sessionId: msg.sessionId,
@@ -169,8 +176,10 @@ export function createBugfixSessions(opts: { services: Services; send: (message:
 				branch: msg.branch,
 				worktreePath: msg.worktreePath,
 				acs: msg.acs,
-				text: msg.text
+				text: turn.text
 			}),
+			images: turn.images,
+			addDirs: [services.attachments.root()],
 			mcpConfigPath: mcp.configPath,
 			userServerNames: [],
 			tools: { builtin: BUGFIX_BUILTIN_TOOLS, mcp: BUGFIX_MCP_TOOLS },
@@ -202,8 +211,21 @@ export function createBugfixSessions(opts: { services: Services; send: (message:
 				return;
 			}
 
-			await reportStartFailure({
-				attempt: () => startProcess(msg),
+			const entry: Entry = {
+				buildId: msg.buildId,
+				worktreePath: msg.worktreePath,
+				branch: msg.branch,
+				planTitle: msg.planTitle,
+				process: null,
+				mcp: null,
+				cancelled: false,
+				idle: false,
+				turns: Promise.resolve()
+			};
+
+			entries.set(msg.sessionId, entry);
+			entry.turns = reportStartFailure({
+				attempt: () => startProcess(msg, entry),
 				teardown: () => {
 					teardown(msg.sessionId);
 				},
@@ -211,24 +233,43 @@ export function createBugfixSessions(opts: { services: Services; send: (message:
 					opts.send({ type: 'bugfix.error', sessionId: msg.sessionId, buildId: msg.buildId, message });
 				}
 			});
+
+			await entry.turns;
 		},
 
 		say(msg): void {
 			const entry = entries.get(msg.sessionId);
-
-			if (!entry?.process) {
+			const gone = (): void => {
 				opts.send({
 					type: 'bugfix.error',
 					sessionId: msg.sessionId,
 					buildId: msg.buildId,
 					message: 'this bug-fixing session is no longer running on this machine'
 				});
+			};
+
+			if (!entry) {
+				gone();
 
 				return;
 			}
 
 			entry.idle = false;
-			entry.process.send(msg.text);
+			entry.turns = entry.turns
+				.then(async () => {
+					const turn = await services.attachments.stageTurn({ key: msg.sessionId, text: msg.text, attachments: msg.attachments });
+
+					if (entries.get(msg.sessionId) !== entry || !entry.process) {
+						gone();
+
+						return;
+					}
+
+					entry.process.send(turn.text, turn.images);
+				})
+				.catch((error: unknown) => {
+					console.error(`[${msg.sessionId}] could not deliver a message: ${error instanceof Error ? error.message : String(error)}`);
+				});
 		},
 
 		cancel(sessionId): void {

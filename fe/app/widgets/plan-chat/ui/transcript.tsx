@@ -1,7 +1,7 @@
 import { Card, Stack, Text } from '@mantine/core'
 
-import { AnsweredQuestion, type PlanAnswer, type PlanMessage } from '~/entities/plan'
-import { ChatMessageBubble, StreamingTail } from '~/shared/ui'
+import { AnsweredQuestion, UserChatTurn, type PlanAnswer, type PlanMessage } from '~/entities/plan'
+import { StreamingTail } from '~/shared/ui'
 
 function answersByQuestion (messages: PlanMessage[]): Record<string, PlanAnswer[]> {
 	return Object.fromEntries(
@@ -12,14 +12,16 @@ function answersByQuestion (messages: PlanMessage[]): Record<string, PlanAnswer[
 }
 
 function TranscriptEntry ({
+	planId,
 	message,
 	answers
 }: {
+	planId: string
 	message: PlanMessage
 	answers: Record<string, PlanAnswer[]>
 }) {
 	if (message.role === 'user') {
-		return <ChatMessageBubble text={message.content.text} />
+		return <UserChatTurn planId={planId} text={message.content.text} attachments={message.content.attachments} />
 	}
 
 	if (message.role === 'assistant') {
@@ -46,10 +48,12 @@ function TranscriptEntry ({
 }
 
 export function Transcript ({
+	planId,
 	messages,
 	streamingText,
 	activity
 }: {
+	planId: string
 	messages: PlanMessage[]
 	streamingText: string
 	activity: string | null
@@ -59,7 +63,7 @@ export function Transcript ({
 	return (
 		<Stack gap="lg">
 			{messages.map((message) => (
-				<TranscriptEntry key={message.id} message={message} answers={answers} />
+				<TranscriptEntry key={message.id} planId={planId} message={message} answers={answers} />
 			))}
 
 			<StreamingTail streamingText={streamingText} activity={activity} />

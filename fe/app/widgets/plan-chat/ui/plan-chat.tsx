@@ -33,7 +33,7 @@ export function PlanChat ({
 		<div className="flex min-h-0 grow flex-col gap-3">
 			<ScrollArea className="min-h-0 grow" type="auto">
 				<Stack gap="lg" pr="md">
-					<Transcript messages={messages} streamingText={streamingText} activity={activity} />
+					<Transcript planId={plan.id} messages={messages} streamingText={streamingText} activity={activity} />
 
 					{plan.status === 'failed' ? (
 						<Alert color="red" title="This session ended early">

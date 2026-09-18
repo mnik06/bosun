@@ -159,7 +159,8 @@ async function rename(
 		...deps,
 		id: plan.id,
 		projectId: opts.projectId,
-		text: `#${provider.number} already creates \`${decision.item.label}\` as \`${decision.item.theirs}\`, and this plan creates it as \`${decision.item.ours}\`. Rename this plan's piece so the two no longer collide, and republish.`
+		text: `#${provider.number} already creates \`${decision.item.label}\` as \`${decision.item.theirs}\`, and this plan creates it as \`${decision.item.ours}\`. Rename this plan's piece so the two no longer collide, and republish.`,
+		attachments: []
 	});
 }
 

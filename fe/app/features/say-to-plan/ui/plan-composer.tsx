@@ -1,3 +1,4 @@
+import { CHAT_ATTACHMENT_LIMITS } from '~/entities/plan'
 import { useSayToPlan } from '~/features/say-to-plan/api/use-say-to-plan'
 import { ChatComposer } from '~/shared/ui'
 
@@ -22,12 +23,17 @@ export function PlanComposer ({
 			? 'The session is working — what you send waits and is picked up the moment its current step finishes.'
 			: null
 
+	// An answer is the words that settle an open question, and the tool call
+	// waiting on it takes nothing else — files go with a message of their own.
+	const attachments = onAnswer ? undefined : CHAT_ATTACHMENT_LIMITS
+
 	return (
 		<ChatComposer
 			placeholder={onAnswer ? 'Answer in your own words' : 'Ask for a change, or add what you forgot'}
 			sending={sending}
 			hint={hint}
-			onSend={async (text) => (onAnswer ? onAnswer(text) : say.mutateAsync(text))}
+			attachments={attachments}
+			onSend={async (message) => (onAnswer ? onAnswer(message.text) : say.mutateAsync(message))}
 		/>
 	)
 }
