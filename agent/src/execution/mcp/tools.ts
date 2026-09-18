@@ -53,7 +53,7 @@ const BLOCK_AC_DEFINITION = mcpToolDefinition({
 const MARK_IMPLEMENTED_DEFINITION = mcpToolDefinition({
 	name: 'mark_ac_implemented',
 	description:
-		'Tick one acceptance criterion as implemented, by its code. Do it the moment the code that satisfies it is written and its feedback loop is green — not in a batch at the end. This bullet cannot finish while one of the criteria it claims is unticked.',
+		'Tick one acceptance criterion as implemented, by its code. Do it the moment the code that satisfies it is written and its feedback loop is green — not in a batch at the end. This bullet cannot finish while one of the criteria it claims is unticked — a criterion only a browser can confirm is ticked here too, once its code is written; watching it is the verify pass\'s job.',
 	schema: MarkAcArgsSchema
 });
 

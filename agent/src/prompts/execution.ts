@@ -162,6 +162,12 @@ feature standing and against a database bosun prepares for it. A criterion whose
 order, what a grid renders — is not yours to confirm and not yours to fail. Implement it and leave
 the driving to verify. Deferring one is correct behaviour, not a gap you are expected to close.
 
+What you defer is the watching, never the tick. \`implemented\` means the code that produces the
+behaviour is written and the loop is green; \`verified\` is the verify pass's column, not yours. A
+criterion that can only be seen in a browser — including one that spans several bullets' work — is
+still ticked with \`mark_ac_implemented\` once the code behind it is in place. Leaving it unticked for
+verify to pick up fails this bullet.
+
 ${decisionsSection(context)}
 
 ${gitFlow(context)}
