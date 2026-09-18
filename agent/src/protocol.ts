@@ -36,6 +36,7 @@ import {
 	BugfixStartMsgSchema,
 	BugfixTextMsgSchema
 } from './bugfix-frames';
+import { ChatAttachmentSchema } from './chat-attachment';
 import { FootprintSchema } from './footprint';
 import { ProjectProfileSchema } from './project-profile';
 import { CommitOutcomeSchema } from './commit-outcome';
@@ -374,6 +375,7 @@ export const PlanSayMsgSchema = z.object({
 	type: z.literal('plan.say'),
 	planId: z.string(),
 	text: z.string(),
+	attachments: z.array(ChatAttachmentSchema).default([]),
 	notes: z.string().nullable().default(null),
 	configDraft: z.string().nullable().default(null),
 	plan: PlanSnapshotSchema

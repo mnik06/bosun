@@ -1,5 +1,5 @@
 export { AppModal } from './app-modal'
-export { ChatComposer } from './chat-composer'
+export { ChatComposer, type ChatComposerMessage } from './chat-composer'
 export { ChatMessageBubble } from './chat-message-bubble'
 export { ConnectionActionsMenu } from './connection-actions-menu'
 export { CopyableCommand } from './copyable-command'

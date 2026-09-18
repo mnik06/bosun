@@ -253,6 +253,13 @@
       "when": 1789730287207,
       "tag": "0035_known_black_cat",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1789756026008,
+      "tag": "0036_plain_nebula",
+      "breakpoints": true
     }
   ]
 }

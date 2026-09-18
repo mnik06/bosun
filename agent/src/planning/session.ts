@@ -1,5 +1,7 @@
+import { type ChatAttachment } from '../chat-attachment';
 import { type AgentConfig } from '../config/config';
 import { type AgentMsg, type PlanAnswer, type PlanQuestion, type PlanSnapshot } from '../protocol';
+import { type SessionImage } from '../services/attachments.service';
 import { resolveProjectConfig } from '../services/config-resolution';
 import { type ReadTree } from '../services/repo.service';
 import { type Services } from '../services/index';
@@ -78,6 +80,10 @@ interface Session {
 	grilled: boolean;
 	nudges: number;
 	requireGrill: boolean;
+	// Every message the person sends, in the order it arrived. Frames are routed
+	// concurrently and a turn waits on its files, so without this a line typed
+	// after a screenshot could reach the session before it.
+	turns: Promise<void>;
 }
 
 export interface PlanningSessions {
@@ -93,6 +99,7 @@ export interface PlanningSessions {
 	say(opts: {
 		planId: string;
 		text: string;
+		attachments: ChatAttachment[];
 		notes: string | null;
 		configDraft: string | null;
 		plan: PlanSnapshot;
@@ -131,6 +138,7 @@ export function createPlanningSessions(opts: {
 
 		teardownSession(sessions, planId);
 		void session?.served?.close();
+		opts.services.attachments.release(planId);
 	};
 
 	// A server that will not start costs the session one convenience, not the grill.
@@ -283,6 +291,7 @@ export function createPlanningSessions(opts: {
 	const startProcess = async (opts2: {
 		planId: string;
 		prompt: string;
+		images: SessionImage[];
 		cwd: string;
 		served: ServedTree | null;
 		published: boolean;
@@ -314,7 +323,8 @@ export function createPlanningSessions(opts: {
 			published: opts2.published,
 			grilled: false,
 			nudges: 0,
-			requireGrill: opts2.requireGrill
+			requireGrill: opts2.requireGrill,
+			turns: Promise.resolve()
 		};
 
 		sessions.set(planId, session);
@@ -350,6 +360,8 @@ export function createPlanningSessions(opts: {
 		session.process = spawnClaudeSession({
 			cwd: opts2.cwd,
 			prompt,
+			images: opts2.images,
+			addDirs: [opts.services.attachments.root()],
 			mcpConfigPath: mcp.configPath,
 			userServerNames: userMcp.serverNames,
 			tools: opts2.tools,
@@ -370,6 +382,7 @@ export function createPlanningSessions(opts: {
 					sessions.delete(planId);
 					void session.mcp.close();
 					void session.served?.close();
+					opts.services.attachments.release(planId);
 
 					return;
 				}
@@ -405,6 +418,7 @@ export function createPlanningSessions(opts: {
 		planId: string;
 		tree: ReadTree;
 		buildPrompt: (served: string | null) => string;
+		images: SessionImage[];
 		published: boolean;
 		requireGrill: boolean;
 		requireCoverage: boolean;
@@ -415,6 +429,7 @@ export function createPlanningSessions(opts: {
 		await spawnFor({
 			planId: payload.planId,
 			prompt: payload.buildPrompt(served?.url ?? null),
+			images: payload.images,
 			cwd: payload.tree.path,
 			served,
 			published: payload.published,
@@ -481,6 +496,7 @@ export function createPlanningSessions(opts: {
 						tree,
 						served
 					}),
+				images: [],
 				published: false,
 				requireGrill: !payload.auto,
 				requireCoverage: true,
@@ -500,10 +516,26 @@ export function createPlanningSessions(opts: {
 		// plan travels on the frame and a revision session starts from it.
 		async say(payload): Promise<void> {
 			const session = sessions.get(payload.planId);
+			const stage = async () =>
+				opts.services.attachments.stageTurn({ key: payload.planId, text: payload.text, attachments: payload.attachments });
 
 			if (session?.process) {
 				session.idleAt = null;
-				session.process.send(payload.text);
+				session.turns = session.turns
+					.then(async () => {
+						const turn = await stage();
+
+						// Torn down while the files were fetched: the plan was confirmed or
+						// the session failed, and neither leaves anything to deliver to.
+						if (sessions.get(payload.planId) === session) {
+							session.process?.send(turn.text, turn.images);
+						}
+					})
+					.catch((error: unknown) => {
+						console.error(`[${payload.planId}] could not deliver a message: ${error instanceof Error ? error.message : String(error)}`);
+					});
+
+				await session.turns;
 
 				return;
 			}
@@ -516,17 +548,24 @@ export function createPlanningSessions(opts: {
 
 			const { tree, notes } = read;
 
+			if (payload.attachments.length > 0) {
+				opts.send({ type: 'plan.activity', planId: payload.planId, label: 'Fetching the attached files' });
+			}
+
+			const turn = await stage();
+
 			await launchPlanning({
 				planId: payload.planId,
 				tree,
 				buildPrompt: (served) =>
 					opts.revisionPrompt({
 						plan: payload.plan,
-						request: payload.text,
+						request: turn.text,
 						notes,
 						tree,
 						served
 					}),
+				images: turn.images,
 				// A revision is handed a plan that is already written, so a turn that
 				// changes nothing is a legitimate answer rather than an empty plan.
 				published: payload.plan.bodyMd !== null,

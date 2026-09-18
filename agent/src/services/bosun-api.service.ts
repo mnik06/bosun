@@ -10,6 +10,10 @@ const EnrollRespSchema = z.object({
 
 const ErrorRespSchema = z.object({ message: z.string() });
 
+// A chat turn waits on its files, so a download that hangs is a session that
+// never hears what the person said.
+const ATTACHMENT_TIMEOUT_MS = 60_000;
+
 const GitCredentialRespSchema = z.object({ token: z.string(), expiresAt: z.string() });
 
 const PlanCriteriaRespSchema = z.array(
@@ -108,6 +112,20 @@ export function getBosunApiService(deps: { serverUrl: string; machineKey?: strin
 		// /mcp-presets stays open — nothing there depends on who is reading it.
 		async getMcpPreset(id: string): Promise<McpPreset> {
 			return McpPresetSchema.parse(await get(`/agent/mcp-presets/${encodeURIComponent(id)}`, true));
+		},
+
+		// Raw bytes, not JSON: whatever a person attached to a chat message.
+		async downloadAttachment(id: string): Promise<Buffer> {
+			const res = await fetch(`${base}/agent/attachments/${encodeURIComponent(id)}`, {
+				headers: { authorization: `Bearer ${deps.machineKey ?? ''}` },
+				signal: AbortSignal.timeout(ATTACHMENT_TIMEOUT_MS)
+			});
+
+			if (!res.ok) {
+				throw await readError(res, await res.json().catch(() => null));
+			}
+
+			return Buffer.from(await res.arrayBuffer());
 		},
 
 		async enroll(opts: { token: string; repoPath: string | null }) {

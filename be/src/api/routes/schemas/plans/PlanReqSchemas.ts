@@ -3,6 +3,7 @@ import {
 	FindingKindSchema,
 	FindingSeveritySchema
 } from 'src/types/BuildSchema';
+import { CHAT_ATTACHMENT_LIMITS } from 'src/types/ChatAttachmentSchema';
 import { FootprintSchema } from 'src/types/FootprintSchema';
 import { PlanAnswerSchema, SliceKindSchema } from 'src/types/PlanSchema';
 
@@ -18,7 +19,32 @@ export const CreatePlanReqSchema = z.object({
 
 export const UpdatePlanReqSchema = z.object({ afk: z.boolean() });
 
-export const SayToPlanReqSchema = z.object({ text: z.string().trim().min(1) });
+const ChatAttachmentUploadSchema = z.object({
+	name: z.string().trim().min(1).max(255),
+	mediaType: z.string().trim().max(255),
+	data: z.base64()
+});
+
+// Files are optional, and so is the text once a file is attached — a screenshot
+// on its own is a complete bug report. The route's body limit is what bounds the
+// total; `decodeChatAttachments` bounds each file.
+export const SayToPlanReqSchema = z
+	.object({
+		text: z.string().trim().default(''),
+		attachments: z
+			.array(ChatAttachmentUploadSchema)
+			.max(CHAT_ATTACHMENT_LIMITS.maxFiles)
+			.default([])
+	})
+	.refine((body) => body.text !== '' || body.attachments.length > 0, {
+		message: 'a message needs text or a file'
+	});
+
+// Base64 inflates by a third; the rest is room for the text and the JSON around it.
+export const CHAT_MESSAGE_BODY_LIMIT =
+	Math.ceil((CHAT_ATTACHMENT_LIMITS.maxTotalBytes * 4) / 3) + 1024 * 1024;
+
+export const PlanAttachmentParamsSchema = z.object({ id: z.string(), attachmentId: z.string() });
 
 export const AnswerPlanReqSchema = z.object({
 	questionId: z.string().min(1),
@@ -111,3 +137,5 @@ export const AgentUpdateBugStatusReqSchema = z
 		message: 'note is required when marking a bug failed',
 		path: ['note']
 	});
+
+export const AgentAttachmentIdParamsSchema = z.object({ id: z.string().min(1) });

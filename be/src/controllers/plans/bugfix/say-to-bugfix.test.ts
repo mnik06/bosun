@@ -109,6 +109,10 @@ function deps(opts: { theBuild: Build; theMachine: Machine; running: BugfixSessi
 		createdAt: new Date()
 	});
 
+	const insertMany = vi.fn().mockImplementation(async (args: { files: { id: string; name: string; mediaType: string; data: Buffer }[] }) =>
+		args.files.map((file) => ({ id: file.id, name: file.name, mediaType: file.mediaType, size: file.data.length }))
+	);
+
 	const lineDeps = {
 		planRepo: { getOwnedById: vi.fn().mockResolvedValue(PLAN) },
 		buildRepo: {
@@ -116,7 +120,11 @@ function deps(opts: { theBuild: Build; theMachine: Machine; running: BugfixSessi
 			transition,
 			listForMachine: vi.fn().mockResolvedValue([])
 		},
-		machineRepo: { getOwnedById: vi.fn().mockResolvedValue(opts.theMachine) },
+		machineRepo: {
+			getOwnedById: vi.fn().mockResolvedValue(opts.theMachine),
+			getById: vi.fn().mockResolvedValue(opts.theMachine)
+		},
+		chatAttachmentRepo: { insertMany },
 		onboardingRunRepo: { listActiveForMachine: vi.fn().mockResolvedValue([]) },
 		quickFixRepo: { listActiveForMachine: vi.fn().mockResolvedValue([]) },
 		acRepo: { listByPlan: vi.fn().mockResolvedValue([]) },
@@ -127,7 +135,7 @@ function deps(opts: { theBuild: Build; theMachine: Machine; running: BugfixSessi
 		machineMemory: getMachineMemoryService()
 	} as unknown as LineDeps;
 
-	return { lineDeps, transition, start, append };
+	return { lineDeps, transition, start, append, insertMany };
 }
 
 describe('sayToBugfix starting a session', () => {
@@ -135,7 +143,7 @@ describe('sayToBugfix starting a session', () => {
 		const theBuild = build({ status: 'in_review' });
 		const { lineDeps, transition, append } = deps({ theBuild, theMachine: machine(), running: null });
 
-		await sayToBugfix(lineDeps, { id: PLAN.id, projectId: PLAN.projectId, userId: 'u_1', text: 'it is broken' });
+		await sayToBugfix(lineDeps, { id: PLAN.id, projectId: PLAN.projectId, userId: 'u_1', text: 'it is broken', attachments: [] });
 
 		expect(transition).toHaveBeenCalledWith({ id: theBuild.id, from: ['in_review'], changes: { status: 'fixing_bugs' } });
 		expect(append).toHaveBeenCalledWith(expect.objectContaining({ buildId: theBuild.id, role: 'user', content: { text: 'it is broken' } }));
@@ -152,7 +160,7 @@ describe('sayToBugfix starting a session', () => {
 		const { lineDeps, transition } = deps({ theBuild, theMachine: machine(), running: null });
 
 		await expect(
-			sayToBugfix(lineDeps, { id: PLAN.id, projectId: PLAN.projectId, userId: 'u_1', text: 'it is broken' })
+			sayToBugfix(lineDeps, { id: PLAN.id, projectId: PLAN.projectId, userId: 'u_1', text: 'it is broken', attachments: [] })
 		).rejects.toThrow(new HttpError(409, 'this build has another job running in its worktree'));
 		expect(transition).not.toHaveBeenCalled();
 	});
@@ -162,7 +170,7 @@ describe('sayToBugfix starting a session', () => {
 		const { lineDeps, transition } = deps({ theBuild, theMachine: machine(), running: null });
 
 		await expect(
-			sayToBugfix(lineDeps, { id: PLAN.id, projectId: PLAN.projectId, userId: 'u_1', text: 'it is broken' })
+			sayToBugfix(lineDeps, { id: PLAN.id, projectId: PLAN.projectId, userId: 'u_1', text: 'it is broken', attachments: [] })
 		).rejects.toThrow(new HttpError(409, 'this plan has no pull request to fix bugs on'));
 		expect(transition).not.toHaveBeenCalled();
 	});
@@ -175,7 +183,7 @@ describe('sayToBugfix starting a session', () => {
 		const { lineDeps, transition } = deps({ theBuild, theMachine: machine(), running: null });
 
 		await expect(
-			sayToBugfix(lineDeps, { id: PLAN.id, projectId: PLAN.projectId, userId: 'u_1', text: 'it is broken' })
+			sayToBugfix(lineDeps, { id: PLAN.id, projectId: PLAN.projectId, userId: 'u_1', text: 'it is broken', attachments: [] })
 		).rejects.toThrow(new HttpError(409, message));
 		expect(transition).not.toHaveBeenCalled();
 	});
@@ -186,7 +194,7 @@ describe('sayToBugfix starting a session', () => {
 		const { lineDeps, transition } = deps({ theBuild, theMachine: machine(), running: null });
 
 		await expect(
-			sayToBugfix(lineDeps, { id: PLAN.id, projectId: PLAN.projectId, userId: 'u_1', text: 'it is broken' })
+			sayToBugfix(lineDeps, { id: PLAN.id, projectId: PLAN.projectId, userId: 'u_1', text: 'it is broken', attachments: [] })
 		).rejects.toThrow(new HttpError(409, 'this machine is offline'));
 		expect(transition).not.toHaveBeenCalled();
 	});
@@ -196,7 +204,7 @@ describe('sayToBugfix starting a session', () => {
 		const { lineDeps, transition } = deps({ theBuild, theMachine: machine({ buildCap: 0 }), running: null });
 
 		await expect(
-			sayToBugfix(lineDeps, { id: PLAN.id, projectId: PLAN.projectId, userId: 'u_1', text: 'it is broken' })
+			sayToBugfix(lineDeps, { id: PLAN.id, projectId: PLAN.projectId, userId: 'u_1', text: 'it is broken', attachments: [] })
 		).rejects.toThrow(new HttpError(409, 'this machine has no room to run a bug-fixing session right now'));
 		expect(transition).not.toHaveBeenCalled();
 	});
@@ -216,12 +224,12 @@ describe('sayToBugfix continuing a live session', () => {
 		};
 		const { lineDeps, transition, append } = deps({ theBuild, theMachine: machine(), running });
 
-		await sayToBugfix(lineDeps, { id: PLAN.id, projectId: PLAN.projectId, userId: 'u_2', text: 'also this' });
+		await sayToBugfix(lineDeps, { id: PLAN.id, projectId: PLAN.projectId, userId: 'u_2', text: 'also this', attachments: [] });
 
 		expect(transition).not.toHaveBeenCalled();
 		expect(append).toHaveBeenCalledWith(expect.objectContaining({ buildId: theBuild.id, role: 'user', content: { text: 'also this' } }));
 		expect(agentSocket.send).toHaveBeenCalledWith(
-			JSON.stringify({ type: 'bugfix.say', sessionId: 'bfs_live', buildId: theBuild.id, text: 'also this' })
+			JSON.stringify({ type: 'bugfix.say', sessionId: 'bfs_live', buildId: theBuild.id, text: 'also this', attachments: [] })
 		);
 	});
 
@@ -240,8 +248,68 @@ describe('sayToBugfix continuing a live session', () => {
 		const { lineDeps, append } = deps({ theBuild, theMachine: machine(), running });
 
 		await expect(
-			sayToBugfix(lineDeps, { id: PLAN.id, projectId: PLAN.projectId, userId: 'u_2', text: 'also this' })
+			sayToBugfix(lineDeps, { id: PLAN.id, projectId: PLAN.projectId, userId: 'u_2', text: 'also this', attachments: [] })
 		).rejects.toThrow(new HttpError(409, 'this machine is offline'));
 		expect(append).not.toHaveBeenCalled();
+	});
+});
+
+describe('sayToBugfix with attached files', () => {
+	const running: BugfixSession = {
+		id: 'bfs_live',
+		buildId: 'bld_1',
+		status: 'running',
+		endedReason: null,
+		startedByUserId: 'u_1',
+		createdAt: new Date(),
+		endedAt: null
+	};
+	const shot = { name: 'C:\\Users\\me\\shot.png', mediaType: 'image/png', data: Buffer.from('png bytes').toString('base64') };
+
+	it('stores the files under the plan and forwards them on the frame by reference', async () => {
+		const theBuild = build({ status: 'fixing_bugs' });
+		const { lineDeps, append, insertMany } = deps({ theBuild, theMachine: machine({ agentVersion: '4.0.8' }), running });
+
+		await sayToBugfix(lineDeps, { id: PLAN.id, projectId: PLAN.projectId, userId: 'u_2', text: '', attachments: [shot] });
+
+		expect(insertMany).toHaveBeenCalledWith({
+			planId: PLAN.id,
+			files: [expect.objectContaining({ name: 'shot.png', mediaType: 'image/png', data: Buffer.from('png bytes') })]
+		});
+
+		const stored = { id: expect.stringMatching(/^att_/), name: 'shot.png', mediaType: 'image/png', size: 9 };
+
+		expect(append).toHaveBeenCalledWith(expect.objectContaining({ content: { text: '', attachments: [stored] } }));
+		expect(JSON.parse(agentSocket.send.mock.calls[0]![0] as string)).toEqual({
+			type: 'bugfix.say',
+			sessionId: 'bfs_live',
+			buildId: theBuild.id,
+			text: '',
+			attachments: [stored]
+		});
+	});
+
+	it.each([['4.0.7'], [null]])('refuses files for an agent that cannot read them (%s), writing nothing', async (agentVersion) => {
+		const theBuild = build({ status: 'fixing_bugs' });
+		const { lineDeps, append, insertMany } = deps({ theBuild, theMachine: machine({ agentVersion }), running });
+
+		await expect(
+			sayToBugfix(lineDeps, { id: PLAN.id, projectId: PLAN.projectId, userId: 'u_2', text: 'see this', attachments: [shot] })
+		).rejects.toThrow(expect.objectContaining({ statusCode: 409 }));
+		expect(insertMany).not.toHaveBeenCalled();
+		expect(append).not.toHaveBeenCalled();
+		expect(agentSocket.send).not.toHaveBeenCalled();
+	});
+
+	it('refuses a file over the size limit before claiming the build', async () => {
+		const theBuild = build({ status: 'in_review' });
+		const { lineDeps, transition, insertMany } = deps({ theBuild, theMachine: machine({ agentVersion: '4.0.8' }), running: null });
+		const huge = { name: 'dump.log', mediaType: 'text/plain', data: Buffer.alloc(10 * 1024 * 1024 + 1).toString('base64') };
+
+		await expect(
+			sayToBugfix(lineDeps, { id: PLAN.id, projectId: PLAN.projectId, userId: 'u_1', text: 'logs', attachments: [huge] })
+		).rejects.toThrow(expect.objectContaining({ statusCode: 413 }));
+		expect(transition).not.toHaveBeenCalled();
+		expect(insertMany).not.toHaveBeenCalled();
 	});
 });

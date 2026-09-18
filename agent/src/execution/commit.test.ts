@@ -2,9 +2,9 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { getExecService } from '../services/exec.service';
+import { type ExecService, getExecService } from '../services/exec.service';
 import { bootstrapBareRemote, git, identify } from '../test-support/git-fixture';
-import { commitMessageFor, getCommitService, isNothingToCommit, mergeBranches } from './commit';
+import { commitMessageFor, getCommitService, isNothingToCommit, mergeBranches, pushHead } from './commit';
 
 const exec = getExecService();
 
@@ -389,5 +389,64 @@ describe('a stacked plan', () => {
 
 		expect(started.ok).toBe(true);
 		expect(fs.existsSync(path.join(worktree, 'unpushed.txt'))).toBe(true);
+	});
+});
+
+describe('pushHead', () => {
+	const branch = 'bosun/plan/1-first';
+	let root: string;
+	let worktree: string;
+	let lfsCalls: string[][];
+
+	const lfsFaked: ExecService = {
+		async run(command, args, opts) {
+			if (args.includes('lfs')) {
+				lfsCalls.push(args);
+
+				return { ok: true, stdout: '', stderr: '', reason: '' };
+			}
+
+			return exec.run(command, args, opts);
+		}
+	};
+
+	async function commitFile(file: string, content: string) {
+		fs.mkdirSync(path.dirname(path.join(worktree, file)), { recursive: true });
+		fs.writeFileSync(path.join(worktree, file), content);
+		await git(worktree, ['add', '-A']);
+		await git(worktree, ['commit', '-m', file]);
+	}
+
+	beforeEach(async () => {
+		({ root, worktree } = await bootstrapBareRemote('bosun-push-'));
+		lfsCalls = [];
+	});
+
+	afterEach(() => {
+		fs.rmSync(root, { recursive: true, force: true });
+	});
+
+	// Found on a real plan: the repository's pre-push hook ran a build that the
+	// kernel killed for memory, and git refused the push with it.
+	it('pushes past a pre-push hook that fails', async () => {
+		await commitFile('base.txt', 'base\n');
+		fs.writeFileSync(path.join(worktree, '.git', 'hooks', 'pre-push'), '#!/bin/sh\nexit 1\n', { mode: 0o755 });
+
+		const pushed = await pushHead({ exec, worktreePath: worktree, branch });
+
+		expect(pushed.ok).toBe(true);
+		expect(await git(path.join(root, 'remote.git'), ['rev-parse', branch])).toBe(await git(worktree, ['rev-parse', 'HEAD']));
+	});
+
+	it.each([
+		['a nested .gitattributes tracks files in LFS', 'assets/.gitattributes', '*.psd filter=lfs diff=lfs merge=lfs -text\n', 1],
+		['no .gitattributes mentions LFS', '.gitattributes', '*.sh text eol=lf\n', 0]
+	])('when %s, uploads LFS objects %i time(s)', async (_case, file, attributes, uploads) => {
+		await commitFile(file, attributes);
+
+		const pushed = await pushHead({ exec: lfsFaked, worktreePath: worktree, branch });
+
+		expect(pushed.ok).toBe(true);
+		expect(lfsCalls).toHaveLength(uploads);
 	});
 });

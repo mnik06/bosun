@@ -1,3 +1,4 @@
+import { getAttachmentsService } from './attachments.service';
 import { getBosunApiService } from './bosun-api.service';
 import { getClaudeAuthService } from './claude-auth.service';
 import { getEnvService } from './env.service';
@@ -38,12 +39,14 @@ export function getServices(opts: { config: AgentConfig; configPath: string; env
 	// agent runs is the one every service works in from that moment.
 	const repoPath = () => workspace.repoPath();
 	const repo = getRepoService({ exec, repoPath });
+	const bosunApi = getBosunApiService({
+		serverUrl: opts.config.serverUrl,
+		machineKey: opts.config.machineKey
+	});
 
 	return {
-		bosunApi: getBosunApiService({
-			serverUrl: opts.config.serverUrl,
-			machineKey: opts.config.machineKey
-		}),
+		attachments: getAttachmentsService({ downloadAttachment: async (id) => bosunApi.downloadAttachment(id) }),
+		bosunApi,
 		claudeAuth,
 		commit: getCommitService({ exec }),
 		env,

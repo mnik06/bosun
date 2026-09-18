@@ -1,3 +1,4 @@
+import { CHAT_ATTACHMENT_LIMITS } from '~/entities/plan'
 import { useSayToBugfix } from '~/features/say-to-bugfix/api/use-say-to-bugfix'
 import { ChatComposer } from '~/shared/ui'
 
@@ -23,11 +24,13 @@ export function BugfixComposer ({
 
 	return (
 		<ChatComposer
-			placeholder="Paste the bugs you found, or add another message"
+			placeholder="Paste the bugs you found, attach screenshots, or add another message"
 			disabled={disabled}
 			sending={say.isPending}
 			hint={hint}
-			onSend={async (text) => say.mutateAsync(text)}
+			attachments={CHAT_ATTACHMENT_LIMITS}
+			attachmentsOff={blockedReason}
+			onSend={async (message) => say.mutateAsync(message)}
 		/>
 	)
 }

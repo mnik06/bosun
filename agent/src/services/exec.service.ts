@@ -15,12 +15,18 @@ export interface ExecResult {
 // A failed check is read by someone on a box they cannot see, so what the command
 // actually said is the entire value of the check. Swallowing the exit code and
 // stderr leaves "it failed", which is indistinguishable from every other cause.
-function failureReason(error: unknown): string {
+function failureReason(error: unknown, timeoutMs: number): string {
 	const detail = error as { code?: string | number; signal?: string; stderr?: string };
 	const stderr = (detail.stderr ?? '').trim().split('\n').slice(-2).join(' ').slice(-160);
 
 	if (detail.signal === 'SIGTERM') {
-		return `timed out after ${EXEC_TIMEOUT_MS / 1000}s`;
+		return `timed out after ${timeoutMs / 1000}s`;
+	}
+
+	// Nothing here sends SIGKILL, so it is the kernel's out-of-memory killer; left
+	// alone it surfaces as "exited with null".
+	if (detail.signal === 'SIGKILL') {
+		return 'killed: the machine ran out of memory';
 	}
 
 	if (detail.code === 'ENOENT') {
@@ -37,11 +43,13 @@ export function getExecService() {
 			args: string[],
 			opts?: { cwd?: string; env?: NodeJS.ProcessEnv; timeoutMs?: number }
 		): Promise<ExecResult> {
+			const timeoutMs = opts?.timeoutMs ?? EXEC_TIMEOUT_MS;
+
 			try {
 				const { stdout, stderr } = await exec(command, args, {
 					cwd: opts?.cwd,
 					env: opts?.env,
-					timeout: opts?.timeoutMs ?? EXEC_TIMEOUT_MS
+					timeout: timeoutMs
 				});
 
 				return { ok: true, stdout: stdout.trim(), stderr: stderr.trim(), reason: '' };
@@ -55,7 +63,7 @@ export function getExecService() {
 					ok: false,
 					stdout: (detail.stdout ?? '').trim(),
 					stderr: (detail.stderr ?? '').trim(),
-					reason: failureReason(error)
+					reason: failureReason(error, timeoutMs)
 				};
 			}
 		}

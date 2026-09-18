@@ -1,11 +1,11 @@
 import { Alert, Stack, Text } from '@mantine/core'
 
-import type { BugfixMessage } from '~/entities/plan'
-import { ChatMessageBubble, StreamingTail } from '~/shared/ui'
+import { UserChatTurn, type BugfixMessage } from '~/entities/plan'
+import { StreamingTail } from '~/shared/ui'
 
-function TranscriptEntry ({ message }: { message: BugfixMessage }) {
+function TranscriptEntry ({ planId, message }: { planId: string, message: BugfixMessage }) {
 	if (message.role === 'user') {
-		return <ChatMessageBubble text={message.content.text} />
+		return <UserChatTurn planId={planId} text={message.content.text} attachments={message.content.attachments} />
 	}
 
 	// A force-end reads as an interruption, not a reply, so it never looks like
@@ -26,10 +26,12 @@ function TranscriptEntry ({ message }: { message: BugfixMessage }) {
 }
 
 export function BugfixTranscript ({
+	planId,
 	messages,
 	streamingText,
 	activity
 }: {
+	planId: string
 	messages: BugfixMessage[]
 	streamingText: string
 	activity: string | null
@@ -37,7 +39,7 @@ export function BugfixTranscript ({
 	return (
 		<Stack gap="lg">
 			{messages.map((message) => (
-				<TranscriptEntry key={message.id} message={message} />
+				<TranscriptEntry key={message.id} planId={planId} message={message} />
 			))}
 
 			<StreamingTail streamingText={streamingText} activity={activity} />

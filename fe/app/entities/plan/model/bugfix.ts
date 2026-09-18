@@ -1,5 +1,7 @@
 import { z } from 'zod'
 
+import { ChatAttachmentSchema } from '~/entities/plan/model/chat-attachment'
+
 export const PlanBugStatusSchema = z.enum(['pending', 'fixing', 'fixed', 'failed'])
 
 // Keyed by build, not by session: a later round's pasted bugs append to the
@@ -24,7 +26,7 @@ export const BugfixMessageSchema = z.object({
 	buildId: z.string(),
 	seq: z.number(),
 	role: BugfixMessageRoleSchema,
-	content: z.object({ text: z.string() }),
+	content: z.object({ text: z.string(), attachments: z.array(ChatAttachmentSchema).default([]) }),
 	createdAt: z.iso.datetime()
 })
 

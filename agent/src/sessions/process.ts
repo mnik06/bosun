@@ -7,6 +7,7 @@ import {
 	scopedCommand,
 	type SessionScope
 } from '../services/memory.service';
+import { type SessionImage } from '../services/attachments.service';
 import { killProcessGroup } from '../utils';
 
 // A person is not obliged to answer within the working day. The CLI's default
@@ -50,7 +51,7 @@ export interface ClaudeSession {
 	// Another user turn on the same session. The CLI reads stream-json from stdin
 	// until it closes, so a session stays answerable instead of ending with its
 	// first result.
-	send(text: string): void;
+	send(text: string, images?: SessionImage[]): void;
 }
 
 // How the process ended beyond its exit code. `oomKills` counts every process the
@@ -65,6 +66,7 @@ function sessionArgs(opts: {
 	mcpConfigPath: string;
 	userServerNames: string[];
 	tools: SessionTools;
+	addDirs: string[];
 }): string[] {
 	// One wildcard per user server rather than an enumerated list: the tools a
 	// third-party server exposes are its own business and change with its version.
@@ -87,13 +89,19 @@ function sessionArgs(opts: {
 		'--tools',
 		opts.tools.builtin.join(','),
 		'--allowed-tools',
-		[...(opts.tools.allowed ?? [...opts.tools.builtin, ...opts.tools.mcp]), ...userTools].join(',')
+		[...(opts.tools.allowed ?? [...opts.tools.builtin, ...opts.tools.mcp]), ...userTools].join(','),
+		...opts.addDirs.flatMap((dir) => ['--add-dir', dir])
 	];
 }
 
 export function spawnClaudeSession(opts: {
 	cwd: string;
 	prompt: string;
+	// Sent with the prompt as image blocks on the first turn.
+	images?: SessionImage[];
+	// Outside `cwd` and still readable without a prompt — which, under
+	// `--permission-prompts none`, would be a refusal.
+	addDirs?: string[];
 	mcpConfigPath: string;
 	userServerNames: string[];
 	tools: SessionTools;
@@ -113,7 +121,8 @@ export function spawnClaudeSession(opts: {
 	const args = sessionArgs({
 		mcpConfigPath: opts.mcpConfigPath,
 		userServerNames: opts.userServerNames,
-		tools: opts.tools
+		tools: opts.tools,
+		addDirs: opts.addDirs ?? []
 	});
 	const command = opts.scope
 		? scopedCommand({ scope: opts.scope, command: 'claude', args })
@@ -200,21 +209,24 @@ export function spawnClaudeSession(opts: {
 		opts.onExit(code, { signal, oomKills });
 	});
 
-	const write = (text: string): void => {
+	const write = (text: string, images: SessionImage[] = []): void => {
 		if (child.stdin.writable) {
-			child.stdin.write(
-				`${JSON.stringify({
-					type: 'user',
-					message: { role: 'user', content: [{ type: 'text', text }] }
-				})}\n`
-			);
+			const content = [
+				{ type: 'text', text },
+				...images.map((image) => ({
+					type: 'image',
+					source: { type: 'base64', media_type: image.mediaType, data: image.data }
+				}))
+			];
+
+			child.stdin.write(`${JSON.stringify({ type: 'user', message: { role: 'user', content } })}\n`);
 		}
 	};
 
 	// The prompt travels on stdin rather than argv: argv is world-readable through
 	// /proc/<pid>/cmdline, and the pasted ticket is the user's own material. stdin
 	// is deliberately left open — closing it ends the session after one turn.
-	write(opts.prompt);
+	write(opts.prompt, opts.images);
 
 	const signalGroup = (signal: NodeJS.Signals): void => killProcessGroup(child, signal);
 

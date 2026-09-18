@@ -1,6 +1,7 @@
 import { FastifyPluginAsync } from 'fastify';
 import { ZodTypeProvider } from 'fastify-type-provider-zod';
 import {
+	CHAT_MESSAGE_BODY_LIMIT,
 	PlanIdParamsSchema,
 	SayToPlanReqSchema
 } from 'src/api/routes/schemas/plans/PlanReqSchemas';
@@ -15,6 +16,7 @@ const routes: FastifyPluginAsync = async function (f) {
 	fastify.post(
 		'/:id/messages',
 		{
+			bodyLimit: CHAT_MESSAGE_BODY_LIMIT,
 			schema: {
 				params: PlanIdParamsSchema,
 				body: SayToPlanReqSchema
@@ -25,6 +27,7 @@ const routes: FastifyPluginAsync = async function (f) {
 				planRepo: fastify.repos.planRepo,
 				planMessageRepo: fastify.repos.planMessageRepo,
 				acRepo: fastify.repos.acRepo,
+				chatAttachmentRepo: fastify.repos.chatAttachmentRepo,
 				sliceRepo: fastify.repos.sliceRepo,
 				machineRepo: fastify.repos.machineRepo,
 				repositoryRepo: fastify.repos.repositoryRepo,
@@ -32,7 +35,8 @@ const routes: FastifyPluginAsync = async function (f) {
 				socketRegistry: fastify.services.socketRegistry,
 				id: req.params.id,
 				projectId: req.membership!.projectId,
-				text: req.body.text
+				text: req.body.text,
+				attachments: req.body.attachments
 			});
 
 			return reply.status(202).send(undefined);

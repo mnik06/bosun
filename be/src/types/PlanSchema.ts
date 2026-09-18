@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ChatAttachmentSchema } from 'src/types/ChatAttachmentSchema';
 import { FootprintSchema } from 'src/types/FootprintSchema';
 import { PlanSummarySchema } from 'src/types/PlanSummarySchema';
 
@@ -55,8 +56,14 @@ const messageBase = {
 
 const TextContentSchema = z.object({ text: z.string() });
 
+// Optional rather than defaulted: every other writer of a user turn — and every
+// row written before files could be attached — carries text alone.
+const UserContentSchema = TextContentSchema.extend({
+	attachments: z.array(ChatAttachmentSchema).optional()
+});
+
 export const PlanMessageSchema = z.discriminatedUnion('role', [
-	z.object({ ...messageBase, role: z.literal('user'), content: TextContentSchema }),
+	z.object({ ...messageBase, role: z.literal('user'), content: UserContentSchema }),
 	z.object({ ...messageBase, role: z.literal('assistant'), content: TextContentSchema }),
 	z.object({
 		...messageBase,

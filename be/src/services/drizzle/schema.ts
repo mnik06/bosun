@@ -1,6 +1,7 @@
 import {
 	bigint,
 	boolean,
+	customType,
 	index,
 	integer,
 	jsonb,
@@ -381,6 +382,30 @@ export const planMessages = pgTable(
 	// the stream and by answers, so a duplicate sequence number is a reordered
 	// transcript rather than a harmless collision.
 	(table) => [unique('plan_messages_plan_seq_key').on(table.planId, table.seq)]
+);
+
+// Not in drizzle's pg-core yet. postgres-js hands `bytea` back as a Buffer and
+// takes one on insert, so no conversion is needed either way.
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({ dataType: () => 'bytea' });
+
+// Files a person attached to a turn in a plan's chat or its bug-fixing chat.
+// Keyed by plan rather than by message or build: both transcripts belong to the
+// plan, and a message references its files from its own `content`. The bytes sit
+// apart from that jsonb so reading a transcript never reads a screenshot.
+export const chatAttachments = pgTable(
+	'chat_attachments',
+	{
+		id: text().primaryKey(),
+		planId: text()
+			.notNull()
+			.references(() => plans.id, { onDelete: 'cascade' }),
+		name: text().notNull(),
+		mediaType: text().notNull(),
+		size: integer().notNull(),
+		data: bytea().notNull(),
+		createdAt: timestamp({ withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [index('chat_attachments_plan_id_idx').on(table.planId)]
 );
 
 export const slices = pgTable(

@@ -20,6 +20,7 @@ import { getNotificationRepo } from 'src/repos/notifications/notification.repo';
 import { getPushSubscriptionRepo } from 'src/repos/notifications/push-subscription.repo';
 import { getOnboardingRunRepo } from 'src/repos/onboarding/onboarding-run.repo';
 import { getAcRepo } from 'src/repos/plans/ac.repo';
+import { getChatAttachmentRepo } from 'src/repos/plans/chat-attachment.repo';
 import { getPlanDecisionRepo } from 'src/repos/plans/plan-decision.repo';
 import { getPlanMessageRepo } from 'src/repos/plans/plan-message.repo';
 import { getPlanRepo } from 'src/repos/plans/plan.repo';
@@ -37,6 +38,7 @@ export function getRepos(db: ReturnType<typeof getDb>) {
 		bugfixMessageRepo: getBugfixMessageRepo(db),
 		bugfixSessionRepo: getBugfixSessionRepo(db),
 		buildRepo: getBuildRepo(db),
+		chatAttachmentRepo: getChatAttachmentRepo(db),
 		githubInstallationRepo: getGithubInstallationRepo(db),
 		githubPatConnectionRepo: getGithubPatConnectionRepo(db),
 		integrationRepo: getIntegrationRepo(db),
