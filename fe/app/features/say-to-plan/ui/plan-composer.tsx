@@ -33,6 +33,7 @@ export function PlanComposer ({
 			sending={sending}
 			hint={hint}
 			attachments={attachments}
+			attachmentsOff={onAnswer ? 'Answer the open question first — files can go in the message after it.' : null}
 			onSend={async (message) => (onAnswer ? onAnswer(message.text) : say.mutateAsync(message))}
 		/>
 	)

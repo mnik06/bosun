@@ -1,8 +1,9 @@
-import { ActionIcon, FileButton, Group, Stack, Text, Textarea } from '@mantine/core'
+import { ActionIcon, FileButton, Group, Overlay, Stack, Text, Textarea } from '@mantine/core'
+import { notifications } from '@mantine/notifications'
 import { Paperclip, SendHorizontal } from 'lucide-react'
-import { useRef, useState, type ClipboardEvent, type DragEvent } from 'react'
+import { useRef, useState } from 'react'
 
-import { usePendingFiles } from '~/shared/hooks'
+import { usePendingFiles, useWindowFileIntake } from '~/shared/hooks'
 import { submitOnEnter, type FileLimits } from '~/shared/lib'
 
 import { PendingFilePills } from './pending-file-pills'
@@ -12,20 +13,54 @@ export interface ChatComposerMessage {
 	files: File[]
 }
 
-export function ChatComposer ({ placeholder, disabled = false, sending, hint, attachments, onSend }: {
+function DropOverlay ({ message }: { message: string }) {
+	return (
+		<Overlay fixed center blur={2} backgroundOpacity={0.35} zIndex={400} className="pointer-events-none">
+			<Text size="lg" fw={600} c="white">
+				{message}
+			</Text>
+		</Overlay>
+	)
+}
+
+export function ChatComposer ({
+	placeholder,
+	disabled = false,
+	sending,
+	hint,
+	attachments,
+	attachmentsOff,
+	onSend
+}: {
 	placeholder: string
 	disabled?: boolean
 	sending: boolean
 	hint?: string | null
-	// Given when the message may carry files. Without it the composer takes text
-	// only — the paperclip is hidden and a paste or drop of files does nothing.
+	// Given when the message may carry files: picked with the paperclip, pasted
+	// anywhere on the page, or dropped anywhere on it. Without it the composer
+	// takes text only.
 	attachments?: FileLimits | undefined
+	// Why files cannot go with this message right now, told to whoever pastes or
+	// drops one anyway rather than letting it vanish.
+	attachmentsOff?: string | null
 	onSend: (message: ChatComposerMessage) => Promise<unknown>
 }) {
 	const [text, setText] = useState('')
-	const pending = usePendingFiles(disabled ? undefined : attachments)
+	const limits = disabled ? undefined : attachments
+	const pending = usePendingFiles(limits)
 	const resetPicker = useRef<() => void>(null)
 	const empty = text.trim() === '' && pending.files.length === 0
+	const offReason = attachmentsOff ?? 'This message cannot carry files.'
+
+	const dragging = useWindowFileIntake((files) => {
+		if (limits) {
+			pending.add(files)
+
+			return
+		}
+
+		notifications.show({ color: 'yellow', title: 'Files not attached', message: offReason })
+	})
 
 	const send = () => {
 		if (empty || sending || disabled) {
@@ -43,47 +78,24 @@ export function ChatComposer ({ placeholder, disabled = false, sending, hint, at
 			})
 	}
 
-	const onPaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
-		const files = Array.from(event.clipboardData.files)
-
-		if (files.length > 0 && attachments) {
-			event.preventDefault()
-			pending.add(files)
-		}
-	}
-
-	const onDrop = (event: DragEvent<HTMLDivElement>) => {
-		if (attachments && event.dataTransfer.files.length > 0) {
-			event.preventDefault()
-			pending.add(Array.from(event.dataTransfer.files))
-		}
-	}
-
 	return (
-		<Stack
-			gap={4}
-			onDragOver={(event) => {
-				if (attachments) {
-					event.preventDefault()
-				}
-			}}
-			onDrop={onDrop}
-		>
+		<Stack gap={4}>
+			{dragging ? <DropOverlay message={limits ? 'Drop to attach' : offReason} /> : null}
+
 			{pending.files.length === 0 ? null : <PendingFilePills files={pending.files} onRemove={pending.remove} />}
 
 			<Group gap="xs" align="end" wrap="nowrap">
-				{attachments ? (
+				{limits ? (
 					<FileButton
 						multiple
 						resetRef={resetPicker}
-						disabled={disabled}
 						onChange={(files) => {
 							pending.add(files)
 							resetPicker.current?.()
 						}}
 					>
 						{(props) => (
-							<ActionIcon {...props} size="lg" variant="subtle" aria-label="Attach files" disabled={disabled}>
+							<ActionIcon {...props} size="lg" variant="subtle" aria-label="Attach files">
 								<Paperclip size={16} />
 							</ActionIcon>
 						)}
@@ -102,7 +114,6 @@ export function ChatComposer ({ placeholder, disabled = false, sending, hint, at
 						setText(event.currentTarget.value)
 					}}
 					onKeyDown={submitOnEnter(send)}
-					onPaste={onPaste}
 				/>
 
 				<ActionIcon

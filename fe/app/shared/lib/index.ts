@@ -1,5 +1,6 @@
 export { admitFiles, type FileLimits } from './admit-files'
 export { base64ToBytes, bytesToBase64 } from './base64'
+export { clipboardFiles } from './clipboard-files'
 export { confirmAction } from './confirm-action'
 export { formatFileSize, formatGib } from './format-bytes'
 export { formatRelativeTime } from './format-relative-time'

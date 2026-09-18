@@ -29,6 +29,7 @@ export function BugfixComposer ({
 			sending={say.isPending}
 			hint={hint}
 			attachments={CHAT_ATTACHMENT_LIMITS}
+			attachmentsOff={blockedReason}
 			onSend={async (message) => say.mutateAsync(message)}
 		/>
 	)
