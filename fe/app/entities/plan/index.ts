@@ -51,7 +51,7 @@ export {
 	type PlanBug
 } from './model/bugfix'
 export { BugfixUiMsgSchema, type BugfixUiMsg } from './model/bugfix-message'
-export type { ConsumedPiece, ContractChange, Footprint, ModuleChange, SchemaChange } from './model/footprint'
+export type { Footprint } from './model/footprint'
 export type { Line, MachineCapacity, NeedsYouItem } from './model/line'
 export {
 	AcSchema,
