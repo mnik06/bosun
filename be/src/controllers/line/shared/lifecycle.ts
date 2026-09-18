@@ -3,6 +3,7 @@ import { announceBuild, announcePlanChanged } from 'src/controllers/line/shared/
 import { recheckDependencyRelease } from 'src/controllers/line/shared/dependency-release';
 import {
 	BUILD_SLOT_STATUSES,
+	hasBulletLeft,
 	hasRunningJob,
 	LANE_STATUSES,
 	nextJob,
@@ -111,6 +112,21 @@ export async function settleBuild(deps: LineDeps, opts: { buildId: string }): Pr
 		return build;
 	}
 
+	// Bullets still to run, behind an integration a bullet's provider merge sent the
+	// build to: it keeps its slot through that integration, and goes straight back
+	// to building after it rather than into the line.
+	if (build.builtAt === null && hasBulletLeft(runs) && (build.status === 'building' || build.status === 'integrating')) {
+		if (build.status === 'building') {
+			return build;
+		}
+
+		const resumed = (await deps.buildRepo.update({ id: build.id, status: 'building' })) ?? build;
+
+		await announce(deps, { build: resumed, plan });
+
+		return resumed;
+	}
+
 	// The verify slice's drive is pending from approval, so "no bullet left" is the
 	// test for a finished build, not "nothing left".
 	if (build.status === 'building' && build.builtAt === null) {
@@ -164,17 +180,7 @@ export async function stopRunningJobs(deps: LineDeps, opts: { build: Build; bugf
 			deps.socketRegistry.sendToAgent({ machineId: opts.build.machineId, message: { type: 'exec.cancel', runId: run.id } });
 		}
 
-		deps.runActivity.forget(run.id);
-		await deps.sliceRunRepo.update({
-			id: run.id,
-			status: 'pending',
-			failureReason: null,
-			questionId: null,
-			question: null,
-			questionAskedAt: null,
-			startedAt: null,
-			finishedAt: null
-		});
+		await putRunBack(deps, { runId: run.id });
 	}
 
 	for (const integration of integrations.filter((entry) => entry.status === 'running')) {
@@ -184,6 +190,21 @@ export async function stopRunningJobs(deps: LineDeps, opts: { build: Build; bugf
 	}
 
 	await deps.integrationRepo.resetForBuild({ buildId: opts.build.id, from: ['running'] });
+}
+
+// A question goes with the session that asked it.
+export async function putRunBack(deps: LineDeps, opts: { runId: string }): Promise<void> {
+	deps.runActivity.forget(opts.runId);
+	await deps.sliceRunRepo.update({
+		id: opts.runId,
+		status: 'pending',
+		failureReason: null,
+		questionId: null,
+		question: null,
+		questionAskedAt: null,
+		startedAt: null,
+		finishedAt: null
+	});
 }
 
 export function removeWorktree(deps: LineDeps, opts: { build: Build }): void {

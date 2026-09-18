@@ -2,8 +2,10 @@ import { type LineDeps } from 'src/controllers/line/line-deps';
 import { scheduleRepository } from 'src/controllers/line/schedule';
 import { bulletGateFailure, driveGateFailure, fixGateFailure } from 'src/controllers/line/shared/ac-gate';
 import { announceBuild, announceNeedsYou, announcePlanChanged } from 'src/controllers/line/shared/announce';
+import { providerBranches } from 'src/controllers/line/shared/dependencies';
 import { recheckDependencyRelease } from 'src/controllers/line/shared/dependency-release';
-import { settleBuild } from 'src/controllers/line/shared/lifecycle';
+import { putRunBack, queueIntegration, settleBuild } from 'src/controllers/line/shared/lifecycle';
+import { loadProviderStates } from 'src/controllers/line/shared/line-snapshot';
 import { notifyDependents } from 'src/controllers/line/shared/merge';
 import { notifyBuildStatus } from 'src/controllers/line/shared/notify';
 import { type Build, type SliceRun } from 'src/types/BuildSchema';
@@ -60,6 +62,34 @@ async function failRun(deps: LineDeps, opts: { located: Located; message: string
 	}
 
 	await scheduleRepository(deps, { repositoryId: build.repositoryId });
+}
+
+// A bullet's provider moved in a way that will not merge into this branch — a
+// migration generated again under a new number, a file both sides changed. The
+// bullet never started, so nothing of it failed: its run goes back, and an
+// integration onto that provider — generated files taken from it and made again, a
+// real conflict to a session of its own — runs first, in the slot the build holds.
+// Only a branch the build actually stacks on is taken as `onto`: the name comes
+// from the agent, and the integration is sent back to it.
+async function integrateBeforeBullet(deps: LineDeps, opts: { located: Located; onto: string }): Promise<boolean> {
+	const { run, build, plan } = opts.located;
+
+	if (run.phase !== null || build.status !== 'building') {
+		return false;
+	}
+
+	const dependencies = await deps.planDependencyRepo.listForPlans([plan.id]);
+	const providers = await loadProviderStates(deps, { planIds: [...new Set(dependencies.map((dependency) => dependency.providerPlanId))] });
+
+	if (!providerBranches({ dependencies, providers }).includes(opts.onto)) {
+		return false;
+	}
+
+	await putRunBack(deps, { runId: run.id });
+	await queueIntegration(deps, { build, plan, trigger: 'provider_moved', onto: opts.onto });
+	await scheduleRepository(deps, { repositoryId: build.repositoryId });
+
+	return true;
 }
 
 async function gateFor(deps: LineDeps, located: Located): Promise<string | null> {
@@ -233,6 +263,10 @@ export async function recordExecFrame(deps: LineDeps, opts: { machineId: string;
 
 		return;
 	case 'exec.error':
+		if (frame.conflictWith !== undefined && (await integrateBeforeBullet(deps, { located, onto: frame.conflictWith }))) {
+			return;
+		}
+
 		await failRun(deps, { located, message: frame.message });
 	}
 }

@@ -29,6 +29,17 @@ const STDERR_KEPT_CHARS = 500;
 const REPORT_KEPT_CHARS = 4_000;
 const TAIL_KEPT_CHARS = 1_500;
 
+// A provider branch that would not merge before the bullet started. Reported as
+// `conflictWith` rather than as a plain failure: the bullet did nothing wrong.
+class ProviderConflict extends Error {
+	constructor(
+		message: string,
+		readonly branch: string
+	) {
+		super(message);
+	}
+}
+
 // Execution writes. Planning's set is deliberately not reused here: the whole
 // difference between the two halves of the product is that one may change the
 // repository and the other may not.
@@ -282,7 +293,8 @@ export function createExecutionSessions(opts: {
 
 	// Named, synced with its own remote, and — for a stacked plan — merged with
 	// whatever its providers gained since it started. A conflict there is not
-	// something a session should be handed half-merged.
+	// something a session should be handed half-merged: the provider is named, and
+	// the backend integrates onto it before the bullet runs again.
 	const prepareBranch = async (msg: ExecStart): Promise<void> => {
 		const cleaned = await opts.services.commit.cleanTree({
 			worktreePath: msg.worktreePath,
@@ -300,7 +312,7 @@ export function createExecutionSessions(opts: {
 		const merged = await mergeBranches({ exec: opts.services.exec, worktreePath: msg.worktreePath, branches: msg.mergeIn });
 
 		if (!merged.ok) {
-			throw new Error(merged.detail);
+			throw merged.conflictWith === undefined ? new Error(merged.detail) : new ProviderConflict(merged.detail, merged.conflictWith);
 		}
 	};
 
@@ -596,8 +608,13 @@ export function createExecutionSessions(opts: {
 				teardown: () => {
 					teardown(msg.runId);
 				},
-				send: (message) => {
-					opts.send({ type: 'exec.error', runId: msg.runId, message });
+				send: (message, error) => {
+					opts.send({
+						type: 'exec.error',
+						runId: msg.runId,
+						message,
+						...(error instanceof ProviderConflict ? { conflictWith: error.branch } : {})
+					});
 				}
 			});
 		},

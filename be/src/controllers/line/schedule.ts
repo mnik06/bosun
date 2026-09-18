@@ -12,6 +12,7 @@ import { admit, holderBlocksLane, jobBytes, usableBytes, type JobClass, type Mac
 import { notifyBuildStatus } from 'src/controllers/line/shared/notify';
 import {
 	BUILD_SLOT_STATUSES,
+	hasBulletLeft,
 	hasRunningJob,
 	LANE_STATUSES,
 	nextJob,
@@ -119,7 +120,7 @@ async function continueHolder(pass: Pass, state: BuildState): Promise<boolean> {
 
 	// The last build bullet landed: the build keeps its slot into the integration
 	// that has to come before verify.
-	if (state.build.status === 'building' && state.build.builtAt === null && job?.kind !== 'bullet') {
+	if (state.build.status === 'building' && state.build.builtAt === null && !hasBulletLeft(state.runs)) {
 		await completeBuilding(pass.deps, state);
 
 		return true;

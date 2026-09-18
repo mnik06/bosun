@@ -7,18 +7,22 @@ import { notifyBuildStatus } from 'src/controllers/line/shared/notify';
 import { UNMERGED_BUILT_STATUSES, type Build } from 'src/types/BuildSchema';
 import { type Repository } from 'src/types/RepositorySchema';
 
+// `failed` too: a failed dependent is retried later, and one left stacked on a
+// merged provider's branch builds on it, integrates onto it and opens its pull
+// request against it.
 async function dependentBuilds(deps: LineDeps, build: Build): Promise<Build[]> {
 	const dependencies = await deps.planDependencyRepo.listByProviders([build.planId]);
 
 	return deps.buildRepo.listByPlans({
 		planIds: [...new Set(dependencies.map((dependency) => dependency.planId))],
-		statuses: [...UNMERGED_BUILT_STATUSES, 'scheduled', 'held', 'building', 'waiting_answer', 'needs_you']
+		statuses: [...UNMERGED_BUILT_STATUSES, 'scheduled', 'held', 'building', 'waiting_answer', 'needs_you', 'failed']
 	});
 }
 
 // A provider's branch moved — a bullet pushed, an integration pushed. Every plan
 // stacked on it that is past building integrates onto it again; one still building
-// merges it before its next bullet on its own.
+// merges it before its next bullet on its own, and integrates onto it only when that
+// merge conflicts (`integrateBeforeBullet`).
 export async function notifyDependents(deps: LineDeps, opts: { build: Build }): Promise<void> {
 	if (opts.build.branch === null) {
 		return;

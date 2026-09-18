@@ -85,14 +85,25 @@ unmerged provider; the provider's branch **at the satisfying commit** with one �
 provider merged in with several. Every bullet merges its providers' branches first. Branches are
 pushed after every bullet, which is what lets a dependent start on another machine.
 
+A provider that will not merge there is not the bullet's failure. A provider integrating the default
+branch generates its migrations again under new numbers, and a dependent that generated its own
+migration on the old ones conflicts with it on every file under `drizzle-out/meta`. The agent names
+the branch (`exec.error.conflictWith`), the run goes back to pending, and a `provider_moved`
+integration onto that branch runs first in the slot the build holds — generated files taken and made
+again, a real conflict to a session — after which the build goes straight back to `building`
+(`integrateBeforeBullet`). While bullets are left, a pending integration does not mean building is
+over (`hasBulletLeft`).
+
 `build.base_branch` is the pull request's base and every integration's `onto`. When a provider
 merges, `markMerged` retargets its stacked dependents to the default branch and queues a `retarget`
-integration.
+integration. A `failed` dependent is retargeted too: retried later on the merged provider's branch, it
+would integrate onto it and open its pull request against it.
 
 ## Integration
 
 Triggers: the last bullet (`built`), a push to the default branch (`base_moved`), a push to a
-provider's branch (`provider_moved`), a provider merging (`retarget`). One pending integration per
+provider's branch or a bullet that could not merge it (`provider_moved`), a provider merging
+(`retarget`). One pending integration per
 build — a push and its webhook are one integration. Webhooks are the fast path; the five-minute
 reconcile (`github/reconcile-pull-requests.ts`) is what catches a missed merge, because a missed
 merge leaves every dependent waiting forever.

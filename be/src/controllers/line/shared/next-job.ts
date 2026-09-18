@@ -42,6 +42,13 @@ export function nextJob(opts: { runs: SliceRun[]; integrations: Integration[] })
 	return run.phase === 'fix' ? { kind: 'fix', run } : { kind: 'lane', run };
 }
 
+// Whether a build bullet is still to run. The test for a finished build: a pending
+// integration can come before the next bullet — a provider that moved in a way the
+// bullet could not merge — and says nothing about whether building is over.
+export function hasBulletLeft(runs: SliceRun[]): boolean {
+	return runs.some((entry) => entry.phase === null && entry.status === 'pending');
+}
+
 export function hasRunningJob(opts: { runs: SliceRun[]; integrations: Integration[] }): boolean {
 	return (
 		opts.runs.some((entry) => entry.status === 'running') ||
