@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { networkGitEnv } from '../execution/commit';
 import { type ExecService } from '../services/exec.service';
 
 const GIT_TIMEOUT_MS = 60_000;
@@ -35,7 +36,7 @@ export function planNumbersIn(subjects: string): number[] {
 // started from, which is the only state a failed integration may leave behind.
 export function getIntegrationGit(deps: { exec: ExecService; worktreePath: string }) {
 	const git: Git = async (args, timeoutMs = GIT_TIMEOUT_MS) =>
-		deps.exec.run('git', ['-C', deps.worktreePath, ...args], { timeoutMs });
+		deps.exec.run('git', ['-C', deps.worktreePath, ...args], { env: networkGitEnv(), timeoutMs });
 
 	async function headSha(): Promise<string | null> {
 		const head = await git(['rev-parse', 'HEAD']);

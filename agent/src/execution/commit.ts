@@ -2,6 +2,13 @@ import { type ExecService } from '../services/exec.service';
 
 const NETWORK_TIMEOUT_MS = 180_000;
 
+// A credential helper that answers nothing leaves git to ask a terminal. The agent
+// has none to answer from, so the prompt would sit until the timeout and report a
+// hang instead of git's own "could not read Username".
+export function networkGitEnv(): NodeJS.ProcessEnv {
+	return { ...process.env, GIT_TERMINAL_PROMPT: '0' };
+}
+
 export interface CommitResult {
 	ok: boolean;
 	commitSha: string | null;
@@ -57,7 +64,7 @@ async function fetchRemoteBranch(opts: {
 	branch: string;
 }): Promise<string | null> {
 	const run = (args: string[]) =>
-		opts.exec.run('git', ['-C', opts.worktreePath, ...args], { timeoutMs: NETWORK_TIMEOUT_MS });
+		opts.exec.run('git', ['-C', opts.worktreePath, ...args], { env: networkGitEnv(), timeoutMs: NETWORK_TIMEOUT_MS });
 	const listed = await run(['ls-remote', '--heads', 'origin', `refs/heads/${opts.branch}`]);
 
 	if (!listed.ok || listed.stdout === '') {
@@ -127,7 +134,10 @@ async function resolveStartFrom(opts: {
 	}
 
 	const fetch = async (args: string[]) =>
-		opts.exec.run('git', ['-C', opts.worktreePath, 'fetch', 'origin', ...args], { timeoutMs: NETWORK_TIMEOUT_MS });
+		opts.exec.run('git', ['-C', opts.worktreePath, 'fetch', 'origin', ...args], {
+			env: networkGitEnv(),
+			timeoutMs: NETWORK_TIMEOUT_MS
+		});
 
 	for (const attempt of [[] as string[], [opts.startFrom], ['+refs/heads/bosun/plan/*:refs/remotes/origin/bosun/plan/*']]) {
 		if (attempt.length > 0) {
@@ -383,7 +393,7 @@ export function getCommitService(deps: { exec: ExecService }) {
 			const pushed = await deps.exec.run(
 				'git',
 				['-C', opts.worktreePath, 'push', '-u', 'origin', `HEAD:refs/heads/${opts.branch}`],
-				{ timeoutMs: NETWORK_TIMEOUT_MS }
+				{ env: networkGitEnv(), timeoutMs: NETWORK_TIMEOUT_MS }
 			);
 
 			return pushed.ok ? { ok: true, detail: 'pushed' } : { ok: false, detail: `could not push ${opts.branch}: ${pushed.reason}` };
