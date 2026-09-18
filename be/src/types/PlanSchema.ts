@@ -126,7 +126,6 @@ export type Slice = z.infer<typeof SliceSchema>;
 export const PlanDecisionSchema = z.object({
 	id: z.string(),
 	planId: z.string(),
-	sliceId: z.string().nullable(),
 	fork: z.string(),
 	options: z.string().nullable(),
 	chose: z.string(),

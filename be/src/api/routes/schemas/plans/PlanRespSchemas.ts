@@ -11,6 +11,7 @@ import {
 	VerifyFindingSchema
 } from 'src/types/BuildSchema';
 import { PlanCriteriaSchema } from 'src/types/build-frames';
+import { PlanBugSchema } from 'src/types/BugfixSchema';
 import { FootprintSchema } from 'src/types/FootprintSchema';
 import {
 	AcSchema,
@@ -144,3 +145,7 @@ export const AgentBlockersRespSchema = z.object({ blockedBy: z.array(z.number().
 export const AgentDecisionRespSchema = z.object({ decisionId: z.string() });
 
 export const AgentFindingRespSchema = z.object({ findingId: z.string() });
+
+export const AgentPlanBugsRespSchema = z.array(PlanBugSchema);
+
+export const AgentPlanBugRespSchema = PlanBugSchema;

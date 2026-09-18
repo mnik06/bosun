@@ -30,7 +30,6 @@ export const NotificationSchema = z.object({
 	body: z.string(),
 	url: z.string(),
 	planId: z.string().nullable(),
-	quickFixId: z.string().nullable(),
 	sentAt: z.iso.datetime(),
 	readAt: z.iso.datetime().nullable()
 })

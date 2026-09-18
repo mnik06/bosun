@@ -12,7 +12,6 @@ export async function recordPlanDecision(opts: {
 	socketRegistry: SocketRegistry;
 	planId: string;
 	machineId: string;
-	sliceId: string | null;
 	fork: string;
 	options: string | null;
 	chose: string;
@@ -28,7 +27,6 @@ export async function recordPlanDecision(opts: {
 	const decision = await opts.planDecisionRepo.create({
 		id: opts.idService.createPlanDecisionId(),
 		planId: plan.id,
-		sliceId: opts.sliceId,
 		fork: opts.fork,
 		options: opts.options,
 		chose: opts.chose,

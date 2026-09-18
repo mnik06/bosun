@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { type DbOrTx } from 'src/services/drizzle/drizzle.service';
-import { builds, integrations, sliceRuns } from 'src/services/drizzle/schema';
+import { bugfixSessions, builds, integrations, sliceRuns } from 'src/services/drizzle/schema';
 import {
 	IntegrationSchema,
 	type Integration,
@@ -81,7 +81,7 @@ export function getIntegrationRepo(db: DbOrTx) {
 		},
 
 		// The same guard a run's claim has: nothing else of this build may be running
-		// in its worktree, bullet or integration.
+		// in its worktree, bullet, integration or bug-fixing session.
 		async claim(id: string): Promise<Integration | null> {
 			const [row] = await db
 				.update(integrations)
@@ -91,7 +91,8 @@ export function getIntegrationRepo(db: DbOrTx) {
 						eq(integrations.id, id),
 						eq(integrations.status, 'pending'),
 						sql`not exists (select 1 from ${sliceRuns} where build_id = ${integrations.buildId} and status = 'running')`,
-						sql`not exists (select 1 from ${integrations} as other where other.build_id = ${integrations.buildId} and other.status = 'running')`
+						sql`not exists (select 1 from ${integrations} as other where other.build_id = ${integrations.buildId} and other.status = 'running')`,
+						sql`not exists (select 1 from ${bugfixSessions} where build_id = ${integrations.buildId} and status = 'running')`
 					)
 				)
 				.returning(columns);

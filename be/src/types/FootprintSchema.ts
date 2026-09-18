@@ -12,7 +12,7 @@ export const SchemaChangeSchema = z.object({
 	definition: z.string().max(4000).default('')
 });
 
-export type SchemaChange = z.infer<typeof SchemaChangeSchema>;
+type SchemaChange = z.infer<typeof SchemaChangeSchema>;
 
 export const ContractChangeSchema = z.object({
 	op: z.enum(['create', 'change']),
@@ -21,7 +21,7 @@ export const ContractChangeSchema = z.object({
 	shape: z.string().max(4000).default('')
 });
 
-export type ContractChange = z.infer<typeof ContractChangeSchema>;
+type ContractChange = z.infer<typeof ContractChangeSchema>;
 
 export const ModuleChangeSchema = z.object({
 	op: z.enum(['create', 'change']),
@@ -29,7 +29,7 @@ export const ModuleChangeSchema = z.object({
 	symbol: z.string().trim().min(1).max(120).optional()
 });
 
-export type ModuleChange = z.infer<typeof ModuleChangeSchema>;
+type ModuleChange = z.infer<typeof ModuleChangeSchema>;
 
 // `item` is a footprint key — see `footprintKey` — naming a piece another plan
 // creates or changes.

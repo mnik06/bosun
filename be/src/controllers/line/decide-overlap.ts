@@ -106,7 +106,7 @@ async function validate(deps: LineDeps, opts: { decision: OverlapDecision | null
 // revision, which clears its approval — and takes it out of the line meanwhile.
 export async function decideOverlap(
 	deps: LineDeps,
-	opts: { id: string; projectId: string; userId: string; chosen: OverlapChoice }
+	opts: { id: string; projectId: string; chosen: OverlapChoice }
 ): Promise<void> {
 	const decision = await validate(deps, { decision: await deps.overlapDecisionRepo.getOwnedById(opts), chosen: opts.chosen });
 	const [plan, provider, build] = await Promise.all([
@@ -123,7 +123,7 @@ export async function decideOverlap(
 		throw new HttpError(409, 'the machine this plan was written on is offline, so its session cannot rename it');
 	}
 
-	if (!(await deps.overlapDecisionRepo.decide({ id: decision.id, chosen: opts.chosen, userId: opts.userId }))) {
+	if (!(await deps.overlapDecisionRepo.decide({ id: decision.id, chosen: opts.chosen }))) {
 		throw new HttpError(409, 'That overlap has already been decided');
 	}
 

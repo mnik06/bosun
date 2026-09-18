@@ -13,6 +13,7 @@ const BY_BUILD: Record<BuildStatus, PlanState> = {
 	fixing: 'verifying',
 	rechecking: 'verifying',
 	in_review: 'in_review',
+	fixing_bugs: 'fixing_bugs',
 	merged: 'merged',
 	needs_you: 'needs_you',
 	failed: 'failed',

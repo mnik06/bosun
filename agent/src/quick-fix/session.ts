@@ -9,7 +9,7 @@ import { startSessionMcpServer, type SessionMcpServer } from '../sessions/mcp-se
 import { spawnClaudeSession, type ClaudeSession } from '../sessions/process';
 import { createStreamParser } from '../planning/stream-parser';
 import { configGate, writeEnvFiles } from '../sessions/run-support';
-import { createStderrTail, logDroppedFrame, reportStartFailure } from '../sessions/turn-support';
+import { createStderrTail, logDroppedFrame, pipeSessionOutput, reportStartFailure } from '../sessions/turn-support';
 
 const STDERR_KEPT_CHARS = 500;
 const REPORT_KEPT_CHARS = 4_000;
@@ -288,6 +288,7 @@ export function createQuickFixSessions(opts: {
 			},
 			onDropped: logDroppedFrame
 		});
+		const pipe = pipeSessionOutput({ parser, stderr, tag: msg.quickFixId });
 
 		run.process = spawnClaudeSession({
 			cwd: worktreePath,
@@ -307,15 +308,10 @@ export function createQuickFixSessions(opts: {
 			onOomKill: (count) => {
 				console.error(`[${msg.quickFixId}] out of memory: the kernel killed a process (${count} so far)`);
 			},
-			onStdout: (chunk) => {
-				parser.push(chunk);
-			},
-			onStderr: (chunk) => {
-				stderr.push(chunk);
-				console.error(`[${msg.quickFixId}] ${chunk.trimEnd()}`);
-			},
+			onStdout: pipe.onStdout,
+			onStderr: pipe.onStderr,
 			onExit: (code, exit) => {
-				parser.flush();
+				pipe.onExit();
 
 				// A shutdown already tore this run down and killed the process itself; its
 				// own exit is not a crash to report.

@@ -15,6 +15,14 @@ import {
 	PlanQuestionMsgSchema,
 	PlanTextMsgSchema
 } from 'src/types/plan-stream';
+import { BugfixCancelMsgSchema, BugfixSayMsgSchema, BugfixStartMsgSchema } from 'src/types/bugfix-frames';
+import {
+	BugfixActivityMsgSchema,
+	BugfixBugsMsgSchema,
+	BugfixDoneMsgSchema,
+	BugfixErrorMsgSchema,
+	BugfixTextMsgSchema
+} from 'src/types/bugfix-stream';
 import { MachineMemorySchema } from 'src/types/machine-memory';
 import { CommitOutcomeSchema } from 'src/types/commit-outcome';
 import {
@@ -87,6 +95,11 @@ export const HelloMsgSchema = z.object({
 	onboardingRunIds: z.array(z.string()).optional(),
 	// The integrations still held, on the same terms.
 	integrationIds: z.array(z.string()).optional(),
+	// The bug-fixing sessions still held, on the same terms. Not yet reconciled
+	// against `bugfix_sessions` on reconnect — see `bugfix-idle-sweep.ts`, which
+	// is what recovers a build stranded in `fixing_bugs` by an agent that never
+	// comes back, on a longer clock.
+	bugfixSessionIds: z.array(z.string()).optional(),
 	// How long that agent process has been alive. A dropped socket and a restarted
 	// agent are indistinguishable here otherwise, and only one of them means every
 	// session on the machine is gone.
@@ -114,12 +127,6 @@ export const HelloMsgSchema = z.object({
 export const PreflightMsgSchema = z.object({
 	type: z.literal('preflight'),
 	checks: z.array(PreflightCheckSchema)
-});
-
-export const PongMsgSchema = z.object({
-	type: z.literal('pong'),
-	id: z.string(),
-	at: z.number()
 });
 
 export const ExecTextMsgSchema = z.object({
@@ -172,7 +179,6 @@ export const UpgradeDeclinedMsgSchema = z.object({
 export const AgentMsgSchema = z.discriminatedUnion('type', [
 	HelloMsgSchema,
 	PreflightMsgSchema,
-	PongMsgSchema,
 	UpgradeDeclinedMsgSchema,
 	PlanTextMsgSchema,
 	PlanActivityMsgSchema,
@@ -198,6 +204,11 @@ export const AgentMsgSchema = z.discriminatedUnion('type', [
 	RepoErrorMsgSchema,
 	OnboardingDoneMsgSchema,
 	OnboardingErrorMsgSchema,
+	BugfixTextMsgSchema,
+	BugfixActivityMsgSchema,
+	BugfixBugsMsgSchema,
+	BugfixDoneMsgSchema,
+	BugfixErrorMsgSchema,
 	QuickFixDoneMsgSchema,
 	QuickFixErrorMsgSchema
 ]);
@@ -335,6 +346,9 @@ export const ServerMsgSchema = z.discriminatedUnion('type', [
 	RepoAttachMsgSchema,
 	OnboardingStartMsgSchema,
 	OnboardingCancelMsgSchema,
+	BugfixStartMsgSchema,
+	BugfixSayMsgSchema,
+	BugfixCancelMsgSchema,
 	QuickFixStartMsgSchema
 ]);
 

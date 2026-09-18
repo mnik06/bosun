@@ -1,26 +1,8 @@
 import { HttpError } from 'src/api/errors/HttpError';
+import { announcePlanForBuild, requireMachineBuild } from 'src/controllers/line/agent/shared/agent-build';
 import { type LineDeps } from 'src/controllers/line/line-deps';
-import { announcePlanChanged } from 'src/controllers/line/shared/announce';
-import { type Build, type VerifyFinding } from 'src/types/BuildSchema';
+import { type VerifyFinding } from 'src/types/BuildSchema';
 import { type PlanCriteria } from 'src/types/build-frames';
-
-async function machineBuild(deps: LineDeps, opts: { buildId: string; machineId: string }): Promise<Build> {
-	const build = await deps.buildRepo.getById(opts.buildId);
-
-	if (!build || build.machineId !== opts.machineId) {
-		throw new HttpError(404, 'Build not found');
-	}
-
-	return build;
-}
-
-async function announce(deps: LineDeps, build: Build): Promise<void> {
-	const plan = await deps.planRepo.getById(build.planId);
-
-	if (plan) {
-		announcePlanChanged({ socketRegistry: deps.socketRegistry, projectId: plan.projectId, planId: plan.id });
-	}
-}
 
 // Reported only by a drive or re-check in flight on this build: a finding is a
 // reproduction somebody watched, and nothing else sees the running product.
@@ -36,7 +18,7 @@ export async function reportFinding(
 		severity: VerifyFinding['severity'];
 	}
 ): Promise<VerifyFinding> {
-	const build = await machineBuild(deps, opts);
+	const build = await requireMachineBuild(deps, opts);
 	const run = await deps.sliceRunRepo.getById(opts.runId);
 
 	if (!run || run.buildId !== build.id || run.status !== 'running' || (run.phase !== 'drive' && run.phase !== 'recheck')) {
@@ -57,7 +39,7 @@ export async function reportFinding(
 		severity: opts.severity
 	});
 
-	await announce(deps, build);
+	await announcePlanForBuild(deps, build);
 
 	return finding;
 }
@@ -73,7 +55,7 @@ export async function resolveFinding(
 		throw new HttpError(404, 'Finding not found');
 	}
 
-	const build = await machineBuild(deps, { buildId: finding.buildId, machineId: opts.machineId });
+	const build = await requireMachineBuild(deps, { buildId: finding.buildId, machineId: opts.machineId });
 	const fixing = (await deps.sliceRunRepo.listForBuild(build.id)).some((run) => run.phase === 'fix' && run.status === 'running');
 
 	if (!fixing) {
@@ -82,7 +64,7 @@ export async function resolveFinding(
 
 	const resolved = await deps.verifyFindingRepo.update({ id: finding.id, status: opts.status, note: opts.note });
 
-	await announce(deps, build);
+	await announcePlanForBuild(deps, build);
 
 	return resolved ?? finding;
 }

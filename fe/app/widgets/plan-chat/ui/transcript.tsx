@@ -1,6 +1,7 @@
-import { Card, Group, Loader, Stack, Text } from '@mantine/core'
+import { Card, Stack, Text } from '@mantine/core'
 
 import { AnsweredQuestion, type PlanAnswer, type PlanMessage } from '~/entities/plan'
+import { ChatMessageBubble, StreamingTail } from '~/shared/ui'
 
 function answersByQuestion (messages: PlanMessage[]): Record<string, PlanAnswer[]> {
 	return Object.fromEntries(
@@ -18,13 +19,7 @@ function TranscriptEntry ({
 	answers: Record<string, PlanAnswer[]>
 }) {
 	if (message.role === 'user') {
-		return (
-			<Card withBorder padding="md" radius="md" bg="var(--mantine-color-default-hover)">
-				<Text size="sm" className="whitespace-pre-wrap">
-					{message.content.text}
-				</Text>
-			</Card>
-		)
+		return <ChatMessageBubble text={message.content.text} />
 	}
 
 	if (message.role === 'assistant') {
@@ -67,20 +62,7 @@ export function Transcript ({
 				<TranscriptEntry key={message.id} message={message} answers={answers} />
 			))}
 
-			{streamingText.length === 0 ? null : (
-				<Text size="sm" className="whitespace-pre-wrap">
-					{streamingText}
-				</Text>
-			)}
-
-			{activity === null ? null : (
-				<Group gap="xs">
-					<Loader size={14} />
-					<Text size="xs" c="dimmed">
-						{activity}
-					</Text>
-				</Group>
-			)}
+			<StreamingTail streamingText={streamingText} activity={activity} />
 		</Stack>
 	)
 }

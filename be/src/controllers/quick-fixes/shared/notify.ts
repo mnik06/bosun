@@ -36,7 +36,6 @@ export async function notifyQuickFixStatus(deps: LineDeps, opts: { quickFix: Qui
 		kind: KIND[quickFix.status],
 		title: quickFix.status === 'pushed' ? 'Quick fix pushed' : 'Quick fix failed',
 		body: quickFix.status === 'pushed' ? `${label} — pull request opened` : `${label}: ${quickFix.error ?? 'failed'}`,
-		url: quickFix.status === 'pushed' && quickFix.prUrl ? quickFix.prUrl : `${deps.appUrl}/machines/${quickFix.machineId}`,
-		quickFixId: quickFix.id
+		url: quickFix.status === 'pushed' && quickFix.prUrl ? quickFix.prUrl : `${deps.appUrl}/machines/${quickFix.machineId}`
 	});
 }

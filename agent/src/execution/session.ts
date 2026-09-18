@@ -469,7 +469,6 @@ export function createExecutionSessions(opts: {
 			createDispatch: createExecutionDispatch({
 				toolSet,
 				planId: msg.planId,
-				sliceId: msg.sliceId,
 				buildId: msg.buildId,
 				runId: msg.runId,
 				bosunApi: opts.services.bosunApi,

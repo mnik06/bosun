@@ -10,6 +10,7 @@ import {
 } from 'src/controllers/line/shared/next-job';
 import { notifyBuildStatus } from 'src/controllers/line/shared/notify';
 import { publishPullRequest } from 'src/controllers/line/shared/pull-request';
+import { endRunningBugfixSession } from 'src/controllers/plans/bugfix/shared/end-bugfix-session';
 import { type Build, type IntegrationTrigger } from 'src/types/BuildSchema';
 import { type Plan } from 'src/types/PlanSchema';
 
@@ -133,7 +134,26 @@ export async function settleBuild(deps: LineDeps, opts: { buildId: string }): Pr
 // Whatever the build has running is stopped: its session cancelled and its run put
 // back, so it runs again from the last commit. A question goes with the session
 // that asked it.
-export async function stopRunningJobs(deps: LineDeps, opts: { build: Build }): Promise<void> {
+//
+// A running bug-fixing session is ended here too, as whichever of `cancelled` or
+// `merged` the caller is about to set the build's own status to — the only
+// status this can be reached from that has either is `fixing_bugs` (`held` is
+// not in `HOLDABLE`, so `hold()` never calls this on one), and both callers set
+// a terminal status right after this returns, so nothing here needs to revert
+// it to a waiting status the way `close-bugfix.ts` does.
+export async function stopRunningJobs(deps: LineDeps, opts: { build: Build; bugfixEndedReason?: 'cancelled' | 'merged' }): Promise<void> {
+	const running = await deps.bugfixSessionRepo.getRunningForBuild(opts.build.id);
+
+	if (running) {
+		await endRunningBugfixSession(deps, {
+			buildId: opts.build.id,
+			planId: opts.build.planId,
+			machineId: opts.build.machineId,
+			session: running,
+			endedReason: opts.bugfixEndedReason ?? 'cancelled'
+		});
+	}
+
 	const [runs, integrations] = await Promise.all([
 		deps.sliceRunRepo.listForBuild(opts.build.id),
 		deps.integrationRepo.listForBuild(opts.build.id)

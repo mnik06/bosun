@@ -17,8 +17,6 @@ import { PlanAnswerSchema, PlanQuestionSchema } from '~/entities/plan/model/ques
 
 export const PlanStatusSchema = z.enum(['planning', 'ready', 'failed'])
 
-export type PlanStatus = z.infer<typeof PlanStatusSchema>
-
 // What the plan is doing, derived by the backend from the plan row and its
 // latest build. Optional on the row because a plan pushed over the socket is the
 // row alone; the badge falls back to what the row can support.
@@ -31,6 +29,7 @@ export const PlanStateSchema = z.enum([
 	'integrating',
 	'verifying',
 	'in_review',
+	'fixing_bugs',
 	'merged',
 	'needs_you',
 	'failed',
@@ -141,8 +140,6 @@ export type Ac = z.infer<typeof AcSchema>
 
 export const SliceKindSchema = z.enum(['build', 'verify'])
 
-export type SliceKind = z.infer<typeof SliceKindSchema>
-
 export const SliceSchema = z.object({
 	id: z.string(),
 	planId: z.string(),
@@ -160,7 +157,6 @@ export type Slice = z.infer<typeof SliceSchema>
 export const PlanDecisionSchema = z.object({
 	id: z.string(),
 	planId: z.string(),
-	sliceId: z.string().nullable(),
 	fork: z.string(),
 	options: z.string().nullable(),
 	chose: z.string(),
