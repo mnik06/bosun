@@ -27,6 +27,7 @@ const publicColumns = {
 	projectProfile: machines.projectProfile,
 	envSets: machines.envSets,
 	repositoryId: machines.repositoryId,
+	clonedRepositoryId: machines.clonedRepositoryId,
 	publicKey: machines.publicKey,
 	policy: machines.policy,
 	sessionSecrets: machines.sessionSecrets,
@@ -147,12 +148,14 @@ export function getMachineRepo(db: Db) {
 		// agent with no repository yet, or one older than the key, must not erase what
 		// the row already says. `wasOnline` is read just before the write so a caller
 		// can tell a real offline/pending→online flip from a `hello` that arrived
-		// while the row already said `online`.
+		// while the row already said `online`. `clonedRepositoryId` follows the same
+		// rule: null is an agent saying it holds no clone, absent is one too old to say.
 		async markOnline(opts: {
 			id: string;
 			agentVersion: string;
 			repoPath?: string;
 			publicKey?: string;
+			clonedRepositoryId?: string | null;
 			now: Date;
 		}): Promise<{ machine: Machine; wasOnline: boolean } | null> {
 			const [before] = await db
@@ -166,6 +169,7 @@ export function getMachineRepo(db: Db) {
 					agentVersion: opts.agentVersion,
 					...(opts.repoPath === undefined ? {} : { repoPath: opts.repoPath }),
 					...(opts.publicKey === undefined ? {} : { publicKey: opts.publicKey }),
+					...(opts.clonedRepositoryId === undefined ? {} : { clonedRepositoryId: opts.clonedRepositoryId }),
 					lastSeenAt: opts.now
 				})
 				.where(eq(machines.id, opts.id))
@@ -269,6 +273,18 @@ export function getMachineRepo(db: Db) {
 			const [row] = await db
 				.update(machines)
 				.set({ repositoryId: null })
+				.where(and(eq(machines.id, opts.id), eq(machines.repositoryId, opts.repositoryId)))
+				.returning(publicColumns);
+
+			return row ? MachineSchema.parse(row) : null;
+		},
+
+		// Only for the repository the row is attached to: a clone landing for an
+		// attach that has since been replaced or undone is not this machine's tree.
+		async markClonedIf(opts: { id: string; repositoryId: string }): Promise<Machine | null> {
+			const [row] = await db
+				.update(machines)
+				.set({ clonedRepositoryId: opts.repositoryId })
 				.where(and(eq(machines.id, opts.id), eq(machines.repositoryId, opts.repositoryId)))
 				.returning(publicColumns);
 

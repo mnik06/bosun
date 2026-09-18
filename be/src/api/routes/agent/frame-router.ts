@@ -127,6 +127,12 @@ async function handleRepositoryFrame(opts: {
 			frame: msg
 		});
 
+		// Scheduling skips a machine until its clone lands, and the `hello` the agent
+		// sends after this one is a `change`, which does not schedule.
+		if (msg.type === 'repo.attached') {
+			await scheduleMachine(lineDeps(opts.fastify), { machineId: opts.machineId });
+		}
+
 		return;
 	}
 

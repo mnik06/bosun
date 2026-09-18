@@ -28,6 +28,11 @@ verify:                    needs_input ──► verifying ──► ready
 
 ## Invariants
 
+- **A run starts only once the clone has landed** (`repositoryCloning`). `machines.repository_id` is
+  written when the attach is asked for, and the agent has no tree until the clone finishes; a run
+  started in between fails on the machine at once with "this machine has no repository attached".
+  `cloned_repository_id` is what the agent last reported holding — set by `repo.attached` and by
+  every `hello` that names a repository — so a reply lost with its socket is repaired on reconnect.
 - **One active run per machine.** Onboarding owns the fixed port range 3900–3909, below every build's
   range, which is only collision-free because of this.
 - **A run is admitted like a drive** (`onboardingAdmission`), against every slot and lane the

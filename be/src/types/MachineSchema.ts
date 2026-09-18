@@ -27,6 +27,7 @@ export const MachineSchema = z.object({
 	capabilities: z.array(PreflightCheckSchema).nullable(),
 	envSets: z.array(EnvSetSummarySchema).nullable(),
 	repositoryId: z.string().nullable(),
+	clonedRepositoryId: z.string().nullable(),
 	publicKey: z.string().nullable(),
 	policy: MachinePolicySchema,
 	sessionSecrets: z.array(z.string()).nullable(),

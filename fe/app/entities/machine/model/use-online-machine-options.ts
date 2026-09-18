@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 
 import { useMachinesQuery } from '~/entities/machine/api/machine.queries'
+import { repositoryCloning } from '~/entities/machine/lib/machine-kind'
 import type { Machine } from '~/entities/machine/model/machine'
 
 export interface MachineOption {
@@ -8,9 +9,9 @@ export interface MachineOption {
 	label: string
 }
 
-// Every machine picker offers only online machines, but what "usable" means
-// beyond that is the caller's call — a plan can run on a bare checkout, a
-// quick fix cannot.
+// Every machine picker offers only online machines with a tree to run in — not
+// one whose clone is still landing — but what "usable" means beyond that is the
+// caller's call: a plan can run on a bare checkout, a quick fix cannot.
 export function useOnlineMachineOptions (opts: {
 	filter: (machine: Machine) => boolean
 	label: (machine: Machine) => string
@@ -22,7 +23,7 @@ export function useOnlineMachineOptions (opts: {
 	const machines = useMachinesQuery()
 
 	const options = (machines.data ?? [])
-		.filter((machine) => machine.status === 'online' && filter(machine))
+		.filter((machine) => machine.status === 'online' && !repositoryCloning(machine) && filter(machine))
 		.map((machine) => ({ value: machine.id, label: label(machine) }))
 
 	const firstMachineId = options[0]?.value
