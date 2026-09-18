@@ -1,10 +1,10 @@
-import { ActionIcon, Badge, Group, Menu, Tooltip } from '@mantine/core'
-import { EllipsisVertical, KeyRound } from 'lucide-react'
+import { Badge, Group, Tooltip } from '@mantine/core'
 import { useState } from 'react'
 
 import type { GithubPatConnection } from '~/entities/repository'
 import { DisconnectGithubPatMenuItem } from '~/features/connect-github-pat/ui/disconnect-github-pat-menu-item'
 import { RotateGithubPatModal } from '~/features/connect-github-pat/ui/rotate-github-pat-modal'
+import { ConnectionActionsMenu } from '~/shared/ui'
 
 const KIND_LABEL = { fine_grained: 'fine-grained', classic: 'classic' } as const
 
@@ -20,23 +20,11 @@ export function GithubPatConnectionBadge ({ connection }: { connection: GithubPa
 				</Badge>
 			</Tooltip>
 
-			<Menu position="bottom-end" withinPortal>
-				<Menu.Target>
-					<ActionIcon variant="subtle" color="gray" size="sm" aria-label={`${connection.githubLogin} token actions`}>
-						<EllipsisVertical size={12} />
-					</ActionIcon>
-				</Menu.Target>
-
-				<Menu.Dropdown>
-					<Menu.Item leftSection={<KeyRound size={14} />} onClick={() => { setRotating(true) }}>
-						Replace token
-					</Menu.Item>
-
-					<Menu.Divider />
-
-					<DisconnectGithubPatMenuItem connection={connection} />
-				</Menu.Dropdown>
-			</Menu>
+			<ConnectionActionsMenu
+				ariaLabel={`${connection.githubLogin} token actions`}
+				onRotate={() => { setRotating(true) }}
+				disconnectItem={<DisconnectGithubPatMenuItem connection={connection} />}
+			/>
 
 			<RotateGithubPatModal connection={connection} opened={rotating} onClose={() => { setRotating(false) }} />
 		</Group>

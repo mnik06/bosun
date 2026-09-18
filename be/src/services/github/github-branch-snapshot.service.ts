@@ -1,3 +1,5 @@
+import { diffBranchHeads } from 'src/utils/general';
+
 // The GitHub PAT sibling to `azureBranchSnapshot`: a repository's previous ETag
 // is what makes each poll conditional (AC-40), and its previous branch->sha map
 // is what a 200 response still gets diffed against — the same mechanism
@@ -17,21 +19,9 @@ export function getGithubBranchSnapshotService() {
 		// branch whose commit differs from what was stored before this call — empty
 		// on a repository's first poll, since there is nothing yet to differ from.
 		diff(repositoryId: string, current: Map<string, string>, etag: string): { branch: string; sha: string }[] {
-			const previous = snapshots.get(repositoryId);
+			const changed = diffBranchHeads(snapshots.get(repositoryId)?.branches, current);
 
 			snapshots.set(repositoryId, { etag, branches: current });
-
-			if (!previous) {
-				return [];
-			}
-
-			const changed: { branch: string; sha: string }[] = [];
-
-			for (const [branch, sha] of current) {
-				if (previous.branches.get(branch) !== sha) {
-					changed.push({ branch, sha });
-				}
-			}
 
 			return changed;
 		}

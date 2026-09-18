@@ -19,12 +19,12 @@ import { runShell } from '../services/setup-steps.service';
 import { startSessionMcpServer, type SessionMcpServer } from '../sessions/mcp-server';
 import { spawnClaudeSession, type ClaudeSession } from '../sessions/process';
 import { createStderrTail, pipeSessionOutput } from '../sessions/turn-support';
+import { clipTail } from '../utils';
 import { getIntegrationGit, type IntegrationGit } from './git';
 import { CONFLICT_DEFINITIONS, CONFLICT_MCP_TOOLS, createConflictDispatch } from './mcp/tools';
 
 const OUTPUT_KEPT_CHARS = 3_000;
 const DETAIL_KEPT_CHARS = 2_000;
-const STDERR_KEPT_CHARS = 500;
 const SESSION_TOOLS = ['Read', 'Grep', 'Glob', 'Edit', 'Write', 'Bash'];
 
 type Done = Extract<AgentMsg, { type: 'integrate.done' }>;
@@ -49,14 +49,8 @@ export interface IntegrationSessions {
 	running(): number;
 }
 
-function clip(text: string, max: number): string {
-	const trimmed = text.trim();
-
-	return trimmed.length <= max ? trimmed : `…${trimmed.slice(-max)}`;
-}
-
 function needsYou(reason: 'conflict' | 'checks' | 'error', detail: string): Outcome {
-	return { kind: 'needs_you', reason, detail: clip(detail, DETAIL_KEPT_CHARS) };
+	return { kind: 'needs_you', reason, detail: clipTail(detail, DETAIL_KEPT_CHARS) };
 }
 
 class Cancelled extends Error {}
@@ -100,7 +94,7 @@ export function createIntegrationSessions(opts: { services: Services; send: (mes
 
 		try {
 			return await new Promise((resolve) => {
-				const stderr = createStderrTail(STDERR_KEPT_CHARS);
+				const stderr = createStderrTail();
 				const parser = createStreamParser({
 					onEvent: (event) => {
 						if (event.kind === 'tool') {
@@ -158,7 +152,7 @@ export function createIntegrationSessions(opts: { services: Services; send: (mes
 				return {
 					ok: false,
 					check: `${check.run}${check.cwd === undefined ? '' : ` (in ${check.cwd})`}`,
-					output: clip(`${result.detail}\n${result.tail}`, OUTPUT_KEPT_CHARS)
+					output: clipTail(`${result.detail}\n${result.tail}`, OUTPUT_KEPT_CHARS)
 				};
 			}
 		}
@@ -296,7 +290,7 @@ export function createIntegrationSessions(opts: { services: Services; send: (mes
 
 		let gaveUp: string | null = null;
 
-		await converse({
+		const session = await converse({
 			msg: ctx.msg,
 			entry: ctx.entry,
 			prompt: repairPrompt({
@@ -318,6 +312,10 @@ export function createIntegrationSessions(opts: { services: Services; send: (mes
 
 		if (gaveUp !== null) {
 			return needsYou('checks', `\`${first.check}\` is red after merging ${ctx.msg.onto}, and the repair gave up: ${gaveUp}`);
+		}
+
+		if (!session.ok) {
+			return needsYou('checks', `\`${first.check}\` is red after merging ${ctx.msg.onto}, and the repair session ended without resolving: ${session.message}`);
 		}
 
 		const committed = await services.commit.commitAll({

@@ -49,10 +49,10 @@ const routes: FastifyPluginAsync = async function (f) {
 	});
 
 	// The PAT fallback's own delivery URL, one per repository, since a PAT
-	// connection has no App-wide secret the way `GITHUB_WEBHOOK_SECRET` is. Still
-	// nothing creates one of these webhooks yet (that lands with sync) — this is
-	// the intake side alone, refusing anything that is not a PAT-connected
-	// repository with a secret already on it.
+	// connection has no App-wide secret the way `GITHUB_WEBHOOK_SECRET` is.
+	// `src/controllers/github/shared/webhook.ts` is what creates and reconciles
+	// these webhooks; this is the intake side alone, refusing anything that is
+	// not a PAT-connected repository with a secret already on it.
 	fastify.post('/github/webhook/:repositoryId', { schema: { params: RepositoryIdParamsSchema } }, async (request, reply) => {
 		const repository = await fastify.repos.repositoryRepo.getById(request.params.repositoryId);
 

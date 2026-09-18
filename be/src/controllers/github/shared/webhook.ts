@@ -49,6 +49,30 @@ async function createOrAdoptWebhook(deps: GithubWebhookSyncDeps, opts: { reposit
 	});
 }
 
+// The create-or-adopt-and-persist tail both entry points share: try the
+// create, store the webhook and report 'webhook' on success, or fall back to
+// polling and report 'polling' on a `GithubPatError` — anything else propagates.
+async function attemptWebhookCreate(deps: GithubWebhookSyncDeps, opts: { repository: Repository; connection: GithubPatConnection; pat: string }): Promise<'webhook' | 'polling'> {
+	const url = webhookUrl({ serverUrl: deps.serverUrl, repositoryId: opts.repository.id });
+	const secret = deps.keyService.generateWebhookSecret();
+
+	try {
+		const githubWebhookId = await createOrAdoptWebhook(deps, { ...opts, url, secret });
+
+		await deps.repositoryRepo.saveGithubWebhook({ id: opts.repository.id, webhookSecretEncrypted: deps.patEncryption.encrypt(secret), githubWebhookId, syncMode: 'webhook' });
+
+		return 'webhook';
+	} catch (error) {
+		await deps.repositoryRepo.saveGithubSyncMode({ id: opts.repository.id, syncMode: 'polling' });
+
+		if (!(error instanceof GithubPatError)) {
+			throw error;
+		}
+
+		return 'polling';
+	}
+}
+
 // Called once, right after a repository row is attached through a PAT
 // connection for the first time (AC-35). A second machine attaching an
 // already-known row finds a webhook id already stored and does nothing
@@ -63,20 +87,7 @@ export async function ensureGithubWebhookOnAttach(deps: GithubWebhookSyncDeps, o
 		return;
 	}
 
-	const url = webhookUrl({ serverUrl: deps.serverUrl, repositoryId: opts.repository.id });
-	const secret = deps.keyService.generateWebhookSecret();
-
-	try {
-		const githubWebhookId = await createOrAdoptWebhook(deps, { ...opts, url, secret });
-
-		await deps.repositoryRepo.saveGithubWebhook({ id: opts.repository.id, webhookSecretEncrypted: deps.patEncryption.encrypt(secret), githubWebhookId, syncMode: 'webhook' });
-	} catch (error) {
-		await deps.repositoryRepo.saveGithubSyncMode({ id: opts.repository.id, syncMode: 'polling' });
-
-		if (!(error instanceof GithubPatError)) {
-			throw error;
-		}
-	}
+	await attemptWebhookCreate(deps, opts);
 }
 
 // Run on the sync job's timer for every PAT-connected GitHub repository
@@ -101,22 +112,5 @@ export async function reconcileGithubWebhook(deps: GithubWebhookSyncDeps, opts: 
 		return 'webhook';
 	}
 
-	const url = webhookUrl({ serverUrl: deps.serverUrl, repositoryId: opts.repository.id });
-	const secret = deps.keyService.generateWebhookSecret();
-
-	try {
-		const githubWebhookId = await createOrAdoptWebhook(deps, { ...opts, url, secret });
-
-		await deps.repositoryRepo.saveGithubWebhook({ id: opts.repository.id, webhookSecretEncrypted: deps.patEncryption.encrypt(secret), githubWebhookId, syncMode: 'webhook' });
-
-		return 'webhook';
-	} catch (error) {
-		await deps.repositoryRepo.saveGithubSyncMode({ id: opts.repository.id, syncMode: 'polling' });
-
-		if (!(error instanceof GithubPatError)) {
-			throw error;
-		}
-
-		return 'polling';
-	}
+	return attemptWebhookCreate(deps, opts);
 }

@@ -1,12 +1,11 @@
-import { Alert, Button, PasswordInput, Stack, Text } from '@mantine/core'
+import { Button, PasswordInput, Stack, Text } from '@mantine/core'
 import { useForm } from '@mantine/form'
 import { zod4Resolver } from 'mantine-form-zod-resolver'
 
 import type { GithubPatConnection } from '~/entities/repository'
 import { useRotateGithubPatConnection } from '~/features/connect-github-pat/api/use-connect-github-pat'
 import { RotateGithubPatFormSchema, type RotateGithubPatForm } from '~/features/connect-github-pat/model/connect-github-pat-form'
-import { AppModal } from '~/shared/ui'
-import { toErrorMessage } from '~/shared/lib'
+import { AppModal, QueryErrorAlert } from '~/shared/ui'
 
 export function RotateGithubPatModal (props: { connection: GithubPatConnection, opened: boolean, onClose: () => void }) {
 	const rotate = useRotateGithubPatConnection(props.connection.id)
@@ -44,9 +43,7 @@ export function RotateGithubPatModal (props: { connection: GithubPatConnection, 
 					/>
 
 					{rotate.error === null ? null : (
-						<Alert color="red" variant="light" title="Could not replace the token">
-							{toErrorMessage(rotate.error, 'Unknown error')}
-						</Alert>
+						<QueryErrorAlert title="Could not replace the token" error={rotate.error} variant="light" />
 					)}
 
 					<Button type="submit" loading={rotate.isPending}>

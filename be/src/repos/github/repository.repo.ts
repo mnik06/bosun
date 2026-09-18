@@ -1,4 +1,4 @@
-import { and, asc, eq, isNotNull, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import { type DbOrTx } from 'src/services/drizzle/drizzle.service';
 import { repositories } from 'src/services/drizzle/schema';
 import { RepositorySchema, type Repository } from 'src/types/RepositorySchema';
@@ -168,6 +168,16 @@ export function getRepositoryRepo(db: DbOrTx) {
 			const [row] = await db.select({ githubWebhookId: repositories.githubWebhookId }).from(repositories).where(eq(repositories.id, id));
 
 			return row?.githubWebhookId ?? null;
+		},
+
+		// The batch sibling of `getGithubWebhookIdById`, for a disconnect that needs
+		// every one of a connection's repositories' hook ids at once rather than one
+		// query per repository. Skips a repository with no webhook rather than
+		// returning it with a null value the caller would have to filter out anyway.
+		async listGithubWebhookIdsByIds(ids: string[]): Promise<Map<string, number>> {
+			const rows = await db.select({ id: repositories.id, githubWebhookId: repositories.githubWebhookId }).from(repositories).where(inArray(repositories.id, ids));
+
+			return new Map(rows.filter((row): row is typeof row & { githubWebhookId: number } => row.githubWebhookId !== null).map((row) => [row.id, row.githubWebhookId]));
 		},
 
 		// Written once a webhook is created or adopted (AC-35, AC-38, AC-63).

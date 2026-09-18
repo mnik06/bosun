@@ -203,18 +203,25 @@ export function getGithubAppService(deps: {
 		scheme?: 'Bearer' | 'token';
 		body?: unknown;
 	}): Promise<{ status: number; json: unknown; headers: Headers }> {
-		const response = await fetchImpl(opts.url, {
-			method: opts.method ?? 'GET',
-			headers: {
-				accept: 'application/vnd.github+json',
-				'x-github-api-version': '2022-11-28',
-				'user-agent': 'bosun',
-				authorization: `${opts.scheme ?? 'Bearer'} ${opts.token}`,
-				...(opts.body === undefined ? {} : { 'content-type': 'application/json' })
-			},
-			body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
-			signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
-		});
+		let response: Response;
+
+		try {
+			response = await fetchImpl(opts.url, {
+				method: opts.method ?? 'GET',
+				headers: {
+					accept: 'application/vnd.github+json',
+					'x-github-api-version': '2022-11-28',
+					'user-agent': 'bosun',
+					authorization: `${opts.scheme ?? 'Bearer'} ${opts.token}`,
+					...(opts.body === undefined ? {} : { 'content-type': 'application/json' })
+				},
+				body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
+				signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+			});
+		} catch (error) {
+			throw new GithubError(502, `Could not reach GitHub: ${error instanceof Error ? error.message : String(error)}`);
+		}
+
 		const json: unknown = await response.json().catch(() => null);
 
 		return { status: response.status, json, headers: response.headers };

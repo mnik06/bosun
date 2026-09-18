@@ -17,6 +17,7 @@ import { appPorts, renderTemplate } from '../services/stack.service';
 import { startSessionMcpServer, type SessionDispatchFactory, type SessionMcpServer } from '../sessions/mcp-server';
 import { spawnClaudeSession, type ClaudeSession } from '../sessions/process';
 import { createStderrTail, logDroppedFrame, pipeSessionOutput } from '../sessions/turn-support';
+import { clipTail } from '../utils';
 import {
 	createDiscoveryDispatch,
 	createSignInDispatch,
@@ -29,7 +30,6 @@ import {
 const ONBOARDING_DIRNAME = 'onboarding';
 
 const DETAIL_CHARS = 1_500;
-const STDERR_KEPT_CHARS = 500;
 const WORKTREE_TIMEOUT_MS = 120_000;
 
 const DISCOVERY_TOOLS = ['Read', 'Grep', 'Glob', 'Task', 'Skill', 'Edit', 'Write', 'Bash', 'ToolSearch'];
@@ -82,12 +82,6 @@ export interface OnboardingSessions {
 	running(): number;
 }
 
-function clip(text: string): string {
-	const trimmed = text.trim();
-
-	return trimmed.length <= DETAIL_CHARS ? trimmed : `…${trimmed.slice(-DETAIL_CHARS)}`;
-}
-
 function errorMessage(error: unknown, fallback: string): string {
 	return error instanceof Error ? error.message : fallback;
 }
@@ -126,7 +120,7 @@ export function createOnboardingSessions(opts: { services: Services; send: (mess
 	}
 
 	function report(opts2: { runId: string; run: Run; label: string; status: 'info' | 'running' | 'passed' | 'failed'; detail?: string | null; estimate?: number }): void {
-		const detail = opts2.detail === undefined || opts2.detail === null || opts2.detail.trim() === '' ? null : clip(opts2.detail);
+		const detail = opts2.detail === undefined || opts2.detail === null || opts2.detail.trim() === '' ? null : clipTail(opts2.detail, DETAIL_CHARS);
 		const progress = progressFor(opts2);
 
 		opts2.run.reports = opts2.run.reports
@@ -244,7 +238,7 @@ export function createOnboardingSessions(opts: { services: Services; send: (mess
 
 		return new Promise<Outcome>((resolve) => {
 			let settled = false;
-			const stderr = createStderrTail(STDERR_KEPT_CHARS);
+			const stderr = createStderrTail();
 			const settle = (outcome: Outcome) => {
 				if (!settled) {
 					settled = true;
@@ -438,7 +432,7 @@ export function createOnboardingSessions(opts: { services: Services; send: (mess
 			report({ runId: opts2.msg.runId, run: opts2.run, label, status: result.ok ? 'passed' : 'failed', detail: result.ok ? null : `${result.detail}\n${result.tail}` });
 
 			if (!result.ok) {
-				return { ok: false, message: `${label}: ${clip(`${result.detail}\n${result.tail}`)}` };
+				return { ok: false, message: `${label}: ${clipTail(`${result.detail}\n${result.tail}`, DETAIL_CHARS)}` };
 			}
 		}
 
@@ -515,7 +509,7 @@ export function createOnboardingSessions(opts: { services: Services; send: (mess
 		if (!result.ok) {
 			report({ runId: msg.runId, run, label: `Setup: ${result.step}`, status: 'failed', detail: result.message });
 
-			return { ok: false, message: `Setup: ${clip(result.message)}` };
+			return { ok: false, message: `Setup: ${clipTail(result.message, DETAIL_CHARS)}` };
 		}
 
 		for (const name of result.ran) {
@@ -548,7 +542,7 @@ export function createOnboardingSessions(opts: { services: Services; send: (mess
 
 			report({ runId: msg.runId, run, label: 'Start the apps', status: 'failed', detail });
 
-			return { ok: false, message: `Start the apps: ${clip(detail)}` };
+			return { ok: false, message: `Start the apps: ${clipTail(detail, DETAIL_CHARS)}` };
 		}
 
 		report({ runId: msg.runId, run, label: 'Start the apps', status: 'passed', detail: stack.apps.map((app) => `${app.app} ${app.url}`).join(', ') });
@@ -683,7 +677,7 @@ export function createOnboardingSessions(opts: { services: Services; send: (mess
 			// Out of the map before the frame goes: a discovery's `done` is answered with
 			// a verify for the same run id, and a run still held here would drop it.
 			runs.delete(msg.runId);
-			opts.send(outcome.ok ? { type: 'onboarding.done', runId: msg.runId } : { type: 'onboarding.error', runId: msg.runId, message: clip(outcome.message) });
+			opts.send(outcome.ok ? { type: 'onboarding.done', runId: msg.runId } : { type: 'onboarding.error', runId: msg.runId, message: clipTail(outcome.message, DETAIL_CHARS) });
 		},
 
 		cancel,

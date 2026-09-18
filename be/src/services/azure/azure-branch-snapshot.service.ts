@@ -1,3 +1,5 @@
+import { diffBranchHeads } from 'src/utils/general';
+
 // The polling half of sync (AC-66, AC-67): each repository's previous set of
 // branch heads, kept process-local like the rate-limit cooldown next to it — a
 // restart just re-establishes a baseline on its next poll rather than firing
@@ -11,21 +13,9 @@ export function getAzureBranchSnapshotService() {
 		// commit differs from what was stored before this call — empty on a
 		// repository's first poll, since there is nothing yet to differ from.
 		diff(repositoryId: string, current: Map<string, string>): { branch: string; sha: string }[] {
-			const previous = snapshots.get(repositoryId);
+			const changed = diffBranchHeads(snapshots.get(repositoryId), current);
 
 			snapshots.set(repositoryId, current);
-
-			if (!previous) {
-				return [];
-			}
-
-			const changed: { branch: string; sha: string }[] = [];
-
-			for (const [branch, sha] of current) {
-				if (previous.get(branch) !== sha) {
-					changed.push({ branch, sha });
-				}
-			}
 
 			return changed;
 		}

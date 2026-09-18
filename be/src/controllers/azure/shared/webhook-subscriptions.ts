@@ -73,6 +73,29 @@ async function createPair(deps: WebhookSyncDeps, opts: { repository: Repository;
 	}
 }
 
+// The create-pair-and-persist tail both entry points share: (re)create the
+// subscription pair and report 'webhook' on success, or fall back to polling
+// and report 'polling' on an `AzureError` — anything else propagates.
+async function attemptWebhookSubscriptionCreate(
+	deps: WebhookSyncDeps,
+	opts: { repository: Repository; connection: AzureConnection; pat: string; existing: AzureWebhookSubscription[] }
+): Promise<'webhook' | 'polling'> {
+	try {
+		await createPair(deps, opts);
+		await deps.repositoryRepo.saveAzureSyncMode({ id: opts.repository.id, azureSyncMode: 'webhook' });
+
+		return 'webhook';
+	} catch (error) {
+		await deps.repositoryRepo.saveAzureSyncMode({ id: opts.repository.id, azureSyncMode: 'polling' });
+
+		if (!(error instanceof AzureError)) {
+			throw error;
+		}
+
+		return 'polling';
+	}
+}
+
 // Called once, right after a repository row is attached for the first time
 // (AC-53). A second machine attaching an already-known row finds both
 // subscriptions already present and does nothing (AC-55). A refusal — most
@@ -90,16 +113,7 @@ export async function ensureAzureWebhookSubscriptionsOnAttach(
 		return;
 	}
 
-	try {
-		await createPair(deps, { ...opts, existing });
-		await deps.repositoryRepo.saveAzureSyncMode({ id: opts.repository.id, azureSyncMode: 'webhook' });
-	} catch (error) {
-		await deps.repositoryRepo.saveAzureSyncMode({ id: opts.repository.id, azureSyncMode: 'polling' });
-
-		if (!(error instanceof AzureError)) {
-			throw error;
-		}
-	}
+	await attemptWebhookSubscriptionCreate(deps, { ...opts, existing });
 }
 
 // Run on the sync job's timer for every Azure repository (AC-64): a
@@ -136,18 +150,5 @@ export async function reconcileAzureWebhookSubscriptions(
 		return 'webhook';
 	}
 
-	try {
-		await createPair(deps, { ...opts, existing });
-		await deps.repositoryRepo.saveAzureSyncMode({ id: opts.repository.id, azureSyncMode: 'webhook' });
-
-		return 'webhook';
-	} catch (error) {
-		await deps.repositoryRepo.saveAzureSyncMode({ id: opts.repository.id, azureSyncMode: 'polling' });
-
-		if (!(error instanceof AzureError)) {
-			throw error;
-		}
-
-		return 'polling';
-	}
+	return attemptWebhookSubscriptionCreate(deps, { ...opts, existing });
 }

@@ -11,7 +11,6 @@ import { createStreamParser } from '../planning/stream-parser';
 import { configGate, writeEnvFiles } from '../sessions/run-support';
 import { createStderrTail, logDroppedFrame, pipeSessionOutput, reportStartFailure } from '../sessions/turn-support';
 
-const STDERR_KEPT_CHARS = 500;
 const REPORT_KEPT_CHARS = 4_000;
 const COMMIT_SUBJECT_CHARS = 72;
 
@@ -271,7 +270,7 @@ export function createQuickFixSessions(opts: {
 
 		run.mcp = mcp;
 
-		const stderr = createStderrTail(STDERR_KEPT_CHARS);
+		const stderr = createStderrTail();
 		const parser = createStreamParser({
 			onEvent: (event) => {
 				if (event.kind === 'text') {

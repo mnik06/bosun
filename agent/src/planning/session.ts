@@ -28,8 +28,6 @@ const PLANNING_TOOLS = {
 	]
 };
 
-const STDERR_KEPT_CHARS = 500;
-
 // Sent once when a turn ends with nothing published. The failure it addresses is
 // always the same: the session spawned subagents, decided their work was still
 // running somewhere, and ended its turn to wait for a report that is never
@@ -323,7 +321,7 @@ export function createPlanningSessions(opts: {
 		opts.send({ type: 'plan.activity', planId, label: 'Starting the session' });
 
 		const activity = createActivityTracker();
-		const stderr = createStderrTail(STDERR_KEPT_CHARS);
+		const stderr = createStderrTail();
 		const parser = createStreamParser({
 			onEvent: (event) => {
 				if (event.kind === 'text') {

@@ -5,8 +5,7 @@ import { zod4Resolver } from 'mantine-form-zod-resolver'
 import { useConnectGithubPatConnection } from '~/features/connect-github-pat/api/use-connect-github-pat'
 import { errorSsoUrl } from '~/features/connect-github-pat/lib/error-sso-url'
 import { ConnectGithubPatFormSchema, detectGithubTokenKind, type ConnectGithubPatForm } from '~/features/connect-github-pat/model/connect-github-pat-form'
-import { AppModal } from '~/shared/ui'
-import { toErrorMessage } from '~/shared/lib'
+import { AppModal, QueryErrorAlert } from '~/shared/ui'
 
 const NEW_TOKEN_URL = 'https://github.com/settings/personal-access-tokens/new'
 const CLASSIC_TOKEN_URL = 'https://github.com/settings/tokens/new'
@@ -118,16 +117,13 @@ export function ConnectGithubPatModal (props: { opened: boolean, onClose: () => 
 					</Text>
 
 					{connect.error === null ? null : (
-						<Alert color="red" variant="light" title="Could not connect">
-							<Stack gap={4}>
-								<Text size="sm">{toErrorMessage(connect.error, 'Unknown error')}</Text>
-								{ssoUrl === null ? null : (
-									<Anchor href={ssoUrl} target="_blank" rel="noreferrer" size="sm">
-										Authorize this token for SSO on GitHub
-									</Anchor>
-								)}
-							</Stack>
-						</Alert>
+						<QueryErrorAlert title="Could not connect" error={connect.error} variant="light">
+							{ssoUrl === null ? null : (
+								<Anchor href={ssoUrl} target="_blank" rel="noreferrer" size="sm">
+									Authorize this token for SSO on GitHub
+								</Anchor>
+							)}
+						</QueryErrorAlert>
 					)}
 
 					<Button type="submit" loading={connect.isPending} disabled={classicUnconfirmed}>

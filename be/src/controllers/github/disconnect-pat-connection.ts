@@ -1,5 +1,5 @@
 import { HttpError } from 'src/api/errors/HttpError';
-import { announceMachine } from 'src/controllers/machines/shared/announce';
+import { announceMachines, listAffectedMachines } from 'src/controllers/machines/shared/announce';
 import { type GithubPatConnectionRepo } from 'src/repos/github/github-pat-connection.repo';
 import { type RepositoryRepo } from 'src/repos/github/repository.repo';
 import { type MachineRepo } from 'src/repos/machines/machine.repo';
@@ -34,19 +34,20 @@ export async function disconnectGithubPatConnection(opts: {
 
 	if (encryptedToken !== null) {
 		const pat = opts.patEncryption.decrypt(encryptedToken);
+		const webhookIds = await opts.repositoryRepo.listGithubWebhookIdsByIds(repositories.map((repository) => repository.id));
 
 		await Promise.all(
 			repositories.map(async (repository) => {
-				const webhookId = await opts.repositoryRepo.getGithubWebhookIdById(repository.id);
+				const webhookId = webhookIds.get(repository.id);
 
-				if (webhookId !== null) {
+				if (webhookId !== undefined) {
 					await opts.githubPat.deleteWebhook({ pat, fullName: repository.fullName, webhookId });
 				}
 			})
 		);
 	}
 
-	const affectedMachines = (await Promise.all(repositories.map((repository) => opts.machineRepo.listByRepository(repository.id)))).flat();
+	const affectedMachines = await listAffectedMachines(opts, repositories);
 
 	const deleted = await opts.githubPatConnectionRepo.deleteOwned({ id: connection.id, projectId: opts.projectId });
 
@@ -54,11 +55,5 @@ export async function disconnectGithubPatConnection(opts: {
 		throw new HttpError(404, 'GitHub token connection not found');
 	}
 
-	for (const machine of affectedMachines) {
-		const refreshed = await opts.machineRepo.getById(machine.id);
-
-		if (refreshed) {
-			announceMachine({ socketRegistry: opts.socketRegistry, machine: refreshed });
-		}
-	}
+	await announceMachines(opts, affectedMachines);
 }

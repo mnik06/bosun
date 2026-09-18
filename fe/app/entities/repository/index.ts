@@ -48,12 +48,8 @@ export {
 	type AvailableAzureRepository,
 	type AvailableRepository,
 	type AzureConnection,
-	type AzureConnectionStatus,
 	type GithubInstallation,
 	type GithubPatConnection,
-	type GithubPatConnectionStatus,
-	type GithubRepositoryConnection,
-	type GithubTokenType,
 	type MachineOnboarding,
 	type OnboardingAssumption,
 	type OnboardingPhase,
@@ -63,8 +59,7 @@ export {
 	type OnboardingStep,
 	type Repository,
 	type RepositoryConfig,
-	type RepositoryMessage,
-	type RepositoryProvider
+	type RepositoryMessage
 } from './model/repository'
 export { useRepositoryAnswer } from './model/use-repository-answer'
 export { OnboardingStatusBadge } from './ui/onboarding-status-badge'

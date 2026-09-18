@@ -13,8 +13,6 @@ export type GithubInstallation = z.infer<typeof GithubInstallationSchema>
 
 export const AzureConnectionStatusSchema = z.enum(['active', 'broken'])
 
-export type AzureConnectionStatus = z.infer<typeof AzureConnectionStatusSchema>
-
 export const AzureConnectionSchema = z.object({
 	id: z.string(),
 	projectId: z.string(),
@@ -30,15 +28,9 @@ export type AzureConnection = z.infer<typeof AzureConnectionSchema>
 
 export const RepositoryProviderSchema = z.enum(['github', 'azure_devops'])
 
-export type RepositoryProvider = z.infer<typeof RepositoryProviderSchema>
-
 export const GithubPatConnectionStatusSchema = z.enum(['active', 'broken'])
 
-export type GithubPatConnectionStatus = z.infer<typeof GithubPatConnectionStatusSchema>
-
 export const GithubTokenTypeSchema = z.enum(['fine_grained', 'classic'])
-
-export type GithubTokenType = z.infer<typeof GithubTokenTypeSchema>
 
 export const GithubPatConnectionSchema = z.object({
 	id: z.string(),
@@ -95,8 +87,6 @@ export const GithubRepositoryConnectionSchema = z.discriminatedUnion('kind', [
 	z.object({ kind: z.literal('app'), installationId: z.string(), accountLogin: z.string() }),
 	z.object({ kind: z.literal('pat'), connectionId: z.string(), githubLogin: z.string() })
 ])
-
-export type GithubRepositoryConnection = z.infer<typeof GithubRepositoryConnectionSchema>
 
 export const AvailableRepositorySchema = z.object({
 	githubRepoId: z.number(),

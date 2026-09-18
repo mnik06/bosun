@@ -7,6 +7,12 @@ export async function sleep(ms: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+export function clipTail(text: string, max: number): string {
+	const trimmed = text.trim();
+
+	return trimmed.length <= max ? trimmed : `…${trimmed.slice(-max)}`;
+}
+
 // A process spawned detached, in its own group, so a signal meant for it reaches
 // whatever it spawned as well. `-pid` addresses the group; it throws once the
 // group is already gone, and the child itself is signalled instead — the same

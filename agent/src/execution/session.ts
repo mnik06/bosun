@@ -25,7 +25,6 @@ import {
 } from './mcp/tools';
 import { prepareRunEnvironment } from './run-environment';
 
-const STDERR_KEPT_CHARS = 500;
 const REPORT_KEPT_CHARS = 4_000;
 const TAIL_KEPT_CHARS = 1_500;
 
@@ -504,7 +503,7 @@ export function createExecutionSessions(opts: {
 		opts.send({ type: 'exec.activity', runId: msg.runId, label: 'Starting the session' });
 
 		const activity = createActivityTracker();
-		const stderr = createStderrTail(STDERR_KEPT_CHARS);
+		const stderr = createStderrTail();
 		const parser = createStreamParser({
 			onEvent: (event) => {
 				if (event.kind === 'text') {
