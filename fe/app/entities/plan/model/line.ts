@@ -8,8 +8,6 @@ export const LineBuildSchema = BuildSchema.extend({
 	reason: z.string().nullable()
 })
 
-export type LineBuild = z.infer<typeof LineBuildSchema>
-
 export const MachineCapacitySchema = z.object({
 	machineId: z.string(),
 	machineName: z.string(),

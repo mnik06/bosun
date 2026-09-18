@@ -22,8 +22,6 @@ export const NotificationKindSchema = z.enum([
 	'quickfix.failed'
 ])
 
-export type NotificationKind = z.infer<typeof NotificationKindSchema>
-
 export const NotificationSchema = z.object({
 	id: z.string(),
 	kind: NotificationKindSchema,
@@ -31,7 +29,6 @@ export const NotificationSchema = z.object({
 	body: z.string(),
 	url: z.string(),
 	planId: z.string().nullable(),
-	quickFixId: z.string().nullable(),
 	sentAt: z.iso.datetime(),
 	readAt: z.iso.datetime().nullable()
 })

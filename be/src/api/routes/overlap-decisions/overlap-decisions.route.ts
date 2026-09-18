@@ -14,7 +14,6 @@ const routes: FastifyPluginAsync = async function (f) {
 			await decideOverlap(lineDeps(fastify), {
 				id: req.params.id,
 				projectId: req.membership!.projectId,
-				userId: req.user!.id,
 				chosen: req.body.chosen
 			});
 

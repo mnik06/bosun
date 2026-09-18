@@ -15,8 +15,6 @@ const columns = {
 	item: overlapDecisions.item,
 	options: overlapDecisions.options,
 	chosen: overlapDecisions.chosen,
-	decidedByUserId: overlapDecisions.decidedByUserId,
-	decidedAt: overlapDecisions.decidedAt,
 	createdAt: overlapDecisions.createdAt
 };
 
@@ -56,10 +54,10 @@ export function getOverlapDecisionRepo(db: DbOrTx) {
 
 		// Only an open decision can be decided: two people answering at once get one
 		// ruling, not the last one.
-		async decide(opts: { id: string; chosen: OverlapChoice; userId: string }): Promise<OverlapDecision | null> {
+		async decide(opts: { id: string; chosen: OverlapChoice }): Promise<OverlapDecision | null> {
 			const [row] = await db
 				.update(overlapDecisions)
-				.set({ chosen: opts.chosen, decidedByUserId: opts.userId, decidedAt: new Date() })
+				.set({ chosen: opts.chosen })
 				.where(and(eq(overlapDecisions.id, opts.id), isNull(overlapDecisions.chosen)))
 				.returning(columns);
 

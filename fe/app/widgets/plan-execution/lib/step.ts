@@ -11,6 +11,7 @@ const STEP: Partial<Record<BuildStatus, number>> = {
 	fixing: 2,
 	rechecking: 2,
 	in_review: 3,
+	fixing_bugs: 3,
 	merged: 4
 }
 

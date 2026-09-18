@@ -1,8 +1,11 @@
 import { type getDb } from 'src/services/drizzle/drizzle.service';
+import { getBugfixMessageRepo } from 'src/repos/builds/bugfix-message.repo';
+import { getBugfixSessionRepo } from 'src/repos/builds/bugfix-session.repo';
 import { getBuildRepo } from 'src/repos/builds/build.repo';
 import { getIntegrationRepo } from 'src/repos/builds/integration.repo';
 import { getOverlapDecisionRepo } from 'src/repos/builds/overlap-decision.repo';
 import { getPlanAmendmentRepo } from 'src/repos/builds/plan-amendment.repo';
+import { getPlanBugRepo } from 'src/repos/builds/plan-bug.repo';
 import { getPlanDependencyRepo } from 'src/repos/builds/plan-dependency.repo';
 import { getRepositoryMessageRepo } from 'src/repos/builds/repository-message.repo';
 import { getSliceRunRepo } from 'src/repos/builds/slice-run.repo';
@@ -26,6 +29,8 @@ import { getUserRepo } from 'src/repos/users/user.repo';
 export function getRepos(db: ReturnType<typeof getDb>) {
 	return {
 		acRepo: getAcRepo(db),
+		bugfixMessageRepo: getBugfixMessageRepo(db),
+		bugfixSessionRepo: getBugfixSessionRepo(db),
 		buildRepo: getBuildRepo(db),
 		githubInstallationRepo: getGithubInstallationRepo(db),
 		integrationRepo: getIntegrationRepo(db),
@@ -34,6 +39,7 @@ export function getRepos(db: ReturnType<typeof getDb>) {
 		onboardingRunRepo: getOnboardingRunRepo(db),
 		overlapDecisionRepo: getOverlapDecisionRepo(db),
 		planAmendmentRepo: getPlanAmendmentRepo(db),
+		planBugRepo: getPlanBugRepo(db),
 		planDecisionRepo: getPlanDecisionRepo(db),
 		planDependencyRepo: getPlanDependencyRepo(db),
 		planMessageRepo: getPlanMessageRepo(db),

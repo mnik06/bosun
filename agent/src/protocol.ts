@@ -26,6 +26,16 @@ import {
 	LineAnswerTextMsgSchema,
 	LineAskMsgSchema
 } from './build-frames';
+import {
+	BugfixActivityMsgSchema,
+	BugfixBugsMsgSchema,
+	BugfixCancelMsgSchema,
+	BugfixDoneMsgSchema,
+	BugfixErrorMsgSchema,
+	BugfixSayMsgSchema,
+	BugfixStartMsgSchema,
+	BugfixTextMsgSchema
+} from './bugfix-frames';
 import { FootprintSchema } from './footprint';
 import { ProjectProfileSchema } from './project-profile';
 import { CommitOutcomeSchema } from './commit-outcome';
@@ -104,6 +114,8 @@ export const HelloMsgSchema = z.object({
 	onboardingRunIds: z.array(z.string()).optional(),
 	// The integrations still held, on the same terms.
 	integrationIds: z.array(z.string()).optional(),
+	// The bug-fixing sessions still held, on the same terms.
+	bugfixSessionIds: z.array(z.string()).optional(),
 	// How long this agent process has been alive. It is what separates a socket
 	// that dropped from an agent that restarted — the two look identical from the
 	// backend, and only one of them means the sessions on that machine are gone.
@@ -275,6 +287,11 @@ export const AgentMsgSchema = z.discriminatedUnion('type', [
 	RepoErrorMsgSchema,
 	OnboardingDoneMsgSchema,
 	OnboardingErrorMsgSchema,
+	BugfixTextMsgSchema,
+	BugfixActivityMsgSchema,
+	BugfixBugsMsgSchema,
+	BugfixDoneMsgSchema,
+	BugfixErrorMsgSchema,
 	QuickFixDoneMsgSchema,
 	QuickFixErrorMsgSchema
 ]);
@@ -504,6 +521,9 @@ export const ServerMsgSchema = z.discriminatedUnion('type', [
 	RepoAttachMsgSchema,
 	OnboardingStartMsgSchema,
 	OnboardingCancelMsgSchema,
+	BugfixStartMsgSchema,
+	BugfixSayMsgSchema,
+	BugfixCancelMsgSchema,
 	QuickFixStartMsgSchema
 ]);
 
@@ -521,4 +541,5 @@ export {
 	type ResolvedConflict
 } from './build-frames';
 
+export { type BugfixStart, type BugfixSay } from './bugfix-frames';
 export { type QuickFixStart } from './quick-fix-frames';

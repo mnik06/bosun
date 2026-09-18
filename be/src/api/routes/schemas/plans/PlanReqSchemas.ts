@@ -63,7 +63,6 @@ export const AgentBlockersReqSchema = z.object({
 });
 
 export const AgentDecisionReqSchema = z.object({
-	sliceId: z.string().nullable().default(null),
 	fork: z.string().min(1),
 	options: z.string().nullable().default(null),
 	chose: z.string().min(1),
@@ -94,3 +93,21 @@ export const AgentResolveFindingReqSchema = z.object({
 	status: z.enum(['fixed', 'left']),
 	note: z.string().trim().min(1).max(2000)
 });
+
+export const AgentReportBugsReqSchema = z.object({
+	sessionId: z.string().min(1),
+	descriptions: z.array(z.string().trim().min(1).max(2000)).min(1)
+});
+
+export const AgentBugIdParamsSchema = z.object({ bugId: z.string().min(1) });
+
+export const AgentUpdateBugStatusReqSchema = z
+	.object({
+		sessionId: z.string().min(1),
+		status: z.enum(['fixing', 'fixed', 'failed']),
+		note: z.string().trim().min(1).max(2000).optional()
+	})
+	.refine((value) => value.status !== 'failed' || value.note !== undefined, {
+		message: 'note is required when marking a bug failed',
+		path: ['note']
+	});

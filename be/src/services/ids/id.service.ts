@@ -24,6 +24,9 @@ export function getIdService() {
 		createRepositoryMessageId: (): string => `rm_${nanoid(12)}`,
 		createPushSubscriptionId: (): string => `psub_${nanoid(12)}`,
 		createNotificationId: (): string => `ntf_${nanoid(12)}`,
+		createBugfixSessionId: (): string => `bfs_${nanoid(12)}`,
+		createPlanBugId: (): string => `bug_${nanoid(12)}`,
+		createBugfixMessageId: (): string => `bfm_${nanoid(12)}`,
 		createQuickFixId: (): string => `qf_${nanoid(12)}`
 	};
 }

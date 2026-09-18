@@ -1,5 +1,6 @@
 import WebSocket from 'ws';
 import { type AskSessions } from '../ask/session';
+import { type BugfixSessions } from '../bugfix/session';
 import { type ExecutionSessions } from '../execution/session';
 import { type IntegrationSessions } from '../integration/session';
 import { type OnboardingSessions } from '../onboarding/session';
@@ -54,6 +55,7 @@ export interface RouterDeps {
 	quickFixes: QuickFixSessions;
 	summaries: SummarySessions;
 	asks: AskSessions;
+	bugfix: BugfixSessions;
 	// Where outcomes that outlive this connection go: a worktree readied while the
 	// socket was replaced still has to reach the backend.
 	sink: (message: AgentMsg) => void;
@@ -306,6 +308,25 @@ export async function routeServerFrame(deps: RouterDeps, msg: ServerMsg): Promis
 
 			return;
 
+		case 'bugfix.start':
+			if (refusePaused(deps, { type: 'bugfix.error', sessionId: msg.sessionId, buildId: msg.buildId, message: PAUSED })) {
+				return;
+			}
+
+			await deps.bugfix.start(msg);
+
+			return;
+
+		case 'bugfix.say':
+			deps.bugfix.say(msg);
+
+			return;
+
+		case 'bugfix.cancel':
+			deps.bugfix.cancel(msg.sessionId);
+
+			return;
+
 		case 'quickfix.start':
 			if (refusePaused(deps, { type: 'quickfix.error', quickFixId: msg.quickFixId, message: PAUSED })) {
 				return;
@@ -332,6 +353,7 @@ export async function routeServerFrame(deps: RouterDeps, msg: ServerMsg): Promis
 			deps.onboarding.cancelAll();
 			deps.quickFixes.cancelAll();
 			deps.asks.cancelAll();
+			deps.bugfix.cancelAll();
 			await deps.services.stack.downAll();
 			await deps.services.teardown.terminateSelf({
 				configPath: deps.configPath,

@@ -14,6 +14,7 @@ export const BuildStatusSchema = z.enum([
 	'fixing',
 	'rechecking',
 	'in_review',
+	'fixing_bugs',
 	'merged',
 	'needs_you',
 	'failed',
@@ -34,6 +35,7 @@ export const ACTIVE_BUILD_STATUSES: BuildStatus[] = [
 	'fixing',
 	'rechecking',
 	'in_review',
+	'fixing_bugs',
 	'needs_you'
 ];
 
@@ -241,8 +243,6 @@ export const OverlapDecisionSchema = z.object({
 	item: OverlapItemSchema,
 	options: z.array(OverlapChoiceSchema),
 	chosen: OverlapChoiceSchema.nullable(),
-	decidedByUserId: z.string().nullable(),
-	decidedAt: z.coerce.date().nullable(),
 	createdAt: z.coerce.date()
 });
 

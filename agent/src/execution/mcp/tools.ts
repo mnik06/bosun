@@ -193,7 +193,6 @@ async function markTool(opts: { name: string; args: unknown; planId: string; bos
 export function createExecutionDispatch(opts: {
 	toolSet: ToolSet;
 	planId: string;
-	sliceId: string;
 	buildId: string;
 	runId: string;
 	bosunApi: BosunApiService;
@@ -249,7 +248,6 @@ export function createExecutionDispatch(opts: {
 						JSON.stringify(
 							await opts.bosunApi.recordPlanDecision({
 								planId: opts.planId,
-								sliceId: opts.sliceId,
 								fork: parsed.fork,
 								options: parsed.options ?? null,
 								chose: parsed.chose,

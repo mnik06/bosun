@@ -1,0 +1,28 @@
+import { type LineDeps } from 'src/controllers/line/line-deps';
+import { admit, loadForMachine, type Admission } from 'src/controllers/line/shared/memory-budget';
+import { type Machine } from 'src/types/MachineSchema';
+
+// `fixing_bugs` sits outside `BUILD_SLOT_STATUSES` on purpose (see next-job.ts):
+// the scheduler must never dispatch into, or pre-empt, a live bug-fixing
+// session. That means admitting a *new* one has to count every other
+// `fixing_bugs` build on the machine by hand — the scheduler's own
+// `machineLoad()` never will. `verifyWaiting` is always false: a precise answer
+// needs the full repository snapshot, which starting a session does not
+// otherwise load, and treating a bug fix as never blocking a waiting verify is
+// the documented approximation.
+export async function admitBugfixSession(deps: LineDeps, opts: { machine: Machine }): Promise<Admission> {
+	const [load, fixingBugs] = await Promise.all([
+		loadForMachine(deps, opts.machine.id),
+		deps.buildRepo.listForMachine({ machineId: opts.machine.id, statuses: ['fixing_bugs'] })
+	]);
+
+	return admit({
+		memory: deps.machineMemory.get(opts.machine.id),
+		jobClass: 'build',
+		load: { ...load, build: load.build + fixingBugs.length },
+		verifyLanes: opts.machine.verifyLanes,
+		verifyWaiting: false,
+		buildCap: opts.machine.buildCap,
+		ignoreMemoryBudget: opts.machine.ignoreMemoryBudget
+	});
+}

@@ -6,8 +6,6 @@ export const McpRequirementSchema = z.object({
 	helpUrl: z.url().optional()
 })
 
-export type McpRequirement = z.infer<typeof McpRequirementSchema>
-
 // `server` is deliberately not modelled here. What the browser needs is the name,
 // the blurb and which credentials the machine will ask for — the definition
 // itself is the agent's business and never renders.
