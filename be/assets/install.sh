@@ -145,6 +145,17 @@ ensure_agent_user() {
 	[ "$(id -u "$AGENT_USER")" != "0" ] || die "$AGENT_USER has uid 0 — the agent never runs as root"
 }
 
+# Linger starts the user manager asynchronously, and `systemctl --user` fails
+# until its socket exists.
+wait_for_user_manager() {
+	waited=0
+
+	while [ ! -S "/run/user/$1/systemd/private" ] && [ "$waited" -lt 15 ]; do
+		sleep 1
+		waited=$((waited + 1))
+	done
+}
+
 # Runs a command as the agent user without a login shell, which keeps the
 # exported environment: that is how the enrollment code reaches the user phase
 # without ever being an argument, since argv is world-readable in /proc.
@@ -186,12 +197,7 @@ root_phase() {
 	# Without linger the user manager exists only while somebody is logged in as
 	# that user — which, for a user nobody logs in as, is never.
 	if loginctl enable-linger "$AGENT_USER" >/dev/null 2>&1; then
-		waited=0
-
-		while [ ! -S "/run/user/$uid/systemd/private" ] && [ "$waited" -lt 15 ]; do
-			sleep 1
-			waited=$((waited + 1))
-		done
+		wait_for_user_manager "$uid"
 	else
 		note "could not enable linger for $AGENT_USER — the agent will not stay up without a login session"
 	fi
@@ -465,13 +471,27 @@ OOMPolicy=continue
 WantedBy=default.target
 UNIT
 
+	uid="$(id -u)"
+	user="$(id -un)"
+
+	# `su <user>` without `-` keeps the caller's XDG_RUNTIME_DIR — root's
+	# /run/user/0, which this user cannot enter — and `systemctl --user` then fails
+	# with "Operation not permitted". Only this user's own directory reaches its
+	# manager.
+	XDG_RUNTIME_DIR="/run/user/$uid"
+	DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus"
+	export XDG_RUNTIME_DIR DBUS_SESSION_BUS_ADDRESS
+
 	# Without linger the user manager is torn down on logout, taking the agent with
 	# it. Under the root phase it is already enabled, and this is a no-op.
-	loginctl enable-linger "$(id -un)" >/dev/null 2>&1 ||
+	if loginctl enable-linger "$user" >/dev/null 2>&1; then
+		wait_for_user_manager "$uid"
+	else
 		note "could not enable linger — the agent will stop when you log out"
+	fi
 
 	if ! systemctl --user daemon-reload; then
-		note "systemctl --user is not reachable from this shell — start the agent with: systemctl --user enable --now bosun-agent.service"
+		note "no user manager is running for $user — as root: loginctl enable-linger $user; then as $user: XDG_RUNTIME_DIR=/run/user/$uid systemctl --user enable --now bosun-agent.service"
 
 		return 0
 	fi
@@ -489,6 +509,24 @@ UNIT
 	note "agent running. Follow it with: journalctl --user -u bosun-agent -f"
 }
 
+# Only a login shell puts ~/.local/bin on the PATH, and only where ~/.profile
+# says so. `su <user>` without `-` keeps root's PATH and reads ~/.bashrc alone, so
+# `bosun-agent` was not found there although the agent itself was running.
+add_to_shell_path() {
+	rc_marker='# added by the bosun-agent installer'
+	rc_line="case \":\$PATH:\" in *\":$INSTALL_DIR:\"*) ;; *) PATH=\"$INSTALL_DIR:\$PATH\" ;; esac $rc_marker"
+
+	for rc in "$HOME/.bashrc" "$HOME/.profile"; do
+		! grep -qF "$rc_marker" "$rc" 2>/dev/null || continue
+		printf '\n%s\n' "$rc_line" >> "$rc"
+	done
+
+	case ":$PATH:" in
+		*":$INSTALL_DIR:"*) ;;
+		*) note "added $INSTALL_DIR to the PATH in ~/.bashrc and ~/.profile — open a new shell to run bosun-agent directly" ;;
+	esac
+}
+
 user_phase() {
 	cd "$HOME" 2>/dev/null || cd /
 
@@ -501,11 +539,7 @@ user_phase() {
 	seed_files
 	resolve_service_path
 	install_service
-
-	case ":$PATH:" in
-		*":$INSTALL_DIR:"*) ;;
-		*) note "add $INSTALL_DIR to your PATH to run bosun-agent directly" ;;
-	esac
+	add_to_shell_path
 
 	[ "${BOSUN_SKIP_SETUP:-0}" != "1" ] || return 0
 
