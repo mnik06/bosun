@@ -58,6 +58,7 @@ const START = {
 	push: true,
 	answer: null,
 	findings: [],
+	priorProposals: [],
 	recheckCodes: [],
 	configDraft: null,
 	policy: null,

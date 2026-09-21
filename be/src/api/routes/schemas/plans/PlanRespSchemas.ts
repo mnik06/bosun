@@ -21,6 +21,7 @@ import {
 	PlanSchema,
 	SliceSchema
 } from 'src/types/PlanSchema';
+import { PlanProposalSchema } from 'src/types/PlanProposalSchema';
 import { PlanStateSchema } from 'src/types/PlanStateSchema';
 
 export const PlanWithStateSchema = PlanSchema.extend({ state: PlanStateSchema });
@@ -145,6 +146,17 @@ export const AgentBlockersRespSchema = z.object({ blockedBy: z.array(z.number().
 export const AgentDecisionRespSchema = z.object({ decisionId: z.string() });
 
 export const AgentFindingRespSchema = z.object({ findingId: z.string() });
+
+export const AgentProposePlanRespSchema = z.object({ proposalId: z.string() });
+
+export const PlanProposalListEntrySchema = PlanProposalSchema.extend({
+	sourcePlanNumber: z.number().int(),
+	sourcePlanTitle: z.string().nullable()
+});
+
+export type PlanProposalListEntry = z.infer<typeof PlanProposalListEntrySchema>;
+
+export const PlanProposalListRespSchema = z.array(PlanProposalListEntrySchema);
 
 export const AgentPlanBugsRespSchema = z.array(PlanBugSchema);
 

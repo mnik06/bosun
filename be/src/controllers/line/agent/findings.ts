@@ -1,5 +1,5 @@
 import { HttpError } from 'src/api/errors/HttpError';
-import { announcePlanForBuild, requireMachineBuild } from 'src/controllers/line/agent/shared/agent-build';
+import { announcePlanForBuild, requireMachineBuild, requireRunningFix } from 'src/controllers/line/agent/shared/agent-build';
 import { type LineDeps } from 'src/controllers/line/line-deps';
 import { type VerifyFinding } from 'src/types/BuildSchema';
 import { type PlanCriteria } from 'src/types/build-frames';
@@ -56,11 +56,8 @@ export async function resolveFinding(
 	}
 
 	const build = await requireMachineBuild(deps, { buildId: finding.buildId, machineId: opts.machineId });
-	const fixing = (await deps.sliceRunRepo.listForBuild(build.id)).some((run) => run.phase === 'fix' && run.status === 'running');
 
-	if (!fixing) {
-		throw new HttpError(409, 'Findings are resolved by a fix session that is running');
-	}
+	await requireRunningFix(deps, { buildId: build.id, message: 'Findings are resolved by a fix session that is running' });
 
 	const resolved = await deps.verifyFindingRepo.update({ id: finding.id, status: opts.status, note: opts.note });
 

@@ -9,6 +9,7 @@ import { formatRelativeTime } from '~/shared/lib'
 
 const KIND_LABEL: Record<NeedsYouItem['kind'], string> = {
 	question: 'Question',
+	proposal: 'Proposed plan',
 	overlap: 'Overlap decision',
 	integration: 'Sync failed',
 	checks: 'Checks still red',
@@ -88,11 +89,11 @@ export function NeedsYouMenu () {
 						Nothing is waiting on anybody.
 					</Text>
 				) : (
-					items.map((item) => (
+					items.map((item, index) => (
 						<Menu.Item
-							key={`${item.planId}-${item.kind}`}
+							key={`${item.planId}-${item.kind}-${String(index)}`}
 							component={Link}
-							to={`/plans/${item.planId}`}
+							to={item.kind === 'proposal' ? '/plans' : `/plans/${item.planId}`}
 						>
 							<Text size="sm" fw={600} truncate>
 								{planLabel({ number: item.planNumber, title: item.planTitle })}

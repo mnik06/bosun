@@ -347,6 +347,7 @@ describe('exec frames', () => {
 		push: true,
 		answer: null,
 		findings: [],
+		priorProposals: [],
 		recheckCodes: [],
 		memoryMaxBytes: null
 	} satisfies ServerMsg;

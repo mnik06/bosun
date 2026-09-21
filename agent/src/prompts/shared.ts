@@ -149,8 +149,8 @@ export function notesSection(config: ProjectConfig): string {
 }
 
 // Everything a session used to rediscover an hour into a bullet, written down once
-// and proven by onboarding. It is the starting point, not the ceiling: a check the
-// config does not name is still worth running when the session finds one.
+// and proven by onboarding. Its checks are the loop; the one place a session looks
+// further is a package it changes that none of them covers (see `loopSource`).
 export function configuredProject(context: RunContext): string[] {
 	const config = context.config;
 
@@ -188,29 +188,57 @@ function configuredProfile(profile: ProjectProfile): string[] {
 	].filter(Boolean);
 }
 
-// The heart of the user's requirement: the session works out how this repository
-// proves itself before it changes anything. A loop discovered after the work is
-// a loop that gets skipped when the work runs long.
-export function feedbackLoops(context: RunContext): string {
-	const configured = context.config === null ? configuredProfile(context.profile) : configuredProject(context);
-	const source = context.config === null ? 'What the operator has already told bosun about this project' : `What \`${PROJECT_CONFIG_PATH}\` says about this project`;
+export function hasConfiguredChecks(config: ProjectConfig | null): config is ProjectConfig {
+	return config !== null && config.checks.length > 0;
+}
 
-	return `# Step 1 — find this repository's feedback loops, before you change anything
+// Onboarding already ran every check a config names. A session sent to re-read the
+// manifests, the CI and the Makefile anyway repeats that search on every bullet,
+// and ends up preferring a script it found over the check onboarding proved.
+export function loopSource(config: ProjectConfig | null): string {
+	if (hasConfiguredChecks(config)) {
+		return `\`${PROJECT_CONFIG_PATH}\` already says how this project proves itself, and onboarding ran every
+command in it. **Its checks, listed below, are your loop.** Do not re-read the manifests, the CI workflow
+or the Makefile to find another one or to confirm these.
 
-You do not know this project. Work out how it tells you that you have broken it, and write the
+Look further in one case only: a package or workspace you will change that none of those checks covers.
+Then read that package's own manifest for its typecheck, lint and test commands — nothing wider — and
+write down what you found.`;
+	}
+
+	return `You do not know this project. Work out how it tells you that you have broken it, and write the
 commands down in your report. Look in \`package.json\` scripts, the Makefile, the CI workflow, and any
 \`CLAUDE.md\`, \`AGENTS.md\` or \`CONTRIBUTING.md\` — those files are the project's own account of how it
-is built, and they outrank your habits.
+is built, and they outrank your habits.`;
+}
 
-Find, for each package or workspace you will touch:
+const DISCOVERY_LIST = `Find, for each package or workspace you will touch:
 
 - the **typecheck**, **lint** and **unit test** commands, or the single command that runs all of them
 - whether there is a **duplication** or **dead-code** check, and what invokes it
 - how **migrations** are generated and applied, if the project has a database
 - how the **dev stack** starts, and on which ports
 - anything else that fails the build: a formatter check, a bundle-size gate, a codegen step that must
-  be re-run after a schema or API change
+  be re-run after a schema or API change`;
 
+// The fix session's machine pass runs the repository's own dead-code and
+// duplication tools, and a config names its checks without saying which is which.
+const SCAN_TOOLS = `The fix pass in step 2 also needs this repository's **dead-code** and **duplication** tools. Tell them
+apart among the checks below — read the script a check runs when its name does not say — and write down
+which they are. "None" is an answer.`;
+
+// The heart of the user's requirement: the session works out how this repository
+// proves itself before it changes anything. A loop discovered after the work is
+// a loop that gets skipped when the work runs long.
+export function feedbackLoops(context: RunContext): string {
+	const configured = context.config === null ? configuredProfile(context.profile) : configuredProject(context);
+	const source = context.config === null ? 'What the operator has already told bosun about this project' : `What \`${PROJECT_CONFIG_PATH}\` says about this project`;
+	const detail = hasConfiguredChecks(context.config) ? (context.mode === 'fix' ? SCAN_TOOLS : '') : DISCOVERY_LIST;
+
+	return `# Step 1 — this repository's feedback loops, before you change anything
+
+${loopSource(context.config)}
+${detail === '' ? '' : `\n${detail}\n`}
 **Write the commands down; do not run them yet.** When and how they run is set out at the end of
 this step, and it is the same for every session bosun starts on this machine.
 

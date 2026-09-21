@@ -10,6 +10,7 @@ import { LineChatDrawer } from '~/widgets/line-chat-drawer'
 import { PlanBoard } from '~/widgets/plan-board'
 import { PlanHistory } from '~/widgets/plan-history'
 import { PlanList } from '~/widgets/plan-list'
+import { PlanProposals } from '~/widgets/plan-proposals'
 
 type PlansView = 'board' | 'list' | 'history'
 
@@ -49,6 +50,8 @@ export default function PlansPage () {
 				</Group>
 			}
 		>
+			<PlanProposals />
+
 			{view === 'board' ? <PlanBoard /> : null}
 			{view === 'list' ? <PlanList /> : null}
 			{view === 'history' ? <PlanHistory /> : null}

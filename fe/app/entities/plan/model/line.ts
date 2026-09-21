@@ -29,7 +29,7 @@ export const LineSchema = z.object({
 export type Line = z.infer<typeof LineSchema>
 
 export const NeedsYouItemSchema = z.object({
-	kind: z.union([z.literal('question'), NeedsYouReasonSchema]),
+	kind: z.union([z.literal('question'), z.literal('proposal'), NeedsYouReasonSchema]),
 	planId: z.string(),
 	planNumber: z.number().int(),
 	planTitle: z.string().nullable(),

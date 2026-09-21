@@ -306,6 +306,10 @@ export const ExecStartMsgSchema = z.object({
 		.nullable(),
 	// A fix session's findings.
 	findings: z.array(ExecFindingSchema),
+	// What fix sessions already proposed for this repository and nobody started —
+	// open, or dismissed by a person — so a fix does not propose it a second time.
+	// Empty on every other session.
+	priorProposals: z.array(z.object({ title: z.string(), input: z.string(), status: z.enum(['open', 'dismissed']) })),
 	// The criteria a re-check drives, or a fix-again session is limited to. Empty on
 	// a first fix, which is how that session knows the codebase sweep is still its job.
 	recheckCodes: z.array(z.string()),

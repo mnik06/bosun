@@ -17,6 +17,16 @@ export async function requireMachineBuild(deps: LineDeps, opts: { buildId: strin
 	return build;
 }
 
+// Only the fix session in flight on a build writes its outcomes: a session that
+// already ended — or a drive, which watches and never decides — must not.
+export async function requireRunningFix(deps: LineDeps, opts: { buildId: string; message: string }): Promise<void> {
+	const fixing = (await deps.sliceRunRepo.listForBuild(opts.buildId)).some((run) => run.phase === 'fix' && run.status === 'running');
+
+	if (!fixing) {
+		throw new HttpError(409, opts.message);
+	}
+}
+
 // The nudge every agent-authorized write ends on: the plan page and its
 // verification/bug panels refetch what changed rather than being sent it.
 export async function announcePlanForBuild(deps: LineDeps, build: Build): Promise<void> {

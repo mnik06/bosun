@@ -23,6 +23,7 @@ import { getAcRepo } from 'src/repos/plans/ac.repo';
 import { getChatAttachmentRepo } from 'src/repos/plans/chat-attachment.repo';
 import { getPlanDecisionRepo } from 'src/repos/plans/plan-decision.repo';
 import { getPlanMessageRepo } from 'src/repos/plans/plan-message.repo';
+import { getPlanProposalRepo } from 'src/repos/plans/plan-proposal.repo';
 import { getPlanRepo } from 'src/repos/plans/plan.repo';
 import { getProjectMemberRepo } from 'src/repos/projects/project-member.repo';
 import { getProjectRepo } from 'src/repos/projects/project.repo';
@@ -51,6 +52,7 @@ export function getRepos(db: ReturnType<typeof getDb>) {
 		planDecisionRepo: getPlanDecisionRepo(db),
 		planDependencyRepo: getPlanDependencyRepo(db),
 		planMessageRepo: getPlanMessageRepo(db),
+		planProposalRepo: getPlanProposalRepo(db),
 		planRepo: getPlanRepo(db),
 		projectMemberRepo: getProjectMemberRepo(db),
 		projectRepo: getProjectRepo(db),

@@ -291,6 +291,12 @@ export function getBosunApiService(deps: { serverUrl: string; machineKey?: strin
 			return post({ path: `/agent/findings/${encodeURIComponent(findingId)}/resolve`, body, authorized: true });
 		},
 
+		async proposePlan(opts: { buildId: string; title: string; input: string }): Promise<unknown> {
+			const { buildId, ...body } = opts;
+
+			return post({ path: `/agent/builds/${encodeURIComponent(buildId)}/proposals`, body, authorized: true });
+		},
+
 		// Parses to rows with backend-assigned ids and seq, returned in the same turn
 		// so the orchestrator can reference them from `update_bug_status` without a
 		// round trip of its own.

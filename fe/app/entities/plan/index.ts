@@ -7,6 +7,7 @@ export {
 } from './api/bugfix.queries'
 export { fetchLine, fetchNeedsYou, lineKeys, needsYouKeys, useLineQuery, useNeedsYouQuery } from './api/line.queries'
 export { fetchPlan, fetchPlans, planKeys, usePlanQuery, usePlansQuery } from './api/plan.queries'
+export { fetchPlanProposals, proposalKeys, usePlanProposalsQuery } from './api/proposal.queries'
 export { BOARD_COLUMNS, boardColumn, HISTORY_STATES, type BoardColumn } from './lib/board-column'
 export { bugfixBlockReason } from './lib/bugfix-block'
 export { CHAT_ATTACHMENT_LIMITS, encodeChatAttachments } from './lib/chat-attachments'
@@ -82,6 +83,7 @@ export {
 	type Slice
 } from './model/plan'
 export { PlanUiMsgSchema, type PlanUiMsg } from './model/plan-message'
+export { PlanProposalSchema, type PlanProposal } from './model/proposal'
 export { PlansSocketProvider, useIntegrationActivity, useRunActivity } from './model/plans-socket'
 export { useBugfixStream, type BugfixStream } from './model/use-bugfix-stream'
 export { usePlanStream, type PlanStream } from './model/use-plan-stream'

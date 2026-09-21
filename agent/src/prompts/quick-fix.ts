@@ -4,6 +4,7 @@ import {
 	checksSection,
 	codegenSection,
 	loopRules,
+	loopSource,
 	migrateSection,
 	notesSection,
 	providedEnv,
@@ -61,12 +62,9 @@ ${unattended(false, false)}
 
 ${context.description}
 
-# Step 1 — find this repository's feedback loops, before you change anything
+# Step 1 — this repository's feedback loops, before you change anything
 
-You do not know this project. Work out how it tells you that you have broken it, and write the
-commands down in your report. Look in \`package.json\` scripts, the Makefile, the CI workflow, and any
-\`CLAUDE.md\`, \`AGENTS.md\` or \`CONTRIBUTING.md\` — those files are the project's own account of how it
-is built, and they outrank your habits.
+${loopSource(context.config)}
 
 **This session never starts the project's dev server or its database.** A quick fix is proven with a
 typecheck, a lint, and its unit tests — never by running the app.

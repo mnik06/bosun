@@ -120,6 +120,15 @@ export const AgentResolveFindingReqSchema = z.object({
 	note: z.string().trim().min(1).max(2000)
 });
 
+// Titles and briefs are read by a person deciding, then by a planning session as
+// its ticket: long enough for evidence and a suggested fix, not for a transcript.
+export const AgentProposePlanReqSchema = z.object({
+	title: z.string().trim().min(1).max(200),
+	input: z.string().trim().min(1).max(8000)
+});
+
+export const ProposalIdParamsSchema = z.object({ id: z.string().min(1) });
+
 export const AgentReportBugsReqSchema = z.object({
 	sessionId: z.string().min(1),
 	descriptions: z.array(z.string().trim().min(1).max(2000)).min(1)

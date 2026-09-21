@@ -24,6 +24,7 @@ import { type AcRepo } from 'src/repos/plans/ac.repo';
 import { type ChatAttachmentRepo } from 'src/repos/plans/chat-attachment.repo';
 import { type PlanDecisionRepo } from 'src/repos/plans/plan-decision.repo';
 import { type PlanMessageRepo } from 'src/repos/plans/plan-message.repo';
+import { type PlanProposalRepo } from 'src/repos/plans/plan-proposal.repo';
 import { type PlanRepo } from 'src/repos/plans/plan.repo';
 import { type SliceRepo } from 'src/repos/plans/slice.repo';
 import { type ProjectMemberRepo } from 'src/repos/projects/project-member.repo';
@@ -67,6 +68,7 @@ export interface LineDeps {
 	repositoryMessageRepo: RepositoryMessageRepo;
 	planRepo: PlanRepo;
 	planMessageRepo: PlanMessageRepo;
+	planProposalRepo: PlanProposalRepo;
 	sliceRepo: SliceRepo;
 	acRepo: AcRepo;
 	chatAttachmentRepo: ChatAttachmentRepo;
@@ -125,6 +127,7 @@ export function lineDeps(fastify: FastifyInstance): LineDeps {
 		repositoryMessageRepo: fastify.repos.repositoryMessageRepo,
 		planRepo: fastify.repos.planRepo,
 		planMessageRepo: fastify.repos.planMessageRepo,
+		planProposalRepo: fastify.repos.planProposalRepo,
 		sliceRepo: fastify.repos.sliceRepo,
 		acRepo: fastify.repos.acRepo,
 		chatAttachmentRepo: fastify.repos.chatAttachmentRepo,

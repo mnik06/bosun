@@ -260,6 +260,13 @@
       "when": 1789756026008,
       "tag": "0036_plain_nebula",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1789994803302,
+      "tag": "0037_swift_warstar",
+      "breakpoints": true
     }
   ]
 }

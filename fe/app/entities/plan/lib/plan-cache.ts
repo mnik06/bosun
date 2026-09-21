@@ -3,6 +3,7 @@ import type { QueryClient } from '@tanstack/react-query'
 import { bugfixKeys } from '~/entities/plan/api/bugfix.queries'
 import { lineKeys, needsYouKeys } from '~/entities/plan/api/line.queries'
 import { planKeys } from '~/entities/plan/api/plan.queries'
+import { proposalKeys } from '~/entities/plan/api/proposal.queries'
 import type { BugfixMessage } from '~/entities/plan/model/bugfix'
 import type {
 	Ac,
@@ -104,8 +105,11 @@ export function appendBugfixMessage (opts: {
 	})
 }
 
+// Proposals have no push of their own: every write to one ends on the same
+// `needs_you.changed` nudge, because an open proposal is a needs-you item.
 export function refreshNeedsYou (queryClient: QueryClient): void {
 	refetchQuery(queryClient, needsYouKeys.all())
+	refetchQuery(queryClient, proposalKeys.all())
 }
 
 export function refreshLine (queryClient: QueryClient): void {

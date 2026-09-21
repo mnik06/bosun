@@ -102,7 +102,7 @@ function promptFor(opts: {
 	}
 
 	if (mode === 'fix') {
-		return fixPrompt({ ...shared, findings: msg.findings, fixAgain: msg.recheckCodes.length > 0 });
+		return fixPrompt({ ...shared, findings: msg.findings, priorProposals: msg.priorProposals, fixAgain: msg.recheckCodes.length > 0 });
 	}
 
 	return executionPrompt({

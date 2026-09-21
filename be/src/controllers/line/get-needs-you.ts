@@ -1,13 +1,16 @@
 import { type NeedsYouItem } from 'src/api/routes/schemas/line/LineSchemas';
 import { type LineDeps } from 'src/controllers/line/line-deps';
+import { listPlanProposals } from 'src/controllers/plans/list-plan-proposals';
 
 // With actions only on plan pages, this is what brings a person to the one that is
 // waiting: every open question, overlap decision and unresolved integration in the
-// project, each naming its plan.
+// project, each naming its plan — and every plan a fix session proposed, named by
+// the plan whose verify found it.
 export async function getNeedsYou(deps: LineDeps, opts: { projectId: string }): Promise<NeedsYouItem[]> {
-	const [questions, stopped] = await Promise.all([
+	const [questions, stopped, proposals] = await Promise.all([
 		deps.sliceRunRepo.listOpenQuestionsForProject(opts.projectId),
-		deps.buildRepo.listForProject({ projectId: opts.projectId, statuses: ['needs_you'] })
+		deps.buildRepo.listForProject({ projectId: opts.projectId, statuses: ['needs_you'] }),
+		listPlanProposals(deps, { projectId: opts.projectId })
 	]);
 	const questionBuilds = new Map(
 		(await Promise.all([...new Set(questions.map((run) => run.buildId))].map(async (id) => deps.buildRepo.getById(id))))
@@ -33,5 +36,13 @@ export async function getNeedsYou(deps: LineDeps, opts: { projectId: string }): 
 			: [];
 	});
 
-	return [...asked, ...blocked].sort((a, b) => a.planNumber - b.planNumber);
+	const proposed = proposals.map((proposal) => ({
+		kind: 'proposal' as const,
+		planId: proposal.sourcePlanId,
+		planNumber: proposal.sourcePlanNumber,
+		planTitle: proposal.sourcePlanTitle,
+		detail: proposal.title
+	}));
+
+	return [...asked, ...blocked, ...proposed].sort((a, b) => a.planNumber - b.planNumber);
 }

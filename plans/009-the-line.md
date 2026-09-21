@@ -296,13 +296,25 @@ Findings — a failed criterion, a console error, a failed request, a visual def
 written reproduction.
 
 **Fix** — in a build slot. Given the findings, it runs the repository's dead-code and duplication tools
-once itself, then the review agent over the plan's diff and the dead-code and duplication agents over
-the **whole codebase** (today's B, C and D, which never needed the stack). C and D carry their method in
-their briefs verbatim — reachability from production entrypoints and dataflow for fields, duplication
-by responsibility rather than by token — and every candidate clears gates before it is reported. It
-fixes the drive's findings and every certain removal and merge wherever it sits, groups the work, runs
-the loop at most twice, resolves each finding as fixed or left with a reason, and commits. A fix-again
-session skips the sweep: the first fix already committed it.
+once itself, then the review agent over the plan's diff and the dead-code and duplication agents
+(today's B, C and D, which never needed the stack). C and D **inventory the branch** — what it wrote,
+and what it made dead — and **search the whole repository**, because a caller, or an existing copy of
+a job the branch wrote a second time, can live anywhere. They carry their method in their briefs
+verbatim — reachability from production entrypoints and dataflow for fields, duplication by
+responsibility rather than by token — and every candidate clears gates before it is reported.
+
+The fix session is still the plan's: it fixes the drive's findings, anything the branch introduced
+that is critical, and anything introduced or right around the feature that is small. Older problems
+that need a person become **proposals** (`propose_plan`, at most three a build): a row a person either
+starts planning from or dismisses, shown on the plans page and in needs-you. Nothing plans itself from
+one — a planning session nobody asked for spends a machine. Everything else older is a line in the
+report. Open and dismissed proposals travel in the next fix's frame so it proposes neither again. It
+groups the work, runs the loop at most twice, resolves each finding as fixed or left with a reason, and
+commits. A fix-again session skips the review and proposes nothing: the first fix already did both.
+
+A cleanup of the whole codebase per plan was tried first. Every pull request became two changes — the
+feature, and whatever the sweep found elsewhere — and put deletions in code the plan never touched in
+front of the reviewer of that plan.
 
 Today's verify session already hands off between these halves: it never looks at the browser itself, it
 reads Agent A's report and fixes from that. The split makes the handoff a table, and gives the lane back

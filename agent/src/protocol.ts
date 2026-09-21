@@ -410,6 +410,14 @@ export const ExecFindingSchema = z.object({
 
 export type ExecFinding = z.infer<typeof ExecFindingSchema>;
 
+export const ExecPriorProposalSchema = z.object({
+	title: z.string(),
+	input: z.string(),
+	status: z.enum(['open', 'dismissed'])
+});
+
+export type ExecPriorProposal = z.infer<typeof ExecPriorProposalSchema>;
+
 // Null on a build bullet. A verify slice runs as several sessions: a drive in the
 // lane, a fix in a build slot, and a re-check of what the fix repaired.
 export const RunPhaseSchema = z.enum(['drive', 'fix', 'recheck']);
@@ -459,6 +467,9 @@ export const ExecStartMsgSchema = z.object({
 		.object({ questions: z.array(PlanQuestionSchema), answers: z.array(PlanAnswerSchema) })
 		.nullable(),
 	findings: z.array(ExecFindingSchema),
+	// What fix sessions already proposed for this repository and nobody started.
+	// Defaulted so a frame from a backend that predates proposals still parses.
+	priorProposals: z.array(ExecPriorProposalSchema).default([]),
 	// The criteria a re-check drives, or a fix-again session is limited to. Empty on
 	// a first fix, which is how that session knows the codebase sweep is still its job.
 	recheckCodes: z.array(z.string()),

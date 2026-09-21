@@ -4,6 +4,7 @@ import { providerBranches, startingPoint, type ProviderState } from 'src/control
 import { worktreeSlug } from 'src/controllers/line/shared/lifecycle';
 import { type BuildState } from 'src/controllers/line/shared/line-snapshot';
 import { notifyBuildStatus } from 'src/controllers/line/shared/notify';
+import { priorProposals } from 'src/controllers/line/shared/prior-proposals';
 import {
 	type Build,
 	type BuildStatus,
@@ -70,13 +71,15 @@ async function execStartFrame(
 	}
 ): Promise<ExecStart | null> {
 	const { build, plan } = opts.state;
-	const [slices, acs, planAcs, decisions, amendments, findings] = await Promise.all([
+	const fixing = opts.run.phase === 'fix';
+	const [slices, acs, planAcs, decisions, amendments, findings, proposals] = await Promise.all([
 		deps.sliceRepo.listByPlan(plan.id),
 		deps.acRepo.listBySlice(opts.run.sliceId),
 		deps.acRepo.listByPlan(plan.id),
 		deps.planDecisionRepo.listByPlan(plan.id),
 		deps.planAmendmentRepo.listForPlan(plan.id),
-		opts.run.phase === 'fix' ? deps.verifyFindingRepo.listForBuild(build.id) : Promise.resolve([])
+		fixing ? deps.verifyFindingRepo.listForBuild(build.id) : Promise.resolve([]),
+		fixing ? priorProposals(deps, { repositoryId: build.repositoryId }) : Promise.resolve([])
 	]);
 	const slice = slices.find((entry) => entry.id === opts.run.sliceId);
 
@@ -125,7 +128,8 @@ async function execStartFrame(
 				reproduction: finding.reproduction,
 				severity: finding.severity
 			})),
-		recheckCodes: opts.run.phase === 'recheck' || opts.run.phase === 'fix' ? scope ?? [] : [],
+		priorProposals: proposals,
+		recheckCodes: opts.run.phase === 'recheck' || fixing ? scope ?? [] : [],
 		memoryMaxBytes: opts.memoryMaxBytes
 	};
 }

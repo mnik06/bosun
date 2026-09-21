@@ -97,6 +97,25 @@ const RESOLVE_FINDING_DEFINITION = mcpToolDefinition({
 	schema: ResolveFindingArgsSchema
 });
 
+export const ProposePlanArgsSchema = z.object({
+	title: z.string().min(1).max(200).describe('what the plan would do, as a plan title — "Merge the two invoice formatters", not "Duplication found"'),
+	input: z
+		.string()
+		.min(1)
+		.max(8000)
+		.describe('the ticket a planning session starts from: what is wrong with path:line evidence, why it needs a person, the change you suggest and everything it touches')
+});
+
+// A proposal is not a plan: it waits on a person, who starts planning from it or
+// dismisses it. That is the point — this session found work it has no business
+// doing inside somebody else's feature, and nobody asked for a planning session.
+const PROPOSE_PLAN_DEFINITION = mcpToolDefinition({
+	name: 'propose_plan',
+	description:
+		'Propose a separate plan for a problem this session will not fix inside the feature and a person has to decide — one that was already in the codebase, or one this plan introduced that is too big to fix here: a schema or data change, a changed contract, a refactor across modules, a behaviour change for callers this plan never touched. A person sees it, and either starts planning from it or dismisses it. At most three per build: one proposal per coherent change, never one per finding. Never for something critical this plan introduced, or something small around the feature — those are yours to fix.',
+	schema: ProposePlanArgsSchema
+});
+
 export const StackUpArgsSchema = z.object({ apps: z.array(z.string()).optional() });
 
 // The agent starts the processes so that starting the stack means the same thing
@@ -143,7 +162,7 @@ export function executionDefinitions(opts: ToolSet): { name: string }[] {
 		case 'recheck':
 			return [MARK_VERIFIED_DEFINITION, BLOCK_AC_DEFINITION, REPORT_FINDING_DEFINITION, ...stack];
 		case 'fix':
-			return [LIST_PLANS_DEFINITION, RECORD_DECISION_DEFINITION, RESOLVE_FINDING_DEFINITION];
+			return [LIST_PLANS_DEFINITION, RECORD_DECISION_DEFINITION, RESOLVE_FINDING_DEFINITION, PROPOSE_PLAN_DEFINITION];
 	}
 }
 
@@ -241,6 +260,8 @@ export function createExecutionDispatch(opts: {
 				}
 				case 'resolve_finding':
 					return textToolResult(JSON.stringify(await opts.bosunApi.resolveFinding(ResolveFindingArgsSchema.parse(args))));
+				case 'propose_plan':
+					return textToolResult(JSON.stringify(await opts.bosunApi.proposePlan({ buildId: opts.buildId, ...ProposePlanArgsSchema.parse(args) })));
 				default: {
 					const parsed = RecordDecisionArgsSchema.parse(args);
 

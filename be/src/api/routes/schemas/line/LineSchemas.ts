@@ -62,7 +62,7 @@ export const LineRespSchema = z.object({
 
 export const ShipFoundationRespSchema = z.object({ prUrl: z.string() });
 
-export const NeedsYouKindSchema = z.union([z.literal('question'), NeedsYouReasonSchema]);
+export const NeedsYouKindSchema = z.union([z.literal('question'), z.literal('proposal'), NeedsYouReasonSchema]);
 
 export const NeedsYouItemSchema = z.object({
 	kind: NeedsYouKindSchema,

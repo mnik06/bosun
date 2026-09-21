@@ -24,6 +24,7 @@ import {
 	type OnboardingStatus,
 	type OnboardingStep
 } from 'src/types/OnboardingSchema';
+import { type PlanProposalStatus } from 'src/types/PlanProposalSchema';
 import { type ProjectProfile } from 'src/types/ProjectProfileSchema';
 import { type ProjectRole } from 'src/types/ProjectSchema';
 import { type PlanSummary } from 'src/types/PlanSummarySchema';
@@ -830,4 +831,35 @@ export const planDecisions = pgTable(
 		createdAt: timestamp({ withTimezone: true }).notNull().defaultNow()
 	},
 	(table) => [index('plan_decisions_plan_id_idx').on(table.planId)]
+);
+
+// Work a verify pass's fix session found and would not do itself: code that was
+// already there before the plan, where the change needs a person. Not a plan until
+// a person starts one from it — a planning session started on the fix's say-so
+// spends a machine on work nobody asked for. Goes with the plan whose verify
+// found it, because that is the only plan a person can reach it from.
+export const planProposals = pgTable(
+	'plan_proposals',
+	{
+		id: text().primaryKey(),
+		projectId: text()
+			.notNull()
+			.references(() => projects.id, { onDelete: 'cascade' }),
+		sourcePlanId: text()
+			.notNull()
+			.references(() => plans.id, { onDelete: 'cascade' }),
+		buildId: text().references(() => builds.id, { onDelete: 'set null' }),
+		repositoryId: text().references(() => repositories.id, { onDelete: 'set null' }),
+		title: text().notNull(),
+		input: text().notNull(),
+		status: text().$type<PlanProposalStatus>().notNull().default('open'),
+		planId: text().references(() => plans.id, { onDelete: 'set null' }),
+		decidedByUserId: text().references(() => users.id, { onDelete: 'set null' }),
+		decidedAt: timestamp({ withTimezone: true }),
+		createdAt: timestamp({ withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [
+		index('plan_proposals_project_id_idx').on(table.projectId),
+		index('plan_proposals_build_id_idx').on(table.buildId)
+	]
 );

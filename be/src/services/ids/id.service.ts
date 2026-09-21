@@ -11,6 +11,7 @@ export function getIdService() {
 		createAcId: (): string => `ac_${nanoid(12)}`,
 		createSliceId: (): string => `sl_${nanoid(12)}`,
 		createPlanDecisionId: (): string => `pd_${nanoid(12)}`,
+		createPlanProposalId: (): string => `pp_${nanoid(12)}`,
 		createSliceRunId: (): string => `sr_${nanoid(12)}`,
 		createGithubInstallationId: (): string => `ghi_${nanoid(12)}`,
 		createAzureConnectionId: (): string => `azc_${nanoid(12)}`,
