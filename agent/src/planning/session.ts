@@ -1,5 +1,6 @@
 import { type ChatAttachment } from '../chat-attachment';
 import { type AgentConfig } from '../config/config';
+import { modesNote, type PlanModes } from '../prompts/planning';
 import { type AgentMsg, type PlanAnswer, type PlanQuestion, type PlanSnapshot } from '../protocol';
 import { type SessionImage } from '../services/attachments.service';
 import { resolveProjectConfig } from '../services/config-resolution';
@@ -80,6 +81,9 @@ interface Session {
 	grilled: boolean;
 	nudges: number;
 	requireGrill: boolean;
+	// Mutated in place when the person flips a flag mid-grill: the ask tool holds
+	// this same object and reads `auto` off it at every ask.
+	modes: PlanModes;
 	// Every message the person sends, in the order it arrived. Frames are routed
 	// concurrently and a turn waits on its files, so without this a line typed
 	// after a screenshot could reach the session before it.
@@ -105,6 +109,7 @@ export interface PlanningSessions {
 		plan: PlanSnapshot;
 	}): Promise<void>;
 	answer(opts: { planId: string; questionId: string; answers: PlanAnswer[] }): void;
+	modes(opts: { planId: string } & PlanModes): void;
 	cancel(planId: string): void;
 	cancelAll(): void;
 	running(): number;
@@ -296,6 +301,7 @@ export function createPlanningSessions(opts: {
 		served: ServedTree | null;
 		published: boolean;
 		requireGrill: boolean;
+		modes: PlanModes;
 		tools: { builtin: string[]; mcp: string[] };
 		definitions: unknown[];
 		createDispatch: SessionDispatchFactory;
@@ -324,6 +330,7 @@ export function createPlanningSessions(opts: {
 			grilled: false,
 			nudges: 0,
 			requireGrill: opts2.requireGrill,
+			modes: opts2.modes,
 			turns: Promise.resolve()
 		};
 
@@ -412,7 +419,7 @@ export function createPlanningSessions(opts: {
 	// takes the served URL rather than the prompt taking it directly, because the
 	// two callers' prompts are built by entirely different services and this is
 	// the only shape both can be handed through. `published`, `requireGrill`,
-	// `requireCoverage` and `auto` are where a fresh grill and a revision
+	// `requireCoverage` and `modes` are where a fresh grill and a revision
 	// genuinely differ, so those stay arguments rather than being folded in here.
 	const launchPlanning = async (payload: {
 		planId: string;
@@ -422,7 +429,7 @@ export function createPlanningSessions(opts: {
 		published: boolean;
 		requireGrill: boolean;
 		requireCoverage: boolean;
-		auto: boolean;
+		modes: PlanModes;
 	}): Promise<void> => {
 		const served = await serveFor(payload.planId, payload.tree);
 
@@ -434,11 +441,12 @@ export function createPlanningSessions(opts: {
 			served,
 			published: payload.published,
 			requireGrill: payload.requireGrill,
+			modes: payload.modes,
 			tools: PLANNING_TOOLS,
 			definitions: TOOL_DEFINITIONS,
 			createDispatch: createPlanDispatch({
 				planId: payload.planId,
-				auto: payload.auto,
+				isAuto: () => payload.modes.auto,
 				requireGrill: payload.requireGrill,
 				requireCoverage: payload.requireCoverage,
 				bosunApi: opts.services.bosunApi,
@@ -500,7 +508,7 @@ export function createPlanningSessions(opts: {
 				published: false,
 				requireGrill: !payload.auto,
 				requireCoverage: true,
-				auto: payload.auto
+				modes: { verifyInUi: payload.verifyInUi, auto: payload.auto }
 			});
 		},
 
@@ -577,12 +585,43 @@ export function createPlanningSessions(opts: {
 				requireCoverage: false,
 				// A revision of an auto plan still answers itself: the snapshot carries
 				// the flag, because the agent holds no plan state between sessions.
-				auto: payload.plan.auto
+				modes: { verifyInUi: payload.plan.verifyInUi, auto: payload.plan.auto }
 			});
 		},
 
 		answer(payload): void {
 			sessions.get(payload.planId)?.mcp.answer(payload);
+		},
+
+		// With no session up there is nothing to retune: the next `plan.say` carries
+		// the flags on its snapshot. The note joins the same chain as the person's
+		// messages, so it cannot overtake one they sent before flipping the switch.
+		modes(payload): void {
+			const session = sessions.get(payload.planId);
+
+			if (!session) {
+				return;
+			}
+
+			const now = { verifyInUi: payload.verifyInUi, auto: payload.auto };
+			const note = modesNote({ was: { ...session.modes }, now });
+
+			Object.assign(session.modes, now);
+
+			if (note === null || !session.process) {
+				return;
+			}
+
+			session.idleAt = null;
+			session.turns = session.turns
+				.then(() => {
+					if (sessions.get(payload.planId) === session) {
+						session.process?.send(note);
+					}
+				})
+				.catch((error: unknown) => {
+					console.error(`[${payload.planId}] could not deliver a mode change: ${error instanceof Error ? error.message : String(error)}`);
+				});
 		},
 
 		cancel(planId): void {

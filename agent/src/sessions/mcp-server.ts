@@ -99,7 +99,9 @@ function fingerprint(questions: PlanQuestion[]): string {
 //
 // `auto` answers the question with the session's own recommendation instead of
 // waiting for a person. The question is still formed and still emitted, so the
-// grill and the transcript are unchanged — only the wait is gone.
+// grill and the transcript are unchanged — only the wait is gone. A function is
+// read at each ask, because a person can switch it mid-grill; a question already
+// waiting when it is switched on stays with the person.
 //
 // Asking the same thing twice is answered from what the session was already told
 // rather than put to the person again. A model that re-asks has lost the tool
@@ -116,30 +118,37 @@ export function createAskTool(opts: {
 		questions: PlanQuestion[];
 		autoAnswers?: PlanAnswer[];
 	}) => void;
-	auto?: boolean;
+	auto?: boolean | (() => boolean);
 	onAnswered?: () => void;
 }) {
+	const isAuto = (): boolean => (typeof opts.auto === 'function' ? opts.auto() : opts.auto === true);
+
 	const settled = new Map<
 		string,
 		{ questions: PlanQuestion[]; answers: PlanAnswer[]; fingerprint: string }
 	>();
-	const inFlight = new Map<string, Promise<PlanAnswer[]>>();
+	const inFlight = new Map<string, Promise<{ answers: PlanAnswer[]; auto: boolean }>>();
 
-	const emit = async (questions: PlanQuestion[]): Promise<PlanAnswer[]> => {
+	// Reports which way it went rather than the caller re-reading the mode: auto
+	// can be switched on while a person is still answering, and that answer is
+	// theirs, not the session's.
+	const emit = async (questions: PlanQuestion[]): Promise<{ answers: PlanAnswer[]; auto: boolean }> => {
 		const questionId = `q_${crypto.randomBytes(9).toString('base64url')}`;
 
-		if (opts.auto) {
+		if (isAuto()) {
 			const autoAnswers = recommendedAnswers(questions);
 
 			opts.onQuestion({ questionId, questions, autoAnswers });
 
-			return autoAnswers;
+			return { answers: autoAnswers, auto: true };
 		}
 
-		return new Promise<PlanAnswer[]>((resolve) => {
+		const answers = await new Promise<PlanAnswer[]>((resolve) => {
 			opts.pending.set(questionId, { questionId, resolve });
 			opts.onQuestion({ questionId, questions });
 		});
+
+		return { answers, auto: false };
 	};
 
 	return async function ask(args: unknown) {
@@ -176,7 +185,7 @@ export function createAskTool(opts: {
 			inFlight.set(key, waiting);
 		}
 
-		const answers = await waiting;
+		const { answers, auto } = await waiting;
 
 		inFlight.delete(key);
 
@@ -188,7 +197,7 @@ export function createAskTool(opts: {
 			opts.onAnswered?.();
 		}
 
-		if (opts.auto) {
+		if (auto) {
 			// Said back to the session rather than left implicit: it has to know the
 			// ruling was its own, because those are the ones the plan records as
 			// decisions taken on the person's behalf.

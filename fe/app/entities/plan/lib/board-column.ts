@@ -1,5 +1,6 @@
 import type { BuildSummary } from '~/entities/plan/model/build'
-import type { PlanState } from '~/entities/plan/model/plan'
+import { resolvePlanState } from '~/entities/plan/lib/plan-state'
+import type { Plan, PlanState } from '~/entities/plan/model/plan'
 
 export type BoardColumn =
 	| 'drafting'
@@ -22,7 +23,14 @@ export const BOARD_COLUMNS: { value: BoardColumn, label: string }[] = [
 	{ value: 'bug_fixing', label: 'Bug Fixing' }
 ]
 
-export const HISTORY_STATES: PlanState[] = ['merged', 'failed', 'cancelled']
+// Only the states nothing more happens to. A failed plan is still active: it
+// stopped on something a person has to look at, and on the board it stays in the
+// column where its work stopped.
+export const HISTORY_STATES: PlanState[] = ['merged', 'cancelled']
+
+export function isHistoryPlan (plan: Pick<Plan, 'state' | 'status' | 'approvedAt'>): boolean {
+	return HISTORY_STATES.includes(resolvePlanState(plan))
+}
 
 const DIRECT: Partial<Record<PlanState, BoardColumn>> = {
 	drafting: 'drafting',

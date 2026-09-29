@@ -13,7 +13,7 @@ import { lineDeps } from 'src/controllers/line/line-deps';
 import { discardPlan } from 'src/controllers/plans/discard-plan';
 import { getPlanDetail } from 'src/controllers/plans/get-plan-detail';
 import { listPlans } from 'src/controllers/plans/list-plans';
-import { setPlanAfk } from 'src/controllers/plans/set-plan-afk';
+import { setPlanModes } from 'src/controllers/plans/set-plan-modes';
 import { startPlan } from 'src/controllers/plans/start-plan';
 import { PlanSchema } from 'src/types/PlanSchema';
 
@@ -81,10 +81,10 @@ const routes: FastifyPluginAsync = async function (f) {
 			}
 		},
 		async (req) => {
-			return setPlanAfk(lineDeps(fastify), {
+			return setPlanModes(lineDeps(fastify), {
 				id: req.params.id,
 				projectId: req.membership!.projectId,
-				afk: req.body.afk
+				...req.body
 			});
 		}
 	);

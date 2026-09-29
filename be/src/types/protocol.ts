@@ -5,6 +5,7 @@ import { PlanAnswerSchema, PlanQuestionSchema } from 'src/types/PlanSchema';
 import {
 	PlanAnswerMsgSchema,
 	PlanCancelMsgSchema,
+	PlanModesMsgSchema,
 	PlanSayMsgSchema,
 	PlanStartMsgSchema
 } from 'src/types/plan-frames';
@@ -342,6 +343,7 @@ export const ServerMsgSchema = z.discriminatedUnion('type', [
 	PlanAnswerMsgSchema,
 	PlanCancelMsgSchema,
 	PlanSayMsgSchema,
+	PlanModesMsgSchema,
 	BuildWorktreeEnsureMsgSchema,
 	BuildWorktreeRemoveMsgSchema,
 	ExecStartMsgSchema,

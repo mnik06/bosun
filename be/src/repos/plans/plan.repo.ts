@@ -141,6 +141,8 @@ export function getPlanRepo(db: DbOrTx) {
 			approvedAt?: Date | null;
 			failureReason?: string | null;
 			afk?: boolean;
+			verifyInUi?: boolean;
+			auto?: boolean;
 		}): Promise<Plan | null> {
 			const { id, ...values } = opts;
 			const [row] = await db

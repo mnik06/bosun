@@ -280,6 +280,13 @@ export async function routeServerFrame(deps: RouterDeps, msg: ServerMsg): Promis
 
 			return;
 
+		// Not refused while paused: it starts nothing, only retunes a session that is
+		// already running.
+		case 'plan.modes':
+			deps.sessions.modes({ planId: msg.planId, verifyInUi: msg.verifyInUi, auto: msg.auto });
+
+			return;
+
 		case 'plan.answer':
 			deps.sessions.answer(msg);
 

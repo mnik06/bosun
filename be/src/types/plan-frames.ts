@@ -20,6 +20,15 @@ export const PlanStartMsgSchema = z.object({
 	configDraft: z.string().nullable().default(null)
 });
 
+// The grill's own two modes, changed while it runs. The session takes them from
+// its next question on; one already waiting on a person stays theirs to answer.
+export const PlanModesMsgSchema = z.object({
+	type: z.literal('plan.modes'),
+	planId: z.string(),
+	verifyInUi: z.boolean(),
+	auto: z.boolean()
+});
+
 // The published plan as it stands, carried on the frame rather than fetched:
 // the agent keeps no plan state, so a revision session that starts an hour after
 // the grill ended needs the artifact handed to it.

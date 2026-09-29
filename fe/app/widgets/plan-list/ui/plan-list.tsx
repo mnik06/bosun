@@ -1,5 +1,11 @@
-import { PlanSearchableList } from '~/entities/plan'
+import { isHistoryPlan, PlanSearchableList } from '~/entities/plan'
 
 export function PlanList () {
-	return <PlanSearchableList emptyMessage="No plans yet." noMatchMessage="No plans match that search." />
+	return (
+		<PlanSearchableList
+			filter={(entry) => !isHistoryPlan(entry)}
+			emptyMessage="No active plans."
+			noMatchMessage="No active plans match that search."
+		/>
+	)
 }

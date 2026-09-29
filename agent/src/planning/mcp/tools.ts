@@ -94,7 +94,8 @@ const COVERAGE_REQUIRED = [
 
 export function createPlanDispatch(opts: {
 	planId: string;
-	auto: boolean;
+	// Read at every ask: a person can switch auto mode while the grill runs.
+	isAuto: () => boolean;
 	// Off for a revision: the plan handed to it is already the product of a grill,
 	// and a change the person asked for in prose is not a new one.
 	requireGrill: boolean;
@@ -114,7 +115,7 @@ export function createPlanDispatch(opts: {
 		const ask = createAskTool({
 			pending,
 			onQuestion: opts.onQuestion,
-			auto: opts.auto,
+			auto: opts.isAuto,
 			onAnswered: () => {
 				grilled = true;
 				opts.onGrilled();

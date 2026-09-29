@@ -68,12 +68,6 @@ export function PlanBoard () {
 		<Stack gap="md">
 			<CapacityStrip capacity={line.data?.capacity ?? []} />
 
-			{plans.data.length === 0 ? (
-				<Text c="dimmed" size="sm">
-					No plans yet. Paste a ticket and let it grill you.
-				</Text>
-			) : null}
-
 			{wide ? (
 				<div className="flex gap-3 overflow-x-auto pb-2">
 					{visibleColumns.map((column) => (

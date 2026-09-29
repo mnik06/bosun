@@ -135,6 +135,29 @@ describe('createAskTool', () => {
 		expect(onAnswered).toHaveBeenCalledTimes(1);
 	});
 
+	// A person can switch auto on mid-grill. The next ask answers itself, but the
+	// one already on their screen is theirs to answer, and says so.
+	it('reads auto at each ask and leaves a waiting question with the person', async () => {
+		const pending = new Map<string, PendingQuestion>();
+		const onQuestion = vi.fn();
+		let auto = false;
+		const ask = createAskTool({ pending, onQuestion, auto: () => auto });
+		const waiting = ask({ questions: [question()] });
+
+		auto = true;
+
+		const next = textOf(await ask({ questions: [question({ header: 'Cache', question: 'Is there a cache?' })] }));
+
+		expect(next).toContain('Auto mode');
+		expect(pending.size).toBe(1);
+
+		const [entry] = [...pending.values()];
+
+		entry!.resolve([{ selected: ['Redis'] }]);
+
+		expect(textOf(await waiting)).not.toContain('Auto mode');
+	});
+
 	// `close()` releases a waiting question with nothing, so that the `claude`
 	// process can exit. Remembering it would answer every later ask with silence.
 	it('does not remember an empty answer as a ruling', async () => {

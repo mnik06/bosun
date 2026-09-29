@@ -25,6 +25,12 @@ answered its own question and has already moved on, so `recordPlanFrame` writes 
 `autoAnswers` riding on the same frame as two messages. A question left without one would render a
 prompt in the browser for a tool call that returned long ago.
 
+**Auto-mode and UI verification move only until the plan is written.** `setPlanModes` accepts them
+while the plan is `planning` with no body, and sends the machine a `plan.modes` frame so the live grill
+applies them from its next question. A question already waiting stays the person's to answer. After
+publish they are refused with a 409: the bullets were cut to one verify setting, and the decisions were
+made by whoever was answering at the time. AFK is read at each bullet, so it stays open.
+
 ## Why a refusal writes nothing
 
 `startPlan` checks ownership, status, the `claude-cli` and `claude-credential` preflight results and

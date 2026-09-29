@@ -1,11 +1,11 @@
-import { HISTORY_STATES, PlanSearchableList, resolvePlanState } from '~/entities/plan'
+import { isHistoryPlan, PlanSearchableList } from '~/entities/plan'
 
 export function PlanHistory () {
 	return (
 		<PlanSearchableList
-			filter={(entry) => HISTORY_STATES.includes(resolvePlanState(entry))}
-			emptyMessage="Nothing merged, failed or cancelled yet."
-			noMatchMessage="Nothing merged, failed or cancelled matches that."
+			filter={isHistoryPlan}
+			emptyMessage="Nothing merged or cancelled yet."
+			noMatchMessage="Nothing merged or cancelled matches that."
 		/>
 	)
 }

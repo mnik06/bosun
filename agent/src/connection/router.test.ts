@@ -25,6 +25,7 @@ function build (opts?: { paused?: boolean; repositoryId?: string | null }) {
 	const sessions = {
 		start: vi.fn().mockResolvedValue(undefined),
 		answer: vi.fn(),
+		modes: vi.fn(),
 		cancel: vi.fn(),
 		cancelAll: vi.fn(),
 		running: vi.fn().mockReturnValue(0),
@@ -221,6 +222,15 @@ describe('routeServerFrame', () => {
 
 		expect(onboarding.start).not.toHaveBeenCalled();
 		expect(sent(send)).toEqual([{ type: 'onboarding.error', runId: 'onb_1', message: 'this machine is paused' }]);
+	});
+
+	// It starts nothing, so a pause has no reason to drop it.
+	it('routes a mode change to the session, even while paused', async () => {
+		const { sessions, route } = build({ paused: true });
+
+		await route({ type: 'plan.modes', planId: 'p_1', verifyInUi: false, auto: true });
+
+		expect(sessions.modes).toHaveBeenCalledWith({ planId: 'p_1', verifyInUi: false, auto: true });
 	});
 
 	it('routes an answer and a cancel to the session', async () => {

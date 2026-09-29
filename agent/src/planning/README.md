@@ -93,6 +93,12 @@ the backend writes both rows. So the transcript of an auto plan reads exactly li
 whether the plan is still waiting stays derivable from the transcript alone — a question written with
 no answer beside it is what the browser renders a prompt for.
 
+Auto mode and UI verification can be flipped while the grill runs. A `plan.modes` frame updates the
+live session's flags in place — the ask tool reads `auto` at every call, so the next ask follows it —
+and queues a note to `claude` on the same chain as the person's messages, naming only what changed.
+A question already waiting when auto is switched on stays with the person. With no live session the
+frame is dropped: the next `plan.say` carries the flags on its snapshot.
+
 ## Why the MCP server runs in this process
 
 `mcp/server.ts` starts an HTTP server on loopback, on an ephemeral port, one per session. `claude` is handed

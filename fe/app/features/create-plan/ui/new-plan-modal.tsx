@@ -98,7 +98,7 @@ export function NewPlanModal ({ opened, onClose, proposal = null }: {
 					/>
 
 					<Switch
-						label="Auto-mode"
+						label="Auto-plan mode"
 						description="Planning never waits for you: the grill answers each of its own questions with the option it recommended. Every question and answer still lands in the transcript."
 						key={form.key('auto')}
 						{...form.getInputProps('auto', { type: 'checkbox' })}

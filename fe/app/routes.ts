@@ -14,6 +14,7 @@ export default [
 			route('projects', 'views/projects/projects-page.tsx')
 		]),
 		route('plans', 'views/plans/plans-page.tsx'),
+		route('plans/new', 'views/plan-draft/plan-draft-page.tsx'),
 		route('plans/:planId', 'views/plan-detail/plan-page.tsx')
 	])
 ] satisfies RouteConfig

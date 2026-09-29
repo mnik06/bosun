@@ -383,6 +383,15 @@ export const PlanSayMsgSchema = z.object({
 	plan: PlanSnapshotSchema
 });
 
+// A person flipped a flag while the grill is running. It reaches a live session
+// only; one that has already ended reads the flags off the next \`plan.say\`.
+export const PlanModesMsgSchema = z.object({
+	type: z.literal('plan.modes'),
+	planId: z.string(),
+	verifyInUi: z.boolean(),
+	auto: z.boolean()
+});
+
 export const PlanAnswerMsgSchema = z.object({
 	type: z.literal('plan.answer'),
 	planId: z.string(),
@@ -524,6 +533,7 @@ export const ServerMsgSchema = z.discriminatedUnion('type', [
 	PlanAnswerMsgSchema,
 	PlanCancelMsgSchema,
 	PlanSayMsgSchema,
+	PlanModesMsgSchema,
 	BuildWorktreeEnsureMsgSchema,
 	BuildWorktreeRemoveMsgSchema,
 	ExecStartMsgSchema,

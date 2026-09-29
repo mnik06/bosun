@@ -772,3 +772,34 @@ they are reading updates the moment you publish it. Say one sentence about what 
 stop.
 `;
 }
+
+export interface PlanModes {
+	verifyInUi: boolean;
+	auto: boolean;
+}
+
+// A running session was told its flags once, in its first prompt, and keeps
+// working from that unless it hears otherwise. Only what changed is said: a line
+// restating a flag nobody touched reads as a new instruction. Null when nothing
+// changed, so there is nothing to send.
+export function modesNote(opts: { was: PlanModes; now: PlanModes }): string | null {
+	const lines: string[] = [];
+
+	if (opts.was.auto !== opts.now.auto) {
+		lines.push(
+			opts.now.auto
+				? 'Auto mode is now **on**: nobody is at the keyboard. Keep asking with `bosun_ask` exactly where you would have, and each ask answers itself with the option you recommended first — take that as the ruling, and record what you settle that way in the key decisions section as a call made on their behalf.'
+				: 'Auto mode is now **off**: a person is answering again. `bosun_ask` waits for them from here on, and what they choose is their decision, not a call made on their behalf.'
+		);
+	}
+
+	if (opts.was.verifyInUi !== opts.now.verifyInUi) {
+		lines.push(
+			opts.now.verifyInUi
+				? 'UI verification is now **on**: the plan must end in a verify bullet — the last bullet, `kind: "verify"`, with no body and no claimed criteria.'
+				: 'UI verification is now **off**: the plan takes no verify bullet. Every bullet is `kind: "build"`, and the API refuses a verify bullet on this plan.'
+		);
+	}
+
+	return lines.length === 0 ? null : ['The person changed how this plan runs while you were working.', ...lines].join('\n\n');
+}

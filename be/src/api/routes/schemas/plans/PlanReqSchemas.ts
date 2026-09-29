@@ -17,7 +17,9 @@ export const CreatePlanReqSchema = z.object({
 	afk: z.boolean().default(false)
 });
 
-export const UpdatePlanReqSchema = z.object({ afk: z.boolean() });
+export const UpdatePlanReqSchema = z
+	.object({ afk: z.boolean(), verifyInUi: z.boolean(), auto: z.boolean() })
+	.partial();
 
 const ChatAttachmentUploadSchema = z.object({
 	name: z.string().trim().min(1).max(255),

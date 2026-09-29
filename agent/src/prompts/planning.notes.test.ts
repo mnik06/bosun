@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { planningPrompt } from './planning';
+import { modesNote, planningPrompt } from './planning';
 import { type ReadTree } from '../services/repo.service';
 
 const tree: ReadTree = {
@@ -78,5 +78,25 @@ describe('the checkout the session is told to read', () => {
 		expect(prompt).toContain('could not be refreshed');
 		expect(prompt).toContain('no space left on device');
 		expect(prompt).not.toContain('{{REPO_STATE}}');
+	});
+});
+
+describe('the note for a mode flipped mid-grill', () => {
+	it('sends nothing when no flag changed', () => {
+		expect(modesNote({ was: { verifyInUi: true, auto: false }, now: { verifyInUi: true, auto: false } })).toBeNull();
+	});
+
+	it('names only the flag that changed', () => {
+		const note = modesNote({ was: { verifyInUi: true, auto: false }, now: { verifyInUi: true, auto: true } });
+
+		expect(note).toContain('Auto mode is now **on**');
+		expect(note).not.toContain('UI verification');
+	});
+
+	it('names both when both changed', () => {
+		const note = modesNote({ was: { verifyInUi: true, auto: true }, now: { verifyInUi: false, auto: false } });
+
+		expect(note).toContain('Auto mode is now **off**');
+		expect(note).toContain('UI verification is now **off**');
 	});
 });
