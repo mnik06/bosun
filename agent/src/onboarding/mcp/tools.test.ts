@@ -31,16 +31,16 @@ describe('publish_config', () => {
 	// Discovery succeeds only on an accepted publish, so a refusal that counted as
 	// one would send the run to needs_input with no config behind it.
 	it('counts only an accepted config as published', async () => {
-		const refused = dispatchWith({ ok: false, issues: [{ path: 'apps.fe.start', message: 'Required' }] });
-		const result = (await refused.dispatch('publish_config', { yaml: 'version: 1' })) as { content: { text: string }[]; isError: boolean };
+		const refused = dispatchWith({ ok: false, issues: [{ line: 4, message: 'Required' }] });
+		const result = (await refused.dispatch('publish_config', { text: 'Apps:\n' })) as { content: { text: string }[]; isError: boolean };
 
 		expect(refused.onPublished).not.toHaveBeenCalled();
 		expect(result.isError).toBe(true);
-		expect(result.content[0]?.text).toContain('- apps.fe.start: Required');
+		expect(result.content[0]?.text).toContain('- line 4: Required');
 
 		const accepted = dispatchWith({ ok: true });
 
-		await accepted.dispatch('publish_config', { yaml: 'version: 1' });
+		await accepted.dispatch('publish_config', { text: 'Apps:\n' });
 		expect(accepted.onPublished).toHaveBeenCalledOnce();
 	});
 

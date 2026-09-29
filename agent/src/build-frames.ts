@@ -18,7 +18,7 @@ export const BuildWorktreeEnsureMsgSchema = z.object({
 	fresh: z.boolean(),
 	startFrom: z.string().nullable(),
 	mergeIn: z.array(z.string()),
-	configDraft: z.string().nullable()
+	config: z.string().nullable()
 });
 
 export type BuildWorktreeEnsure = z.infer<typeof BuildWorktreeEnsureMsgSchema>;
@@ -58,7 +58,7 @@ export const IntegrateStartMsgSchema = z.object({
 	worktreePath: z.string(),
 	branch: z.string(),
 	onto: z.string(),
-	configDraft: z.string().nullable(),
+	config: z.string().nullable(),
 	autoResolve: z.boolean(),
 	criteria: PlanCriteriaSchema,
 	portBase: z.number().int(),

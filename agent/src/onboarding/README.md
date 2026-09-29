@@ -1,7 +1,8 @@
 # Onboarding runs on the agent
 
 `onboarding.start` carries a run id and a phase. A **discovery** is a Claude session that reads the
-repository and publishes `.bosun/project.yaml`; a **verify** is the agent running that config. The
+repository and publishes its config, as plain text, to bosun; a **verify** is the agent running that
+config. The
 backend owns the run's state (`be/src/controllers/onboarding/`); this module only does the work and
 answers with exactly one `onboarding.done` or `onboarding.error`. Progress never travels as a frame —
 every line goes through `POST /agent/onboarding/:runId/steps`, so it is persisted and survives a reload.
@@ -17,9 +18,10 @@ A discovery succeeds only when a `publish_config` was **accepted** by the backen
 without one earns one nudge, then the run fails — a run in `needs_input` with no config would ask the
 operator for inputs to a config that does not exist.
 
-When the default branch already carries the file, discovery starts from it and publishes the config
-as it should be, recording each change as an assumption (AC-38). The published config becomes the
-repository's draft; the pull request is what proposes it.
+When bosun already holds a config for this repository, discovery starts from it and publishes the
+config as it should be, recording each change as an assumption (AC-38). Publishing replaces whatever
+bosun held before — there is no draft, no tracked file and no pull request; the published text is the
+repository's config from that point on.
 
 ## The branch a run reads
 
@@ -40,7 +42,7 @@ plausible.
 ## Why verify is run by the agent
 
 "Ready" has to mean the config ran, not that a session believed it would. Verify resolves the config
-(the scratch tree's file, else the draft — never a broken file's fallback), writes the provided env
+bosun sent on the frame that started the run — the only source there is — writes the provided env
 files, provisions the toolchain, runs every setup step, each app's `codegen`, each app's `migrate`
 only when the machine's policy allows, starts the stack through the same `stack.service` a bullet
 uses, and only then spends one short Claude turn signing in as each test account. That turn is the

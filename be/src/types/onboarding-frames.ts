@@ -14,8 +14,7 @@ export const RepoAttachMsgSchema = z.object({
 export const RepoAttachedMsgSchema = z.object({
 	type: z.literal('repo.attached'),
 	repositoryId: z.string(),
-	repoPath: z.string(),
-	configOnDefault: z.boolean()
+	repoPath: z.string()
 });
 
 export const RepoErrorMsgSchema = z.object({
@@ -29,14 +28,8 @@ export const OnboardingStartMsgSchema = z.object({
 	runId: z.string(),
 	phase: OnboardingPhaseSchema,
 	portBase: z.number().int(),
-	// Null when the repository has no draft. A tree carrying the file uses the
-	// file; the draft is only ever the fallback for a tree that has none.
-	configDraft: z.string().nullable(),
-	// Set for the verify that follows a discovery. A discovery on a repository that
-	// already has `.bosun/project.yaml` publishes a proposed change to it, and the
-	// pull request that follows must carry a config somebody watched run — not the
-	// file it would replace.
-	preferDraft: z.boolean().default(false),
+	// Null when the repository has no config yet.
+	config: z.string().nullable(),
 	applyMigrations: z.boolean(),
 	memoryMaxBytes: z.number().int().positive().nullable(),
 	// The branch the scratch checkout is cut from — bosun's default branch, which a

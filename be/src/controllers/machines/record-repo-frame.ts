@@ -1,6 +1,4 @@
 import { announceMachine } from 'src/controllers/machines/shared/announce';
-import { announceRepository } from 'src/controllers/repositories/shared/announce-repository';
-import { type RepositoryRepo } from 'src/repos/github/repository.repo';
 import { type MachineRepo } from 'src/repos/machines/machine.repo';
 import { type SocketRegistry } from 'src/services/sockets/registry.service';
 import { type AgentMsg } from 'src/types/protocol';
@@ -11,7 +9,6 @@ type RepoFrame = Extract<AgentMsg, { type: 'repo.attached' | 'repo.error' }>;
 // an agent cannot report on — or clear — a repository it was never attached to.
 export async function recordRepoFrame(opts: {
 	machineRepo: MachineRepo;
-	repositoryRepo: RepositoryRepo;
 	socketRegistry: SocketRegistry;
 	machineId: string;
 	projectId: string;
@@ -40,18 +37,7 @@ export async function recordRepoFrame(opts: {
 
 	const machine = await opts.machineRepo.markClonedIf({ id: opts.machineId, repositoryId: opts.frame.repositoryId });
 
-	if (!machine) {
-		return;
-	}
-
-	announceMachine({ socketRegistry: opts.socketRegistry, machine });
-
-	const repository = await opts.repositoryRepo.saveConfigOnDefault({
-		id: opts.frame.repositoryId,
-		configOnDefault: opts.frame.configOnDefault
-	});
-
-	if (repository) {
-		announceRepository({ socketRegistry: opts.socketRegistry, repository });
+	if (machine) {
+		announceMachine({ socketRegistry: opts.socketRegistry, machine });
 	}
 }

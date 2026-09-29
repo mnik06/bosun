@@ -13,7 +13,7 @@ import { formatGib, type SessionScope } from '../services/memory.service';
 import { runShell } from '../services/setup-steps.service';
 import { startSessionMcpServer, type SessionMcpServer } from '../sessions/mcp-server';
 import { spawnClaudeSession, type ClaudeSession, type SessionExit } from '../sessions/process';
-import { configGate, writeEnvFiles } from '../sessions/run-support';
+import { writeEnvFiles } from '../sessions/run-support';
 import { createStderrTail, logDroppedFrame, pipeSessionOutput, reportStartFailure } from '../sessions/turn-support';
 import { commitMessageFor, mergeBranches } from './commit';
 import {
@@ -155,7 +155,6 @@ interface Run {
 	report: string;
 	// The `.env` files written before the session started, kept out of the commit.
 	envFiles: string[];
-	repository: boolean;
 }
 
 export interface ExecutionSessions {
@@ -221,16 +220,6 @@ export function createExecutionSessions(opts: {
 	// no single sha to record against the slice. The push follows every commit:
 	// a provider's foundation on the remote is what a dependent stacks on.
 	const finishWriting = async (msg: ExecStart, run: Run): Promise<void> => {
-		const gate = run.repository
-			? await configGate({ exec: opts.services.exec, worktreePath: msg.worktreePath, actor: 'bullet' })
-			: null;
-
-		if (gate !== null) {
-			opts.send({ type: 'exec.error', runId: msg.runId, message: gate });
-
-			return;
-		}
-
 		const committed = await opts.services.commit.commitAll({
 			worktreePath: msg.worktreePath,
 			keepOut: run.envFiles,
@@ -315,10 +304,9 @@ export function createExecutionSessions(opts: {
 		}
 	};
 
-	// Resolved from the tree the session runs in, after its branch is checked out: a
-	// plan that changes how the app starts carries its own config, and that branch's
-	// own verify pass starts the app the new way. A file that does not validate stops
-	// the session here — it never falls back to the draft.
+	// Resolved from the config bosun sent on the frame — the one bosun holds for
+	// the repository right now, whatever it was when this bullet started. A config
+	// that does not validate stops the session here.
 	//
 	// Setup runs again before the session when a watched file changed since it last
 	// ran, so a plan that added a dependency is not built on the node_modules the
@@ -345,7 +333,7 @@ export function createExecutionSessions(opts: {
 			return { config: null, env: undefined, repository: false };
 		}
 
-		const resolved = resolveProjectConfig({ treePath: msg.worktreePath, draft: msg.configDraft });
+		const resolved = resolveProjectConfig(msg.config);
 
 		if (resolved.source === 'invalid') {
 			throw new Error(resolved.detail);
@@ -451,8 +439,6 @@ export function createExecutionSessions(opts: {
 
 		const providedEnv = written.providedEnv;
 		const project = await prepareProject(msg);
-
-		run.repository = project.repository;
 
 		if (modeOf(msg) === 'lane') {
 			await prepareDatabase(msg, project);
@@ -596,8 +582,7 @@ export function createExecutionSessions(opts: {
 				cancelled: false,
 				settled: false,
 				report: '',
-				envFiles: [],
-				repository: false
+				envFiles: []
 			};
 
 			runs.set(msg.runId, run);

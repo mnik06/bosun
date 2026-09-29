@@ -18,8 +18,7 @@ const columns = {
 	defaultBranch: sql<string>`coalesce(${repositories.defaultBranchOverride}, ${repositories.defaultBranch})`,
 	providerDefaultBranch: repositories.defaultBranch,
 	defaultBranchOverride: repositories.defaultBranchOverride,
-	configDraft: repositories.configDraft,
-	configOnDefault: repositories.configOnDefault,
+	config: repositories.config,
 	autoResolveConflicts: repositories.autoResolveConflicts,
 	lastSyncedAt: repositories.lastSyncedAt,
 	azureSyncMode: repositories.azureSyncMode,
@@ -207,10 +206,10 @@ export function getRepositoryRepo(db: DbOrTx) {
 			await db.update(repositories).set({ webhookSecretEncrypted: null, githubWebhookId: null, syncMode: null }).where(eq(repositories.id, id));
 		},
 
-		async saveConfigDraft(opts: { id: string; configDraft: string }): Promise<Repository | null> {
+		async saveConfig(opts: { id: string; config: string }): Promise<Repository | null> {
 			const [row] = await db
 				.update(repositories)
-				.set({ configDraft: opts.configDraft })
+				.set({ config: opts.config })
 				.where(eq(repositories.id, opts.id))
 				.returning(columns);
 
@@ -240,16 +239,6 @@ export function getRepositoryRepo(db: DbOrTx) {
 				.update(repositories)
 				.set({ defaultBranchOverride: opts.defaultBranchOverride })
 				.where(and(eq(repositories.id, opts.id), eq(repositories.projectId, opts.projectId)))
-				.returning(columns);
-
-			return row ? RepositorySchema.parse(row) : null;
-		},
-
-		async saveConfigOnDefault(opts: { id: string; configOnDefault: boolean }): Promise<Repository | null> {
-			const [row] = await db
-				.update(repositories)
-				.set({ configOnDefault: opts.configOnDefault })
-				.where(eq(repositories.id, opts.id))
 				.returning(columns);
 
 			return row ? RepositorySchema.parse(row) : null;

@@ -97,7 +97,7 @@ export interface PlanningSessions {
 		verifyInUi: boolean;
 		auto: boolean;
 		notes: string | null;
-		configDraft: string | null;
+		config: string | null;
 	}): Promise<void>;
 	held(): string[];
 	say(opts: {
@@ -105,7 +105,7 @@ export interface PlanningSessions {
 		text: string;
 		attachments: ChatAttachment[];
 		notes: string | null;
-		configDraft: string | null;
+		config: string | null;
 		plan: PlanSnapshot;
 	}): Promise<void>;
 	answer(opts: { planId: string; questionId: string; answers: PlanAnswer[] }): void;
@@ -248,13 +248,13 @@ export function createPlanningSessions(opts: {
 	// hold a socket for days, and what `origin/HEAD` pointed at when it connected
 	// is exactly the staleness this exists to remove.
 	//
-	// A repository machine's notes come from the config in the tree it reads — the
-	// file when the default branch has one, the draft otherwise. A file that does
-	// not validate stops the session here, before it plans against a config nobody
-	// can run. Null means the session was refused and the plan already failed.
+	// A repository machine's notes come from the config bosun holds for it. A
+	// config that does not validate stops the session here, before it plans
+	// against one nobody can run. Null means the session was refused and the plan
+	// already failed.
 	const readTree = async (
 		planId: string,
-		project: { notes: string | null; configDraft: string | null }
+		project: { notes: string | null; config: string | null }
 	): Promise<{ tree: ReadTree; notes: string | null } | null> => {
 		opts.send({ type: 'plan.activity', planId, label: 'Fetching the latest changes' });
 
@@ -282,7 +282,7 @@ export function createPlanningSessions(opts: {
 			return { tree, notes: project.notes };
 		}
 
-		const resolved = resolveProjectConfig({ treePath: tree.path, draft: project.configDraft });
+		const resolved = resolveProjectConfig(project.config);
 
 		if (resolved.source === 'invalid') {
 			opts.send({ type: 'plan.error', planId, message: resolved.detail });

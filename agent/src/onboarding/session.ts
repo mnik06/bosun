@@ -3,7 +3,7 @@ import os from 'os';
 import path from 'path';
 import { NO_PUSH_GIT_ENV, prepareRunEnvironment } from '../execution/run-environment';
 import { createStreamParser } from '../planning/stream-parser';
-import { PROJECT_CONFIG_PATH, type ProjectConfig } from '../project-config';
+import { type ProjectConfig } from '../project-config';
 import { DISCOVERY_NUDGE, discoveryPrompt, signInPrompt } from '../prompts/onboarding';
 import { type AgentMsg, type OnboardingStart } from '../protocol';
 import { launchBrowser } from '../services/browser.service';
@@ -288,8 +288,7 @@ export function createOnboardingSessions(opts: { services: Services; send: (mess
 	}
 
 	async function discover(msg: OnboardingStart, run: Run, scratch: string): Promise<Outcome> {
-		const file = path.join(scratch, PROJECT_CONFIG_PATH);
-		const existingConfig = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : null;
+		const existingConfig = msg.config;
 		let published = false;
 		let nudged = false;
 
@@ -299,7 +298,7 @@ export function createOnboardingSessions(opts: { services: Services; send: (mess
 			runId: msg.runId,
 			run,
 			cwd: scratch,
-			prompt: discoveryPrompt({ portBase: msg.portBase, existingConfig, configPath: PROJECT_CONFIG_PATH }),
+			prompt: discoveryPrompt({ portBase: msg.portBase, existingConfig }),
 			builtin: DISCOVERY_TOOLS,
 			mcpTools: DISCOVERY_MCP_TOOLS,
 			definitions: DISCOVERY_DEFINITIONS,
@@ -443,12 +442,10 @@ export function createOnboardingSessions(opts: { services: Services; send: (mess
 		const step = (label: string, status: 'passed' | 'failed' | 'info', detail: string | null) => {
 			report({ runId: msg.runId, run, label, status, detail });
 		};
-		const resolved = resolveProjectConfig({ treePath: scratch, draft: msg.configDraft, preferDraft: msg.preferDraft });
+		const resolved = resolveProjectConfig(msg.config);
 
 		if (resolved.source === 'none' || resolved.source === 'invalid') {
-			const detail = resolved.source === 'none'
-				? `the default branch has no ${PROJECT_CONFIG_PATH} and bosun holds no draft`
-				: resolved.detail;
+			const detail = resolved.source === 'none' ? 'bosun holds no config for this repository yet' : resolved.detail;
 
 			step('Resolve the config', 'failed', detail);
 
@@ -456,7 +453,7 @@ export function createOnboardingSessions(opts: { services: Services; send: (mess
 		}
 
 		run.plan = { done: 0, total: verifyPlanTotal({ config: resolved.config, applyMigrations: msg.applyMigrations }) };
-		step('Resolve the config', 'passed', resolved.source === 'file' ? `from ${PROJECT_CONFIG_PATH} on the default branch` : 'from the draft in bosun');
+		step('Resolve the config', 'passed', 'the config bosun holds for this repository');
 
 		try {
 			step('Write the provided env files', 'passed', describeApplied(services.projectEnv.applyTo(scratch)) ?? 'nothing to write');

@@ -6,18 +6,20 @@ import { describeIssues, parseProjectConfig } from 'src/types/ProjectConfigSchem
 import { type Repository } from 'src/types/RepositorySchema';
 import { orNotFound } from 'src/utils/general';
 
-// Validated on write, so a draft that reaches a machine is one its schema accepts
-// and a session never discovers the typo an hour into a bullet.
-export async function saveConfigDraft(opts: {
+// Validated on write, so a config that reaches a machine is one its schema
+// accepts and a session never discovers the typo an hour into a bullet. Saved
+// immediately — there is no draft, and nothing is ever written to the
+// repository's own git tree.
+export async function saveConfig(opts: {
 	repositoryRepo: RepositoryRepo;
 	socketRegistry: SocketRegistry;
 	id: string;
 	projectId: string;
-	yaml: string;
+	text: string;
 }): Promise<Repository> {
 	await getOwnedRepository(opts);
 
-	const parsed = parseProjectConfig(opts.yaml);
+	const parsed = parseProjectConfig(opts.text);
 
 	if (!parsed.ok) {
 		throw new HttpError(400, `The config is not valid: ${describeIssues(parsed.issues)}`, {
@@ -26,7 +28,7 @@ export async function saveConfigDraft(opts: {
 	}
 
 	const repository = await orNotFound(
-		opts.repositoryRepo.saveConfigDraft({ id: opts.id, configDraft: opts.yaml }),
+		opts.repositoryRepo.saveConfig({ id: opts.id, config: opts.text }),
 		'Repository not found'
 	);
 

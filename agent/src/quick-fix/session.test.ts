@@ -26,6 +26,7 @@ const START: QuickFixStart = {
 	branch: 'bosun/quickfix/qf_1-fix-the-typo',
 	baseRef: 'main',
 	description: 'The signup button is unreadable on dark mode.',
+	config: null,
 	memoryMaxBytes: null
 };
 

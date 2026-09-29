@@ -24,7 +24,7 @@ async function runSetup(opts: { services: Services; msg: BuildWorktreeEnsure; wo
 		return { ok: true, detail: 'no repository attached — nothing to set up' };
 	}
 
-	const resolved = resolveProjectConfig({ treePath: worktreePath, draft: msg.configDraft });
+	const resolved = resolveProjectConfig(msg.config);
 
 	if (resolved.source === 'invalid') {
 		return { ok: false, detail: resolved.detail };

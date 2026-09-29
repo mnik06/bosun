@@ -1,4 +1,4 @@
-import { PROJECT_CONFIG_PATH, type ProjectConfig } from '../project-config';
+import { type ProjectConfig } from '../project-config';
 import {
 	agentConfigRule,
 	checksSection,
@@ -44,7 +44,7 @@ function configuredChecks(config: ProjectConfig | null): string {
 
 	return lines.length === 0
 		? '_The operator configured nothing beyond a repository — everything above is yours to discover._'
-		: `What \`${PROJECT_CONFIG_PATH}\` says about this project:\n\n${lines.join('\n')}`;
+		: `What bosun's stored config says about this project:\n\n${lines.join('\n')}`;
 }
 
 // A quick fix is deliberately outside the whole plan/board machinery: no ACs, no

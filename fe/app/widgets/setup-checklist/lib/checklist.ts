@@ -1,5 +1,5 @@
 import { repositoryCloning, type Machine, type PreflightCheck } from '~/entities/machine'
-import { configSource, pendingBaseBranch, type MachineOnboarding, type Repository } from '~/entities/repository'
+import { pendingBaseBranch, type MachineOnboarding, type Repository } from '~/entities/repository'
 
 export type ChecklistRowId = 'agent' | 'claude' | 'browser' | 'repository' | 'config' | 'inputs' | 'verified'
 
@@ -27,7 +27,7 @@ export interface ChecklistRow {
 
 export interface ChecklistInput {
 	machine: Pick<Machine, 'status' | 'capabilities' | 'repositoryId' | 'clonedRepositoryId'>
-	repository: Pick<Repository, 'fullName' | 'configOnDefault' | 'configDraft' | 'defaultBranch'> | null
+	repository: Pick<Repository, 'fullName' | 'config' | 'defaultBranch'> | null
 	onboarding: MachineOnboarding | null
 }
 
@@ -76,14 +76,8 @@ function configRow ({ machine, repository, onboarding }: ChecklistInput): Row {
 		return { state: 'todo', detail: `written for ${suggested} — make it the base branch`, action: 'choose-base-branch' }
 	}
 
-	const source = repository === null ? 'none' : configSource(repository)
-
-	if (source === 'file') {
-		return { state: 'done', detail: `.bosun/project.yaml on ${repository?.defaultBranch ?? 'the default branch'}`, action: null }
-	}
-
-	if (source === 'draft') {
-		return { state: 'done', detail: 'bosun draft', action: null }
+	if (repository !== null && repository.config !== null) {
+		return { state: 'done', detail: 'saved', action: null }
 	}
 
 	const run = onboarding?.run
@@ -100,7 +94,7 @@ function configRow ({ machine, repository, onboarding }: ChecklistInput): Row {
 }
 
 function hasConfig (repository: ChecklistInput['repository']): boolean {
-	return repository !== null && configSource(repository) !== 'none'
+	return repository !== null && repository.config !== null
 }
 
 function inputsRow ({ repository, onboarding }: ChecklistInput): Row {

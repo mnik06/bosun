@@ -63,8 +63,7 @@ export const RepositorySchema = z.object({
 	// Nullish: a backend older than base-branch overrides omits both.
 	providerDefaultBranch: z.string().nullish(),
 	defaultBranchOverride: z.string().nullish(),
-	configDraft: z.string().nullable(),
-	configOnDefault: z.boolean(),
+	config: z.string().nullable(),
 	autoResolveConflicts: z.boolean(),
 	lastSyncedAt: z.iso.datetime().nullable(),
 	azureSyncMode: z.enum(['webhook', 'polling']).nullable(),
@@ -178,10 +177,7 @@ export const MachineOnboardingSchema = z.object({
 export type MachineOnboarding = z.infer<typeof MachineOnboardingSchema>
 
 export const RepositoryConfigSchema = z.object({
-	defaultBranch: z.string(),
-	file: z.string().nullable(),
-	draft: z.string().nullable(),
-	source: z.enum(['file', 'draft', 'none'])
+	config: z.string().nullable()
 })
 
 export type RepositoryConfig = z.infer<typeof RepositoryConfigSchema>

@@ -14,7 +14,7 @@ import { type Services } from '../services/index';
 
 const SEALED = { v: 1 as const, wrappedKey: 'd3JhcHBlZA==', iv: 'aXY=', ciphertext: 'Y2lwaGVy' };
 
-const CONFIG_WITH_SETUP = 'version: 1\nsetup:\n  - name: install\n    run: pnpm i\n';
+const CONFIG_WITH_SETUP = 'Install:\n- install: pnpm i\n';
 
 function build (opts?: { paused?: boolean; repositoryId?: string | null }) {
 	const send = vi.fn();
@@ -192,7 +192,7 @@ describe('routeServerFrame', () => {
 	it('refuses to start a plan while paused, and tells the backend why', async () => {
 		const { send, sessions, route } = build({ paused: true });
 
-		await route({ type: 'plan.start', verifyInUi: true, auto: false, notes: null, configDraft: null, planId: 'p_1', input: 'go' });
+		await route({ type: 'plan.start', verifyInUi: true, auto: false, notes: null, config: null, planId: 'p_1', input: 'go' });
 
 		expect(sessions.start).not.toHaveBeenCalled();
 		expect(sent(send)).toEqual([
@@ -203,7 +203,7 @@ describe('routeServerFrame', () => {
 	it('starts a plan when not paused', async () => {
 		const { sessions, route } = build();
 
-		await route({ type: 'plan.start', verifyInUi: true, auto: true, notes: null, configDraft: 'version: 1', planId: 'p_1', input: 'go' });
+		await route({ type: 'plan.start', verifyInUi: true, auto: true, notes: null, config: 'Notes:\nx', planId: 'p_1', input: 'go' });
 
 		expect(sessions.start).toHaveBeenCalledWith({
 			planId: 'p_1',
@@ -211,14 +211,14 @@ describe('routeServerFrame', () => {
 			verifyInUi: true,
 			auto: true,
 			notes: null,
-			configDraft: 'version: 1'
+			config: 'Notes:\nx'
 		});
 	});
 
 	it('refuses onboarding while paused, and says so', async () => {
 		const { send, onboarding, route } = build({ paused: true });
 
-		await route({ type: 'onboarding.start', runId: 'onb_1', phase: 'discover', portBase: 3900, configDraft: null, preferDraft: false, applyMigrations: true, memoryMaxBytes: null });
+		await route({ type: 'onboarding.start', runId: 'onb_1', phase: 'discover', portBase: 3900, config: null, applyMigrations: true, memoryMaxBytes: null });
 
 		expect(onboarding.start).not.toHaveBeenCalled();
 		expect(sent(send)).toEqual([{ type: 'onboarding.error', runId: 'onb_1', message: 'this machine is paused' }]);
@@ -344,7 +344,7 @@ describe('exec frames', () => {
 		planTitle: 'Auth',
 		planBodyMd: 'body',
 		profile: DEFAULT_PROJECT_PROFILE,
-		configDraft: null,
+		config: null,
 		policy: null,
 		portBase: 4100,
 		slice: { ordinal: 1, kind: 'build', title: 'token table', bodyMd: null },
@@ -400,6 +400,7 @@ describe('quick fix frames', () => {
 		branch: 'bosun/quickfix/qf_1-fix-the-typo',
 		baseRef: 'main',
 		description: 'The signup button is unreadable on dark mode.',
+		config: null,
 		memoryMaxBytes: null
 	} satisfies ServerMsg;
 
@@ -483,7 +484,7 @@ describe('build worktree frames', () => {
 		fresh: true,
 		startFrom: 'abc1234',
 		mergeIn: ['bosun/plan/3-avatars'],
-		configDraft: CONFIG_WITH_SETUP
+		config: CONFIG_WITH_SETUP
 	} satisfies ServerMsg;
 
 	// A dependent is cut from its provider, never from the base: the branch is
@@ -575,7 +576,7 @@ describe('integration frames', () => {
 		worktreePath: '/w',
 		branch: 'bosun/plan/4-comments',
 		onto: 'main',
-		configDraft: null,
+		config: null,
 		autoResolve: true,
 		criteria: { planNumber: 4, title: 'Comments', acs: [] },
 		portBase: 4100,

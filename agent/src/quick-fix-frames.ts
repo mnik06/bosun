@@ -9,6 +9,7 @@ export const QuickFixStartMsgSchema = z.object({
 	branch: z.string(),
 	baseRef: z.string(),
 	description: z.string(),
+	config: z.string().nullable(),
 	memoryMaxBytes: z.number().int().positive().nullable()
 });
 

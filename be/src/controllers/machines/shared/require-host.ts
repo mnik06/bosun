@@ -1,5 +1,5 @@
 import { HttpError } from 'src/api/errors/HttpError';
-import { awaitingRepository, repositoryCloning } from 'src/controllers/repositories/shared/config-draft';
+import { awaitingRepository, repositoryCloning } from 'src/controllers/repositories/shared/config-for';
 import { type MachineRepo } from 'src/repos/machines/machine.repo';
 import { type SocketRegistry } from 'src/services/sockets/registry.service';
 import { type Machine } from 'src/types/MachineSchema';

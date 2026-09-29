@@ -4,8 +4,6 @@ import { Link } from 'react-router'
 
 import type { Machine } from '~/entities/machine'
 import {
-	configSource,
-	describeConfigSource,
 	onboardingProgress,
 	OnboardingStatusBadge,
 	pendingBaseBranch,
@@ -15,7 +13,6 @@ import {
 	type OnboardingRun,
 	type Repository
 } from '~/entities/repository'
-import { OpenPullRequestButton } from '~/features/open-onboarding-pr'
 import { BaseBranchButton } from '~/features/set-base-branch'
 import { StartOnboardingButton } from '~/features/start-onboarding'
 import { formatRelativeTime } from '~/shared/lib'
@@ -32,12 +29,11 @@ function ReportActions ({
 	run: OnboardingRun,
 	repository: Repository | null
 }) {
-	const hasConfig = run.config !== null || (repository !== null && configSource(repository) !== 'none')
+	const hasConfig = run.config !== null || (repository !== null && repository.config !== null)
 
 	if (run.status === 'ready') {
 		return (
 			<Group gap="sm">
-				<OpenPullRequestButton repositoryId={run.repositoryId} />
 				<StartOnboardingButton machine={machine} phase="verify" label="Run verify again" again />
 			</Group>
 		)
@@ -118,6 +114,14 @@ function countLabel (count: number, noun: string): string {
 	return count === 1 ? `1 ${noun}` : `${count} ${noun}s`
 }
 
+function configLine (repository: Repository | null): string {
+	if (repository === null) {
+		return ''
+	}
+
+	return ` · config ${repository.config === null ? 'none yet' : 'saved'}`
+}
+
 // Collapsed: what discovery guessed is worth a look once, not on every visit.
 function Assumptions ({ assumptions }: { assumptions: OnboardingAssumption[] }) {
 	const [opened, { toggle }] = useDisclosure(false)
@@ -196,7 +200,7 @@ export function OnboardingReport ({ machine }: { machine: Machine }) {
 						<Text size="xs" c="dimmed">
 							{run.phase === 'discover' ? 'Discovery and verify' : 'Verify'} · started{' '}
 							{formatRelativeTime(run.startedAt)}
-							{repository === null ? '' : ` · config ${describeConfigSource(repository)}`}
+							{configLine(repository)}
 						</Text>
 					</Stack>
 

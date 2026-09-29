@@ -104,7 +104,7 @@ async function execStartFrame(
 		planTitle: plan.title ?? 'Untitled plan',
 		planBodyMd: plan.bodyMd ?? '',
 		profile: DEFAULT_PROJECT_PROFILE,
-		configDraft: opts.repository.configDraft,
+		config: opts.repository.config,
 		policy: { applyMigrations: opts.machine.policy.applyMigrations },
 		portBase: build.portBase,
 		slice: { ordinal: slice.ordinal, kind: slice.kind, title: slice.title, bodyMd: slice.bodyMd },
@@ -222,7 +222,7 @@ export async function dispatchIntegration(
 				worktreePath: moved.worktreePath,
 				branch: moved.branch,
 				onto: claimed.onto,
-				configDraft: opts.repository.configDraft,
+				config: opts.repository.config,
 				autoResolve: opts.repository.autoResolveConflicts,
 				criteria,
 				portBase: moved.portBase,
@@ -308,7 +308,7 @@ async function ensureWorktree(
 			fresh: opts.previous.startedAt === null,
 			startFrom: opts.stacking?.startFrom ?? null,
 			mergeIn: opts.stacking?.mergeIn ?? [],
-			configDraft: opts.repository.configDraft
+			config: opts.repository.config
 		}
 	});
 
@@ -352,7 +352,7 @@ export async function resendWorktrees(deps: LineDeps, opts: { machine: Machine }
 				fresh: false,
 				startFrom: null,
 				mergeIn: [],
-				configDraft: repository?.configDraft ?? null
+				config: repository?.config ?? null
 			}
 		});
 	}

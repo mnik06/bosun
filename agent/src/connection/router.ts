@@ -129,8 +129,7 @@ async function attachRepository(deps: RouterDeps, msg: Extract<ServerMsg, { type
 		JSON.stringify({
 			type: 'repo.attached',
 			repositoryId: msg.repositoryId,
-			repoPath: result.repoPath,
-			configOnDefault: result.configOnDefault
+			repoPath: result.repoPath
 		})
 	);
 	await deps.announce('change');
@@ -263,7 +262,7 @@ export async function routeServerFrame(deps: RouterDeps, msg: ServerMsg): Promis
 				verifyInUi: msg.verifyInUi,
 				auto: msg.auto,
 				notes: msg.notes,
-				configDraft: msg.configDraft
+				config: msg.config
 			});
 
 			return;
@@ -274,7 +273,7 @@ export async function routeServerFrame(deps: RouterDeps, msg: ServerMsg): Promis
 				text: msg.text,
 				attachments: msg.attachments,
 				notes: msg.notes,
-				configDraft: msg.configDraft,
+				config: msg.config,
 				plan: msg.plan
 			});
 

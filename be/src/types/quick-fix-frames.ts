@@ -11,6 +11,9 @@ export const QuickFixStartMsgSchema = z.object({
 	branch: z.string(),
 	baseRef: z.string(),
 	description: z.string(),
+	// The repository's config, same as every other session type — a quick fix has
+	// no tree of its own to read one from.
+	config: z.string().nullable(),
 	// The most memory this session may use, on the same terms as `exec.start`.
 	memoryMaxBytes: z.number().int().positive().nullable()
 });

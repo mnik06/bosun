@@ -52,7 +52,6 @@ export async function maybeStartVerify(deps: OnboardingDeps, opts: { machineId: 
 		id: run.id,
 		step: { label: 'Verify started', status: 'info', detail: null, progress: 0, at: new Date().toISOString() }
 	});
-	const proposed = run.phase === 'discover' && run.config !== null;
 	const sent = deps.socketRegistry.sendToAgent({
 		machineId: machine.id,
 		message: {
@@ -60,8 +59,7 @@ export async function maybeStartVerify(deps: OnboardingDeps, opts: { machineId: 
 			runId: run.id,
 			phase: 'verify',
 			portBase: ONBOARDING_PORT_BASE,
-			configDraft: proposed ? run.config : repository.configDraft,
-			preferDraft: proposed,
+			config: repository.config,
 			applyMigrations: machine.policy.applyMigrations,
 			memoryMaxBytes: admission.limitBytes,
 			baseBranch: repository.defaultBranch

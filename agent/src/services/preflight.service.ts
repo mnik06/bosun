@@ -10,7 +10,6 @@ import { describeEnvSets, type ProjectEnvService } from './project-env.service';
 import { NO_REPOSITORY, repoPathGetter, type RepoPathSource } from './repo.service';
 import { type WorkspaceService } from './workspace.service';
 import { type PreflightCheck } from '../protocol';
-import { PROJECT_CONFIG_PATH } from '../project-config';
 
 const MIN_CLAUDE_MAJOR = 2;
 
@@ -70,7 +69,7 @@ export function getPreflightService(deps: {
 	mcpConfig: McpConfigService;
 	memory: MemoryService;
 	projectEnv: ProjectEnvService;
-	workspace: Pick<WorkspaceService, 'repositoryId' | 'configOnDefault'>;
+	workspace: Pick<WorkspaceService, 'repositoryId'>;
 	repoPath: RepoPathSource;
 }) {
 	const currentRepoPath = repoPathGetter(deps.repoPath);
@@ -303,45 +302,11 @@ export function getPreflightService(deps: {
 		return { name: 'env', ok: true, detail: `${describeEnvSets(deps.projectEnv.summary())}${secretLine}` };
 	}
 
-	// Which of the two configs a repository machine's sessions run on. Only the
-	// default branch is looked at: a plan's branch may carry its own file, and a
-	// session always uses the one in the tree it runs in.
-	async function checkConfig(): Promise<PreflightCheck | null> {
-		if (deps.workspace.repositoryId() === null) {
-			return null;
-		}
-
-		const onDefault = await deps.workspace.configOnDefault();
-
-		return {
-			name: 'config',
-			ok: true,
-			detail: onDefault
-				? `${PROJECT_CONFIG_PATH} is on the default branch — sessions use it`
-				: `no ${PROJECT_CONFIG_PATH} on the default branch yet — sessions use the draft in bosun`
-		};
-	}
-
 	return {
 		async collect(): Promise<PreflightCheck[]> {
-			const [claude, git, gh, browser, config] = await Promise.all([
-				checkClaude(),
-				checkGit(),
-				checkGh(),
-				checkBrowser(),
-				checkConfig()
-			]);
+			const [claude, git, gh, browser] = await Promise.all([checkClaude(), checkGit(), checkGh(), checkBrowser()]);
 
-			return [
-				claude,
-				git,
-				gh,
-				checkCustomMcp(),
-				browser,
-				checkMemory(),
-				checkEnv(),
-				...(config === null ? [] : [config])
-			];
+			return [claude, git, gh, checkCustomMcp(), browser, checkMemory(), checkEnv()];
 		}
 	};
 }

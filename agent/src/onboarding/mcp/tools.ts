@@ -9,7 +9,7 @@ export const ReportStepArgsSchema = z.object({
 	progress: z.number().min(0).max(1).optional()
 });
 
-export const PublishConfigArgsSchema = z.object({ yaml: z.string().min(1).max(100_000) });
+export const PublishConfigArgsSchema = z.object({ text: z.string().min(1).max(100_000) });
 
 export const ReportRequirementArgsSchema = z
 	.object({
@@ -53,7 +53,7 @@ export const ReportSignInArgsSchema = z.object({
 
 const PublishRespSchema = z.union([
 	z.object({ ok: z.literal(true) }),
-	z.object({ ok: z.literal(false), issues: z.array(z.object({ path: z.string(), message: z.string() })) })
+	z.object({ ok: z.literal(false), issues: z.array(z.object({ line: z.number().int().nullable(), message: z.string() })) })
 ]);
 
 // No `bosun_ask`, deliberately: discovery depends on no answer mid-way. What it
@@ -69,7 +69,7 @@ export const DISCOVERY_DEFINITIONS = [
 	mcpToolDefinition({
 		name: 'publish_config',
 		description:
-			'Publish the whole `.bosun/project.yaml` you have written, as YAML. Bosun validates it: when it is refused you get every field that is wrong and must fix them and publish again. Publishing again replaces what you published before. Discovery fails unless a publish succeeds.',
+			"Publish the whole config you have written, in bosun's plain-text grammar. Bosun validates it: when it is refused you get every field that is wrong, each with its line, and must fix them and publish again. Publishing again replaces what you published before. Discovery fails unless a publish succeeds.",
 		schema: PublishConfigArgsSchema
 	}),
 	mcpToolDefinition({
@@ -113,13 +113,13 @@ export function describePublishAnswer(answer: unknown): { published: boolean; te
 	}
 
 	if (parsed.data.ok) {
-		return { published: true, text: 'Published. This is now the repository\'s draft config in bosun.' };
+		return { published: true, text: "Published. This is now the repository's config in bosun." };
 	}
 
 	return {
 		published: false,
 		text: `Not published — the config is invalid. Fix every one of these, then call publish_config again:\n${parsed.data.issues
-			.map((issue) => `- ${issue.path}: ${issue.message}`)
+			.map((issue) => (issue.line === null ? `- ${issue.message}` : `- line ${issue.line}: ${issue.message}`))
 			.join('\n')}`
 	};
 }
@@ -156,7 +156,7 @@ async function suggestBaseBranch(opts: { runId: string; bosunApi: BosunApiServic
 	}
 
 	return textToolResult(
-		`Recorded, and this checkout is now origin/${parsed.branch}. Onboard this tree — if it carries .bosun/project.yaml, start from that file. Verify waits until the operator makes ${parsed.branch} the base branch.`
+		`Recorded, and this checkout is now origin/${parsed.branch}. Onboard this tree. Verify waits until the operator makes ${parsed.branch} the base branch.`
 	);
 }
 

@@ -1,81 +1,88 @@
-const CONFIG_REFERENCE = `\`\`\`yaml
-version: 1
+const CONFIG_REFERENCE = `\`\`\`
+Toolchain:
+- Node: 24.15.0
+- Package manager: pnpm@11.8.0
 
-toolchain:                      # one node for the whole repository, exact versions only
-  node: "24.15.0"               # from .nvmrc / .node-version / engines.node
-  packageManager: "pnpm@11.8.0" # npm|pnpm|yarn @ exact version, from packageManager or the lockfile
+Install:
+/be: pnpm install --frozen-lockfile (rerun when: be/pnpm-lock.yaml)
+/fe: pnpm install --frozen-lockfile (rerun when: fe/pnpm-lock.yaml)
 
-setup:                          # run in order when a worktree is created; names are unique
-  - name: install be
-    cwd: be                     # relative to the repository root, optional
-    run: pnpm install --frozen-lockfile
-    rerunWhen: [be/pnpm-lock.yaml]   # re-run before a bullet when any of these files changed
-  - name: install fe
-    cwd: fe
-    run: pnpm install --frozen-lockfile
-    rerunWhen: [fe/pnpm-lock.yaml]
+Apps:
+be:
+- Cwd: be
+- Start: pnpm local
+- Env PORT: {port}
+- Ready: {url.be}/health
+- Migrate: pnpm db:migration:run
+- Codegen: pnpm generate
+fe:
+- Cwd: fe
+- Start: pnpm dev --port {port} --strictPort --host 127.0.0.1
+- Depends on: be
+- Env VITE_API_URL: {url.be}
+- Ready: {url.fe}/@vite/client
 
-apps:                           # at most 10; an app's port is portBase + its position here
-  be:                           # names: lowercase letters, digits, dashes
-    cwd: be
-    start: pnpm local           # started by bosun, never by a session
-    env:                        # templated: {port} is this app's port, {url.<app>} another app's URL
-      PORT: "{port}"
-    ready: "{url.be}/health"    # polled until it answers below 500; readyTimeoutSeconds defaults to 90
-    migrate: pnpm db:migration:run
-    codegen: pnpm generate      # optional
-  fe:
-    cwd: fe
-    start: pnpm dev --port {port} --strictPort --host 127.0.0.1   # {url.*} is always 127.0.0.1
-    dependsOn: [be]
-    env:
-      VITE_API_URL: "{url.be}"
-    ready: "{url.fe}/@vite/client"   # a dev server compiles the app on its first page; probe something cheap
+Feedback loops:
+/be: pnpm preflight
+/fe: pnpm preflight
 
-checks:                         # the feedback loop every session runs, and what an integration must keep green
-  - cwd: be
-    run: pnpm preflight
-  - cwd: fe
-    run: pnpm preflight
+Regenerate:
+/be:
+- Migrations (when be/drizzle-out/** changes): pnpm db:migration:generate
+- Lockfile be (when be/pnpm-lock.yaml changes): pnpm install --lockfile-only
+/fe:
+- Lockfile fe (when fe/pnpm-lock.yaml changes): pnpm install --lockfile-only
 
-regenerate:                     # files produced by a command, never merged: taken from the target branch and produced again
-  - name: migrations
-    cwd: be
-    paths: [be/drizzle-out/**]  # git globs from the repository root; ** crosses directories
-    run: pnpm db:migration:generate
-  - name: lockfile
-    cwd: fe
-    paths: [fe/pnpm-lock.yaml]
-    run: pnpm install --lockfile-only
+Reset database:
+- Cwd: be
+- Run: pnpm db:reset
 
-verify:
-  resetDatabase:                # run before every verify drive, on machines that allow migrations
-    cwd: be
-    run: pnpm db:reset
+Test accounts:
+- leader: sign in at {url.fe}/login using TEST_LEADER_EMAIL, TEST_LEADER_PASSWORD
 
-testAccounts:
-  - role: leader
-    signIn: "{url.fe}/login"    # must name an app: {url.fe}, never a bare {url}
-    secrets: [TEST_LEADER_EMAIL, TEST_LEADER_PASSWORD]   # key names only, never values
-
-notes: |
-  Anything a session could not work out by reading the code.
+Notes:
+Anything a session could not work out by reading the code.
 \`\`\`
 
-No other keys exist, and unknown keys are refused. Environment facts — which database, whether it
-may be migrated, any value of any secret — never go in this file.`;
+Every section is optional and appears at most once, in any order. No other sections exist, and an
+unrecognized line is refused. **This text has no comment syntax** — nothing published may carry a
+trailing annotation of the kind used below to explain it, only what the grammar itself defines:
 
-function existingSection(opts: { existingConfig: string | null; configPath: string }): string {
+- \`Toolchain:\` names one node for the whole repository and one package manager, both exact versions —
+  read \`.nvmrc\`/\`.node-version\`/\`engines.node\` and \`packageManager\` or the lockfile.
+- \`Install:\` and \`Feedback loops:\` run in the order written. \`/dir: command\` is a complete entry for
+  that directory; \`/dir:\` alone opens a block whose \`- Label: command\` lines all take that directory,
+  and each then needs a label — a directory with only one command may skip the label and write
+  \`/dir: command\` directly. An \`Install:\` entry may add \`(rerun when: <path>[, <path>...])\` after its
+  command. Every label in a section — including a lone one — is unique across the *whole document*,
+  not just within its own directory: \`Lockfile be\`/\`Lockfile fe\` above, never \`Lockfile\` twice.
+- \`Apps:\` holds at most 10 named blocks (lowercase letters, digits, dashes); an app's port is
+  \`portBase\` plus its position here, started by bosun and never by a session. \`{port}\` and
+  \`{url.<app>}\` are templated — \`{url.*}\` is always \`http://127.0.0.1:<port>\`, so a server must listen
+  on \`127.0.0.1\` (Vite: \`--host 127.0.0.1\`). \`Ready:\` is polled until it answers below 500;
+  \`Ready timeout:\` (seconds) defaults to 90. \`Codegen:\` is optional.
+- \`Regenerate:\` follows the same directory-scope shape as \`Install:\`, but every entry is always
+  \`- Label (when <glob>[, <glob>...] changes): command\`, globs from the repository root (\`**\` crosses
+  directories).
+- \`Reset database:\` is optional, at most one, and runs before every verify drive on a machine that
+  allows migrations.
+- \`Test accounts:\` secrets are key names only, never values, and \`sign in at\` must name an app
+  (\`{url.fe}\`), never a bare \`{url}\`.
+- \`Notes:\` is free text to the end of the document — anything a session could not work out by reading
+  the code. Environment facts — which database, whether it may be migrated, any value of any secret —
+  never go anywhere in this text.`;
+
+function existingSection(opts: { existingConfig: string | null }): string {
 	if (opts.existingConfig === null) {
-		return `The repository has no \`${opts.configPath}\` yet. You are writing the first one.`;
+		return 'The repository has no config yet. You are writing the first one.';
 	}
 
-	return `The default branch already carries \`${opts.configPath}\`. **Start from it, not from nothing.**
+	return `Bosun already holds a config for this repository. **Start from it, not from nothing.**
 Check every field against the code. Publish the config as it should be, and for every change you make
 record an assumption that says what you would change and why, citing the file. A field you leave
 alone because it is right needs no entry.
 
-\`\`\`yaml
+\`\`\`
 ${opts.existingConfig}
 \`\`\``;
 }
@@ -83,11 +90,10 @@ ${opts.existingConfig}
 export function discoveryPrompt(opts: {
 	portBase: number;
 	existingConfig: string | null;
-	configPath: string;
 }): string {
 	return `You are onboarding a repository onto bosun. Bosun runs coding sessions on this machine, and before
-any of them can build, test or start this project it needs \`${opts.configPath}\`: a file that says how
-this repository is installed, generated, migrated, started and proven. Your job is to write it.
+any of them can build, test or start this project it needs a config bosun holds: plain text that says
+how this repository is installed, generated, migrated, started and proven. Your job is to write it.
 
 # Nobody is watching, and nothing can be asked
 
@@ -190,11 +196,11 @@ the time the operator waits. Read the scripts and write what they say.
 
 # Write the config and publish it
 
-The file's exact shape:
+The text's exact shape:
 
 ${CONFIG_REFERENCE}
 
-Call \`publish_config\` with the whole file. When it is refused, fix every field it names and publish
+Call \`publish_config\` with the whole text. When it is refused, fix every field it names and publish
 again, until it is accepted. Do not stop with a config that was never accepted — that fails onboarding.
 
 Before you finish, check that every env key, every test-account secret and the migration policy you
@@ -208,7 +214,7 @@ operator still has to provide.`;
 
 export const DISCOVERY_NUDGE = [
 	'Your turn ended, but publish_config has not succeeded, so there is no config and onboarding will fail.',
-	'Write the whole .bosun/project.yaml now from what you already know and call publish_config; fix whatever it refuses and publish again until it is accepted.',
+	'Write the whole config now from what you already know and call publish_config; fix whatever it refuses and publish again until it is accepted.',
 	'Report any requirement and assumption you have not reported yet.'
 ].join(' ');
 

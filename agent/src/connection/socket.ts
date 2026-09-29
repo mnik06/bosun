@@ -140,8 +140,7 @@ function createAnnouncer(deps: ConnectionDeps & { socket: WebSocket }) {
 				envSets: deps.services.projectEnv.summary(),
 				sessionSecrets: deps.services.projectEnv.secretNames(),
 				publicKey: publicKeyOf(deps.services),
-				repositoryId: deps.services.workspace.repositoryId(),
-				configOnDefault: deps.services.workspace.knownConfigOnDefault()
+				repositoryId: deps.services.workspace.repositoryId()
 			})
 		);
 

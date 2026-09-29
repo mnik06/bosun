@@ -1,4 +1,4 @@
-import { PROJECT_CONFIG_PATH, type ProjectConfig } from '../project-config';
+import { type ProjectConfig } from '../project-config';
 import { type ProjectProfile } from '../project-profile';
 import { envFileFor } from '../services/project-env.service';
 import { appPorts, renderTemplate } from '../services/stack.service';
@@ -17,8 +17,8 @@ export interface RunContext {
 	baseRef: string;
 	worktreePath: string;
 	profile: ProjectProfile;
-	// A repository machine's config, from the worktree's own file or the draft. Null
-	// on a machine with no repository, which runs on `profile` as before.
+	// The config bosun holds for the repository. Null on a machine with no
+	// repository, which runs on `profile` as before.
 	config: ProjectConfig | null;
 	// Policy, not a fact about the code: whether this machine's lane may migrate.
 	applyMigrations: boolean;
@@ -174,7 +174,7 @@ export function configuredProject(context: RunContext): string[] {
 			? ''
 			: `- Test accounts: ${config.testAccounts.map((account) => `${account.role} signs in at ${renderTemplate(account.signIn, { app: null, ports })} with ${account.secrets.map((key) => `\`$${key}\``).join(' and ')} from your environment`).join('; ')}. Read them with \`printenv\` when you need them and never print, quote or write down their values.`,
 		notesSection(config),
-		`- \`${PROJECT_CONFIG_PATH}\` describes this code and travels with the branch. If your work changes how the project installs, generates, migrates, starts or proves itself, update it in this bullet — it is validated before the bullet is committed, and a file you leave invalid fails the bullet.`
+		"- This project's config lives in bosun, not in the tree. If your work changes how the project installs, generates, migrates, starts or proves itself, say so plainly in your report — a leader edits the config from the browser, and no session can change it directly."
 	].filter(Boolean);
 }
 
@@ -197,7 +197,7 @@ export function hasConfiguredChecks(config: ProjectConfig | null): config is Pro
 // and ends up preferring a script it found over the check onboarding proved.
 export function loopSource(config: ProjectConfig | null): string {
 	if (hasConfiguredChecks(config)) {
-		return `\`${PROJECT_CONFIG_PATH}\` already says how this project proves itself, and onboarding ran every
+		return `The project's config already says how this project proves itself, and onboarding ran every
 command in it. **Its checks, listed below, are your loop.** Do not re-read the manifests, the CI workflow
 or the Makefile to find another one or to confirm these.
 
@@ -232,7 +232,7 @@ which they are. "None" is an answer.`;
 // a loop that gets skipped when the work runs long.
 export function feedbackLoops(context: RunContext): string {
 	const configured = context.config === null ? configuredProfile(context.profile) : configuredProject(context);
-	const source = context.config === null ? 'What the operator has already told bosun about this project' : `What \`${PROJECT_CONFIG_PATH}\` says about this project`;
+	const source = context.config === null ? 'What the operator has already told bosun about this project' : "What bosun's stored config says about this project";
 	const detail = hasConfiguredChecks(context.config) ? (context.mode === 'fix' ? SCAN_TOOLS : '') : DISCOVERY_LIST;
 
 	return `# Step 1 — this repository's feedback loops, before you change anything
