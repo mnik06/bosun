@@ -27,7 +27,8 @@ function build (opts?: { paused?: boolean; repositoryId?: string | null }) {
 		answer: vi.fn(),
 		cancel: vi.fn(),
 		cancelAll: vi.fn(),
-		running: vi.fn().mockReturnValue(0)
+		running: vi.fn().mockReturnValue(0),
+		held: vi.fn().mockReturnValue([])
 	};
 	const executions = {
 		start: vi.fn().mockResolvedValue(undefined),

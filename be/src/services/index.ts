@@ -1,4 +1,5 @@
 import { getAgentReleaseService } from 'src/services/agent-release/agent-release.service';
+import { getAutoUpgradeRolloutService } from 'src/services/agent-release/auto-upgrade-rollout.service';
 import { getSupabaseAdmin } from 'src/services/auth/supabase-admin.service';
 import { getSupabaseAuth } from 'src/services/auth/supabase-auth.service';
 import { getAzureBranchSnapshotService } from 'src/services/azure/azure-branch-snapshot.service';
@@ -34,6 +35,7 @@ export function getServices(opts: { env: Env }) {
 			latestReleaseUrl: opts.env.AGENT_LATEST_RELEASE_URL,
 			downloadBaseUrl: opts.env.AGENT_DOWNLOAD_BASE_URL
 		}),
+		autoUpgradeRollout: getAutoUpgradeRolloutService(),
 		azureBranchSnapshot: getAzureBranchSnapshotService(),
 		azureConnectionGuard: getAzureConnectionGuardService(),
 		azureDevOps: getAzureDevOpsService({}),

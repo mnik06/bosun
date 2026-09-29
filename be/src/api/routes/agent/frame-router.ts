@@ -159,6 +159,14 @@ function relayDecline(opts: {
 		{ machineId: opts.machineId, version: opts.msg.version, reason: opts.msg.reason },
 		'agent declined an upgrade'
 	);
+
+	if (opts.fastify.services.autoUpgradeRollout.recordDecline({ machineId: opts.machineId, ...opts.msg })) {
+		opts.log.error(
+			{ version: opts.msg.version },
+			'agent build failed on too many machines; no longer offering it unattended'
+		);
+	}
+
 	opts.fastify.services.socketRegistry.broadcastToUi({
 		projectId: opts.projectId,
 		message: {

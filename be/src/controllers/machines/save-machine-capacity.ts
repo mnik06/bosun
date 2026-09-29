@@ -14,6 +14,7 @@ export async function saveMachineCapacity(
 		verifyLanes?: number;
 		buildCap?: number | null;
 		ignoreMemoryBudget?: boolean;
+		autoUpgrade?: boolean;
 	}
 ): Promise<Machine> {
 	const machine = await orNotFound(deps.machineRepo.saveCapacity(opts), 'Machine not found');

@@ -69,6 +69,8 @@ export const MachineSchema = z.object({
 	verifyLanes: z.number().int().nullish(),
 	buildCap: z.number().int().nullish(),
 	ignoreMemoryBudget: z.boolean().nullish(),
+	// Nullish for the same reason: a backend older than unattended upgrades omits it.
+	autoUpgrade: z.boolean().nullish(),
 	createdAt: z.iso.datetime()
 })
 

@@ -117,6 +117,17 @@ describe('createFrameSink', () => {
 		expect(sink.pendingRunIds()).toEqual([]);
 	});
 
+	// Named in `hello` as held, so the backend does not fail a quick fix whose
+	// outcome is only waiting for the connection to come back.
+	it('reports the quick fixes whose results are parked, apart from runs', () => {
+		const sink = createFrameSink();
+
+		sink.send({ type: 'quickfix.error', quickFixId: 'qf_1', message: 'boom' } as AgentMsg);
+
+		expect(sink.pendingQuickFixIds()).toEqual(['qf_1']);
+		expect(sink.pendingRunIds()).toEqual([]);
+	});
+
 	it('sends straight through while a connection is attached', () => {
 		const sink = createFrameSink();
 		const deliver = vi.fn();

@@ -87,6 +87,8 @@ export function getAgentReleaseService(deps: {
 	return {
 		currentVersion,
 
+		pinned: Boolean(deps.pinnedVersion),
+
 		downloadBaseFor(version: string): string {
 			return resolveDownloadBase({ baseUrl: deps.downloadBaseUrl, version });
 		},
@@ -115,3 +117,5 @@ export function getAgentReleaseService(deps: {
 		}
 	};
 }
+
+export type AgentReleaseService = ReturnType<typeof getAgentReleaseService>;

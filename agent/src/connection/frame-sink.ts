@@ -38,6 +38,7 @@ export interface FrameSink {
 	pendingOnboardingRunIds(): string[];
 	pendingIntegrationIds(): string[];
 	pendingBugfixSessionIds(): string[];
+	pendingQuickFixIds(): string[];
 }
 
 // An execution session outlives the socket it was dispatched over: `claude` keeps
@@ -107,6 +108,10 @@ export function createFrameSink(): FrameSink {
 
 		pendingBugfixSessionIds(): string[] {
 			return pending.flatMap((message) => ('sessionId' in message ? [message.sessionId] : []));
+		},
+
+		pendingQuickFixIds(): string[] {
+			return pending.flatMap((message) => ('quickFixId' in message ? [message.quickFixId] : []));
 		},
 
 		// The same argument for a grill: a session that published and settled while

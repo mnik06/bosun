@@ -12,6 +12,7 @@ import { errorHandler } from 'src/api/errors/error.handler';
 import { startPullRequestReconcile } from 'src/controllers/github/reconcile-pull-requests';
 import { lineDeps } from 'src/controllers/line/line-deps';
 import { startQuestionSweep } from 'src/controllers/line/release-stale-questions';
+import { startAutoUpgradeSweep } from 'src/controllers/machines/auto-upgrade-sweep';
 import { startBugfixIdleSweep } from 'src/controllers/plans/bugfix/bugfix-idle-sweep';
 import { startStalePlanSweep } from 'src/controllers/plans/sweep-stale-plans';
 import { getLoggerOptions } from 'src/api/plugins/logger.plugin';
@@ -154,11 +155,21 @@ export async function buildServer(): Promise<FastifyInstance> {
 	// silence needs its own clock.
 	const stopBugfixIdleSweep = startBugfixIdleSweep({ deps: lineDeps(server), log: server.log });
 
+	// Refresh is the only other path to a new agent build, and it needs a person.
+	const stopAutoUpgradeSweep = startAutoUpgradeSweep({
+		machineRepo: server.repos.machineRepo,
+		agentRelease: server.services.agentRelease,
+		autoUpgradeRollout: server.services.autoUpgradeRollout,
+		socketRegistry: server.services.socketRegistry,
+		log: server.log
+	});
+
 	server.addHook('onClose', stopSweep);
 	server.addHook('onClose', async () => {
 		stopQuestionSweep();
 		stopReconcile();
 		stopBugfixIdleSweep();
+		stopAutoUpgradeSweep();
 	});
 
 	return server;

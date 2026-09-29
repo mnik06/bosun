@@ -15,6 +15,7 @@ import { machineRefreshBlock, useLineQuery } from '~/entities/plan'
 import { AddMcpServerButton } from '~/features/add-mcp-server'
 import { PausedBanner } from '~/features/pause-machine'
 import { RefreshMachineButton, useRefreshMachine } from '~/features/refresh-machine'
+import { AutoUpgradeSwitch } from '~/features/set-machine-auto-upgrade'
 import { MachineCapacityForm } from '~/features/set-machine-capacity'
 import { SetupClaudeButton } from '~/features/setup-claude'
 import { formatRelativeTime } from '~/shared/lib'
@@ -145,6 +146,14 @@ export function MachineDetail ({
 			/>
 
 			<GitCard machine={data} />
+
+			<SetupCard
+				title="Agent updates"
+				description="How this machine moves to a new agent build."
+				action={null}
+			>
+				<AutoUpgradeSwitch machine={data} />
+			</SetupCard>
 
 			{kind === 'repository' ? (
 				<SetupCard

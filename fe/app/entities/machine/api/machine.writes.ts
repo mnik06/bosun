@@ -27,7 +27,8 @@ export async function patchMachineCapacity (opts: {
 	machineId: string,
 	verifyLanes?: number,
 	buildCap?: number | null,
-	ignoreMemoryBudget?: boolean
+	ignoreMemoryBudget?: boolean,
+	autoUpgrade?: boolean
 }): Promise<Machine> {
 	const { machineId, ...body } = opts
 	const { data } = await apiClient.patch<unknown>(`/machines/${machineId}`, body)

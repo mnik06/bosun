@@ -86,6 +86,7 @@ export const UpdateMachineCapacityReqSchema = z
 	.object({
 		verifyLanes: z.number().int().min(0).max(4),
 		buildCap: z.number().int().min(1).max(32).nullable(),
-		ignoreMemoryBudget: z.boolean()
+		ignoreMemoryBudget: z.boolean(),
+		autoUpgrade: z.boolean()
 	})
 	.partial();

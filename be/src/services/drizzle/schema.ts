@@ -272,6 +272,9 @@ export const machines = pgTable(
 		// work here. Sessions keep their per-job limits, so what runs past the budget
 		// leans on swap rather than on the kernel's killer.
 		ignoreMemoryBudget: boolean().notNull().default(false),
+		// Off by default: a machine takes a new agent build without anybody pressing
+		// Refresh only when a leader opted it in.
+		autoUpgrade: boolean().notNull().default(false),
 		createdAt: timestamp({ withTimezone: true }).notNull().defaultNow()
 	},
 	(table) => [index('machines_project_id_idx').on(table.projectId)]

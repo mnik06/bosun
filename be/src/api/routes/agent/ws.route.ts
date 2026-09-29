@@ -7,6 +7,7 @@ import { markMachineOnline } from 'src/controllers/machines/mark-machine-online'
 import { reconcileRepository } from 'src/controllers/machines/reconcile-repository';
 import { saveMachinePreflight } from 'src/controllers/machines/save-machine-preflight';
 import { announceMachine } from 'src/controllers/machines/shared/announce';
+import { sendUpgrade } from 'src/controllers/machines/shared/send-upgrade';
 import { machineOfflineDeps, notifyMachineOffline } from 'src/controllers/machines/shared/notify-offline';
 import { machineOnlineDeps, notifyMachineOnline } from 'src/controllers/machines/shared/notify-online';
 import { lineDeps } from 'src/controllers/line/line-deps';
@@ -17,6 +18,7 @@ import { onboardingDeps } from 'src/controllers/onboarding/onboarding-deps';
 import { stallMachineOnboarding } from 'src/controllers/onboarding/stall-machine-onboarding';
 import { saveConfigOnDefault } from 'src/controllers/repositories/save-config-on-default';
 import { stallMachinePlans } from 'src/controllers/plans/stall-machine-plans';
+import { stallMachineQuickFixes } from 'src/controllers/quick-fixes/stall-machine-quick-fixes';
 import { type Machine } from 'src/types/MachineSchema';
 import { AgentMsgSchema, type AgentMsg } from 'src/types/protocol';
 import { handleAgentFrame, isOrderedFrame } from 'src/api/routes/agent/frame-router';
@@ -121,29 +123,19 @@ async function offerUpgrade(opts: {
 		return;
 	}
 
-	const { socketRegistry, pendingUpgrades } = opts.fastify.services;
+	const { socketRegistry, pendingUpgrades, autoUpgradeRollout } = opts.fastify.services;
 
-	// Logged with both versions because the comparison is equality, not "newer
-	// than": a pinned version below what a machine runs is a deliberate rollback,
-	// and it should read as one rather than as an upgrade that quietly went
-	// backwards.
-	opts.log.info(
-		{ machineId: opts.machine.id, from: opts.reported, to: target.version },
-		'offering the agent an upgrade'
-	);
-	socketRegistry.sendToAgent({
-		machineId: opts.machine.id,
-		message: { type: 'upgrade', ...target, force: pendingUpgrades.take(opts.machine.id) }
+	sendUpgrade({
+		socketRegistry,
+		machine: opts.machine,
+		from: opts.reported,
+		target,
+		force: pendingUpgrades.take(opts.machine.id),
+		trigger: 'refresh',
+		log: opts.log
 	});
-	socketRegistry.broadcastToUi({
-		projectId: opts.machine.projectId,
-		message: {
-			type: 'machine.upgrading',
-			machineId: opts.machine.id,
-			from: opts.reported,
-			to: target.version
-		}
-	});
+	// So the sweep does not repeat an offer the agent may already be holding.
+	autoUpgradeRollout.markOffered({ machineId: opts.machine.id, version: target.version });
 }
 
 async function settleHello(opts: {
@@ -202,6 +194,11 @@ async function settleHello(opts: {
 		projectId: machine.projectId,
 		connectedAt: opts.connectedAt,
 		heldRunIds: msg.onboardingRunIds
+	});
+	await stallMachineQuickFixes(lineDeps(fastify), {
+		machineId: machine.id,
+		connectedAt: opts.connectedAt,
+		heldQuickFixIds: msg.quickFixIds
 	});
 }
 
@@ -279,6 +276,13 @@ export async function applyMachineFrame(opts: {
 	// Offered only when the operator asked for it. A connect-triggered upgrade
 	// would push a new build to every machine the moment it reconnects, which
 	// turns one bad release into a fleet-wide outage with nobody having chosen it.
+	// A deferred offer is held by the agent process, and a `connect` hello may be a
+	// new one. Without this a machine that restarted before going idle would never
+	// be offered that version unattended again.
+	if (opts.msg.type === 'hello' && (opts.msg.reason ?? 'connect') === 'connect') {
+		opts.fastify.services.autoUpgradeRollout.forgetOffer(machine.id);
+	}
+
 	if (opts.msg.type === 'hello' && opts.msg.reason === 'refresh') {
 		await offerUpgrade({
 			fastify: opts.fastify,

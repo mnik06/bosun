@@ -100,6 +100,10 @@ export const HelloMsgSchema = z.object({
 	// is what recovers a build stranded in `fixing_bugs` by an agent that never
 	// comes back, on a longer clock.
 	bugfixSessionIds: z.array(z.string()).optional(),
+	// The quick fixes still held, on the same terms. Reconciled on reconnect by
+	// `stallMachineQuickFixes`: a quick fix left `running` holds a build slot's
+	// memory on the capacity strip for as long as it stays that way.
+	quickFixIds: z.array(z.string()).optional(),
 	// How long that agent process has been alive. A dropped socket and a restarted
 	// agent are indistinguishable here otherwise, and only one of them means every
 	// session on the machine is gone.

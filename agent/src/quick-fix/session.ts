@@ -49,6 +49,7 @@ export interface QuickFixSessions {
 	start(msg: QuickFixStart): Promise<void>;
 	cancelAll(): void;
 	running(): number;
+	held(): string[];
 }
 
 export function createQuickFixSessions(opts: {
@@ -359,6 +360,10 @@ export function createQuickFixSessions(opts: {
 
 		running(): number {
 			return runs.size;
+		},
+
+		held(): string[] {
+			return [...runs.keys()];
 		}
 	};
 }

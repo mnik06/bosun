@@ -124,6 +124,9 @@ function createAnnouncer(deps: ConnectionDeps & { socket: WebSocket }) {
 				bugfixSessionIds: [
 					...new Set([...deps.bugfix.held(), ...deps.sink.pendingBugfixSessionIds()])
 				],
+				quickFixIds: [
+					...new Set([...deps.quickFixes.held(), ...deps.sink.pendingQuickFixIds()])
+				],
 				uptimeMs: Math.round(process.uptime() * 1000),
 				// What the scheduler budgets this machine's bullets against, and how the
 				// agent process before this one ended. Together they are how a bullet

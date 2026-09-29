@@ -37,6 +37,7 @@ export const MachineSchema = z.object({
 	buildCap: z.number().int().nullable(),
 	// The two counts above are the only limit: memory admits and refuses nothing.
 	ignoreMemoryBudget: z.boolean(),
+	autoUpgrade: z.boolean(),
 	createdAt: z.date()
 });
 

@@ -34,6 +34,7 @@ const publicColumns = {
 	verifyLanes: machines.verifyLanes,
 	buildCap: machines.buildCap,
 	ignoreMemoryBudget: machines.ignoreMemoryBudget,
+	autoUpgrade: machines.autoUpgrade,
 	createdAt: machines.createdAt
 };
 
@@ -307,6 +308,7 @@ export function getMachineRepo(db: Db) {
 			verifyLanes?: number;
 			buildCap?: number | null;
 			ignoreMemoryBudget?: boolean;
+			autoUpgrade?: boolean;
 		}): Promise<Machine | null> {
 			const { id, projectId, ...values } = opts;
 			const [row] = await db
@@ -316,6 +318,12 @@ export function getMachineRepo(db: Db) {
 				.returning(publicColumns);
 
 			return row ? MachineSchema.parse(row) : null;
+		},
+
+		async listAutoUpgrading(): Promise<Machine[]> {
+			const rows = await db.select(publicColumns).from(machines).where(eq(machines.autoUpgrade, true));
+
+			return rows.map((row) => MachineSchema.parse(row));
 		},
 
 		async listByRepository(repositoryId: string): Promise<Machine[]> {
