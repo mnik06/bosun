@@ -187,6 +187,17 @@ function configuredProfile(profile: ProjectProfile): string[] {
 	].filter(Boolean);
 }
 
+// The operator's standing instructions for this phase, from the machine's saved
+// profile — unconditional, unlike `configuredProfile`/`configuredProject` above,
+// which only ever render one or the other depending on whether the repository has
+// an onboarded `.bosun/project.yaml`. A standing operator instruction should never
+// be silently masked by onboarding, so this is rendered regardless of `config`.
+export function operatorInstructionsSection(text: string | null): string {
+	return text === null || text.trim() === ''
+		? ''
+		: `\n## Operator instructions\n\nWritten by the person who set this machine up. Treat it as standing instruction for this repository, in this session and every one like it that follows:\n\n${text.trim()}\n`;
+}
+
 export function hasConfiguredChecks(config: ProjectConfig | null): config is ProjectConfig {
 	return config !== null && config.checks.length > 0;
 }
@@ -242,7 +253,7 @@ ${detail === '' ? '' : `\n${detail}\n`}
 this step, and it is the same for every session bosun starts on this machine.
 
 ${configured.length === 0 ? '_The operator configured nothing — everything above is yours to discover._' : `${source}:\n\n${configured.join('\n')}`}${providedEnv(context)}
-
+${operatorInstructionsSection(context.profile.implementInstructions)}
 ${portsRule(context)}
 
 ${agentConfigRule()}

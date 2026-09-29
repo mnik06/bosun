@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createExecutionSessions, exitMessage } from './session';
 import { type ExecStart } from '../protocol';
+import { DEFAULT_PROJECT_PROFILE } from '../project-profile';
 import { type Services } from '../services/index';
 
 const GIB = 1024 ** 3;
@@ -45,7 +46,7 @@ const START = {
 	planNumber: 1,
 	planTitle: 'A plan',
 	planBodyMd: '',
-	profile: { startCommand: null, setupCommand: null, testCredentialsPath: null },
+	profile: DEFAULT_PROJECT_PROFILE,
 	portBase: 4100,
 	slice: { ordinal: 1, kind: 'build', title: 'build it', bodyMd: '' },
 	phase: null,
