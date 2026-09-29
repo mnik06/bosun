@@ -261,7 +261,7 @@ export async function routeServerFrame(deps: RouterDeps, msg: ServerMsg): Promis
 				input: msg.input,
 				verifyInUi: msg.verifyInUi,
 				auto: msg.auto,
-				notes: msg.notes,
+				planInstructions: msg.planInstructions,
 				config: msg.config
 			});
 

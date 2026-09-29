@@ -11,11 +11,12 @@ export const PlanStartMsgSchema = z.object({
 	// The grill answers itself: the session takes its own recommendation instead of
 	// stopping for a person who is not there.
 	auto: z.boolean().default(false),
-	// The operator's notes from the machine's project setup. Planning gets them
-	// for the same reason execution does: a convention nobody can read off the
-	// code — a skill this repository expects a session to invoke, a rule the team
-	// keeps in its head — is exactly what a session cannot discover for itself.
-	notes: z.string().nullable().default(null),
+	// The operator's standing "Plan" instructions from the machine's saved
+	// profile. Planning gets them for the same reason execution does: a
+	// convention nobody can read off the code — a skill this repository expects
+	// a session to invoke, a rule the team keeps in its head — is exactly what a
+	// session cannot discover for itself.
+	planInstructions: z.string().nullable().default(null),
 	// The repository's config, for a machine with one attached.
 	config: z.string().nullable().default(null)
 });

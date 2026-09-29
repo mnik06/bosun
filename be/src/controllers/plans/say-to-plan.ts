@@ -126,7 +126,7 @@ export async function sayToPlan(opts: {
 			planId: plan.id,
 			text: opts.text,
 			attachments,
-			notes: machine?.projectProfile?.notes ?? null,
+			notes: machine?.projectProfile?.planInstructions ?? null,
 			config,
 			plan: planSnapshot({ plan, acs, slices })
 		}

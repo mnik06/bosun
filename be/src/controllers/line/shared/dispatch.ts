@@ -103,7 +103,7 @@ async function execStartFrame(
 		planNumber: plan.number,
 		planTitle: plan.title ?? 'Untitled plan',
 		planBodyMd: plan.bodyMd ?? '',
-		profile: DEFAULT_PROJECT_PROFILE,
+		profile: opts.machine.projectProfile ?? DEFAULT_PROJECT_PROFILE,
 		config: opts.repository.config,
 		policy: { applyMigrations: opts.machine.policy.applyMigrations },
 		portBase: build.portBase,

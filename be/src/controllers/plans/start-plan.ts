@@ -57,7 +57,7 @@ export async function startPlan(
 			input: opts.input,
 			verifyInUi: opts.verifyInUi,
 			auto: opts.auto,
-			notes: machine.projectProfile?.notes ?? null,
+			planInstructions: machine.projectProfile?.planInstructions ?? null,
 			config: await configFor({ repositoryRepo: opts.repositoryRepo, machine })
 		}
 	});

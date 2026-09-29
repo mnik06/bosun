@@ -1,3 +1,6 @@
 export { useSaveProjectProfile } from './api/use-save-profile'
+export { MachinePromptsButton } from './ui/machine-prompts-button'
+export { MachinePromptsForm } from './ui/machine-prompts-form'
+export { MachinePromptsModal } from './ui/machine-prompts-modal'
 export { ProjectProfileButton } from './ui/project-profile-button'
 export { ProjectProfileModal } from './ui/project-profile-modal'

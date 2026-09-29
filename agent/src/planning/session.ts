@@ -96,7 +96,7 @@ export interface PlanningSessions {
 		input: string;
 		verifyInUi: boolean;
 		auto: boolean;
-		notes: string | null;
+		planInstructions: string | null;
 		config: string | null;
 	}): Promise<void>;
 	held(): string[];
@@ -484,7 +484,7 @@ export function createPlanningSessions(opts: {
 				return;
 			}
 
-			const read = await readTree(payload.planId, payload);
+			const read = await readTree(payload.planId, { notes: payload.planInstructions, config: payload.config });
 
 			if (read === null) {
 				return;
