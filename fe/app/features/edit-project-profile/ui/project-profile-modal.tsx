@@ -1,23 +1,12 @@
-import { Button, Stack, Switch, Text, Textarea, TextInput } from '@mantine/core'
+import { Button, Stack, Switch, Text, TextInput } from '@mantine/core'
 import { useState } from 'react'
 
 import { DEFAULT_PROJECT_PROFILE, type Machine, type ProjectProfile } from '~/entities/machine'
 import { useSaveProjectProfile } from '~/features/edit-project-profile/api/use-save-profile'
+import { trimmedOrNull, typed } from '~/shared/lib'
 import { AppModal } from '~/shared/ui'
 
 const AGENT_DECIDES = 'Leave it empty and the agent works it out from the repository itself.'
-
-// Kept exactly as typed. Trimming on every keystroke ate the space the moment
-// it was pressed, so "pnpm install" could not be typed at all. The trim belongs
-// at the save, where a trailing space is a mistake rather than a word in
-// progress.
-function typed (value: string): string | null {
-	return value === '' ? null : value
-}
-
-function trimmedOrNull (value: string | null): string | null {
-	return value === null || value.trim() === '' ? null : value.trim()
-}
 
 function ProfileForm ({ machine, onDone }: { machine: Machine, onDone: () => void }) {
 	const [draft, setDraft] = useState<ProjectProfile>(
@@ -90,17 +79,6 @@ function ProfileForm ({ machine, onDone }: { machine: Machine, onDone: () => voi
 				}}
 			/>
 
-			<Textarea
-				label="Notes"
-				description="Anything else a session should know that it could not find out by looking."
-				autosize
-				minRows={2}
-				value={draft.notes ?? ''}
-				onChange={(event) => {
-					field('notes', typed(event.currentTarget.value))
-				}}
-			/>
-
 			<Button
 				loading={save.isPending}
 				onClick={() => {
@@ -110,8 +88,7 @@ function ProfileForm ({ machine, onDone }: { machine: Machine, onDone: () => voi
 							migrationCommand: trimmedOrNull(draft.migrationCommand),
 							setupCommand: trimmedOrNull(draft.setupCommand),
 							startCommand: trimmedOrNull(draft.startCommand),
-							testCredentialsPath: trimmedOrNull(draft.testCredentialsPath),
-							notes: trimmedOrNull(draft.notes)
+							testCredentialsPath: trimmedOrNull(draft.testCredentialsPath)
 						},
 						{ onSuccess: onDone }
 					)

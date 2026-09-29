@@ -13,6 +13,7 @@ import {
 } from '~/entities/machine'
 import { machineRefreshBlock, useLineQuery } from '~/entities/plan'
 import { AddMcpServerButton } from '~/features/add-mcp-server'
+import { MachinePromptsForm } from '~/features/edit-project-profile'
 import { PausedBanner } from '~/features/pause-machine'
 import { RefreshMachineButton, useRefreshMachine } from '~/features/refresh-machine'
 import { AutoUpgradeSwitch } from '~/features/set-machine-auto-upgrade'
@@ -24,6 +25,7 @@ import { GitCard } from '~/widgets/machine-detail/ui/git-card'
 import { MachineActions } from '~/widgets/machine-detail/ui/machine-actions'
 import { MachineTabs } from '~/widgets/machine-detail/ui/machine-tabs'
 import { ProjectSetupCard } from '~/widgets/machine-detail/ui/project-setup-card'
+import { PromptsCard } from '~/widgets/machine-detail/ui/prompts-card'
 import { SetupCard } from '~/widgets/machine-detail/ui/setup-card'
 
 // Waiting is not a refusal, and a version this machine rolled back is not the
@@ -165,7 +167,12 @@ export function MachineDetail ({
 				</SetupCard>
 			) : null}
 
-			{kind === 'legacy' ? <ProjectSetupCard machine={data} /> : null}
+			{kind === 'legacy' ? (
+				<>
+					<ProjectSetupCard machine={data} />
+					<PromptsCard machine={data} />
+				</>
+			) : null}
 		</Stack>
 	)
 
@@ -211,6 +218,7 @@ export function MachineDetail ({
 				<MachineTabs
 					machine={data}
 					setup={setup}
+					prompts={<MachinePromptsForm machine={data} />}
 					panes={{ onboarding: renderOnboarding, inputs: renderInputs, config: renderConfig }}
 				/>
 			) : (

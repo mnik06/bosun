@@ -19,7 +19,12 @@ export const ProjectProfileSchema = z.object({
 	// The path to them, never the credentials. They stay in the repository or on
 	// the box; bosun holds a pointer and nothing more.
 	testCredentialsPath: z.string().nullable().default(null),
-	notes: z.string().nullable().default(null)
+	// Standing instructions for every session of that phase started on this
+	// machine, from now on. Free text, no limit — the same absence of a cap the
+	// field it replaces (`notes`) had.
+	planInstructions: z.string().nullable().default(null),
+	implementInstructions: z.string().nullable().default(null),
+	executeInstructions: z.string().nullable().default(null)
 });
 
 export type ProjectProfile = z.infer<typeof ProjectProfileSchema>;

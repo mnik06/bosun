@@ -6,7 +6,9 @@ export const ProjectProfileSchema = z.object({
 	migrationCommand: z.string().nullable(),
 	startCommand: z.string().nullable(),
 	testCredentialsPath: z.string().nullable(),
-	notes: z.string().nullable()
+	planInstructions: z.string().nullable(),
+	implementInstructions: z.string().nullable(),
+	executeInstructions: z.string().nullable()
 })
 
 export type ProjectProfile = z.infer<typeof ProjectProfileSchema>
@@ -17,7 +19,9 @@ export const DEFAULT_PROJECT_PROFILE: ProjectProfile = {
 	migrationCommand: null,
 	startCommand: null,
 	testCredentialsPath: null,
-	notes: null
+	planInstructions: null,
+	implementInstructions: null,
+	executeInstructions: null
 }
 
 export const MachineStatusSchema = z.enum(['pending', 'online', 'offline', 'paused'])

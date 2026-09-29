@@ -183,8 +183,7 @@ function configuredProfile(profile: ProjectProfile): string[] {
 		profile.setupCommand === null ? '' : `- Setup for a fresh checkout: \`${profile.setupCommand}\` (already run when this worktree was created).`,
 		profile.migrationCommand === null ? '' : `- Migrations: \`${profile.migrationCommand}\`.`,
 		profile.startCommand === null ? '' : `- Dev stack: \`${profile.startCommand}\`.`,
-		profile.testCredentialsPath === null ? '' : `- Test-user credentials: \`${profile.testCredentialsPath}\`.`,
-		profile.notes === null ? '' : `- Operator notes: ${profile.notes}`
+		profile.testCredentialsPath === null ? '' : `- Test-user credentials: \`${profile.testCredentialsPath}\`.`
 	].filter(Boolean);
 }
 
