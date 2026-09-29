@@ -120,7 +120,6 @@ async function handleRepositoryFrame(opts: {
 	if (isRepoFrame(msg)) {
 		await recordRepoFrame({
 			machineRepo: opts.fastify.repos.machineRepo,
-			repositoryRepo: opts.fastify.repos.repositoryRepo,
 			socketRegistry: opts.fastify.services.socketRegistry,
 			machineId: opts.machineId,
 			projectId: opts.projectId,

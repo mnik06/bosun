@@ -74,11 +74,10 @@ connection answers a request nobody is waiting on any more. See `../services/pro
 
 ### What `hello` says about a repository machine
 
-Plan 008 adds: `repositoryId` and `configOnDefault` (what the last look at the default branch found —
-cached, because `hello` must go out before anything is awaited), `publicKey` (what the browser seals
-values to; absent means the backend refuses browser input), `sessionSecrets` (names only), and
-`onboardingRunIds` (the onboarding runs still held, on the same terms as `runIds`). `repoPath` is
-absent until a machine enrolled under 008 has a repository.
+Plan 008 adds: `repositoryId`, `publicKey` (what the browser seals values to; absent means the backend
+refuses browser input), `sessionSecrets` (names only), and `onboardingRunIds` (the onboarding runs
+still held, on the same terms as `runIds`). `repoPath` is absent until a machine enrolled under 008
+has a repository.
 
 ### Preflight follows the files
 

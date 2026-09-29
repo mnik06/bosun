@@ -192,10 +192,10 @@ export const repositories = pgTable(
 		// where the project lives — a bootstrap stub nobody moved on from. Kept apart
 		// from `defaultBranch` so a re-attach refreshing that one cannot undo it.
 		defaultBranchOverride: text(),
-		// Held only until `.bosun/project.yaml` exists on a branch. Validated on write,
-		// so a draft that reaches a machine is one the schema accepts.
-		configDraft: text(),
-		configOnDefault: boolean().notNull().default(false),
+		// The repository's whole config, in bosun's own text grammar. Validated on
+		// write, so a config that reaches a machine is one its schema accepts. Null
+		// means no config yet — never a file bosun reads from the customer's tree.
+		config: text(),
 		autoResolveConflicts: boolean().notNull().default(true),
 		// Azure has no equivalent of a GitHub webhook installation event to announce
 		// a first successful sync, so the UI reads this instead — a PAT-connected

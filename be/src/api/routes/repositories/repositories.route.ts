@@ -2,19 +2,16 @@ import { FastifyPluginAsync } from 'fastify';
 import { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { UpdateRepositoryReqSchema } from 'src/api/routes/schemas/line/LineSchemas';
 import {
-	PullRequestRespSchema,
 	RepositoryConfigRespSchema,
 	RepositoryIdParamsSchema,
 	RepositoryListRespSchema,
 	RepositoryRespSchema,
-	SaveConfigDraftReqSchema
+	SaveConfigReqSchema
 } from 'src/api/routes/schemas/repositories/RepositorySchemas';
-import { bindGitProviderFor } from 'src/controllers/line/shared/git-provider-for';
 import { getRepositoryConfig } from 'src/controllers/repositories/get-repository-config';
 import { listRepositories } from 'src/controllers/repositories/list-repositories';
-import { openConfigPullRequest } from 'src/controllers/repositories/open-config-pull-request';
 import { saveAutoResolve } from 'src/controllers/repositories/save-auto-resolve';
-import { saveConfigDraft } from 'src/controllers/repositories/save-config-draft';
+import { saveConfig } from 'src/controllers/repositories/save-config';
 
 const routes: FastifyPluginAsync = async function (f) {
 	const fastify = f.withTypeProvider<ZodTypeProvider>();
@@ -32,8 +29,6 @@ const routes: FastifyPluginAsync = async function (f) {
 		async (req) => {
 			return getRepositoryConfig({
 				repositoryRepo: fastify.repos.repositoryRepo,
-				socketRegistry: fastify.services.socketRegistry,
-				gitProviderFor: bindGitProviderFor(fastify),
 				id: req.params.id,
 				projectId: req.membership!.projectId
 			});
@@ -41,18 +36,18 @@ const routes: FastifyPluginAsync = async function (f) {
 	);
 
 	fastify.put(
-		'/:id/config-draft',
+		'/:id/config',
 		{
 			preValidation: fastify.requireLeader,
-			schema: { params: RepositoryIdParamsSchema, body: SaveConfigDraftReqSchema, response: { 200: RepositoryRespSchema } }
+			schema: { params: RepositoryIdParamsSchema, body: SaveConfigReqSchema, response: { 200: RepositoryRespSchema } }
 		},
 		async (req) => {
-			const repository = await saveConfigDraft({
+			const repository = await saveConfig({
 				repositoryRepo: fastify.repos.repositoryRepo,
 				socketRegistry: fastify.services.socketRegistry,
 				id: req.params.id,
 				projectId: req.membership!.projectId,
-				yaml: req.body.yaml
+				text: req.body.text
 			});
 
 			return { repository };
@@ -75,23 +70,6 @@ const routes: FastifyPluginAsync = async function (f) {
 			});
 
 			return { repository };
-		}
-	);
-
-	fastify.post(
-		'/:id/pull-request',
-		{
-			preValidation: fastify.requireLeader,
-			schema: { params: RepositoryIdParamsSchema, response: { 200: PullRequestRespSchema } }
-		},
-		async (req) => {
-			return openConfigPullRequest({
-				repositoryRepo: fastify.repos.repositoryRepo,
-				onboardingRunRepo: fastify.repos.onboardingRunRepo,
-				gitProviderFor: bindGitProviderFor(fastify),
-				id: req.params.id,
-				projectId: req.membership!.projectId
-			});
 		}
 	);
 };

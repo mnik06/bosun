@@ -4,7 +4,7 @@ import { loadRepositorySnapshot } from 'src/controllers/line/shared/line-snapsho
 import { describeReason } from 'src/controllers/line/shared/reason';
 import { verifyLine } from 'src/controllers/line/schedule';
 import { getOwnedRepository } from 'src/controllers/repositories/shared/announce-repository';
-import { repositoryCloning } from 'src/controllers/repositories/shared/config-draft';
+import { repositoryCloning } from 'src/controllers/repositories/shared/config-for';
 import { type RepositoryMessage } from 'src/types/BuildSchema';
 import { type AgentMsg } from 'src/types/protocol';
 

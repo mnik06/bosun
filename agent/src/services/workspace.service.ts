@@ -3,7 +3,6 @@ import os from 'os';
 import path from 'path';
 import { readConfig, workingRepoPath, writeConfig, type AgentConfig } from '../config/config';
 import { type RepoAttach } from '../protocol';
-import { PROJECT_CONFIG_PATH } from '../project-config';
 import { type ExecService } from './exec.service';
 
 const REPOS_DIRNAME = 'repos';
@@ -43,7 +42,7 @@ export function credentialHelperCommand(opts: {
 	return `!${program} git-credential${config}`;
 }
 
-export type AttachResult = { ok: true; repoPath: string; configOnDefault: boolean } | { ok: false; detail: string };
+export type AttachResult = { ok: true; repoPath: string } | { ok: false; detail: string };
 
 // The repository stops being a directory the operator chose and becomes a clone
 // the agent owns. Where the installer ran has no bearing on it.
@@ -60,9 +59,6 @@ export function getWorkspaceService(deps: {
 }) {
 	const bosunDir = path.join(deps.homeDir ?? os.homedir(), '.bosun');
 	const reposRoot = path.join(bosunDir, REPOS_DIRNAME);
-	// What the last look at the default branch found. `hello` has to go out before
-	// anything is awaited, so it carries this rather than asking git again.
-	let knownConfigOnDefault: boolean | undefined;
 	const attaching = new Map<string, Promise<AttachResult>>();
 	const helper = credentialHelperCommand({
 		execPath: deps.execPath ?? process.execPath,
@@ -194,25 +190,6 @@ export function getWorkspaceService(deps: {
 			}
 		},
 
-		async configOnDefault(): Promise<boolean | undefined> {
-			const current = config();
-
-			if (!current.repository) {
-				return undefined;
-			}
-
-			const head = await git(['-C', current.repository.path, 'symbolic-ref', '--short', 'refs/remotes/origin/HEAD']);
-			const ref = head.ok && head.stdout !== '' ? head.stdout : 'HEAD';
-
-			knownConfigOnDefault = (await git(['-C', current.repository.path, 'cat-file', '-e', `${ref}:${PROJECT_CONFIG_PATH}`])).ok;
-
-			return knownConfigOnDefault;
-		},
-
-		knownConfigOnDefault(): boolean | undefined {
-			return knownConfigOnDefault;
-		},
-
 		// One attach per repository at a time. The backend asks again whenever the
 		// agent announces without a repository while its row names one — which is
 		// also what every announce during a long clone looks like.
@@ -264,7 +241,7 @@ export function getWorkspaceService(deps: {
 
 			// The branch bosun names rather than the one the remote calls its default: a
 			// leader can point bosun at another, and every session that reads
-			// `origin/HEAD` — planning, onboarding, config-on-default — has to follow.
+			// `origin/HEAD` — planning, onboarding — has to follow.
 			const pointed = await git(['-C', target, 'remote', 'set-head', 'origin', msg.defaultBranch]);
 
 			if (!pointed.ok) {
@@ -283,11 +260,7 @@ export function getWorkspaceService(deps: {
 				config: { ...current, repository: { id: msg.repositoryId, slug: msg.slug, path: target } }
 			});
 
-			const onDefault = await git(['-C', target, 'cat-file', '-e', `origin/${msg.defaultBranch}:${PROJECT_CONFIG_PATH}`]);
-
-			knownConfigOnDefault = onDefault.ok;
-
-			return { ok: true, repoPath: target, configOnDefault: onDefault.ok };
+			return { ok: true, repoPath: target };
 	}
 }
 

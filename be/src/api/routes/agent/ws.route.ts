@@ -16,7 +16,6 @@ import { resendWorktrees } from 'src/controllers/line/shared/dispatch';
 import { pauseMachineBuilds, stallMachineBuilds } from 'src/controllers/line/stall-machine-builds';
 import { onboardingDeps } from 'src/controllers/onboarding/onboarding-deps';
 import { stallMachineOnboarding } from 'src/controllers/onboarding/stall-machine-onboarding';
-import { saveConfigOnDefault } from 'src/controllers/repositories/save-config-on-default';
 import { stallMachinePlans } from 'src/controllers/plans/stall-machine-plans';
 import { stallMachineQuickFixes } from 'src/controllers/quick-fixes/stall-machine-quick-fixes';
 import { type Machine } from 'src/types/MachineSchema';
@@ -172,13 +171,6 @@ async function settleHello(opts: {
 		machineId: machine.id,
 		connectedAt: opts.connectedAt,
 		heldPlanIds: msg.planIds
-	});
-	await saveConfigOnDefault({
-		repositoryRepo: fastify.repos.repositoryRepo,
-		socketRegistry,
-		machine,
-		reportedRepositoryId: msg.repositoryId,
-		configOnDefault: msg.configOnDefault
 	});
 	await reconcileRepository({
 		repositoryRepo: fastify.repos.repositoryRepo,

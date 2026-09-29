@@ -136,9 +136,7 @@ export const HelloMsgSchema = z.object({
 	sessionSecrets: z.array(z.string()).optional(),
 	// Base64 SPKI of the key browser input is sealed to.
 	publicKey: z.string().optional(),
-	repositoryId: z.string().nullable().optional(),
-	// Whether the default branch carries `.bosun/project.yaml` as of the last fetch.
-	configOnDefault: z.boolean().optional()
+	repositoryId: z.string().nullable().optional()
 });
 
 export const PreflightMsgSchema = z.object({
@@ -337,8 +335,8 @@ export const PlanStartMsgSchema = z.object({
 	// code — a skill this repository expects a session to invoke, a rule the team
 	// keeps in its head — is exactly what a session cannot discover for itself.
 	notes: z.string().nullable().default(null),
-	// The repository's draft, used only when the read tree has no config file.
-	configDraft: z.string().nullable().default(null)
+	// The repository's config, for a machine with one attached.
+	config: z.string().nullable().default(null)
 });
 
 // The published plan as it stands, carried on the frame rather than fetched:
@@ -379,7 +377,7 @@ export const PlanSayMsgSchema = z.object({
 	text: z.string(),
 	attachments: z.array(ChatAttachmentSchema).default([]),
 	notes: z.string().nullable().default(null),
-	configDraft: z.string().nullable().default(null),
+	config: z.string().nullable().default(null),
 	plan: PlanSnapshotSchema
 });
 
@@ -451,11 +449,11 @@ export const ExecStartMsgSchema = z.object({
 	planTitle: z.string(),
 	planBodyMd: z.string(),
 	// A machine with no repository runs on the profile edited in the browser. A
-	// repository machine reads `.bosun/project.yaml` from the worktree, falls back
-	// to `configDraft` only when the file does not exist, and takes `policy` —
-	// the one environment fact the file never holds, and only the lane's — from here.
+	// repository machine runs on the config bosun holds for it, and takes
+	// `policy` — the one environment fact the config never holds, and only the
+	// lane's — from here.
 	profile: ProjectProfileSchema,
-	configDraft: z.string().nullable().default(null),
+	config: z.string().nullable().default(null),
 	policy: RunPolicySchema.nullable().default(null),
 	portBase: z.number().int(),
 	slice: ExecSliceSchema,

@@ -357,7 +357,7 @@ export function createIntegrationSessions(opts: { services: Services; send: (mes
 			return needsYou('error', 'the worktree has no commit to integrate');
 		}
 
-		const resolvedConfig = resolveProjectConfig({ treePath: msg.worktreePath, draft: msg.configDraft });
+		const resolvedConfig = resolveProjectConfig(msg.config);
 
 		if (resolvedConfig.source === 'invalid') {
 			return needsYou('error', resolvedConfig.detail);

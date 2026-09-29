@@ -25,8 +25,7 @@ export type RepoAttach = z.infer<typeof RepoAttachMsgSchema>;
 export const RepoAttachedMsgSchema = z.object({
 	type: z.literal('repo.attached'),
 	repositoryId: z.string(),
-	repoPath: z.string(),
-	configOnDefault: z.boolean()
+	repoPath: z.string()
 });
 
 export const RepoErrorMsgSchema = z.object({
@@ -40,10 +39,7 @@ export const OnboardingStartMsgSchema = z.object({
 	runId: z.string(),
 	phase: z.enum(['discover', 'verify']),
 	portBase: z.number().int(),
-	configDraft: z.string().nullable(),
-	// Set for the verify that follows a discovery: it proves the config that
-	// discovery published, even where the default branch already carries a file.
-	preferDraft: z.boolean().default(false),
+	config: z.string().nullable(),
 	applyMigrations: z.boolean(),
 	memoryMaxBytes: z.number().int().positive().nullable(),
 	// The branch the scratch checkout is cut from. Absent from a backend older than

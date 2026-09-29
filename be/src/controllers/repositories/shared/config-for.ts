@@ -1,10 +1,10 @@
 import { type RepositoryRepo } from 'src/repos/github/repository.repo';
 import { type Machine } from 'src/types/MachineSchema';
 
-// What a repository machine is told to fall back on when the tree it works in has
-// no `.bosun/project.yaml`. Null for a machine with no repository, which keeps
-// running on its profile.
-export async function configDraftFor(opts: {
+// What a repository machine is told to run its sessions against. Null for a
+// machine with no repository, which keeps running on its profile, and for a
+// repository that has no config yet.
+export async function configFor(opts: {
 	repositoryRepo: RepositoryRepo;
 	machine: Pick<Machine, 'repositoryId'> | null;
 }): Promise<string | null> {
@@ -12,7 +12,7 @@ export async function configDraftFor(opts: {
 		return null;
 	}
 
-	return (await opts.repositoryRepo.getById(opts.machine.repositoryId))?.configDraft ?? null;
+	return (await opts.repositoryRepo.getById(opts.machine.repositoryId))?.config ?? null;
 }
 
 // Enrolled under plan 008 and not yet given a repository: there is no checkout to

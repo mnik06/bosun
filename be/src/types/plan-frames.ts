@@ -16,8 +16,8 @@ export const PlanStartMsgSchema = z.object({
 	// code — a skill this repository expects a session to invoke, a rule the team
 	// keeps in its head — is exactly what a session cannot discover for itself.
 	notes: z.string().nullable().default(null),
-	// The repository's draft, for a read tree that has no `.bosun/project.yaml`.
-	configDraft: z.string().nullable().default(null)
+	// The repository's config, for a machine with one attached.
+	config: z.string().nullable().default(null)
 });
 
 // The grill's own two modes, changed while it runs. The session takes them from
@@ -68,7 +68,7 @@ export const PlanSayMsgSchema = z.object({
 	text: z.string(),
 	attachments: z.array(ChatAttachmentSchema).default([]),
 	notes: z.string().nullable().default(null),
-	configDraft: z.string().nullable().default(null),
+	config: z.string().nullable().default(null),
 	plan: PlanSnapshotSchema
 });
 

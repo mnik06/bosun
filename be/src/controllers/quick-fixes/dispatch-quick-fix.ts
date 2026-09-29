@@ -66,6 +66,7 @@ export async function dispatchQuickFix(
 			branch: quickFix.branch,
 			baseRef: quickFix.baseBranch,
 			description: quickFix.description,
+			config: repository.config,
 			memoryMaxBytes: admission.limitBytes
 		}
 	});

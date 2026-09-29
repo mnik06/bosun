@@ -8,7 +8,7 @@ import { type Services } from '../services/index';
 import { startSessionMcpServer, type SessionMcpServer } from '../sessions/mcp-server';
 import { spawnClaudeSession, type ClaudeSession } from '../sessions/process';
 import { createStreamParser } from '../planning/stream-parser';
-import { configGate, writeEnvFiles } from '../sessions/run-support';
+import { writeEnvFiles } from '../sessions/run-support';
 import { createStderrTail, logDroppedFrame, pipeSessionOutput, reportStartFailure } from '../sessions/turn-support';
 
 const REPORT_KEPT_CHARS = 4_000;
@@ -104,14 +104,6 @@ export function createQuickFixSessions(opts: {
 
 		try {
 			const worktreePath = opts.services.worktree.pathFor(msg.quickFixId);
-			const gate = await configGate({ exec: opts.services.exec, worktreePath, actor: 'fix' });
-
-			if (gate !== null) {
-				opts.send({ type: 'quickfix.error', quickFixId: msg.quickFixId, message: gate });
-
-				return;
-			}
-
 			const committed = await opts.services.commit.commitAll({
 				worktreePath,
 				keepOut: run.envFiles,
@@ -188,15 +180,15 @@ export function createQuickFixSessions(opts: {
 		return ensured.worktreePath;
 	};
 
-	// Resolved from the tree the session runs in, after its branch is checked out —
-	// the same rule a plan bullet follows. Null when the repository has never been
-	// onboarded: the session then works out its own checks, same as it would on a
-	// machine bosun has never configured.
+	// Resolved from the config bosun sent on the frame, the same as every other
+	// session type. Null when the repository has never been onboarded: the
+	// session then works out its own checks, same as it would on a machine bosun
+	// has never configured.
 	const prepareProject = async (
 		msg: QuickFixStart,
 		worktreePath: string
 	): Promise<{ config: ProjectConfig | null; env: NodeJS.ProcessEnv }> => {
-		const resolved = resolveProjectConfig({ treePath: worktreePath, draft: null });
+		const resolved = resolveProjectConfig(msg.config);
 
 		if (resolved.source === 'invalid') {
 			throw new Error(resolved.detail);

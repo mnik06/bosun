@@ -1,43 +1,41 @@
 import { Alert, Button, Group, List, Stack, Text, Textarea } from '@mantine/core'
 import { useState, type ReactNode } from 'react'
 
-import { useSaveConfigDraft } from '~/features/edit-config-draft/api/use-save-config-draft'
-import { configIssues } from '~/features/edit-config-draft/lib/config-issues'
+import { useSaveConfig } from '~/features/edit-config/api/use-save-config'
+import { configIssues } from '~/features/edit-config/lib/config-issues'
 
-const PLACEHOLDER = `version: 1
+const PLACEHOLDER = `Toolchain:
+- Node: 24.15.0
+- Package manager: pnpm@11.8.0
 
-toolchain:
-  node: "24.15.0"
-  packageManager: "pnpm@11.8.0"
+Install: pnpm install --frozen-lockfile
 
-setup:
-  - name: install
-    run: pnpm install --frozen-lockfile
-    rerunWhen: [pnpm-lock.yaml]
+Apps:
+web:
+- Start: pnpm dev --port {port}
+- Ready: {url.web}
 
-apps:
-  web:
-    start: pnpm dev --port {port}
-    ready: "{url.web}"`
+Feedback loops:
+web: npm run ci`
 
-export function ConfigDraftEditor ({
+export function ConfigEditor ({
 	repositoryId,
-	initialYaml,
+	initialText,
 	actions
 }: {
 	repositoryId: string,
-	initialYaml: string,
+	initialText: string,
 	actions?: ReactNode
 }) {
-	const [yaml, setYaml] = useState(initialYaml)
-	const save = useSaveConfigDraft(repositoryId)
+	const [text, setText] = useState(initialText)
+	const save = useSaveConfig(repositoryId)
 	const issues = save.isError ? configIssues(save.error) : null
-	const changed = yaml !== initialYaml
+	const changed = text !== initialText
 
 	return (
 		<Stack gap="sm">
 			<Textarea
-				aria-label="project.yaml"
+				aria-label="Project config"
 				description="Facts about the code — how it installs, starts and proves itself. Never secrets, never which database."
 				placeholder={PLACEHOLDER}
 				autosize
@@ -45,21 +43,23 @@ export function ConfigDraftEditor ({
 				maxRows={40}
 				spellCheck={false}
 				classNames={{ input: 'font-mono text-xs' }}
-				value={yaml}
+				value={text}
 				onChange={(event) => {
-					setYaml(event.currentTarget.value)
+					setText(event.currentTarget.value)
 				}}
 			/>
 
 			{issues === null || issues.length === 0 ? null : (
-				<Alert color="red" variant="light" title="The draft did not validate">
+				<Alert color="red" variant="light" title="The config did not validate">
 					<List size="sm" spacing={2}>
 						{issues.map((issue) => (
-							<List.Item key={`${issue.path}:${issue.message}`}>
-								<Text component="span" size="sm" className="font-mono">
-									{issue.path}
-								</Text>{' '}
-								— {issue.message}
+							<List.Item key={`${issue.line ?? 'doc'}:${issue.message}`}>
+								{issue.line === null ? null : (
+									<Text component="span" size="sm" className="font-mono">
+										Line {issue.line}:
+									</Text>
+								)}{' '}
+								{issue.message}
 							</List.Item>
 						))}
 					</List>
@@ -75,21 +75,21 @@ export function ConfigDraftEditor ({
 						size="xs"
 						disabled={!changed}
 						onClick={() => {
-							setYaml(initialYaml)
+							setText(initialText)
 							save.reset()
 						}}
 					>
-						Discard draft changes
+						Discard changes
 					</Button>
 					<Button
 						size="xs"
 						loading={save.isPending}
-						disabled={!changed || yaml.trim() === ''}
+						disabled={!changed || text.trim() === ''}
 						onClick={() => {
-							save.mutate(yaml)
+							save.mutate(text)
 						}}
 					>
-						Save draft
+						Save
 					</Button>
 				</Group>
 			</Group>

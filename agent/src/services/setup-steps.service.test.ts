@@ -22,8 +22,8 @@ afterEach(() => {
 	}
 });
 
-function config(yaml: string): ProjectConfig {
-	const parsed = parseProjectConfig(yaml);
+function config(text: string): ProjectConfig {
+	const parsed = parseProjectConfig(text);
 
 	if (!parsed.ok) {
 		throw new Error(JSON.stringify(parsed.issues));
@@ -39,14 +39,9 @@ function harness() {
 	fs.mkdirSync(path.join(worktreePath, 'be'));
 	fs.writeFileSync(path.join(worktreePath, 'be', 'pnpm-lock.yaml'), 'lock: 1\n');
 
-	const steps = config(`version: 1
-setup:
-  - name: install be
-    cwd: be
-    run: echo install >> ${path.join(worktreePath, 'ran.log')}
-    rerunWhen: [be/pnpm-lock.yaml]
-  - name: generate
-    run: echo generate >> ran.log
+	const steps = config(`Install:
+/be: echo install >> ${path.join(worktreePath, 'ran.log')} (rerun when: be/pnpm-lock.yaml)
+- generate: echo generate >> ran.log
 `);
 
 	return {
@@ -63,7 +58,7 @@ describe('setup steps', () => {
 
 		expect(await service.runAll({ key: 'q', worktreePath, config: steps, env: process.env })).toEqual({
 			ok: true,
-			ran: ['install be', 'generate']
+			ran: ['be', 'generate']
 		});
 		expect(ran()).toEqual(['install', 'generate']);
 	});
@@ -78,18 +73,15 @@ describe('setup steps', () => {
 
 		fs.writeFileSync(path.join(worktreePath, 'be', 'pnpm-lock.yaml'), 'lock: 2\n');
 
-		expect(await service.rerunChanged({ key: 'q', worktreePath, config: steps, env: process.env })).toEqual({ ok: true, ran: ['install be'] });
+		expect(await service.rerunChanged({ key: 'q', worktreePath, config: steps, env: process.env })).toEqual({ ok: true, ran: ['be'] });
 		expect(await service.rerunChanged({ key: 'q', worktreePath, config: steps, env: process.env })).toEqual({ ok: true, ran: [] });
 		expect(ran()).toEqual(['install', 'generate', 'install']);
 	});
 
 	it('fails with the step\'s name and output tail, and tries that step again next time', async () => {
 		const { service, worktreePath } = harness();
-		const flaky = config(`version: 1
-setup:
-  - name: install
-    run: test -f ok || { echo "ERR_PNPM_NO_LOCKFILE"; exit 3; }
-    rerunWhen: [lock]
+		const flaky = config(`Install:
+- install: test -f ok || { echo "ERR_PNPM_NO_LOCKFILE"; exit 3; } (rerun when: lock)
 `);
 
 		const failed = await service.runAll({ key: 'q', worktreePath, config: flaky, env: process.env });

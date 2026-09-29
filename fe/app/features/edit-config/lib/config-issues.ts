@@ -2,7 +2,7 @@ import { isAxiosError } from 'axios'
 import { z } from 'zod'
 
 const IssuesRespSchema = z.object({
-	issues: z.array(z.object({ path: z.string(), message: z.string() }))
+	issues: z.array(z.object({ line: z.number().int().nullable(), message: z.string() }))
 })
 
 export type ConfigIssue = z.infer<typeof IssuesRespSchema>['issues'][number]

@@ -42,10 +42,9 @@ export const RepositorySchema = z.object({
 	defaultBranch: z.string(),
 	providerDefaultBranch: z.string(),
 	defaultBranchOverride: z.string().nullable(),
-	configDraft: z.string().nullable(),
-	// Reported by an agent that has the clone, never looked up here: it is a fact
-	// about the default branch as that machine last fetched it.
-	configOnDefault: z.boolean(),
+	// The repository's whole config, in bosun's own text grammar. Null means no
+	// config yet — never a file bosun reads from the customer's tree.
+	config: z.string().nullable(),
 	// Whether an integration may hand a real conflict to a session. Off, a conflict
 	// outside `regenerate` paths goes straight to needs you.
 	autoResolveConflicts: z.boolean(),

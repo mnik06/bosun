@@ -123,10 +123,8 @@ export const HelloMsgSchema = z.object({
 	// Base64 SPKI of the key browser input is sealed to. Absent from an agent too
 	// old to decrypt, which is what refuses browser input for that machine.
 	publicKey: z.string().max(2000).optional(),
-	// The repository the agent believes it is attached to, and whether the default
-	// branch carries `.bosun/project.yaml` as of its last fetch.
-	repositoryId: z.string().nullable().optional(),
-	configOnDefault: z.boolean().optional()
+	// The repository the agent believes it is attached to.
+	repositoryId: z.string().nullable().optional()
 });
 
 export const PreflightMsgSchema = z.object({
@@ -281,11 +279,11 @@ export const ExecStartMsgSchema = z.object({
 	planTitle: z.string(),
 	planBodyMd: z.string(),
 	// A machine with no repository still runs on the profile edited in the
-	// browser. A repository machine reads `.bosun/project.yaml` from the worktree
-	// and falls back to `configDraft` only when the file does not exist; `policy`
-	// is the one environment fact the file never holds, and governs only the lane.
+	// browser. A repository machine runs on the config bosun holds for it;
+	// `policy` is the one environment fact the config never holds, and governs
+	// only the lane.
 	profile: ProjectProfileSchema,
-	configDraft: z.string().nullable(),
+	config: z.string().nullable(),
 	policy: RunPolicySchema.nullable(),
 	portBase: z.number().int(),
 	slice: ExecSliceSchema,

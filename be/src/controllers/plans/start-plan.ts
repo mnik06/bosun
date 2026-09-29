@@ -1,7 +1,7 @@
 import { requireHost } from 'src/controllers/machines/shared/require-host';
 import { announcePlan } from 'src/controllers/plans/shared/plan-broadcast';
 import { notifyPlanStatus, type PlanNotifyDeps } from 'src/controllers/plans/shared/notify';
-import { configDraftFor } from 'src/controllers/repositories/shared/config-draft';
+import { configFor } from 'src/controllers/repositories/shared/config-for';
 import { type RepositoryRepo } from 'src/repos/github/repository.repo';
 import { type MachineRepo } from 'src/repos/machines/machine.repo';
 import { type PlanMessageRepo } from 'src/repos/plans/plan-message.repo';
@@ -58,7 +58,7 @@ export async function startPlan(
 			verifyInUi: opts.verifyInUi,
 			auto: opts.auto,
 			notes: machine.projectProfile?.notes ?? null,
-			configDraft: await configDraftFor({ repositoryRepo: opts.repositoryRepo, machine })
+			config: await configFor({ repositoryRepo: opts.repositoryRepo, machine })
 		}
 	});
 

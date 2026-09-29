@@ -16,7 +16,7 @@ const green = [
 	{ name: 'browser', ok: true, detail: 'chromium launches' }
 ]
 
-const repository = { fullName: 'acme/app', configOnDefault: false, configDraft: null, defaultBranch: 'main' }
+const repository = { fullName: 'acme/app', config: null, defaultBranch: 'main' }
 
 function run (overrides: Partial<OnboardingRun>): OnboardingRun {
 	return {
@@ -89,16 +89,16 @@ describe('setupChecklist', () => {
 			.toEqual(['todo', 'start-onboarding'])
 	})
 
-	// Discovery published a draft, but for another branch than the default one:
+	// Discovery published a config, but for another branch than the default one:
 	// the config row is not done until that branch is chosen, and verify waits.
 	it('holds verify on a base branch discovery suggested', () => {
 		const machine = { status: 'online' as const, capabilities: green, repositoryId: 'repo_1' }
 		const suggested = onboarding({ status: 'needs_input', suggestedBaseBranch: 'develop' })
-		const pending = states({ machine, repository: { ...repository, configDraft: 'version: 1' }, onboarding: suggested })
+		const pending = states({ machine, repository: { ...repository, config: 'Notes:\nx' }, onboarding: suggested })
 
 		expect(pending.config).toEqual(['todo', 'choose-base-branch'])
 		expect(pending.verified).toEqual(['blocked', null])
-		expect(states({ machine, repository: { ...repository, defaultBranch: 'develop', configDraft: 'version: 1' }, onboarding: suggested }).config)
+		expect(states({ machine, repository: { ...repository, defaultBranch: 'develop', config: 'Notes:\nx' }, onboarding: suggested }).config)
 			.toEqual(['done', null])
 	})
 
@@ -106,7 +106,7 @@ describe('setupChecklist', () => {
 		const missing = [{ kind: 'env' as const, path: 'be', key: 'DATABASE_URL', why: 'db', evidence: 'be/.env.example', optional: false }]
 		const result = states({
 			machine: { status: 'online', capabilities: green, repositoryId: 'repo_1' },
-			repository: { ...repository, configDraft: 'version: 1' },
+			repository: { ...repository, config: 'Notes:\nx' },
 			onboarding: onboarding({ status: 'needs_input' }, missing)
 		})
 
@@ -115,12 +115,12 @@ describe('setupChecklist', () => {
 		expect(result.verified).toEqual(['blocked', null])
 	})
 
-	// A second machine on a repository that already has its file needs no
+	// A second machine on a repository that already has a config needs no
 	// discovery at all: its own inputs and a verify.
 	it('sends a second machine on an onboarded repository straight to verify', () => {
 		const result = states({
 			machine: { status: 'online', capabilities: green, repositoryId: 'repo_1' },
-			repository: { ...repository, configOnDefault: true },
+			repository: { ...repository, config: 'Notes:\nx' },
 			onboarding: null
 		})
 
@@ -131,7 +131,7 @@ describe('setupChecklist', () => {
 	it('counts a verified machine as finished', () => {
 		const rows = setupChecklist({
 			machine: { status: 'online', capabilities: green, repositoryId: 'repo_1' },
-			repository: { ...repository, configOnDefault: true },
+			repository: { ...repository, config: 'Notes:\nx' },
 			onboarding: onboarding({ phase: 'verify', status: 'ready' })
 		})
 
@@ -142,7 +142,7 @@ describe('setupChecklist', () => {
 		expect(
 			states({
 				machine: { status: 'online', capabilities: green, repositoryId: 'repo_1' },
-				repository: { ...repository, configDraft: 'version: 1' },
+				repository: { ...repository, config: 'Notes:\nx' },
 				onboarding: onboarding({ phase: 'verify', status: 'failed', failureReason: 'be did not answer' })
 			}).verified
 		).toEqual(['failed', 'run-verify'])

@@ -9,7 +9,7 @@ import { type ConfigIssue, parseProjectConfig } from 'src/types/ProjectConfigSch
 // act on where a refused request is not.
 export async function saveOnboardingConfig(
 	deps: OnboardingDeps,
-	opts: { runId: string; machineId: string; projectId: string; yaml: string }
+	opts: { runId: string; machineId: string; projectId: string; text: string }
 ): Promise<{ ok: true } | { ok: false; issues: ConfigIssue[] }> {
 	const run = await getActiveRunForMachine(deps, opts);
 
@@ -17,15 +17,15 @@ export async function saveOnboardingConfig(
 		throw new HttpError(409, 'only a discovery publishes a config');
 	}
 
-	const parsed = parseProjectConfig(opts.yaml);
+	const parsed = parseProjectConfig(opts.text);
 
 	if (!parsed.ok) {
 		return { ok: false, issues: parsed.issues };
 	}
 
 	const [updated, repository] = await Promise.all([
-		deps.onboardingRunRepo.update({ id: run.id, config: opts.yaml }),
-		deps.repositoryRepo.saveConfigDraft({ id: run.repositoryId, configDraft: opts.yaml })
+		deps.onboardingRunRepo.update({ id: run.id, config: opts.text }),
+		deps.repositoryRepo.saveConfig({ id: run.repositoryId, config: opts.text })
 	]);
 
 	if (repository) {

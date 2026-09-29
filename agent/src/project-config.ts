@@ -1,12 +1,15 @@
-import { parseDocument } from 'yaml';
 import { z } from 'zod';
+import { type ConfigIssue } from './project-config-grammar';
+import { parseSource } from './project-config-sections';
 
-// Mirrored in `be/src/types/ProjectConfigSchema.ts`. The backend validates a draft and a
-// published config with it; the agent validates the file it finds in a tree.
-// Two copies that disagree would mean a config bosun accepts and a machine
-// refuses, so a change here is a change there in the same commit.
+// Mirrored in `be/src/types/ProjectConfigSchema.ts` (and its grammar halves,
+// `project-config-grammar.ts` and `project-config-sections.ts`, mirrored from
+// this file's own). The backend validates a config and a published config with
+// it; the agent validates the config it is handed. Two copies that disagree
+// would mean a config bosun accepts and a machine refuses, so a change here is
+// a change there in the same commit.
 
-export const PROJECT_CONFIG_PATH = '.bosun/project.yaml';
+export type { ConfigIssue } from './project-config-grammar';
 
 // A build owns ten ports and an app's port is its position in `apps`.
 export const MAX_APPS = 10;
@@ -255,52 +258,34 @@ export const ProjectConfigSchema = BaseSchema.superRefine((config, ctx) => {
 
 export type ProjectConfig = z.infer<typeof ProjectConfigSchema>;
 
-export interface ConfigIssue {
-	path: string;
-	message: string;
-}
-
 export type ConfigParse = { ok: true; config: ProjectConfig } | { ok: false; issues: ConfigIssue[] };
 
-export function formatIssuePath(path: readonly PropertyKey[]): string {
-	return path.reduce<string>((joined, segment) => {
-		if (typeof segment === 'number') {
-			return `${joined}[${segment}]`;
-		}
-
-		return joined === '' ? String(segment) : `${joined}.${String(segment)}`;
-	}, '') || '(root)';
+export function describeIssues(issues: ConfigIssue[]): string {
+	return issues.map((issue) => (issue.line === null ? issue.message : `Line ${issue.line}: ${issue.message}`)).join('; ');
 }
 
-// The message is what reaches a session and the browser. A YAML error is cut to
-// its first line: the rest is a code frame of the source, which is noise in a
-// one-line failure reason.
+// The message is what reaches a session and the browser: a grammar problem
+// (a malformed line, an unknown section) and a schema problem (a `dependsOn`
+// cycle, a bad regex) are both a source line and a plain sentence.
 export function parseProjectConfig(source: string): ConfigParse {
 	if (source.length > MAX_SOURCE_CHARS) {
-		return { ok: false, issues: [{ path: '(root)', message: `longer than ${MAX_SOURCE_CHARS} characters` }] };
+		return { ok: false, issues: [{ line: null, message: `longer than ${MAX_SOURCE_CHARS} characters` }] };
 	}
 
-	const doc = parseDocument(source, { prettyErrors: true, uniqueKeys: true });
-
-	if (doc.errors.length > 0) {
-		return {
-			ok: false,
-			issues: doc.errors.map((error) => ({ path: '(yaml)', message: error.message.split('\n')[0] ?? 'invalid YAML' }))
-		};
+	if (source.trim() === '') {
+		return { ok: false, issues: [{ line: null, message: 'must not be empty' }] };
 	}
 
-	const parsed = ProjectConfigSchema.safeParse(doc.toJS());
+	const { raw, issues, lineMap } = parseSource(source);
+	const parsed = ProjectConfigSchema.safeParse(raw);
 
-	if (!parsed.success) {
-		return {
-			ok: false,
-			issues: parsed.error.issues.map((issue) => ({ path: formatIssuePath(issue.path), message: issue.message }))
-		};
+	if (issues.length === 0 && parsed.success) {
+		return { ok: true, config: parsed.data };
 	}
 
-	return { ok: true, config: parsed.data };
-}
+	const schemaIssues: ConfigIssue[] = parsed.success
+		? []
+		: parsed.error.issues.map((issue) => ({ line: lineMap.lineFor(issue.path), message: issue.message }));
 
-export function describeIssues(issues: ConfigIssue[]): string {
-	return issues.map((issue) => `${issue.path}: ${issue.message}`).join('; ');
+	return { ok: false, issues: [...issues, ...schemaIssues] };
 }

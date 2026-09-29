@@ -18,7 +18,7 @@ import {
 	nextJob,
 	WAITING_STATUSES
 } from 'src/controllers/line/shared/next-job';
-import { repositoryCloning } from 'src/controllers/repositories/shared/config-draft';
+import { repositoryCloning } from 'src/controllers/repositories/shared/config-for';
 import { type Machine } from 'src/types/MachineSchema';
 import { type Repository } from 'src/types/RepositorySchema';
 

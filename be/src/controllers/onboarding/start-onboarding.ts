@@ -9,7 +9,7 @@ import {
 import { notifyOnboardingStatus } from 'src/controllers/onboarding/shared/notify';
 import { baseBranchRefusal, pendingBaseBranch } from 'src/controllers/onboarding/shared/base-branch';
 import { maybeStartVerify } from 'src/controllers/onboarding/shared/start-verify';
-import { repositoryCloning } from 'src/controllers/repositories/shared/config-draft';
+import { repositoryCloning } from 'src/controllers/repositories/shared/config-for';
 import { type Machine } from 'src/types/MachineSchema';
 import { type OnboardingPhase, type OnboardingRun } from 'src/types/OnboardingSchema';
 import { type Repository } from 'src/types/RepositorySchema';
@@ -57,8 +57,7 @@ async function startDiscovery(
 			runId: run.id,
 			phase: 'discover',
 			portBase: ONBOARDING_PORT_BASE,
-			configDraft: opts.repository.configDraft,
-			preferDraft: false,
+			config: opts.repository.config,
 			applyMigrations: opts.machine.policy.applyMigrations,
 			memoryMaxBytes: admission.limitBytes,
 			baseBranch: opts.repository.defaultBranch
@@ -83,7 +82,7 @@ async function startVerify(
 ): Promise<OnboardingRun> {
 	const discovery = await deps.onboardingRunRepo.latestDiscoveryForRepository(opts.repository.id);
 
-	if (!discovery && opts.repository.configDraft === null && !opts.repository.configOnDefault) {
+	if (!discovery && opts.repository.config === null) {
 		throw new HttpError(409, 'there is no config to verify yet — start onboarding to discover one');
 	}
 
@@ -102,7 +101,7 @@ async function startVerify(
 		portBase: null,
 		requirements: discovery?.requirements ?? [],
 		assumptions: discovery?.assumptions ?? [],
-		config: opts.repository.configDraft
+		config: opts.repository.config
 	});
 
 	await maybeStartVerify(deps, { machineId: opts.machine.id });

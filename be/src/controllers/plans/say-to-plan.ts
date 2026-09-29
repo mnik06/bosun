@@ -8,7 +8,7 @@ import {
 } from 'src/controllers/plans/shared/chat-attachments';
 import { getOwnedPlan } from 'src/controllers/plans/shared/plan-access';
 import { announcePlan, announcePlanMessage } from 'src/controllers/plans/shared/plan-broadcast';
-import { configDraftFor } from 'src/controllers/repositories/shared/config-draft';
+import { configFor } from 'src/controllers/repositories/shared/config-for';
 import { type RepositoryRepo } from 'src/repos/github/repository.repo';
 import { type MachineRepo } from 'src/repos/machines/machine.repo';
 import { type AcRepo } from 'src/repos/plans/ac.repo';
@@ -117,7 +117,7 @@ export async function sayToPlan(opts: {
 		opts.sliceRepo.listByPlan(plan.id),
 		opts.machineRepo.getById(plan.machineId)
 	]);
-	const configDraft = await configDraftFor({ repositoryRepo: opts.repositoryRepo, machine });
+	const config = await configFor({ repositoryRepo: opts.repositoryRepo, machine });
 
 	opts.socketRegistry.sendToAgent({
 		machineId: plan.machineId,
@@ -127,7 +127,7 @@ export async function sayToPlan(opts: {
 			text: opts.text,
 			attachments,
 			notes: machine?.projectProfile?.notes ?? null,
-			configDraft,
+			config,
 			plan: planSnapshot({ plan, acs, slices })
 		}
 	});

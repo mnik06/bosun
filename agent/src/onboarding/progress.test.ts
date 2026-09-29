@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { verifyPlanTotal } from './session';
 import { parseProjectConfig, type ProjectConfig } from '../project-config';
 
-function config(yaml: string): ProjectConfig {
-	const parsed = parseProjectConfig(yaml);
+function config(text: string): ProjectConfig {
+	const parsed = parseProjectConfig(text);
 
 	if (!parsed.ok) {
 		throw new Error(JSON.stringify(parsed.issues));
@@ -12,26 +12,21 @@ function config(yaml: string): ProjectConfig {
 	return parsed.config;
 }
 
-const FULL = config(`version: 1
-setup:
-  - name: install be
-    run: pnpm i
-  - name: install fe
-    run: pnpm i
-apps:
-  be:
-    start: pnpm local
-    migrate: pnpm migrate
-    codegen: pnpm generate
-  fe:
-    start: pnpm dev
-testAccounts:
-  - role: leader
-    signIn: "{url.fe}/login"
-    secrets: [EMAIL]
-  - role: developer
-    signIn: "{url.fe}/login"
-    secrets: [EMAIL2]
+const FULL = config(`Install:
+- install be: pnpm i
+- install fe: pnpm i
+
+Apps:
+be:
+- Start: pnpm local
+- Migrate: pnpm migrate
+- Codegen: pnpm generate
+fe:
+- Start: pnpm dev
+
+Test accounts:
+- leader: sign in at {url.fe}/login using EMAIL
+- developer: sign in at {url.fe}/login using EMAIL2
 `);
 
 // The verify percentage the operator watches is steps finished over this total,
@@ -47,11 +42,11 @@ describe('verifyPlanTotal', () => {
 		expect(verifyPlanTotal({ config: FULL, applyMigrations: false })).toBe(11);
 		// resolve, env, toolchain + no-setup line + skipped migrations + start + no-accounts line
 		expect(
-			verifyPlanTotal({ config: config('version: 1\napps:\n  be:\n    start: run\n    migrate: a\n  fe:\n    start: run\n    migrate: b\n'), applyMigrations: false })
+			verifyPlanTotal({ config: config('Apps:\nbe:\n- Start: run\n- Migrate: a\nfe:\n- Start: run\n- Migrate: b\n'), applyMigrations: false })
 		).toBe(7);
 	});
 
 	it('counts the single "none" line a config with no setup or accounts reports', () => {
-		expect(verifyPlanTotal({ config: config('version: 1\n'), applyMigrations: true })).toBe(6);
+		expect(verifyPlanTotal({ config: config('Notes:\nnothing configured\n'), applyMigrations: true })).toBe(6);
 	});
 });

@@ -10,11 +10,11 @@ export const RunIdParamsSchema = z.object({ runId: z.string().min(1) });
 
 export const OnboardingStepReqSchema = OnboardingStepInputSchema;
 
-export const OnboardingConfigReqSchema = z.object({ yaml: z.string().min(1).max(100_000) });
+export const OnboardingConfigReqSchema = z.object({ text: z.string().min(1).max(100_000) });
 
 export const OnboardingConfigRespSchema = z.union([
 	z.object({ ok: z.literal(true) }),
-	z.object({ ok: z.literal(false), issues: z.array(z.object({ path: z.string(), message: z.string() })) })
+	z.object({ ok: z.literal(false), issues: z.array(z.object({ line: z.number().int().nullable(), message: z.string() })) })
 ]);
 
 export const OnboardingRequirementReqSchema = OnboardingRequirementSchema;

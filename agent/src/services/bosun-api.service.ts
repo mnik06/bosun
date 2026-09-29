@@ -220,10 +220,10 @@ export function getBosunApiService(deps: { serverUrl: string; machineKey?: strin
 
 		// Validation issues come back as an answer rather than a refusal, so the
 		// session reads which fields to fix.
-		async publishOnboardingConfig(opts: { runId: string; yaml: string }): Promise<unknown> {
+		async publishOnboardingConfig(opts: { runId: string; text: string }): Promise<unknown> {
 			return post({
 				path: `/agent/onboarding/${encodeURIComponent(opts.runId)}/config`,
-				body: { yaml: opts.yaml },
+				body: { text: opts.text },
 				authorized: true
 			});
 		},

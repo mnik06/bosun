@@ -60,22 +60,21 @@ const START = {
 	findings: [],
 	priorProposals: [],
 	recheckCodes: [],
-	configDraft: null,
+	config: null,
 	policy: null,
 	memoryMaxBytes: null
 } as unknown as ExecStart;
 
-const LANE_DRAFT = [
-	'version: 1',
-	'apps:',
-	'  be:',
-	'    cwd: be',
-	'    start: pnpm local',
-	'    migrate: pnpm db:migration:run',
-	'verify:',
-	'  resetDatabase:',
-	'    cwd: be',
-	'    run: pnpm db:reset',
+const LANE_CONFIG = [
+	'Apps:',
+	'be:',
+	'- Cwd: be',
+	'- Start: pnpm local',
+	'- Migrate: pnpm db:migration:run',
+	'',
+	'Reset database:',
+	'- Cwd: be',
+	'- Run: pnpm db:reset',
 	''
 ].join('\n');
 
@@ -235,9 +234,9 @@ describe('createExecutionSessions', () => {
 		});
 	});
 
-	// A repository bullet runs on the config of the tree it is in, or the draft when
-	// that tree has none. One that does not validate stops here, naming the field,
-	// rather than a session discovering it an hour in.
+	// A repository bullet runs on the config bosun holds for the repository. One
+	// that does not validate stops here, rather than a session discovering it an
+	// hour in.
 	it('stops a repository bullet whose config does not validate, before any session starts', async () => {
 		const send = vi.fn();
 		const deps = services(async () => ({ ok: true, detail: 'cleaned' }), null, undefined, 'repo_1');
@@ -245,7 +244,7 @@ describe('createExecutionSessions', () => {
 		await createExecutionSessions({ services: deps, send }).start({
 			...START,
 			worktreePath: '/nonexistent-worktree',
-			configDraft: 'version: 1\napps:\n  be:\n    cwd: be\n'
+			config: 'Apps:\nbe:\n- Cwd: be\n'
 		});
 
 		const { spawnClaudeSession } = await import('../sessions/process');
@@ -254,7 +253,7 @@ describe('createExecutionSessions', () => {
 		expect(send).toHaveBeenCalledWith({
 			type: 'exec.error',
 			runId: 'sr_1',
-			message: expect.stringContaining("the repository's draft config is invalid — apps.be.start:")
+			message: expect.stringContaining("the repository's config is invalid")
 		});
 	});
 
@@ -291,7 +290,7 @@ describe('lane sessions', () => {
 			worktreePath: '/nonexistent-worktree',
 			phase: 'drive',
 			slice: { ordinal: 2, kind: 'verify', title: 'verify', bodyMd: null },
-			configDraft: LANE_DRAFT,
+			config: LANE_CONFIG,
 			policy: { applyMigrations: true }
 		});
 
@@ -319,7 +318,7 @@ describe('lane sessions', () => {
 			...START,
 			worktreePath: '/nonexistent-worktree',
 			phase: 'drive',
-			configDraft: LANE_DRAFT,
+			config: LANE_CONFIG,
 			policy: { applyMigrations: false }
 		});
 
@@ -340,7 +339,7 @@ describe('lane sessions', () => {
 			...START,
 			worktreePath: '/nonexistent-worktree',
 			phase: 'drive',
-			configDraft: LANE_DRAFT,
+			config: LANE_CONFIG,
 			policy: { applyMigrations: true }
 		});
 
