@@ -68,10 +68,8 @@ export function shimScript(opts: { nodeBin: string; target: string }): string {
 // the checksum never covered.
 export function binEntries(pkg: { name?: unknown; bin?: unknown }): [string, string][] {
 	const unscoped = typeof pkg.name === 'string' ? (pkg.name.split('/').pop() ?? '') : '';
-	const raw: [string, unknown][] =
-		typeof pkg.bin === 'string'
-			? [[unscoped, pkg.bin]]
-			: Object.entries(pkg.bin !== null && typeof pkg.bin === 'object' ? pkg.bin : {});
+	const table = pkg.bin !== null && typeof pkg.bin === 'object' ? pkg.bin : {};
+	const raw: [string, unknown][] = typeof pkg.bin === 'string' ? [[unscoped, pkg.bin]] : Object.entries(table);
 
 	return raw.flatMap(([name, target]) => {
 		if (!BIN_NAME.test(name) || typeof target !== 'string') {

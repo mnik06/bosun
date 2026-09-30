@@ -41,7 +41,7 @@ export function getInputsKeyService(deps: { homeDir?: string }) {
 				return null;
 			}
 
-			throw new Error(`could not read ${keyPath}`);
+			throw new Error(`could not read ${keyPath}`, { cause: error });
 		}
 
 		try {

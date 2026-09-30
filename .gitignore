@@ -30,3 +30,8 @@ Thumbs.db
 .vscode/
 *.swp
 .vercel
+
+# Claude Code local state
+.claude/settings.local.json
+.mcp.json
+.playwright-mcp

@@ -49,7 +49,11 @@ export function getPromptService(deps: {
 		rl.on('line', (line: string) => {
 			const waiter = waiting.shift();
 
-			waiter ? waiter(line) : ready.push(line);
+			if (waiter) {
+				waiter(line);
+			} else {
+				ready.push(line);
+			}
 		});
 
 		// EOF with a prompt still outstanding resolves empty rather than hanging the

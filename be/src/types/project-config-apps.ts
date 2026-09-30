@@ -4,7 +4,7 @@
 
 import { splitLabel, type ConfigIssue, type LineMap, type Section } from './project-config-grammar';
 
-const SIMPLE_APP_FIELDS: Record<string, string> = { Cwd: 'cwd', Start: 'start', Ready: 'ready', Migrate: 'migrate', Codegen: 'codegen' };
+const SIMPLE_APP_FIELDS: Record<string, string> = { Cwd: 'cwd', Start: 'start', Test: 'test', Ready: 'ready', Migrate: 'migrate', Codegen: 'codegen' };
 const APP_FIELDS = [...Object.keys(SIMPLE_APP_FIELDS), 'Ready timeout', 'Depends on', 'Env <KEY>'];
 
 function applyAppField(opts: { app: Record<string, unknown>; appName: string; label: string; value: string; line: number; lineMap: LineMap; issues: ConfigIssue[] }): void {

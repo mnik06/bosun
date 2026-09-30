@@ -3,6 +3,7 @@ import os from 'os';
 import path from 'path';
 import { z } from 'zod';
 import { type EnvSetSummary, type EnvVarInput } from '../protocol';
+import { plural } from '../utils';
 
 const PROJECT_ENV_FILENAME = 'project-env.json';
 
@@ -127,10 +128,7 @@ export function describeEnvSets(sets: EnvSetSummary[]): string {
 	return sets
 		.map((set) => {
 			const names = set.keys.join(', ');
-			const keys =
-				names.length <= NAMED_KEYS_MAX_CHARS
-					? names
-					: `${set.keys.length} key${set.keys.length === 1 ? '' : 's'}`;
+			const keys = names.length <= NAMED_KEYS_MAX_CHARS ? names : plural(set.keys.length, 'key');
 
 			return `${envFileFor(set.path)}: ${keys}`;
 		})
@@ -173,28 +171,33 @@ function checkedVars(opts: {
 			throw new Error(`duplicate key ${entry.key}`);
 		}
 
-		if (entry.value === null) {
-			if (!Object.hasOwn(opts.stored, entry.key)) {
-				throw new Error(`no stored value for ${entry.key}`);
-			}
-
-			next[entry.key] = opts.stored[entry.key]!;
-
-			continue;
-		}
-
-		if (/[\r\n]/.test(entry.value)) {
-			throw new Error(`the value for ${entry.key} must be a single line`);
-		}
-
-		if (entry.value.length > MAX_VALUE_LENGTH) {
-			throw new Error(`the value for ${entry.key} is longer than ${MAX_VALUE_LENGTH} characters`);
-		}
-
-		next[entry.key] = entry.value;
+		next[entry.key] = checkedValue({ entry, stored: opts.stored });
 	}
 
 	return next;
+}
+
+// A null value keeps the stored one: the browser never holds a value to send back.
+function checkedValue(opts: { entry: EnvVarInput; stored: Record<string, string> }): string {
+	const { entry } = opts;
+
+	if (entry.value === null) {
+		if (!Object.hasOwn(opts.stored, entry.key)) {
+			throw new Error(`no stored value for ${entry.key}`);
+		}
+
+		return opts.stored[entry.key]!;
+	}
+
+	if (/[\r\n]/.test(entry.value)) {
+		throw new Error(`the value for ${entry.key} must be a single line`);
+	}
+
+	if (entry.value.length > MAX_VALUE_LENGTH) {
+		throw new Error(`the value for ${entry.key} is longer than ${MAX_VALUE_LENGTH} characters`);
+	}
+
+	return entry.value;
 }
 
 // An entry is only trusted if it could have been stored through `set`. The file
@@ -405,7 +408,7 @@ export function getProjectEnvService(deps: { homeDir?: string }) {
 					existing = fs.readFileSync(target, 'utf8');
 				} catch (error) {
 					if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-						throw new Error(`could not read ${file}: ${(error as NodeJS.ErrnoException).code ?? 'unknown error'}`);
+						throw new Error(`could not read ${file}: ${(error as NodeJS.ErrnoException).code ?? 'unknown error'}`, { cause: error });
 					}
 				}
 
@@ -414,7 +417,7 @@ export function getProjectEnvService(deps: { homeDir?: string }) {
 					// an existing `.env` keeps whatever mode its owner gave it.
 					fs.writeFileSync(target, mergeEnvFile(existing, set.vars), { mode: 0o600 });
 				} catch (error) {
-					throw new Error(`could not write ${file}: ${(error as NodeJS.ErrnoException).code ?? 'unknown error'}`);
+					throw new Error(`could not write ${file}: ${(error as NodeJS.ErrnoException).code ?? 'unknown error'}`, { cause: error });
 				}
 
 				written.push(file);

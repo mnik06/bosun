@@ -223,6 +223,7 @@ export async function mergeBranches(opts: {
 	return { ok: true, detail: merged.length === 0 ? 'providers already contained' : `merged ${merged.join(', ')}` };
 }
 
+// eslint-disable-next-line max-lines-per-function -- a service factory returning N small git methods, same shape as *.service.ts
 export function getCommitService(deps: { exec: ExecService }) {
 	async function git(worktreePath: string, args: string[]) {
 		return deps.exec.run('git', ['-C', worktreePath, ...args], { timeoutMs: 60_000 });

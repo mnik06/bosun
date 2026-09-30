@@ -1,0 +1,26 @@
+{
+	"$schema": "https://unpkg.com/knip@6/schema.json",
+	"entry": [
+		"app/root.tsx",
+		"app/routes.ts",
+		"app/entry.client.tsx",
+		"react-router.config.ts",
+		"vite.config.ts",
+		"vitest.config.ts",
+		"eslint.config.js"
+	],
+	"project": ["app/**/*.{ts,tsx}", "*.{ts,tsx,js,mjs}"],
+	"ignore": [".react-router/**", "build/**", "**/*.d.ts"],
+	"ignoreDependencies": [
+		"babel-plugin-react-compiler",
+		"@babel/preset-typescript",
+		"husky",
+		"lint-staged",
+		"@fontsource-variable/inter",
+		"@fontsource-variable/jetbrains-mono"
+	],
+	"ignoreExportsUsedInFile": true,
+	"paths": {
+		"~/*": ["./app/*"]
+	}
+}

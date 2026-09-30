@@ -57,6 +57,7 @@ const AppSchema = z
 	.object({
 		cwd: RelativePathSchema.optional(),
 		start: CommandSchema,
+		test: CommandSchema.optional(),
 		env: z.record(z.string().regex(ENV_KEY, 'must be an env variable name'), z.string().max(2000)).optional(),
 		ready: z.string().min(1).max(500).optional(),
 		readyTimeoutSeconds: z.number().int().min(1).max(900).optional(),
@@ -69,7 +70,7 @@ const AppSchema = z
 const TestAccountSchema = z
 	.object({
 		role: z.string().trim().min(1).max(40),
-		signIn: z.string().min(1).max(500),
+		description: z.string().min(1).max(500),
 		secrets: z.array(z.string().regex(ENV_KEY, 'must be an env variable name')).min(1).max(10)
 	})
 	.strict();
@@ -250,7 +251,7 @@ export const ProjectConfigSchema = BaseSchema.superRefine((config, ctx) => {
 	checkApps(config, report);
 
 	config.testAccounts.forEach((account, index) => {
-		checkPlaceholders({ value: account.signIn, path: ['testAccounts', index, 'signIn'], apps, insideApp: false, report });
+		checkPlaceholders({ value: account.description, path: ['testAccounts', index, 'description'], apps, insideApp: false, report });
 	});
 });
 

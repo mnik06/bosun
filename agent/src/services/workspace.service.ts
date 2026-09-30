@@ -213,54 +213,54 @@ export function getWorkspaceService(deps: {
 	// Idempotent: attaching the repository the machine already has fetches it and
 	// rewrites its helper rather than cloning a second copy.
 	async function attachOnce(msg: RepoAttach): Promise<AttachResult> {
-			let current: AgentConfig;
+		let current: AgentConfig;
 
-			// Refused rather than thrown: nothing awaits an attach but the frame that
-			// asked for it, and a config this agent does not own must never be
-			// rewritten with a repository added to it.
-			try {
-				current = config();
-			} catch (error) {
-				return { ok: false, detail: error instanceof Error ? error.message : String(error) };
-			}
+		// Refused rather than thrown: nothing awaits an attach but the frame that
+		// asked for it, and a config this agent does not own must never be
+		// rewritten with a repository added to it.
+		try {
+			current = config();
+		} catch (error) {
+			return { ok: false, detail: error instanceof Error ? error.message : String(error) };
+		}
 
-			const target = path.join(reposRoot, msg.slug);
+		const target = path.join(reposRoot, msg.slug);
 
-			if (current.repository !== undefined && current.repository.id !== msg.repositoryId) {
-				return { ok: false, detail: `this machine is already attached to ${current.repository.slug}` };
-			}
+		if (current.repository !== undefined && current.repository.id !== msg.repositoryId) {
+			return { ok: false, detail: `this machine is already attached to ${current.repository.slug}` };
+		}
 
-			const failure = fs.existsSync(path.join(target, '.git'))
-				? await refresh({ msg, target })
-				: await clone({ msg, target });
-			const configured = failure ?? (await configure({ repoPath: target, cloneUrl: msg.cloneUrl }));
+		const failure = fs.existsSync(path.join(target, '.git'))
+			? await refresh({ msg, target })
+			: await clone({ msg, target });
+		const configured = failure ?? (await configure({ repoPath: target, cloneUrl: msg.cloneUrl }));
 
-			if (configured !== null) {
-				return { ok: false, detail: configured };
-			}
+		if (configured !== null) {
+			return { ok: false, detail: configured };
+		}
 
-			// The branch bosun names rather than the one the remote calls its default: a
-			// leader can point bosun at another, and every session that reads
-			// `origin/HEAD` — planning, onboarding — has to follow.
-			const pointed = await git(['-C', target, 'remote', 'set-head', 'origin', msg.defaultBranch]);
+		// The branch bosun names rather than the one the remote calls its default: a
+		// leader can point bosun at another, and every session that reads
+		// `origin/HEAD` — planning, onboarding — has to follow.
+		const pointed = await git(['-C', target, 'remote', 'set-head', 'origin', msg.defaultBranch]);
 
-			if (!pointed.ok) {
-				await git(['-C', target, 'remote', 'set-head', 'origin', '--auto']);
-			}
+		if (!pointed.ok) {
+			await git(['-C', target, 'remote', 'set-head', 'origin', '--auto']);
+		}
 
-			// The read tree was a worktree of the checkout the machine used before. Left
-			// in place it points at another repository's objects and every planning
-			// session would fall back to reading a tree nobody refreshes.
-			if (current.repository === undefined) {
-				fs.rmSync(path.join(bosunDir, 'read-tree'), { recursive: true, force: true });
-			}
+		// The read tree was a worktree of the checkout the machine used before. Left
+		// in place it points at another repository's objects and every planning
+		// session would fall back to reading a tree nobody refreshes.
+		if (current.repository === undefined) {
+			fs.rmSync(path.join(bosunDir, 'read-tree'), { recursive: true, force: true });
+		}
 
-			writeConfig({
-				configPath: deps.configPath,
-				config: { ...current, repository: { id: msg.repositoryId, slug: msg.slug, path: target } }
-			});
+		writeConfig({
+			configPath: deps.configPath,
+			config: { ...current, repository: { id: msg.repositoryId, slug: msg.slug, path: target } }
+		});
 
-			return { ok: true, repoPath: target };
+		return { ok: true, repoPath: target };
 	}
 }
 

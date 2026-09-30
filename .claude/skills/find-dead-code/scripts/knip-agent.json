@@ -1,0 +1,8 @@
+{
+	"$schema": "https://unpkg.com/knip@6/schema.json",
+	"entry": ["src/index.ts", "vitest.config.ts"],
+	"project": ["src/**/*.ts", "*.ts"],
+	"ignore": ["dist/**", "release/**", "**/*.d.ts"],
+	"ignoreDependencies": ["ts-node"],
+	"ignoreExportsUsedInFile": true
+}

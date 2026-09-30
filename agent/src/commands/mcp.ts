@@ -122,6 +122,32 @@ export async function addMcpPreset(opts: { config: AgentConfig; id: string }): P
 	}
 }
 
+async function askRequirements(deps: {
+	preset: McpPreset;
+	prompt: ReturnType<typeof getPromptService>;
+}): Promise<Map<string, string>> {
+	const answers = new Map<string, string>();
+
+	for (const requirement of deps.preset.requires) {
+		if (requirement.helpUrl) {
+			console.log(`  ${requirement.helpUrl}`);
+		}
+
+		const value =
+			requirement.secret === false
+				? await deps.prompt.ask(`${requirement.label}: `)
+				: await deps.prompt.secret(requirement.label);
+
+		if (!value) {
+			throw new Error(`${requirement.env} is required — nothing was written`);
+		}
+
+		answers.set(requirement.env, value);
+	}
+
+	return answers;
+}
+
 async function runAdd(deps: {
 	preset: McpPreset;
 	mcpConfig: ReturnType<typeof getMcpConfigService>;
@@ -149,24 +175,7 @@ async function runAdd(deps: {
 	}
 
 	const replace = plan.mustPrompt || (await prompt.confirm('Replace the stored credential?'));
-	const answers = new Map<string, string>();
-
-	for (const requirement of replace ? preset.requires : []) {
-		if (requirement.helpUrl) {
-			console.log(`  ${requirement.helpUrl}`);
-		}
-
-		const value =
-			requirement.secret === false
-				? await prompt.ask(`${requirement.label}: `)
-				: await prompt.secret(requirement.label);
-
-		if (!value) {
-			throw new Error(`${requirement.env} is required — nothing was written`);
-		}
-
-		answers.set(requirement.env, value);
-	}
+	const answers = replace ? await askRequirements({ preset, prompt }) : new Map<string, string>();
 
 	secrets.push(...buildSecrets({ preset, answers, replace }));
 

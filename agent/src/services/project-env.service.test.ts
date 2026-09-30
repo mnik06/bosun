@@ -47,8 +47,8 @@ describe('formatEnvValue', () => {
 		['', "''"],
 		['has space', "'has space'"],
 		['$HOME#x', "'$HOME#x'"],
-		["it's", `"it's"`],
-		[`it's "quoted" \\ here`, `"it's \\"quoted\\" \\\\ here"`]
+		["it's", '"it\'s"'],
+		['it\'s "quoted" \\ here', '"it\'s \\"quoted\\" \\\\ here"']
 	])('%j -> %s', (value, expected) => {
 		expect(formatEnvValue(value)).toBe(expected);
 	});

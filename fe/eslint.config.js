@@ -60,7 +60,20 @@ const FSD_POLICIES = [
 		from: { element: { type: 'view' } },
 		allow: { to: { element: { type: ['shared', 'entity', 'feature', 'widget'] } } }
 	},
-	{ from: { element: { type: 'app-root' } }, allow: { to: { element: { type: '*' } } } }
+	{ from: { element: { type: 'app-root' } }, allow: { to: { element: { type: '*' } } } },
+
+	// The UI socket is the one app-wide push channel. The machine entity owns it, so it
+	// parses and patches the repository entity's cache from the same frames.
+	{
+		from: { element: { type: 'entity', captured: { slice: 'machine' } } },
+		allow: { to: { element: { type: 'entity', captured: { slice: 'repository' } } } }
+	},
+
+	// Bugfix admission mirrors the backend's host check, which is a rule over a machine.
+	{
+		from: { element: { type: 'entity', captured: { slice: 'plan' } } },
+		allow: { to: { element: { type: 'entity', captured: { slice: 'machine' } } } }
+	}
 ]
 
 const FSD_BARREL_POLICY = {

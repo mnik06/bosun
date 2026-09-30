@@ -34,6 +34,7 @@ export function planNumbersIn(subjects: string): number[] {
 // every step can be exercised against a real repository in a test. Each step is
 // safe to abandon: `abandon` returns the worktree to the commit the integration
 // started from, which is the only state a failed integration may leave behind.
+// eslint-disable-next-line max-lines-per-function -- a factory returning N small git steps, same shape as *.service.ts
 export function getIntegrationGit(deps: { exec: ExecService; worktreePath: string }) {
 	const git: Git = async (args, timeoutMs = GIT_TIMEOUT_MS) =>
 		deps.exec.run('git', ['-C', deps.worktreePath, ...args], { env: networkGitEnv(), timeoutMs });

@@ -39,7 +39,7 @@ async function answers(url: string): Promise<string | null> {
 }
 
 // Serves whatever API_URL it was given, so the test can see the wiring arrived.
-const SERVER = `node -e "require('http').createServer((q,s)=>s.end(process.env.API_URL||'ok')).listen(Number(process.env.PORT),'127.0.0.1')"`;
+const SERVER = 'node -e "require(\'http\').createServer((q,s)=>s.end(process.env.API_URL||\'ok\')).listen(Number(process.env.PORT),\'127.0.0.1\')"';
 
 describe('startOrder', () => {
 	const apps = config({
@@ -135,7 +135,7 @@ describe('up and down', () => {
 	it('waits out a server that takes longer than one probe to answer', async () => {
 		const homeDir = tempDir();
 		const stack = getStackService({ memory: unscoped, homeDir });
-		const slow = `node -e "require('http').createServer((q,s)=>setTimeout(()=>s.end('ok'),4000)).listen(Number(process.env.PORT),'127.0.0.1')"`;
+		const slow = 'node -e "require(\'http\').createServer((q,s)=>setTimeout(()=>s.end(\'ok\'),4000)).listen(Number(process.env.PORT),\'127.0.0.1\')"';
 		const compiling = config({ web: { start: slow, env: { PORT: '{port}' }, ready: '{url}', readyTimeoutSeconds: 10 } });
 
 		const result = await stack.up({ key: 'sr_3', config: compiling, worktreePath: homeDir, portBase: portBase + 40, env: process.env, memoryMaxBytes: null });

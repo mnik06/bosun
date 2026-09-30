@@ -1,0 +1,14 @@
+{
+	"$schema": "https://unpkg.com/knip@6/schema.json",
+	"entry": [
+		"src/api/api.ts",
+		"src/api/routes/**/*.ts",
+		"drizzle.config.ts",
+		"eslint.config.mjs",
+		"vitest.config.ts"
+	],
+	"project": ["src/**/*.ts", "*.{ts,mjs}"],
+	"ignore": ["dist/**", "drizzle-out/**", "**/*.d.ts"],
+	"ignoreDependencies": ["pino-pretty", "tsconfig-paths", "ts-node", "nodemon"],
+	"ignoreExportsUsedInFile": true
+}

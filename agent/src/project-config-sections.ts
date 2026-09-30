@@ -49,7 +49,7 @@ function bulletEntry(opts: { text: string; line: number; withRerun: boolean; cwd
 	const split = splitLabel(opts.text);
 
 	if (!split || split.label === '') {
-		opts.issues.push({ line: opts.line, message: 'expected `- Label: command`' });
+		opts.issues.push({ line: opts.line, message: 'expected `- folder: command`' });
 
 		return null;
 	}
@@ -160,23 +160,46 @@ export function parseRegenerate(section: Section, issues: ConfigIssue[]): Regene
 interface TestAccountEntry {
 	line: number;
 	role: string;
-	signIn: string;
+	description: string;
 	secrets: string[];
+}
+
+// The env keys holding an account's credentials are the SCREAMING_SNAKE words
+// in its description — `- leader: TEST_LEADER_EMAIL / TEST_LEADER_PASSWORD` —
+// so the line reads as a person would write it, with no syntax around them. The
+// older `sign in at <url> using KEY1, KEY2` form names them explicitly, and any
+// key name goes there.
+const SECRET_KEY = /\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+\b/g;
+const LEGACY_SECRETS = / using ([A-Za-z_]\w*(?:, *[A-Za-z_]\w*)*)$/;
+
+function secretKeys(description: string): string[] {
+	const legacy = LEGACY_SECRETS.exec(description);
+
+	return legacy ? legacy[1]!.split(',').map((entry) => entry.trim()) : [...new Set(description.match(SECRET_KEY) ?? [])];
 }
 
 export function parseTestAccounts(section: Section, issues: ConfigIssue[]): TestAccountEntry[] {
 	const entries: TestAccountEntry[] = [];
 
 	for (const line of section.body) {
-		const bullet = /^- ([^:]+): sign in at (.+) using (.+)$/.exec(line.text);
+		const bullet = /^- (.+)$/.exec(line.text);
+		const split = bullet ? splitLabel(bullet[1]!) : null;
 
-		if (!bullet) {
-			issues.push({ line: line.no, message: 'expected `- Role: sign in at <destination> using KEY1, KEY2`' });
+		if (!split || split.label === '' || split.value === '') {
+			issues.push({ line: line.no, message: 'expected `- role: TEST_USER_EMAIL / TEST_USER_PASSWORD, and anything else worth knowing`' });
 
 			continue;
 		}
 
-		entries.push({ line: line.no, role: bullet[1]!.trim(), signIn: bullet[2]!.trim(), secrets: bullet[3]!.split(',').map((entry) => entry.trim()) });
+		const secrets = secretKeys(split.value);
+
+		if (secrets.length === 0) {
+			issues.push({ line: line.no, message: 'name the env keys that hold its credentials, such as TEST_USER_EMAIL / TEST_USER_PASSWORD' });
+
+			continue;
+		}
+
+		entries.push({ line: line.no, role: split.label, description: split.value, secrets });
 	}
 
 	return entries;
@@ -190,17 +213,17 @@ export function parseToolchain(section: Section, issues: ConfigIssue[], lineMap:
 	}
 
 	for (const line of section.body) {
-		const bullet = /^- (.+)$/.exec(line.text);
-		const split = bullet ? splitLabel(bullet[1]!) : null;
+		const node = /^- Node:? +(\S+)$/i.exec(line.text);
+		const manager = /^- Package manager: *(\S+)$/i.exec(line.text) ?? /^- ((?:npm|pnpm|yarn)(?:@| +)\S+)$/.exec(line.text);
 
-		if (split?.label === 'Node') {
-			toolchain.node = split.value;
+		if (node) {
+			toolchain.node = node[1];
 			lineMap.note(['toolchain', 'node'], line.no);
-		} else if (split?.label === 'Package manager') {
-			toolchain.packageManager = split.value;
+		} else if (manager) {
+			toolchain.packageManager = manager[1]!.replace(/ +/, '@');
 			lineMap.note(['toolchain', 'packageManager'], line.no);
 		} else {
-			issues.push({ line: line.no, message: 'expected `- Node: <version>` or `- Package manager: <name>@<version>`' });
+			issues.push({ line: line.no, message: 'expected `- Node <version>` or `- <npm|pnpm|yarn> <version>`' });
 		}
 	}
 
@@ -343,7 +366,7 @@ function applyTestAccounts(sections: Sections, raw: Raw, lineMap: LineMap, issue
 	raw.testAccounts = parseTestAccounts(section, issues).map((entry, index) => {
 		lineMap.note(['testAccounts', index], entry.line);
 
-		return { role: entry.role, signIn: entry.signIn, secrets: entry.secrets };
+		return { role: entry.role, description: entry.description, secrets: entry.secrets };
 	});
 }
 

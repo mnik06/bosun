@@ -357,7 +357,11 @@ export function createPlanningSessions(opts: {
 					return;
 				}
 
-				event.ok ? settle(planId) : fail(planId, event.message);
+				if (event.ok) {
+					settle(planId);
+				} else {
+					fail(planId, event.message);
+				}
 			},
 			onDropped: logDroppedFrame
 		});
@@ -470,9 +474,11 @@ export function createPlanningSessions(opts: {
 				continue;
 			}
 
-			session.idleAt === null
-				? fail(planId, 'this planning session reached its 24-hour limit and was ended')
-				: teardown(planId);
+			if (session.idleAt === null) {
+				fail(planId, 'this planning session reached its 24-hour limit and was ended');
+			} else {
+				teardown(planId);
+			}
 		}
 	}, REAP_SWEEP_MS);
 

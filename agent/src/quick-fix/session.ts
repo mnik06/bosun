@@ -188,7 +188,7 @@ export function createQuickFixSessions(opts: {
 		msg: QuickFixStart,
 		worktreePath: string
 	): Promise<{ config: ProjectConfig | null; env: NodeJS.ProcessEnv }> => {
-		const resolved = resolveProjectConfig(msg.config);
+		const resolved = resolveProjectConfig(msg.config, worktreePath);
 
 		if (resolved.source === 'invalid') {
 			throw new Error(resolved.detail);
@@ -276,7 +276,11 @@ export function createQuickFixSessions(opts: {
 					return;
 				}
 
-				event.ok ? void finish(msg) : fail(msg.quickFixId, event.message);
+				if (event.ok) {
+					void finish(msg);
+				} else {
+					fail(msg.quickFixId, event.message);
+				}
 			},
 			onDropped: logDroppedFrame
 		});

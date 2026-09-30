@@ -49,9 +49,10 @@ export function criteriaList(acs: { code: string; text: string }[]): string {
 // telling it to call one it does not have would be a promise the session cannot
 // keep.
 export function unattended(canAsk: boolean, canRecordDecisions = true): string {
+	const recording = canRecordDecisions ? ', record the decision with `record_decision` where you have one,' : '';
 	const asking = canAsk
-		? `You may call \`bosun_ask\` when a decision is genuinely the operator's and you cannot settle it from the plan or the code. This plan keeps its build slot while you wait, but only for ten minutes: past that the session is stopped, other plans take the slot, and this bullet starts again from its last commit — with the answer in its prompt — once somebody gives one. Spend it on decisions that change what gets built, never on confirmations.`
-		: `**You cannot ask anything.** No tool exists for it. Decide${canRecordDecisions ? ', record the decision with `record_decision` where you have one,' : ''} and carry on. A choice you are unsure of is still better than a session that ends having done nothing.`;
+		? 'You may call `bosun_ask` when a decision is genuinely the operator\'s and you cannot settle it from the plan or the code. This plan keeps its build slot while you wait, but only for ten minutes: past that the session is stopped, other plans take the slot, and this bullet starts again from its last commit — with the answer in its prompt — once somebody gives one. Spend it on decisions that change what gets built, never on confirmations.'
+		: `**You cannot ask anything.** No tool exists for it. Decide${recording} and carry on. A choice you are unsure of is still better than a session that ends having done nothing.`;
 
 	return `# Nobody is watching this run
 
@@ -102,9 +103,11 @@ export function commandList(entries: { label: string; cwd?: string; run: string 
 export function toolchainSection(config: ProjectConfig): string {
 	const toolchain = config.toolchain;
 
-	return toolchain === undefined
-		? ''
-		: `- Toolchain: node ${toolchain.node}${toolchain.packageManager === undefined ? '' : `, ${toolchain.packageManager}`} — provisioned by bosun and already first on your PATH. Never install or switch another.`;
+	if (toolchain === undefined) {
+		return '';
+	}
+
+	return `- Toolchain: node ${toolchain.node}${toolchain.packageManager === undefined ? '' : `, ${toolchain.packageManager}`} — provisioned by bosun and already first on your PATH. Never install or switch another.`;
 }
 
 // The setup block. A quick fix has no dev-stack re-run to mention, so it takes the
@@ -122,20 +125,24 @@ export function setupSection(config: ProjectConfig, opts: { rerun: boolean }): s
 		: `- Setup, already run in this worktree:\n${commands}`;
 }
 
-export function codegenSection(config: ProjectConfig): string {
-	const apps = Object.entries(config.apps);
+function appCommandSection(config: ProjectConfig, opts: { field: 'codegen' | 'migrate' | 'test'; title: string }): string {
+	const apps = Object.entries(config.apps).filter(([, app]) => app[opts.field] !== undefined);
 
-	return apps.some(([, app]) => app.codegen !== undefined)
-		? `- Code generation:\n${commandList(apps.filter(([, app]) => app.codegen !== undefined).map(([name, app]) => ({ label: name, cwd: app.cwd, run: app.codegen! })))}`
-		: '';
+	return apps.length === 0
+		? ''
+		: `- ${opts.title}:\n${commandList(apps.map(([name, app]) => ({ label: name, cwd: app.cwd, run: app[opts.field]! })))}`;
+}
+
+export function codegenSection(config: ProjectConfig): string {
+	return appCommandSection(config, { field: 'codegen', title: 'Code generation' });
 }
 
 export function migrateSection(config: ProjectConfig): string {
-	const apps = Object.entries(config.apps);
+	return appCommandSection(config, { field: 'migrate', title: 'Migrations' });
+}
 
-	return apps.some(([, app]) => app.migrate !== undefined)
-		? `- Migrations:\n${commandList(apps.filter(([, app]) => app.migrate !== undefined).map(([name, app]) => ({ label: name, cwd: app.cwd, run: app.migrate! })))}`
-		: '';
+export function testSection(config: ProjectConfig): string {
+	return appCommandSection(config, { field: 'test', title: 'Tests' });
 }
 
 export function checksSection(config: ProjectConfig): string {
@@ -169,10 +176,11 @@ export function configuredProject(context: RunContext): string[] {
 			: `- Apps, started only with the \`stack_up\` tool — never by running their start command yourself:\n${apps.map(([name, app]) => `  - \`${name}\` on port ${ports[name]} (http://127.0.0.1:${ports[name]})${app.cwd === undefined ? '' : ` in \`${app.cwd}\``}${app.dependsOn === undefined ? '' : `, after ${app.dependsOn.join(', ')}`}`).join('\n')}`,
 		codegenSection(config),
 		migrateSection(config),
+		testSection(config),
 		checksSection(config),
 		config.testAccounts.length === 0
 			? ''
-			: `- Test accounts: ${config.testAccounts.map((account) => `${account.role} signs in at ${renderTemplate(account.signIn, { app: null, ports })} with ${account.secrets.map((key) => `\`$${key}\``).join(' and ')} from your environment`).join('; ')}. Read them with \`printenv\` when you need them and never print, quote or write down their values.`,
+			: `- Test accounts, their credentials in your environment: ${config.testAccounts.map((account) => `${account.role} — ${renderTemplate(account.description, { app: null, ports })}`).join('; ')}. Read them with \`printenv\` when you need them and never print, quote or write down their values.`,
 		notesSection(config),
 		"- This project's config lives in bosun, not in the tree. If your work changes how the project installs, generates, migrates, starts or proves itself, say so plainly in your report — a leader edits the config from the browser, and no session can change it directly."
 	].filter(Boolean);
@@ -237,13 +245,21 @@ const SCAN_TOOLS = `The fix pass in step 2 also needs this repository's **dead-c
 apart among the checks below — read the script a check runs when its name does not say — and write down
 which they are. "None" is an answer.`;
 
+function loopDetail(context: RunContext): string {
+	if (!hasConfiguredChecks(context.config)) {
+		return DISCOVERY_LIST;
+	}
+
+	return context.mode === 'fix' ? SCAN_TOOLS : '';
+}
+
 // The heart of the user's requirement: the session works out how this repository
 // proves itself before it changes anything. A loop discovered after the work is
 // a loop that gets skipped when the work runs long.
 export function feedbackLoops(context: RunContext): string {
 	const configured = context.config === null ? configuredProfile(context.profile) : configuredProject(context);
 	const source = context.config === null ? 'What the operator has already told bosun about this project' : "What bosun's stored config says about this project";
-	const detail = hasConfiguredChecks(context.config) ? (context.mode === 'fix' ? SCAN_TOOLS : '') : DISCOVERY_LIST;
+	const detail = loopDetail(context);
 
 	return `# Step 1 — this repository's feedback loops, before you change anything
 

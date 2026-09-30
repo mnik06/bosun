@@ -1,76 +1,56 @@
 const CONFIG_REFERENCE = `\`\`\`
 Toolchain:
-- Node: 24.15.0
-- Package manager: pnpm@11.8.0
+- Node 24.15.0
+- pnpm 11.8.0
 
 Install:
-/be: pnpm install --frozen-lockfile (rerun when: be/pnpm-lock.yaml)
-/fe: pnpm install --frozen-lockfile (rerun when: fe/pnpm-lock.yaml)
+- be: pnpm install
+- fe: pnpm install
 
 Apps:
 be:
-- Cwd: be
-- Start: pnpm local
-- Env PORT: {port}
-- Ready: {url.be}/health
 - Migrate: pnpm db:migration:run
-- Codegen: pnpm generate
+- Start: pnpm local
+- Test: pnpm test
 fe:
-- Cwd: fe
-- Start: pnpm dev --port {port} --strictPort --host 127.0.0.1
-- Depends on: be
-- Env VITE_API_URL: {url.be}
-- Ready: {url.fe}/@vite/client
+- Start: pnpm dev
+- Test: pnpm test
 
 Feedback loops:
-/be: pnpm preflight
-/fe: pnpm preflight
-
-Regenerate:
-/be:
-- Migrations (when be/drizzle-out/** changes): pnpm db:migration:generate
-- Lockfile be (when be/pnpm-lock.yaml changes): pnpm install --lockfile-only
-/fe:
-- Lockfile fe (when fe/pnpm-lock.yaml changes): pnpm install --lockfile-only
-
-Reset database:
-- Cwd: be
-- Run: pnpm db:reset
+- be: pnpm preflight
+- fe: pnpm preflight
 
 Test accounts:
-- leader: sign in at {url.fe}/login using TEST_LEADER_EMAIL, TEST_LEADER_PASSWORD
+- leader: TEST_LEADER_EMAIL / TEST_LEADER_PASSWORD. No signup, created by hand in Supabase.
 
 Notes:
-Anything a session could not work out by reading the code.
+- DATABASE_URL must use the session pooler (5432), not 6543 — 6543 breaks migrations.
 \`\`\`
 
-Every section is optional and appears at most once, in any order. No other sections exist, and an
-unrecognized line is refused. **This text has no comment syntax** — nothing published may carry a
-trailing annotation of the kind used below to explain it, only what the grammar itself defines:
+**Write it the way an engineer who knows nothing about bosun would** — short, plain commands exactly as
+a person types them, nothing a reader of the code could work out alone. Every section is optional and
+appears at most once, in any order; an unrecognized line is refused, and there is no comment syntax.
 
-- \`Toolchain:\` names one node for the whole repository and one package manager, both exact versions —
-  read \`.nvmrc\`/\`.node-version\`/\`engines.node\` and \`packageManager\` or the lockfile.
-- \`Install:\` and \`Feedback loops:\` run in the order written. \`/dir: command\` is a complete entry for
-  that directory; \`/dir:\` alone opens a block whose \`- Label: command\` lines all take that directory,
-  and each then needs a label — a directory with only one command may skip the label and write
-  \`/dir: command\` directly. An \`Install:\` entry may add \`(rerun when: <path>[, <path>...])\` after its
-  command. Every label in a section — including a lone one — is unique across the *whole document*,
-  not just within its own directory: \`Lockfile be\`/\`Lockfile fe\` above, never \`Lockfile\` twice.
-- \`Apps:\` holds at most 10 named blocks (lowercase letters, digits, dashes); an app's port is
-  \`portBase\` plus its position here, started by bosun and never by a session. \`{port}\` and
-  \`{url.<app>}\` are templated — \`{url.*}\` is always \`http://127.0.0.1:<port>\`, so a server must listen
-  on \`127.0.0.1\` (Vite: \`--host 127.0.0.1\`). \`Ready:\` is polled until it answers below 500;
-  \`Ready timeout:\` (seconds) defaults to 90. \`Codegen:\` is optional.
-- \`Regenerate:\` follows the same directory-scope shape as \`Install:\`, but every entry is always
-  \`- Label (when <glob>[, <glob>...] changes): command\`, globs from the repository root (\`**\` crosses
-  directories).
-- \`Reset database:\` is optional, at most one, and runs before every verify drive on a machine that
-  allows migrations.
-- \`Test accounts:\` secrets are key names only, never values, and \`sign in at\` must name an app
-  (\`{url.fe}\`), never a bare \`{url}\`.
-- \`Notes:\` is free text to the end of the document — anything a session could not work out by reading
-  the code. Environment facts — which database, whether it may be migrated, any value of any secret —
-  never go anywhere in this text.`;
+- \`Toolchain:\` one exact node version and one exact package manager for the whole repository — read
+  \`.nvmrc\`/\`.node-version\`/\`engines.node\` and \`packageManager\` or the lockfile.
+- \`Install:\` and \`Feedback loops:\` are \`- <folder>: <command>\`, run in that folder, in the order
+  written. A repository with one package at its root writes \`Install: pnpm install\` on one line.
+- \`Apps:\` one block per server a person would open or call, named after its folder (lowercase letters,
+  digits, dashes), at most 10, **backends before the frontends that call them** — the order is the
+  start order. Each takes \`Start:\` and, when it has them, \`Migrate:\` and \`Test:\` — the plain script
+  a person runs, never a port, a host or an env variable.
+- \`Test accounts:\` \`- <role>: <KEY_NAMES> <one line on the account>\`. The credential keys are the
+  SCREAMING_SNAKE names of env variables, never values.
+- \`Notes:\` free text to the end of the document, **only** for what is critical and cannot be learned
+  by reading the code. Most configs need none. Environment facts — which database, whether it may be
+  migrated, any value of any secret — never go anywhere in this text.
+
+Bosun works out the rest from the tree, so none of it is written: each app's port (\`PORT\`, or
+\`--port\`/\`--host 127.0.0.1\` for a Vite or Next dev server), every \`.env.example\` value that points at
+another app's local port, readiness, lockfile re-installs, and drizzle migration renumbering. Only
+when an app cannot be wired that way — a server that ignores \`PORT\` and is neither Vite nor Next, a
+URL to another app that no \`.env.example\` carries — add the one line it needs (\`- Env KEY: {url.be}\`,
+\`- Start: ... --listen {port}\`, \`- Ready: {url.be}/health\`) and record an assumption saying why.`;
 
 function existingSection(opts: { existingConfig: string | null }): string {
 	if (opts.existingConfig === null) {
@@ -80,7 +60,9 @@ function existingSection(opts: { existingConfig: string | null }): string {
 	return `Bosun already holds a config for this repository. **Start from it, not from nothing.**
 Check every field against the code. Publish the config as it should be, and for every change you make
 record an assumption that says what you would change and why, citing the file. A field you leave
-alone because it is right needs no entry.
+alone because it is right needs no entry. Rewrite it into the short shape below, dropping every line
+bosun now works out by itself — cwd, ports, env wiring, readiness, dependencies, rerun and regenerate
+rules; a line dropped that way needs no assumption.
 
 \`\`\`
 ${opts.existingConfig}
@@ -150,32 +132,21 @@ project's own account of how it is built; they outrank your habits. Find:
 - **the toolchain**: the node version each asks for (\`.nvmrc\`, \`.node-version\`, \`engines.node\`) and the
   package manager (\`packageManager\`, else the lockfile). The config names one exact node and one exact
   package manager for the whole repository; when packages disagree, pick the newest and record it
-- **how each installs**, and which lockfile's change means installing again
-- **how each generates code** (clients, types from a schema) and **how each migrates**, if it has a database
-- **how each starts**, on which port, and how it learns the URL of another app it talks to — these
-  are the \`env\` entries that must be wired with \`{port}\` and \`{url.<app>}\`. Every \`{url.<app>}\` is
-  \`http://127.0.0.1:<port>\`, so each server must listen on 127.0.0.1: a server bound to \`localhost\`
-  can end up on IPv6 alone and never answer (Vite: \`--host 127.0.0.1\`). Point \`ready\` at something
-  that answers without rendering the app — a health route, or \`/@vite/client\` for a Vite dev server —
-  because the first page of a dev server compiles everything and can take minutes on a small machine
-- **how each proves itself**: the typecheck, lint and test commands, or the one command that runs them
+- **how each installs**
+- **how each migrates**, if it has a database
+- **how each starts** — the plain dev script — and whether it reads \`PORT\` (or is a Vite/Next dev
+  server) and learns other apps' URLs from keys its \`.env.example\` lists with a local URL. That is
+  how bosun wires it; an app it cannot wire needs the one extra line described below
+- **how each proves itself**: its test command, and the one command that runs typecheck, lint and tests
 - **every env key each reads**: \`.env.example\`, config and env schemas, and the code itself. Each key
   that needs a real value from the operator is a requirement of kind \`env\`, with \`path\` set to the
   folder whose \`.env\` it lives in (\`.\` for the root). Set \`optional\` on a key the project starts and
   works without — telemetry, a feature that switches itself off, a value with a default. Verify waits
   for every input that is not optional, so a key marked required that is not blocks the operator
-- **how a user signs in**, and which credentials a test account needs. Their key names go in
-  \`testAccounts[].secrets\` and each is a requirement of kind \`secret\`
+- **how a user signs in**, and which credentials a test account needs. Their key names go in the test
+  account line and each is a requirement of kind \`secret\`
 - **whether the project migrates a database**. If it does, report a requirement of kind \`policy\` with
   key \`applyMigrations\`: whether this machine may migrate is the operator's decision
-- **which files are generated rather than written** — migrations a generator numbers, lockfiles, a
-  generated client that is committed. Each becomes a \`regenerate\` rule with the paths it owns and the
-  command that produces them. Two plans built side by side both generate migration \`0013\`; the rule is
-  how bosun renumbers them when they land. A repository whose migrations are hand-written and numbered
-  by a person gets no migrations rule — record that as an assumption
-- **how the development database is reset** to an empty, migrated state — a reset, a drop-and-create, a
-  truncate script. It becomes \`verify.resetDatabase\`; leave it out when the project has none rather than
-  inventing one
 
 # Try what you can
 
@@ -218,13 +189,20 @@ export const DISCOVERY_NUDGE = [
 	'Report any requirement and assumption you have not reported yet.'
 ].join(' ');
 
-export function signInPrompt(opts: { accounts: { role: string; url: string; secrets: string[] }[] }): string {
+export function signInPrompt(opts: { accounts: { role: string; description: string; secrets: string[] }[]; apps: { app: string; url: string }[] }): string {
 	const accounts = opts.accounts
-		.map((account) => `- **${account.role}** — open ${account.url}, credentials in: ${account.secrets.map((name) => `\`${name}\``).join(', ')}`)
+		.map((account) => `- **${account.role}** — ${account.description} (credentials in: ${account.secrets.map((name) => `\`${name}\``).join(', ')})`)
 		.join('\n');
+	const apps = opts.apps.map((entry) => `- \`${entry.app}\` at ${entry.url}`).join('\n');
 
 	return `You are the last step of verifying a project's bosun config. Bosun has already installed the project
 and started every app; they are running now. Your only job is to prove each test account can sign in.
+
+The apps:
+
+${apps}
+
+The accounts:
 
 ${accounts}
 
@@ -233,8 +211,8 @@ For each account, in turn:
 1. Read the credentials from your environment with Bash — \`printenv NAME\` for each variable named
    above. They are real secrets: **never repeat a value in your replies, in a tool's detail, or anywhere
    else.** Use them only to fill in the sign-in form.
-2. Open the URL with the browser tools (find them with ToolSearch if they are not loaded), fill in the
-   sign-in form and submit it.
+2. Open the app a person would sign in to with the browser tools (find them with ToolSearch if they are
+   not loaded), find its sign-in screen, fill in the form and submit it.
 3. Confirm you reached a page past the sign-in screen — not the form again, not an error.
 4. Call \`report_sign_in\` with the role, whether it worked, and one line on what you saw.
 

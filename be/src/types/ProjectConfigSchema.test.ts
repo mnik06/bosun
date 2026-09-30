@@ -74,9 +74,58 @@ describe('parseProjectConfig', () => {
 			{ cwd: 'fe', run: 'pnpm preflight' }
 		]);
 		expect(parsed.config.testAccounts).toEqual([
-			{ role: 'leader', signIn: '{url.fe}/login', secrets: ['TEST_LEADER_EMAIL', 'TEST_LEADER_PASSWORD'] }
+			{ role: 'leader', description: 'sign in at {url.fe}/login using TEST_LEADER_EMAIL, TEST_LEADER_PASSWORD', secrets: ['TEST_LEADER_EMAIL', 'TEST_LEADER_PASSWORD'] }
 		]);
 		expect(parsed.config.notes).toBe('Anything a session could not work out by reading the code.\n');
+	});
+
+	// The shape onboarding now writes: no cwd, no ports, no wiring — the agent
+	// infers those from the tree.
+	it('accepts the short form a person would write', () => {
+		const source = `Toolchain:
+- Node 24.15.0
+- pnpm 11.8.0
+
+Install:
+- be: pnpm install
+- Lint all: pnpm lint
+
+Apps:
+be:
+- Migrate: pnpm db:migration:run
+- Start: pnpm local
+- Test: pnpm test
+
+Feedback loops:
+- be: pnpm preflight
+
+Test accounts:
+- leader: TEST_LEADER_EMAIL / TEST_LEADER_PASSWORD. No signup, created by hand.
+`;
+		const parsed = parseProjectConfig(source);
+
+		expect(parsed.ok).toBe(true);
+		if (!parsed.ok) {
+			return;
+		}
+
+		expect(parsed.config.toolchain).toEqual({ node: '24.15.0', packageManager: 'pnpm@11.8.0' });
+		// Whether `be` is a folder is only known on the machine, which infers it.
+		expect(parsed.config.setup).toEqual([
+			{ name: 'be', run: 'pnpm install' },
+			{ name: 'Lint all', run: 'pnpm lint' }
+		]);
+		expect(parsed.config.apps.be).toEqual({ migrate: 'pnpm db:migration:run', start: 'pnpm local', test: 'pnpm test' });
+		expect(parsed.config.checks).toEqual([{ name: 'be', run: 'pnpm preflight' }]);
+		expect(parsed.config.testAccounts).toEqual([
+			{ role: 'leader', description: 'TEST_LEADER_EMAIL / TEST_LEADER_PASSWORD. No signup, created by hand.', secrets: ['TEST_LEADER_EMAIL', 'TEST_LEADER_PASSWORD'] }
+		]);
+	});
+
+	it('refuses a test account that names no credential key', () => {
+		const source = 'Test accounts:\n- leader: the usual admin\n';
+
+		expect(issues(source)).toEqual([{ line: 2, message: 'name the env keys that hold its credentials, such as TEST_USER_EMAIL / TEST_USER_PASSWORD' }]);
 	});
 
 	it('names a dependsOn cycle', () => {
@@ -145,7 +194,7 @@ describe('parseProjectConfig', () => {
 	it('requires a label on every bulleted entry inside a directory block', () => {
 		const source = 'Feedback loops:\n/be:\n- pnpm preflight\n';
 
-		expect(issues(source)).toEqual([{ line: 3, message: 'expected `- Label: command`' }]);
+		expect(issues(source)).toEqual([{ line: 3, message: 'expected `- folder: command`' }]);
 	});
 
 	it('parses Reset database: and Regenerate:', () => {
@@ -199,7 +248,7 @@ Notes:`
 		const source = 'Toolchain:\nsomething else\n';
 
 		expect(issues(source)).toEqual([
-			{ line: 2, message: 'expected `- Node: <version>` or `- Package manager: <name>@<version>`' },
+			{ line: 2, message: 'expected `- Node <version>` or `- <npm|pnpm|yarn> <version>`' },
 			{ line: 1, message: 'Invalid input: expected string, received undefined' }
 		]);
 	});

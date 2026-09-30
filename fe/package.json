@@ -21,7 +21,7 @@
     "lint:fix": "eslint . --fix",
     "preflight": "pnpm typecheck && pnpm lint:fix && pnpm test && pnpm dup",
     "test": "vitest run",
-    "prepare": "husky",
+    "prepare": "cd .. && husky fe/.husky",
     "dup": "jscpd app",
     "dup:report": "jscpd app --reporters console-full"
   },

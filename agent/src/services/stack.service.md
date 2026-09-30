@@ -18,10 +18,19 @@ onboarding's verify, a second machine — and the session only decides *when*. T
   `start`, `ready` and every `env` value, so a frontend is handed its own build's backend. There is no
   allocator and no second place to look, which is why a build's ten ports cap a config at ten apps and
   why reordering `apps` renumbers them.
+- **The config is written without any of that; the wiring is inferred.** `config-inference.ts` fills
+  what a person leaves out before the stack ever sees the config: `PORT={port}` on every app,
+  `--port {port} --strictPort --host 127.0.0.1` on a Vite (or Next) dev script, and each `.env.example`
+  value pointing at a local port exactly one app listens on by default (its `.env.example` `PORT`,
+  `vite.config` `port`, a `--port` in its script, the framework default) rewired to `{url.<app>}`.
+  Readiness defaults to `{url}` (`{url}/@vite/client` for Vite); `dependsOn` to the wired apps listed
+  above, since two apps can point at each other. A port two apps could own is left unwired rather than
+  guessed. Anything the config does say wins. The failure mode is silent mis-wiring when a project
+  reads its URLs from somewhere other than `.env.example` — the fix is one `- Env KEY: {url.<app>}` line.
 - **Dependencies start first, and a requested app brings its dependencies.** Each app must answer its
   readiness check before the next starts: `ready` polled once a second until any status below 500 or
-  `readyTimeoutSeconds` (90 by default). An app without `ready` counts as up if it is still alive two
-  seconds after starting.
+  `readyTimeoutSeconds` (90 by default). Only a config handed to the stack uninferred can reach it
+  without `ready`; such an app counts as up if it is still alive two seconds after starting.
 - **A failed `up` leaves nothing running.** The first app that exits early, times out or has no
   directory stops everything this `up` started and returns the app, the reason and the tail of its log.
   A stack half up is a stack a session would drive and misread.

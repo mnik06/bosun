@@ -70,9 +70,8 @@ export function getEnvService(deps: { baseEnv: NodeJS.ProcessEnv; homeDir?: stri
 			const line = `${opts.variable}=${opts.value}`;
 			const existing = read();
 			const pattern = new RegExp(`^\\s*(?:export\\s+)?${opts.variable}\\s*=.*$`, 'm');
-			const next = pattern.test(existing)
-				? existing.replace(pattern, line)
-				: `${existing}${existing === '' || existing.endsWith('\n') ? '' : '\n'}${line}\n`;
+			const separator = existing === '' || existing.endsWith('\n') ? '' : '\n';
+			const next = pattern.test(existing) ? existing.replace(pattern, line) : `${existing}${separator}${line}\n`;
 
 			fs.mkdirSync(path.dirname(envPath), { recursive: true, mode: 0o700 });
 			fs.writeFileSync(envPath, next, { mode: 0o600 });

@@ -1,29 +1,25 @@
-import os from 'os';
 import path from 'path';
 import WebSocket, { type RawData } from 'ws';
-import { backoffDelay, nextAttempt } from './backoff';
-import { createFrameSink, type FrameSink } from './frame-sink';
-import { UPGRADE_EXIT_CODE } from '../services/upgrade.service';
-
-// A deferred upgrade lands within a sweep of the machine going idle.
-const UPGRADE_SWEEP_MS = 15_000;
-import { parseServerFrame, routeServerFrame, type AgentState } from './router';
-import { type AgentConfig } from '../config/config';
 import { createAskSessions } from '../ask/session';
 import { createBugfixSessions, type BugfixSessions } from '../bugfix/session';
+import { type AgentConfig } from '../config/config';
 import { createExecutionSessions, type ExecutionSessions } from '../execution/session';
 import { createIntegrationSessions, type IntegrationSessions } from '../integration/session';
 import { createOnboardingSessions, type OnboardingSessions } from '../onboarding/session';
-import { watchBosunFiles } from './file-watch';
 import { createPlanningSessions, type PlanningSessions } from '../planning/session';
 import { planningPrompt, revisionPrompt } from '../prompts/planning';
 import { summaryPrompt } from '../prompts/summary';
-import { createQuickFixSessions, type QuickFixSessions } from '../quick-fix/session';
-import { createSummarySessions } from '../summary/session';
 import { type AgentMsg } from '../protocol';
+import { createQuickFixSessions, type QuickFixSessions } from '../quick-fix/session';
 import { type Services } from '../services/index';
+import { createSummarySessions } from '../summary/session';
 import { sleep } from '../utils';
-import { AGENT_VERSION } from '../version';
+import { createAnnouncer } from './announce';
+import { backoffDelay, nextAttempt } from './backoff';
+import { watchBosunFiles } from './file-watch';
+import { createFrameSink, type FrameSink } from './frame-sink';
+import { parseServerFrame, routeServerFrame, type AgentState, type RouterDeps } from './router';
+import { createUpgradeControl } from './upgrade-control';
 
 // A refused upgrade carrying a well-formed key means the credential was
 // destroyed on purpose. Retrying cannot fix it, and retrying forever is how a
@@ -58,104 +54,36 @@ interface ConnectionDeps {
 	announcer: { current: ((reason: 'change') => Promise<void>) | null };
 }
 
-// Sealed browser input is only possible once there is a key to seal to. A key file
-// that cannot be read leaves the key out, which the backend reads as a machine that
-// cannot take browser input — the honest answer — rather than failing the announce.
-function publicKeyOf(services: Services): string | undefined {
-	try {
-		return services.inputsKey.ensure().publicKey;
-	} catch (error) {
-		console.error(`inputs key: ${error instanceof Error ? error.message : 'unreadable'}`);
+// Dropped rather than queued, for the per-connection senders only — ask
+// sessions and the upgrade handshake. Both are answers to something this
+// socket asked for, so replaying one on the next connection would be
+// answering a question nobody is waiting on. Everything that outlives the
+// connection sends through the sink instead.
+function socketSender(socket: WebSocket): (message: AgentMsg) => void {
+	return (message) => {
+		if (socket.readyState !== WebSocket.OPEN) {
+			console.error(`dropped ${message.type}: the connection is not open`);
 
-		return undefined;
-	}
-}
-
-// A config this agent no longer owns is logged and left out of `hello`, not thrown:
-// the announce is what keeps the machine visible, and its preflight carries the
-// reason to the browser.
-function announcedRepoPath(services: Services): string | undefined {
-	try {
-		return services.workspace.repoPath() ?? undefined;
-	} catch (error) {
-		console.error(`config: ${error instanceof Error ? error.message : 'unreadable'}`);
-
-		return undefined;
-	}
-}
-
-// What `refresh` runs is deliberately the same thing `open` runs. Everything the
-// agent reports is read from disk at this moment — the env file, the MCP config,
-// the skills directories — so a token pasted in after the agent started, or a
-// server added since, takes effect without a restart.
-function createAnnouncer(deps: ConnectionDeps & { socket: WebSocket }) {
-	return async function announce(reason: 'connect' | 'refresh' | 'change'): Promise<void> {
-		if (deps.socket.readyState !== WebSocket.OPEN) {
 			return;
 		}
 
-		// `markOnline` leaves a paused row paused, so re-announcing cannot silently
-		// un-pause a machine.
-		deps.socket.send(
-			JSON.stringify({
-				type: 'hello',
-				agentVersion: AGENT_VERSION,
-				hostname: os.hostname(),
-				repoPath: announcedRepoPath(deps.services),
-				reason,
-				// Every run whose outcome this agent is still going to report: the ones
-				// it is building, and the ones that settled while the connection was
-				// down and are parked in the sink. A reconnect is otherwise
-				// indistinguishable from an agent that came back with nothing, and the
-				// backend settles every run it cannot account for — which would reset
-				// the very sessions this connection was opened to keep reporting on.
-				runIds: [...new Set([...deps.executions.held(), ...deps.sink.pendingRunIds()])],
-				// The grills this agent is still holding, for the same reason: a
-				// planning session outlives the socket it was started on, and a backend
-				// that failed every `planning` plan on a reconnect would kill the grill
-				// the person is in the middle of answering.
-				planIds: [...new Set([...deps.sessions.held(), ...deps.sink.pendingPlanIds()])],
-				onboardingRunIds: [
-					...new Set([...deps.onboarding.held(), ...deps.sink.pendingOnboardingRunIds()])
-				],
-				integrationIds: [
-					...new Set([...deps.integrations.held(), ...deps.sink.pendingIntegrationIds()])
-				],
-				bugfixSessionIds: [
-					...new Set([...deps.bugfix.held(), ...deps.sink.pendingBugfixSessionIds()])
-				],
-				quickFixIds: [
-					...new Set([...deps.quickFixes.held(), ...deps.sink.pendingQuickFixIds()])
-				],
-				uptimeMs: Math.round(process.uptime() * 1000),
-				// What the scheduler budgets this machine's bullets against, and how the
-				// agent process before this one ended. Together they are how a bullet
-				// stranded by the kernel killing the agent reads as out of memory rather
-				// than as a restart nobody can explain.
-				memory: deps.services.memory.report(),
-				previousExit: deps.services.memory.previousExit() ?? undefined,
-				// Key names per path, so the browser can show what this machine holds
-				// without a value ever leaving it. Read from disk like everything above:
-				// a store restored or emptied by hand is otherwise invisible.
-				envSets: deps.services.projectEnv.summary(),
-				sessionSecrets: deps.services.projectEnv.secretNames(),
-				publicKey: publicKeyOf(deps.services),
-				repositoryId: deps.services.workspace.repositoryId()
-			})
-		);
+		socket.send(JSON.stringify(message));
+	};
+}
 
-		const checks = await deps.services.preflight.collect();
+function frameHandler(routerDeps: RouterDeps): (raw: RawData) => void {
+	return (raw) => {
+		const msg = parseServerFrame(raw.toString());
 
-		// Also logged, not only sent: preflight results otherwise exist solely in the
-		// browser, and the person debugging a red check is usually on the box reading
-		// journalctl.
-		for (const check of checks.filter((entry) => !entry.ok)) {
-			console.error(`preflight ${check.name}: ${check.detail ?? 'failed'}`);
+		if (!msg) {
+			return;
 		}
 
-		if (deps.socket.readyState === WebSocket.OPEN) {
-			deps.socket.send(JSON.stringify({ type: 'preflight', checks }));
-		}
+		void routeServerFrame(routerDeps, msg).catch((error: unknown) => {
+			// Nothing awaits a frame, so a handler that throws is otherwise an
+			// unhandled rejection — and that ends the agent and every session on it.
+			console.error(`${msg.type}: ${error instanceof Error ? error.message : String(error)}`);
+		});
 	};
 }
 
@@ -164,22 +92,7 @@ async function connectOnce(deps: ConnectionDeps): Promise<void> {
 		const socket = new WebSocket(socketUrl(deps.config.serverUrl), {
 			headers: { Authorization: `Bearer ${deps.config.machineKey}` }
 		});
-		// Dropped rather than queued, for the per-connection senders only — ask
-		// sessions and the upgrade handshake. Both are answers to something this
-		// socket asked for, so replaying one on the next connection would be
-		// answering a question nobody is waiting on. Everything that outlives the
-		// connection sends through the sink instead.
-		const send = (message: AgentMsg): void => {
-			if (socket.readyState !== WebSocket.OPEN) {
-				console.error(`dropped ${message.type}: the connection is not open`);
-
-				return;
-			}
-
-			socket.send(JSON.stringify(message));
-		};
-
-		const { sessions } = deps;
+		const send = socketSender(socket);
 		const summaries = createSummarySessions({
 			config: deps.config,
 			services: deps.services,
@@ -187,115 +100,7 @@ async function connectOnce(deps: ConnectionDeps): Promise<void> {
 		});
 		const asks = createAskSessions({ services: deps.services, send });
 		const announce = createAnnouncer({ ...deps, socket });
-
-		// Exits rather than restarting itself: `Restart=on-failure` is what brings
-		// the unit back, now running the binary that was just swapped in.
-		// Held when the machine is busy rather than dropped. Without it a deferral is
-		// a dead end: the operator presses Refresh, nothing happens, and they have to
-		// guess when the machine is free and press again.
-		let pendingUpgrade: { version: string; downloadBaseUrl: string; force: boolean } | null =
-			null;
-
-		const sessionsRunning = (): number =>
-			sessions.running() +
-			deps.executions.running() +
-			deps.integrations.running() +
-			deps.onboarding.running() +
-			deps.bugfix.running() +
-			deps.quickFixes.running();
-
-		const install = async (target: {
-			version: string;
-			downloadBaseUrl: string;
-			force: boolean;
-		}): Promise<void> => {
-			// The warm sessions are ended before the swap, not left to be orphaned:
-			// they are detached processes, so exiting without this leaves a `claude`
-			// per idle grill running against a worktree with nobody listening.
-			sessions.endIdle();
-			deps.bugfix.endIdle();
-
-			try {
-				await deps.services.upgrade.apply(target);
-
-				// After the install, never before: a version cleared from the block
-				// list by an attempt that then failed to download would be offered
-				// again on the next refresh with nothing having changed.
-				if (target.force) {
-					deps.services.upgrade.unblock(target.version);
-				}
-
-				console.log(`upgrade: installed ${target.version}, restarting`);
-				process.exit(UPGRADE_EXIT_CODE);
-			} catch (error) {
-				const message = error instanceof Error ? error.message : String(error);
-
-				console.error(`upgrade failed: ${message}`);
-				send({
-					type: 'upgrade.declined',
-					version: target.version,
-					reason: `install failed: ${message}`,
-					retryable: true,
-					queued: false
-				});
-			}
-		};
-
-		// Exits rather than restarting itself: `Restart=on-failure` is what brings
-		// the unit back, now running the binary that was just swapped in.
-		const onUpgrade = async (target: {
-			version: string;
-			downloadBaseUrl: string;
-			force: boolean;
-		}) => {
-			const decision = deps.services.upgrade.decide({
-				current: AGENT_VERSION,
-				target: target.version,
-				sessionsRunning: sessionsRunning(),
-				force: target.force
-			});
-
-			console.log(`upgrade: ${decision.reason}`);
-
-			if (decision.proceed) {
-				await install(target);
-
-				return;
-			}
-
-			// A newer offer replaces an older one: whatever is waiting should be the
-			// version the backend last said was current.
-			pendingUpgrade = decision.deferred ? target : null;
-
-			// Said out loud, not just logged. The operator pressed a button and the
-			// only place the answer used to appear was a file on this box.
-			send({
-				type: 'upgrade.declined',
-				version: target.version,
-				reason: decision.reason,
-				retryable: decision.retryable,
-				queued: decision.deferred
-			});
-		};
-
-		// Polled rather than pushed from the places a session ends: several paths
-		// finish one — a result, an error, a cancel, a reap — and a callback wired
-		// into each is a callback the next one forgets. The cost of being up to a
-		// sweep late is nothing next to an upgrade that never lands.
-		const upgradeSweep = setInterval(() => {
-			const target = pendingUpgrade;
-
-			if (target === null || sessionsRunning() > 0) {
-				return;
-			}
-
-			pendingUpgrade = null;
-			console.log(`upgrade: the machine is idle — installing ${target.version} now`);
-			void install(target);
-		}, UPGRADE_SWEEP_MS);
-
-		upgradeSweep.unref();
-
+		const upgrades = createUpgradeControl({ ...deps, send });
 		let settled = false;
 
 		const settle = (error?: Error) => {
@@ -304,7 +109,23 @@ async function connectOnce(deps: ConnectionDeps): Promise<void> {
 			}
 
 			settled = true;
-			error ? reject(error) : resolve();
+
+			if (error) {
+				reject(error);
+			} else {
+				resolve();
+			}
+		};
+
+		// `executions` and `sessions` are deliberately absent: neither a bullet nor
+		// a grill is cancelled by the socket it happened to be dispatched over.
+		// Detaching parks their frames until the next connection instead of
+		// throwing the session away.
+		const detach = () => {
+			deps.announcer.current = null;
+			deps.sink.detach();
+			summaries.cancelAll();
+			asks.cancelAll();
 		};
 
 		socket.on('open', () => {
@@ -322,38 +143,26 @@ async function connectOnce(deps: ConnectionDeps): Promise<void> {
 			});
 		});
 
-		socket.on('message', (raw: RawData) => {
-			const msg = parseServerFrame(raw.toString());
-
-			if (!msg) {
-				return;
-			}
-
-			void routeServerFrame(
-				{
-					socket,
-					services: deps.services,
-					configPath: deps.configPath,
-					state: deps.state,
-					sessions,
-					executions: deps.executions,
-					integrations: deps.integrations,
-					onboarding: deps.onboarding,
-					quickFixes: deps.quickFixes,
-					summaries,
-					asks,
-					bugfix: deps.bugfix,
-					sink: deps.sink.send,
-					announce,
-					onUpgrade
-				},
-				msg
-			).catch((error: unknown) => {
-				// Nothing awaits a frame, so a handler that throws is otherwise an
-				// unhandled rejection — and that ends the agent and every session on it.
-				console.error(`${msg.type}: ${error instanceof Error ? error.message : String(error)}`);
-			});
-		});
+		socket.on(
+			'message',
+			frameHandler({
+				socket,
+				services: deps.services,
+				configPath: deps.configPath,
+				state: deps.state,
+				sessions: deps.sessions,
+				executions: deps.executions,
+				integrations: deps.integrations,
+				onboarding: deps.onboarding,
+				quickFixes: deps.quickFixes,
+				summaries,
+				asks,
+				bugfix: deps.bugfix,
+				sink: deps.sink.send,
+				announce,
+				onUpgrade: upgrades.onUpgrade
+			})
+		);
 
 		socket.on('unexpected-response', (_req, res) => {
 			settle(
@@ -363,24 +172,14 @@ async function connectOnce(deps: ConnectionDeps): Promise<void> {
 			);
 		});
 
-		// `executions` and `sessions` are deliberately absent from both: neither a
-		// bullet nor a grill is cancelled by the socket it happened to be dispatched
-		// over. Detaching parks their frames until the next connection instead of
-		// throwing the session away.
 		socket.on('error', (error) => {
-			clearInterval(upgradeSweep);
-			deps.announcer.current = null;
-			deps.sink.detach();
-			summaries.cancelAll();
-			asks.cancelAll();
+			upgrades.stop();
+			detach();
 			settle(error);
 		});
 
 		socket.on('close', () => {
-			deps.announcer.current = null;
-			deps.sink.detach();
-			summaries.cancelAll();
-			asks.cancelAll();
+			detach();
 			settle();
 		});
 	});

@@ -1,0 +1,5 @@
+for pkg in be fe agent; do
+	if [ -d "$pkg/node_modules" ]; then
+		(cd "$pkg" && pnpm typecheck) || exit 1
+	fi
+done

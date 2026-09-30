@@ -280,6 +280,62 @@ function writeConfigFile(opts: { sessionId: string; config: unknown }): string {
 	return configPath;
 }
 
+async function serveRequest(opts: {
+	req: http.IncomingMessage;
+	res: http.ServerResponse;
+	token: string;
+	definitions: unknown[];
+	dispatch: (name: string, args: unknown) => Promise<unknown>;
+}): Promise<void> {
+	const { req, res } = opts;
+
+	if (req.method !== 'POST' || req.headers.authorization !== `Bearer ${opts.token}`) {
+		res.writeHead(req.method === 'POST' ? 401 : 405).end();
+
+		return;
+	}
+
+	let message: { jsonrpc?: string; id?: unknown; method?: string; params?: never };
+
+	try {
+		message = JSON.parse(await readBody(req)) as typeof message;
+	} catch {
+		res.writeHead(400).end();
+
+		return;
+	}
+
+	// A notification carries no id and expects no response body.
+	if (message.id === undefined) {
+		res.writeHead(202).end();
+
+		return;
+	}
+
+	let payload: unknown;
+
+	try {
+		payload = {
+			jsonrpc: JSON_RPC,
+			id: message.id,
+			result: await handleRpc({ message, definitions: opts.definitions, dispatch: opts.dispatch })
+		};
+	} catch (error) {
+		payload = {
+			jsonrpc: JSON_RPC,
+			id: message.id,
+			error: { code: -32601, message: error instanceof Error ? error.message : 'error' }
+		};
+	}
+
+	const json = JSON.stringify(payload);
+
+	res.writeHead(200, {
+		'content-type': 'application/json',
+		'content-length': Buffer.byteLength(json)
+	}).end(json);
+}
+
 // Built by the caller from `pending`, which is why the map is handed in rather
 // than owned here: `bosun_ask` is a tool only some sessions are given.
 export type SessionDispatchFactory = (
@@ -299,53 +355,7 @@ export async function startSessionMcpServer(opts: {
 	const token = crypto.randomBytes(24).toString('base64url');
 
 	const server = http.createServer((req, res) => {
-		void (async () => {
-			if (req.method !== 'POST' || req.headers.authorization !== `Bearer ${token}`) {
-				res.writeHead(req.method === 'POST' ? 401 : 405).end();
-
-				return;
-			}
-
-			let message: { jsonrpc?: string; id?: unknown; method?: string; params?: never };
-
-			try {
-				message = JSON.parse(await readBody(req)) as typeof message;
-			} catch {
-				res.writeHead(400).end();
-
-				return;
-			}
-
-			// A notification carries no id and expects no response body.
-			if (message.id === undefined) {
-				res.writeHead(202).end();
-
-				return;
-			}
-
-			let payload: unknown;
-
-			try {
-				payload = {
-					jsonrpc: JSON_RPC,
-					id: message.id,
-					result: await handleRpc({ message, definitions: opts.definitions, dispatch })
-				};
-			} catch (error) {
-				payload = {
-					jsonrpc: JSON_RPC,
-					id: message.id,
-					error: { code: -32601, message: error instanceof Error ? error.message : 'error' }
-				};
-			}
-
-			const json = JSON.stringify(payload);
-
-			res.writeHead(200, {
-				'content-type': 'application/json',
-				'content-length': Buffer.byteLength(json)
-			}).end(json);
-		})();
+		void serveRequest({ req, res, token, definitions: opts.definitions, dispatch });
 	});
 
 	await new Promise<void>((resolve, reject) => {

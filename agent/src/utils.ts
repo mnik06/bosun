@@ -7,6 +7,10 @@ export async function sleep(ms: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+export function plural(count: number, noun: string): string {
+	return `${count} ${noun}${count === 1 ? '' : 's'}`;
+}
+
 export function clipTail(text: string, max: number): string {
 	const trimmed = text.trim();
 
@@ -32,7 +36,7 @@ export function killProcessGroup(child: ChildProcess, signal: NodeJS.Signals): v
 export function withLocalTools(): void {
 	const home = os.homedir();
 	const toolchains = path.join(home, '.bosun', 'toolchains');
-	let nodes: string[] = [];
+	let nodes: string[];
 
 	try {
 		nodes = fs

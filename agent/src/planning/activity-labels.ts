@@ -1,3 +1,5 @@
+import { plural } from '../utils';
+
 // Tools are counted by the label they render, not by their own name. Grep and
 // Glob both read as "searched the codebase", so counting them separately makes
 // the number visibly go backwards as the two interleave.
@@ -21,10 +23,6 @@ const TOOL_LABELS: Record<string, string> = {
 	mcp__bosun__mark_ac_implemented: 'Ticking a criterion off',
 	mcp__bosun__mark_ac_verified: 'Ticking a criterion off'
 };
-
-function plural(count: number, noun: string): string {
-	return `${count} ${noun}${count === 1 ? '' : 's'}`;
-}
 
 export function activityBucket(opts: { tool: string; subagent: boolean }): string {
 	const bucket = TOOL_BUCKETS[opts.tool] ?? opts.tool;
@@ -66,7 +64,7 @@ export function describeToolActivity(opts: {
 // so a new builtin does not make the session look frozen.
 export function createActivityTracker(): {
 	label(opts: { tool: string; subagent: boolean }): string;
-} {
+	} {
 	const counts = new Map<string, number>();
 
 	return {

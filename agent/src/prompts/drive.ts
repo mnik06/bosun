@@ -12,20 +12,27 @@ function stackStart(context: DriveContext): string {
 	const creds =
 		accounts.length === 0
 			? 'The config names no test account. If the app needs a login, that is a blocker to record against every criterion behind it, not a criterion to mark passed.'
-			: `Sign in as ${accounts.map((account) => `**${account.role}** at ${renderTemplate(account.signIn, { app: null, ports })} with the values of ${account.secrets.map((key) => `\`$${key}\``).join(' and ')}`).join('; ')}. Read them with \`printenv\` and never quote them.`;
+			: `Sign in as ${accounts.map((account) => `**${account.role}** (${renderTemplate(account.description, { app: null, ports })}) with the values of ${account.secrets.map((key) => `\`$${key}\``).join(' and ')}`).join('; ')}, finding the sign-in screen from the app itself. Read them with \`printenv\` and never quote them.`;
 
 	return `Start the stack with the \`stack_up\` tool. It starts every app from \`.bosun/project.yaml\` in order, each on its own port in ${context.portBase}–${context.portBase + 9}, and answers with their URLs once each one is ready — or with the app that failed and the tail of its log. Never start an app any other way. ${creds}`;
 }
 
+function profileStart(context: DriveContext): string {
+	const run =
+		context.profile.startCommand === null
+			? `Nobody configured how this project starts, so work out how it runs from its scripts and start it **on a port in ${context.portBase}–${context.portBase + 9}**.`
+			: `Start it with \`${context.profile.startCommand}\`, on a port in ${context.portBase}–${context.portBase + 9}.`;
+	const creds =
+		context.profile.testCredentialsPath === null
+			? 'No credentials path was configured. If the app needs a login and you cannot find one, that is a blocker to record, not a criterion to mark passed.'
+			: `Sign in with the credentials at \`${context.profile.testCredentialsPath}\`.`;
+
+	return `${run} ${creds}`;
+}
+
 function reachTheApp(context: DriveContext): string {
 	const start =
-		context.config !== null && Object.keys(context.config.apps).length > 0
-			? stackStart(context)
-			: `${context.profile.startCommand === null
-				? `Nobody configured how this project starts, so work out how it runs from its scripts and start it **on a port in ${context.portBase}–${context.portBase + 9}**.`
-				: `Start it with \`${context.profile.startCommand}\`, on a port in ${context.portBase}–${context.portBase + 9}.`} ${context.profile.testCredentialsPath === null
-				? 'No credentials path was configured. If the app needs a login and you cannot find one, that is a blocker to record, not a criterion to mark passed.'
-				: `Sign in with the credentials at \`${context.profile.testCredentialsPath}\`.`}`;
+		context.config !== null && Object.keys(context.config.apps).length > 0 ? stackStart(context) : profileStart(context);
 
 	return `${start}
 

@@ -94,6 +94,67 @@ function sessionArgs(opts: {
 	];
 }
 
+function userTurn(text: string, images: SessionImage[]): string {
+	const content = [
+		{ type: 'text', text },
+		...images.map((image) => ({
+			type: 'image',
+			source: { type: 'base64', media_type: image.mediaType, data: image.data }
+		}))
+	];
+
+	return `${JSON.stringify({ type: 'user', message: { role: 'user', content } })}\n`;
+}
+
+function watchOomKills(opts: {
+	pid: number | undefined;
+	scope: SessionScope | null;
+	onOomKill?: (count: number) => void;
+}): { read(): void; count(): number; stop(): void } {
+	let oomKills = 0;
+	let eventsPath: string | null = null;
+
+	const read = (): void => {
+		if (!opts.scope || opts.pid === undefined) {
+			return;
+		}
+
+		try {
+			eventsPath ??= memoryEventsPath({
+				cgroup: fs.readFileSync(`/proc/${opts.pid}/cgroup`, 'utf8'),
+				unit: opts.scope.unit
+			});
+
+			if (eventsPath === null) {
+				return;
+			}
+
+			const count = parseOomKills(fs.readFileSync(eventsPath, 'utf8'));
+
+			if (count > oomKills) {
+				oomKills = count;
+				opts.onOomKill?.(count);
+			}
+		} catch {
+			// The scope went with its last process, or the pid with the process. What
+			// was counted before then stands.
+		}
+	};
+	const poll = opts.scope ? setInterval(read, OOM_POLL_MS) : null;
+
+	poll?.unref();
+
+	return {
+		read,
+		count: () => oomKills,
+		stop: () => {
+			if (poll) {
+				clearInterval(poll);
+			}
+		}
+	};
+}
+
 export function spawnClaudeSession(opts: {
 	cwd: string;
 	prompt: string;
@@ -147,38 +208,7 @@ export function spawnClaudeSession(opts: {
 		stdio: ['pipe', 'pipe', 'pipe']
 	});
 	let killTimer: NodeJS.Timeout | null = null;
-	let oomKills = 0;
-	let eventsPath: string | null = null;
-
-	const readOomKills = (): void => {
-		if (!opts.scope || child.pid === undefined) {
-			return;
-		}
-
-		try {
-			eventsPath ??= memoryEventsPath({
-				cgroup: fs.readFileSync(`/proc/${child.pid}/cgroup`, 'utf8'),
-				unit: opts.scope.unit
-			});
-
-			if (eventsPath === null) {
-				return;
-			}
-
-			const count = parseOomKills(fs.readFileSync(eventsPath, 'utf8'));
-
-			if (count > oomKills) {
-				oomKills = count;
-				opts.onOomKill?.(count);
-			}
-		} catch {
-			// The scope went with its last process, or the pid with the process. What
-			// was counted before then stands.
-		}
-	};
-	const oomPoll = opts.scope ? setInterval(readOomKills, OOM_POLL_MS) : null;
-
-	oomPoll?.unref();
+	const oom = watchOomKills({ pid: child.pid, scope: opts.scope ?? null, onOomKill: opts.onOomKill });
 
 	child.stdout.setEncoding('utf8');
 	child.stderr.setEncoding('utf8');
@@ -186,12 +216,9 @@ export function spawnClaudeSession(opts: {
 	child.stderr.on('data', opts.onStderr);
 
 	child.on('error', (error) => {
-		if (oomPoll) {
-			clearInterval(oomPoll);
-		}
-
+		oom.stop();
 		opts.onStderr(error.message);
-		opts.onExit(null, { signal: null, oomKills });
+		opts.onExit(null, { signal: null, oomKills: oom.count() });
 	});
 
 	child.on('exit', (code, signal) => {
@@ -199,27 +226,16 @@ export function spawnClaudeSession(opts: {
 			clearTimeout(killTimer);
 		}
 
-		if (oomPoll) {
-			clearInterval(oomPoll);
-		}
-
+		oom.stop();
 		// Once more before reporting: the kill that ended `claude` lands between
 		// polls, and the scope outlives it for as long as anything it started does.
-		readOomKills();
-		opts.onExit(code, { signal, oomKills });
+		oom.read();
+		opts.onExit(code, { signal, oomKills: oom.count() });
 	});
 
 	const write = (text: string, images: SessionImage[] = []): void => {
 		if (child.stdin.writable) {
-			const content = [
-				{ type: 'text', text },
-				...images.map((image) => ({
-					type: 'image',
-					source: { type: 'base64', media_type: image.mediaType, data: image.data }
-				}))
-			];
-
-			child.stdin.write(`${JSON.stringify({ type: 'user', message: { role: 'user', content } })}\n`);
+			child.stdin.write(userTurn(text, images));
 		}
 	};
 

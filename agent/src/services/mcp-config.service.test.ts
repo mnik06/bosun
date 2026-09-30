@@ -97,7 +97,6 @@ describe('readMcpConfigFile', () => {
 	});
 });
 
-
 describe('getMcpConfigService writes', () => {
 	let home: string;
 

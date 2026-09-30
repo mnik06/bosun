@@ -150,19 +150,19 @@ export function executionDefinitions(opts: ToolSet): { name: string }[] {
 	const stack = opts.stack ? [STACK_UP_DEFINITION, STACK_DOWN_DEFINITION] : [];
 
 	switch (opts.phase) {
-		case 'build':
-			return [
-				...(opts.afk ? [] : [ASK_DEFINITION]),
-				LIST_PLANS_DEFINITION,
-				RECORD_DECISION_DEFINITION,
-				MARK_IMPLEMENTED_DEFINITION,
-				...stack
-			];
-		case 'drive':
-		case 'recheck':
-			return [MARK_VERIFIED_DEFINITION, BLOCK_AC_DEFINITION, REPORT_FINDING_DEFINITION, ...stack];
-		case 'fix':
-			return [LIST_PLANS_DEFINITION, RECORD_DECISION_DEFINITION, RESOLVE_FINDING_DEFINITION, PROPOSE_PLAN_DEFINITION];
+	case 'build':
+		return [
+			...(opts.afk ? [] : [ASK_DEFINITION]),
+			LIST_PLANS_DEFINITION,
+			RECORD_DECISION_DEFINITION,
+			MARK_IMPLEMENTED_DEFINITION,
+			...stack
+		];
+	case 'drive':
+	case 'recheck':
+		return [MARK_VERIFIED_DEFINITION, BLOCK_AC_DEFINITION, REPORT_FINDING_DEFINITION, ...stack];
+	case 'fix':
+		return [LIST_PLANS_DEFINITION, RECORD_DECISION_DEFINITION, RESOLVE_FINDING_DEFINITION, PROPOSE_PLAN_DEFINITION];
 	}
 }
 
@@ -231,53 +231,53 @@ export function createExecutionDispatch(opts: {
 			}
 
 			switch (name) {
-				case 'bosun_ask':
-					return ask(args);
-				case 'list_plans':
-					return textToolResult(JSON.stringify(await opts.bosunApi.listMachinePlans()));
-				case 'stack_up':
-				case 'stack_down':
-					return stackTool({ name, args, stack: opts.stack! });
-				case 'mark_ac_implemented':
-				case 'mark_ac_verified':
-				case 'mark_ac_blocked':
-					return markTool({ name, args, planId: opts.planId, bosunApi: opts.bosunApi });
-				case 'report_finding': {
-					const parsed = ReportFindingArgsSchema.parse(args);
+			case 'bosun_ask':
+				return ask(args);
+			case 'list_plans':
+				return textToolResult(JSON.stringify(await opts.bosunApi.listMachinePlans()));
+			case 'stack_up':
+			case 'stack_down':
+				return stackTool({ name, args, stack: opts.stack! });
+			case 'mark_ac_implemented':
+			case 'mark_ac_verified':
+			case 'mark_ac_blocked':
+				return markTool({ name, args, planId: opts.planId, bosunApi: opts.bosunApi });
+			case 'report_finding': {
+				const parsed = ReportFindingArgsSchema.parse(args);
 
-					return textToolResult(
-						JSON.stringify(
-							await opts.bosunApi.reportFinding({
-								buildId: opts.buildId,
-								runId: opts.runId,
-								acCode: parsed.acCode ?? null,
-								kind: parsed.kind,
-								reproduction: parsed.reproduction,
-								severity: parsed.severity ?? 'medium'
-							})
-						)
-					);
-				}
-				case 'resolve_finding':
-					return textToolResult(JSON.stringify(await opts.bosunApi.resolveFinding(ResolveFindingArgsSchema.parse(args))));
-				case 'propose_plan':
-					return textToolResult(JSON.stringify(await opts.bosunApi.proposePlan({ buildId: opts.buildId, ...ProposePlanArgsSchema.parse(args) })));
-				default: {
-					const parsed = RecordDecisionArgsSchema.parse(args);
+				return textToolResult(
+					JSON.stringify(
+						await opts.bosunApi.reportFinding({
+							buildId: opts.buildId,
+							runId: opts.runId,
+							acCode: parsed.acCode ?? null,
+							kind: parsed.kind,
+							reproduction: parsed.reproduction,
+							severity: parsed.severity ?? 'medium'
+						})
+					)
+				);
+			}
+			case 'resolve_finding':
+				return textToolResult(JSON.stringify(await opts.bosunApi.resolveFinding(ResolveFindingArgsSchema.parse(args))));
+			case 'propose_plan':
+				return textToolResult(JSON.stringify(await opts.bosunApi.proposePlan({ buildId: opts.buildId, ...ProposePlanArgsSchema.parse(args) })));
+			default: {
+				const parsed = RecordDecisionArgsSchema.parse(args);
 
-					return textToolResult(
-						JSON.stringify(
-							await opts.bosunApi.recordPlanDecision({
-								planId: opts.planId,
-								fork: parsed.fork,
-								options: parsed.options ?? null,
-								chose: parsed.chose,
-								blastRadius: parsed.blastRadius ?? null,
-								reversing: parsed.reversing ?? null
-							})
-						)
-					);
-				}
+				return textToolResult(
+					JSON.stringify(
+						await opts.bosunApi.recordPlanDecision({
+							planId: opts.planId,
+							fork: parsed.fork,
+							options: parsed.options ?? null,
+							chose: parsed.chose,
+							blastRadius: parsed.blastRadius ?? null,
+							reversing: parsed.reversing ?? null
+						})
+					)
+				);
+			}
 			}
 		};
 	};

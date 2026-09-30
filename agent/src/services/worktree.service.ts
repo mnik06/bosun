@@ -1,6 +1,7 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { plural } from '../utils';
 import { type ExecService } from './exec.service';
 import {
 	copyUntracked,
@@ -94,7 +95,7 @@ export function getWorktreeService(deps: {
 			// every build — and the setup steps it runs — on code that has moved.
 			await deps.repo.fetch();
 
-			const baseRef = await resolveBaseRef({ exec: deps.exec, repoPath: repoPath });
+			const baseRef = await resolveBaseRef({ exec: deps.exec, repoPath });
 
 			if (baseRef === null) {
 				return {
@@ -130,14 +131,16 @@ export function getWorktreeService(deps: {
 			const copied = copyUntracked({
 				from: repoPath,
 				to: worktreePath,
-				files: await untrackedPaths({ exec: deps.exec, repoPath: repoPath })
+				files: await untrackedPaths({ exec: deps.exec, repoPath })
 			});
+
+			const copiedNote = copied.length === 0 ? '' : `, copied ${plural(copied.length, 'untracked file')}`;
 
 			return {
 				ok: true,
 				worktreePath,
 				baseRef,
-				detail: `created from ${baseRef}${copied.length === 0 ? '' : `, copied ${copied.length} untracked file${copied.length === 1 ? '' : 's'}`}`
+				detail: `created from ${baseRef}${copiedNote}`
 			};
 		},
 
@@ -153,7 +156,6 @@ export function getWorktreeService(deps: {
 
 				return;
 			}
-
 
 			await deps.exec.run(
 				'git',

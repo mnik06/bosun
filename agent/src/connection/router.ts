@@ -152,46 +152,160 @@ async function routeBuildFrame(
 	msg: Extract<ServerMsg, { type: `build.${string}` | `integrate.${string}` | 'line.ask' }>
 ): Promise<void> {
 	switch (msg.type) {
-		case 'build.worktree.ensure':
-			if (refusePaused(deps, { type: 'build.worktree.error', buildId: msg.buildId, message: PAUSED })) {
-				return;
-			}
-
-			await ensureWorktree({ services: deps.services, msg, send: deps.sink });
-
+	case 'build.worktree.ensure':
+		if (refusePaused(deps, { type: 'build.worktree.error', buildId: msg.buildId, message: PAUSED })) {
 			return;
+		}
 
-		case 'build.worktree.remove':
-			await deps.services.worktree.remove(msg.slug);
-			deps.services.setupSteps.forget(msg.slug);
-			console.log(`worktree ${msg.slug}: removed`);
+		await ensureWorktree({ services: deps.services, msg, send: deps.sink });
 
+		return;
+
+	case 'build.worktree.remove':
+		await deps.services.worktree.remove(msg.slug);
+		deps.services.setupSteps.forget(msg.slug);
+		console.log(`worktree ${msg.slug}: removed`);
+
+		return;
+
+	case 'build.summarize':
+		await deps.summaries.start(msg);
+
+		return;
+
+	case 'integrate.start':
+		if (refusePaused(deps, { type: 'integrate.needs_you', integrationId: msg.integrationId, reason: 'error', detail: PAUSED })) {
 			return;
+		}
 
-		case 'build.summarize':
-			await deps.summaries.start(msg);
+		await deps.integrations.start(msg);
 
-			return;
+		return;
 
-		case 'integrate.start':
-			if (refusePaused(deps, { type: 'integrate.needs_you', integrationId: msg.integrationId, reason: 'error', detail: PAUSED })) {
-				return;
-			}
+	case 'integrate.cancel':
+		deps.integrations.cancel(msg.integrationId);
 
-			await deps.integrations.start(msg);
-
-			return;
-
-		case 'integrate.cancel':
-			deps.integrations.cancel(msg.integrationId);
-
-			return;
+		return;
 
 		// A question is read-only and answers somebody who is waiting, so a paused
 		// machine still takes it: pausing stops dispatching work, not asking.
-		case 'line.ask':
-			await deps.asks.ask(msg);
+	case 'line.ask':
+		await deps.asks.ask(msg);
 	}
+}
+
+async function routePlanFrame(deps: RouterDeps, msg: Extract<ServerMsg, { type: `plan.${string}` }>): Promise<void> {
+	switch (msg.type) {
+	case 'plan.start':
+		if (refusePaused(deps, { type: 'plan.error', planId: msg.planId, message: PAUSED })) {
+			return;
+		}
+
+		await deps.sessions.start({
+			planId: msg.planId,
+			input: msg.input,
+			verifyInUi: msg.verifyInUi,
+			auto: msg.auto,
+			planInstructions: msg.planInstructions,
+			config: msg.config
+		});
+
+		return;
+
+	case 'plan.say':
+		await deps.sessions.say({
+			planId: msg.planId,
+			text: msg.text,
+			attachments: msg.attachments,
+			notes: msg.notes,
+			config: msg.config,
+			plan: msg.plan
+		});
+
+		return;
+
+		// Not refused while paused: it starts nothing, only retunes a session that is
+		// already running.
+	case 'plan.modes':
+		deps.sessions.modes({ planId: msg.planId, verifyInUi: msg.verifyInUi, auto: msg.auto });
+
+		return;
+
+	case 'plan.answer':
+		deps.sessions.answer(msg);
+
+		return;
+
+	case 'plan.cancel':
+		deps.sessions.cancel(msg.planId);
+	}
+}
+
+async function routeRunFrame(
+	deps: RouterDeps,
+	msg: Extract<ServerMsg, { type: `exec.${string}` | `bugfix.${string}` | `quickfix.${string}` }>
+): Promise<void> {
+	switch (msg.type) {
+	case 'exec.start':
+		if (refusePaused(deps, { type: 'exec.error', runId: msg.runId, message: PAUSED })) {
+			return;
+		}
+
+		await deps.executions.start(msg);
+
+		return;
+
+	case 'exec.answer':
+		deps.executions.answer(msg);
+
+		return;
+
+	case 'exec.cancel':
+		deps.executions.cancel(msg.runId);
+
+		return;
+
+	case 'bugfix.start':
+		if (refusePaused(deps, { type: 'bugfix.error', sessionId: msg.sessionId, buildId: msg.buildId, message: PAUSED })) {
+			return;
+		}
+
+		await deps.bugfix.start(msg);
+
+		return;
+
+	case 'bugfix.say':
+		deps.bugfix.say(msg);
+
+		return;
+
+	case 'bugfix.cancel':
+		deps.bugfix.cancel(msg.sessionId);
+
+		return;
+
+	case 'quickfix.start':
+		if (refusePaused(deps, { type: 'quickfix.error', quickFixId: msg.quickFixId, message: PAUSED })) {
+			return;
+		}
+
+		await deps.quickFixes.start(msg);
+	}
+}
+
+async function shutdown(deps: RouterDeps, msg: Extract<ServerMsg, { type: 'shutdown' }>): Promise<void> {
+	deps.sessions.cancelAll();
+	deps.executions.cancelAll();
+	deps.integrations.cancelAll();
+	deps.onboarding.cancelAll();
+	deps.quickFixes.cancelAll();
+	deps.asks.cancelAll();
+	deps.bugfix.cancelAll();
+	await deps.services.stack.downAll();
+	await deps.services.teardown.terminateSelf({
+		configPath: deps.configPath,
+		reason: msg.reason
+	});
 }
 
 // A switch rather than a chain with a fallthrough: the chain's last branch was
@@ -199,172 +313,89 @@ async function routeBuildFrame(
 // somebody remembered to add a case for it.
 export async function routeServerFrame(deps: RouterDeps, msg: ServerMsg): Promise<void> {
 	switch (msg.type) {
-		case 'refresh':
-			await deps.announce('refresh');
+	case 'refresh':
+		await deps.announce('refresh');
 
+		return;
+
+	case 'upgrade':
+		await deps.onUpgrade({
+			version: msg.version,
+			downloadBaseUrl: msg.downloadBaseUrl,
+			force: msg.force
+		});
+
+		return;
+
+	case 'pause':
+		deps.state.paused = true;
+		console.log('paused by bosun — holding the connection, taking no work');
+
+		return;
+
+	case 'resume':
+		deps.state.paused = false;
+		console.log('resumed by bosun');
+
+		return;
+
+	case 'env.set':
+	case 'env.delete':
+	case 'secrets.set':
+		changeEnv(deps, msg);
+
+		return;
+
+	case 'repo.attach':
+		await attachRepository(deps, msg);
+
+		return;
+
+	case 'onboarding.start':
+		if (refusePaused(deps, { type: 'onboarding.error', runId: msg.runId, message: PAUSED })) {
 			return;
+		}
 
-		case 'upgrade':
-			await deps.onUpgrade({
-				version: msg.version,
-				downloadBaseUrl: msg.downloadBaseUrl,
-				force: msg.force
-			});
+		await deps.onboarding.start(msg);
 
-			return;
+		return;
 
-		case 'pause':
-			deps.state.paused = true;
-			console.log('paused by bosun — holding the connection, taking no work');
+	case 'onboarding.cancel':
+		deps.onboarding.cancel(msg.runId);
 
-			return;
+		return;
 
-		case 'resume':
-			deps.state.paused = false;
-			console.log('resumed by bosun');
+	case 'plan.start':
+	case 'plan.say':
+	case 'plan.modes':
+	case 'plan.answer':
+	case 'plan.cancel':
+		await routePlanFrame(deps, msg);
 
-			return;
+		return;
 
-		case 'env.set':
-		case 'env.delete':
-		case 'secrets.set':
-			changeEnv(deps, msg);
+	case 'exec.start':
+	case 'exec.answer':
+	case 'exec.cancel':
+	case 'bugfix.start':
+	case 'bugfix.say':
+	case 'bugfix.cancel':
+	case 'quickfix.start':
+		await routeRunFrame(deps, msg);
 
-			return;
+		return;
 
-		case 'repo.attach':
-			await attachRepository(deps, msg);
+	case 'build.worktree.ensure':
+	case 'build.worktree.remove':
+	case 'build.summarize':
+	case 'integrate.start':
+	case 'integrate.cancel':
+	case 'line.ask':
+		await routeBuildFrame(deps, msg);
 
-			return;
+		return;
 
-		case 'onboarding.start':
-			if (refusePaused(deps, { type: 'onboarding.error', runId: msg.runId, message: PAUSED })) {
-				return;
-			}
-
-			await deps.onboarding.start(msg);
-
-			return;
-
-		case 'onboarding.cancel':
-			deps.onboarding.cancel(msg.runId);
-
-			return;
-
-		case 'plan.start':
-			if (refusePaused(deps, { type: 'plan.error', planId: msg.planId, message: PAUSED })) {
-				return;
-			}
-
-			await deps.sessions.start({
-				planId: msg.planId,
-				input: msg.input,
-				verifyInUi: msg.verifyInUi,
-				auto: msg.auto,
-				planInstructions: msg.planInstructions,
-				config: msg.config
-			});
-
-			return;
-
-		case 'plan.say':
-			await deps.sessions.say({
-				planId: msg.planId,
-				text: msg.text,
-				attachments: msg.attachments,
-				notes: msg.notes,
-				config: msg.config,
-				plan: msg.plan
-			});
-
-			return;
-
-		// Not refused while paused: it starts nothing, only retunes a session that is
-		// already running.
-		case 'plan.modes':
-			deps.sessions.modes({ planId: msg.planId, verifyInUi: msg.verifyInUi, auto: msg.auto });
-
-			return;
-
-		case 'plan.answer':
-			deps.sessions.answer(msg);
-
-			return;
-
-		case 'plan.cancel':
-			deps.sessions.cancel(msg.planId);
-
-			return;
-
-		case 'exec.start':
-			if (refusePaused(deps, { type: 'exec.error', runId: msg.runId, message: PAUSED })) {
-				return;
-			}
-
-			await deps.executions.start(msg);
-
-			return;
-
-		case 'exec.answer':
-			deps.executions.answer(msg);
-
-			return;
-
-		case 'exec.cancel':
-			deps.executions.cancel(msg.runId);
-
-			return;
-
-		case 'bugfix.start':
-			if (refusePaused(deps, { type: 'bugfix.error', sessionId: msg.sessionId, buildId: msg.buildId, message: PAUSED })) {
-				return;
-			}
-
-			await deps.bugfix.start(msg);
-
-			return;
-
-		case 'bugfix.say':
-			deps.bugfix.say(msg);
-
-			return;
-
-		case 'bugfix.cancel':
-			deps.bugfix.cancel(msg.sessionId);
-
-			return;
-
-		case 'quickfix.start':
-			if (refusePaused(deps, { type: 'quickfix.error', quickFixId: msg.quickFixId, message: PAUSED })) {
-				return;
-			}
-
-			await deps.quickFixes.start(msg);
-
-			return;
-
-		case 'build.worktree.ensure':
-		case 'build.worktree.remove':
-		case 'build.summarize':
-		case 'integrate.start':
-		case 'integrate.cancel':
-		case 'line.ask':
-			await routeBuildFrame(deps, msg);
-
-			return;
-
-		case 'shutdown':
-			deps.sessions.cancelAll();
-			deps.executions.cancelAll();
-			deps.integrations.cancelAll();
-			deps.onboarding.cancelAll();
-			deps.quickFixes.cancelAll();
-			deps.asks.cancelAll();
-			deps.bugfix.cancelAll();
-			await deps.services.stack.downAll();
-			await deps.services.teardown.terminateSelf({
-				configPath: deps.configPath,
-				reason: msg.reason
-			});
+	case 'shutdown':
+		await shutdown(deps, msg);
 	}
 }

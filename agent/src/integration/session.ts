@@ -55,6 +55,24 @@ function needsYou(reason: 'conflict' | 'checks' | 'error', detail: string): Outc
 
 class Cancelled extends Error {}
 
+function checkpoint(entry: Entry): void {
+	if (entry.cancelled) {
+		throw new Cancelled();
+	}
+}
+
+interface OntoRef {
+	ref: string;
+	sha: string;
+}
+
+interface Prepared {
+	kind: 'prepared';
+	preHead: string;
+	config: ProjectConfig | null;
+	onto: OntoRef;
+}
+
 // A finished branch is merged with what it lands on, its generated files are
 // produced again instead of merged, a real conflict goes to a session given every
 // plan's criteria, and nothing is pushed while the project's checks are red. See
@@ -325,18 +343,10 @@ export function createIntegrationSessions(opts: { services: Services; send: (mes
 		return second.ok ? second : needsYou('checks', `\`${second.check}\` is still red after one repair:\n${second.output}`);
 	}
 
-	async function integrate(msg: IntegrateStart, entry: Entry): Promise<Outcome> {
-		const git = getIntegrationGit({ exec: services.exec, worktreePath: msg.worktreePath });
-		const keepOut = services.projectEnv.summary().map((set) => envFileFor(set.path));
-		const step = (label: string) => opts.send({ type: 'integrate.activity', integrationId: msg.integrationId, label });
-		const checkpoint = () => {
-			if (entry.cancelled) {
-				throw new Cancelled();
-			}
-		};
-
-		step('Fetching');
-
+	// Synced with its own remote, its starting commit recorded, and the target
+	// fetched. Nothing has been merged yet, so a failure here has nothing to undo.
+	async function prepare(ctx: { git: IntegrationGit; msg: IntegrateStart; entry: Entry }): Promise<Prepared | Outcome> {
+		const { git, msg, entry } = ctx;
 		const synced = await syncWithRemote({ exec: services.exec, worktreePath: msg.worktreePath, branch: msg.branch });
 
 		if (!synced.ok) {
@@ -349,46 +359,48 @@ export function createIntegrationSessions(opts: { services: Services; send: (mes
 			return needsYou('error', 'the worktree has no commit to integrate');
 		}
 
-		const resolvedConfig = resolveProjectConfig(msg.config);
+		const resolvedConfig = resolveProjectConfig(msg.config, msg.worktreePath);
 
 		if (resolvedConfig.source === 'invalid') {
 			return needsYou('error', resolvedConfig.detail);
 		}
 
-		const config = resolvedConfig.source === 'none' ? null : resolvedConfig.config;
 		const onto = await git.fetchOnto(msg.onto);
 
 		if (!onto.ok) {
 			return needsYou('error', onto.detail);
 		}
 
-		checkpoint();
+		return {
+			kind: 'prepared',
+			preHead: entry.preHead,
+			config: resolvedConfig.source === 'none' ? null : resolvedConfig.config,
+			onto: onto.value
+		};
+	}
 
-		if (await git.contains(onto.value.ref)) {
-			const pushed = await git.push(msg.branch);
+	// The target merged in, its generated files taken rather than merged, and a
+	// real conflict handed to a session.
+	async function mergeOnto(ctx: {
+		git: IntegrationGit;
+		msg: IntegrateStart;
+		entry: Entry;
+		onto: OntoRef;
+		config: ProjectConfig | null;
+		env: NodeJS.ProcessEnv;
+	}): Promise<{ ok: true; resolved: ResolvedConflict[] } | Outcome> {
+		const { git, msg, entry, onto } = ctx;
+		const globs = (ctx.config?.regenerate ?? []).flatMap((rule) => rule.paths);
 
-			return pushed.ok
-				? { kind: 'done', frame: { ontoSha: onto.value.sha, headSha: entry.preHead, merged: false, regenerated: [], resolved: [], checks: 'skipped' } }
-				: needsYou('error', pushed.detail);
-		}
+		opts.send({ type: 'integrate.activity', integrationId: msg.integrationId, label: `Merging ${msg.onto}` });
 
-		const environment = await prepareRunEnvironment({ services, config, includeSecrets: true });
-
-		if (!environment.ok) {
-			return needsYou('error', environment.detail);
-		}
-
-		const globs = (config?.regenerate ?? []).flatMap((rule) => rule.paths);
-
-		step(`Merging ${msg.onto}`);
-
-		const taken = await git.takeGenerated({ ontoRef: onto.value.ref, globs });
+		const taken = await git.takeGenerated({ ontoRef: onto.ref, globs });
 
 		if (!taken.ok) {
 			return needsYou('error', taken.detail);
 		}
 
-		const merge = await git.merge(onto.value.ref);
+		const merge = await git.merge(onto.ref);
 
 		if (!merge.ok) {
 			return needsYou('error', merge.detail);
@@ -401,43 +413,94 @@ export function createIntegrationSessions(opts: { services: Services; send: (mes
 			return needsYou('error', theirs.detail);
 		}
 
-		checkpoint();
+		checkpoint(entry);
 
 		const real = merge.value.filter((file) => !generated.has(file));
-		const resolution = real.length === 0
-			? { ok: true as const, resolved: [] }
-			: await resolveConflicts({ git, msg, entry, ontoRef: onto.value.ref, files: real, env: environment.env });
 
-		if ('kind' in resolution) {
-			return resolution;
+		if (real.length === 0) {
+			return { ok: true, resolved: [] };
 		}
 
-		checkpoint();
+		return resolveConflicts({ git, msg, entry, ontoRef: onto.ref, files: real, env: ctx.env });
+	}
 
-		const regenerated = config === null
-			? { ok: true as const, regenerated: [] }
-			: await regenerate({ git, msg, config, env: environment.env, keepOut });
+	// After regenerate, never before: a lockfile under a `regenerate` path is
+	// still the target's copy until its rule runs, and a frozen install against
+	// that copy and the branch's own manifest refuses every dependency the branch
+	// added.
+	async function regenerateAndSetup(ctx: {
+		git: IntegrationGit;
+		msg: IntegrateStart;
+		config: ProjectConfig | null;
+		env: NodeJS.ProcessEnv;
+		keepOut: string[];
+	}): Promise<{ ok: true; regenerated: Regenerated[] } | Outcome> {
+		const { msg, config } = ctx;
+
+		if (config === null) {
+			return { ok: true, regenerated: [] };
+		}
+
+		const regenerated = await regenerate({ ...ctx, config });
 
 		if ('kind' in regenerated) {
 			return regenerated;
 		}
 
-		// After regenerate, never before: a lockfile under a `regenerate` path is
-		// still the target's copy until its rule runs, and a frozen install against
-		// that copy and the branch's own manifest refuses every dependency the branch
-		// added.
-		if (config !== null) {
-			const setup = await services.setupSteps.rerunChanged({
-				key: path.basename(msg.worktreePath),
-				worktreePath: msg.worktreePath,
-				config,
-				env: environment.env,
-				onStep: (name) => step(`Re-running setup: ${name}`)
-			});
+		const setup = await services.setupSteps.rerunChanged({
+			key: path.basename(msg.worktreePath),
+			worktreePath: msg.worktreePath,
+			config,
+			env: ctx.env,
+			onStep: (name) => opts.send({ type: 'integrate.activity', integrationId: msg.integrationId, label: `Re-running setup: ${name}` })
+		});
 
-			if (!setup.ok) {
-				return needsYou('error', setup.message);
-			}
+		return setup.ok ? regenerated : needsYou('error', setup.message);
+	}
+
+	async function integrate(msg: IntegrateStart, entry: Entry): Promise<Outcome> {
+		const git = getIntegrationGit({ exec: services.exec, worktreePath: msg.worktreePath });
+		const keepOut = services.projectEnv.summary().map((set) => envFileFor(set.path));
+		const step = (label: string) => opts.send({ type: 'integrate.activity', integrationId: msg.integrationId, label });
+
+		step('Fetching');
+
+		const prepared = await prepare({ git, msg, entry });
+
+		if (prepared.kind !== 'prepared') {
+			return prepared;
+		}
+
+		const { config, onto } = prepared;
+
+		checkpoint(entry);
+
+		if (await git.contains(onto.ref)) {
+			const pushed = await git.push(msg.branch);
+
+			return pushed.ok
+				? { kind: 'done', frame: { ontoSha: onto.sha, headSha: prepared.preHead, merged: false, regenerated: [], resolved: [], checks: 'skipped' } }
+				: needsYou('error', pushed.detail);
+		}
+
+		const environment = await prepareRunEnvironment({ services, config, includeSecrets: true });
+
+		if (!environment.ok) {
+			return needsYou('error', environment.detail);
+		}
+
+		const resolution = await mergeOnto({ git, msg, entry, onto, config, env: environment.env });
+
+		if ('kind' in resolution) {
+			return resolution;
+		}
+
+		checkpoint(entry);
+
+		const regenerated = await regenerateAndSetup({ git, msg, config, env: environment.env, keepOut });
+
+		if ('kind' in regenerated) {
+			return regenerated;
 		}
 
 		const committed = await services.commit.commitAll({
@@ -450,15 +513,15 @@ export function createIntegrationSessions(opts: { services: Services; send: (mes
 			return needsYou('error', `could not commit the integration: ${committed.detail}`);
 		}
 
-		checkpoint();
+		checkpoint(entry);
 
-		const checks = await checksGreen({ git, msg, entry, ontoRef: onto.value.ref, config, env: environment.env, keepOut });
+		const checks = await checksGreen({ git, msg, entry, ontoRef: onto.ref, config, env: environment.env, keepOut });
 
 		if ('kind' in checks) {
 			return checks;
 		}
 
-		checkpoint();
+		checkpoint(entry);
 		step(`Pushing ${msg.branch}`);
 
 		const pushed = await git.push(msg.branch);
@@ -470,7 +533,7 @@ export function createIntegrationSessions(opts: { services: Services; send: (mes
 		return {
 			kind: 'done',
 			frame: {
-				ontoSha: onto.value.sha,
+				ontoSha: onto.sha,
 				headSha: await git.headSha(),
 				merged: true,
 				regenerated: regenerated.regenerated,
@@ -506,7 +569,9 @@ export function createIntegrationSessions(opts: { services: Services; send: (mes
 			try {
 				outcome = await integrate(msg, entry);
 			} catch (error) {
-				outcome = error instanceof Cancelled ? null : needsYou('error', error instanceof Error ? error.message : 'the sync failed');
+				const message = error instanceof Error ? error.message : 'the sync failed';
+
+				outcome = error instanceof Cancelled ? null : needsYou('error', message);
 			}
 
 			release(entry);

@@ -353,7 +353,7 @@ export function createOnboardingSessions(opts: { services: Services; send: (mess
 		const ports = appPorts(opts2.config, opts2.msg.portBase);
 		const accounts = opts2.config.testAccounts.map((account) => ({
 			role: account.role,
-			url: renderTemplate(account.signIn, { app: null, ports }),
+			description: renderTemplate(account.description, { app: null, ports }),
 			secrets: account.secrets
 		}));
 		const reported = new Map<string, { ok: boolean; detail: string }>();
@@ -361,7 +361,7 @@ export function createOnboardingSessions(opts: { services: Services; send: (mess
 			runId: opts2.msg.runId,
 			run: opts2.run,
 			cwd: opts2.scratch,
-			prompt: signInPrompt({ accounts }),
+			prompt: signInPrompt({ accounts, apps: Object.entries(ports).map(([app, port]) => ({ app, url: `http://127.0.0.1:${port}` })) }),
 			builtin: SIGN_IN_TOOLS,
 			mcpTools: SIGN_IN_MCP_TOOLS,
 			definitions: SIGN_IN_DEFINITIONS,
@@ -442,7 +442,7 @@ export function createOnboardingSessions(opts: { services: Services; send: (mess
 		const step = (label: string, status: 'passed' | 'failed' | 'info', detail: string | null) => {
 			report({ runId: msg.runId, run, label, status, detail });
 		};
-		const resolved = resolveProjectConfig(msg.config);
+		const resolved = resolveProjectConfig(msg.config, scratch);
 
 		if (resolved.source === 'none' || resolved.source === 'invalid') {
 			const detail = resolved.source === 'none' ? 'bosun holds no config for this repository yet' : resolved.detail;

@@ -157,9 +157,11 @@ export function createBugfixSessions(opts: { services: Services; send: (message:
 					return;
 				}
 
-				event.ok
-					? void settle({ sessionId: msg.sessionId, buildId: msg.buildId })
-					: fail({ sessionId: msg.sessionId, buildId: msg.buildId, message: event.message });
+				if (event.ok) {
+					void settle({ sessionId: msg.sessionId, buildId: msg.buildId });
+				} else {
+					fail({ sessionId: msg.sessionId, buildId: msg.buildId, message: event.message });
+				}
 			},
 			onDropped: logDroppedFrame
 		});

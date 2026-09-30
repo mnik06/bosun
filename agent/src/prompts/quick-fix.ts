@@ -9,6 +9,7 @@ import {
 	notesSection,
 	providedEnv,
 	setupSection,
+	testSection,
 	toolchainSection,
 	unattended
 } from './shared';
@@ -38,6 +39,7 @@ function configuredChecks(config: ProjectConfig | null): string {
 		setupSection(config, { rerun: false }),
 		codegenSection(config),
 		migrateSection(config),
+		testSection(config),
 		checksSection(config),
 		notesSection(config)
 	].filter(Boolean);

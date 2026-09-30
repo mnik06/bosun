@@ -640,9 +640,9 @@ Three things this does change:
   \`nonGoal\` says so and names the call as made on their behalf.
 `;
 
-const VERIFY_ON = `This plan was created with UI verification **on**, so its last bullet has \`kind: "verify"\` and there is exactly one of them.`;
+const VERIFY_ON = 'This plan was created with UI verification **on**, so its last bullet has `kind: "verify"` and there is exactly one of them.';
 
-const VERIFY_OFF = `This plan was created with UI verification **off**, so it has **no** verify bullet at all. Every bullet is \`kind: "build"\`, and the API refuses a verify bullet on this plan.`;
+const VERIFY_OFF = 'This plan was created with UI verification **off**, so it has **no** verify bullet at all. Every bullet is `kind: "build"`, and the API refuses a verify bullet on this plan.';
 
 // What the operator wrote in the machine's project setup. It is the only channel
 // for a convention the repository does not state — a skill this project expects

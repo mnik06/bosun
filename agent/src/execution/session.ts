@@ -333,7 +333,7 @@ export function createExecutionSessions(opts: {
 			return { config: null, env: undefined, repository: false };
 		}
 
-		const resolved = resolveProjectConfig(msg.config);
+		const resolved = resolveProjectConfig(msg.config, msg.worktreePath);
 
 		if (resolved.source === 'invalid') {
 			throw new Error(resolved.detail);
@@ -509,7 +509,11 @@ export function createExecutionSessions(opts: {
 					return;
 				}
 
-				event.ok ? void finish(msg) : fail(msg.runId, event.message);
+				if (event.ok) {
+					void finish(msg);
+				} else {
+					fail(msg.runId, event.message);
+				}
 			},
 			onDropped: logDroppedFrame
 		});

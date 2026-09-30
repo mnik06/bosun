@@ -18,7 +18,8 @@ export function writeEnvFiles(opts: {
 		applied = opts.projectEnv.applyTo(opts.worktreePath);
 	} catch (error) {
 		throw new Error(
-			`could not write the provided env files: ${error instanceof Error ? error.message : 'unknown error'}`
+			`could not write the provided env files: ${error instanceof Error ? error.message : 'unknown error'}`,
+			{ cause: error }
 		);
 	}
 

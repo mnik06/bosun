@@ -5,8 +5,8 @@ remote machines connect back to. It owns all business logic, validates every req
 the HTTP boundary, and holds the only connection to Postgres (Drizzle ORM). File-based routing via
 `@fastify/autoload`; Zod everywhere for validation and type inference.
 
-Nothing but this service talks to the database. `fe/` reaches it over REST; the `agent/` daemon
-reaches it over an outbound WebSocket that it dials and the BE never initiates.
+Nothing but this service talks to the database. `fe/` reaches it over REST and a browser WebSocket;
+the `agent/` daemon reaches it over an outbound WebSocket that it dials and the BE never initiates.
 
 Identity is **not** ours: there is no login endpoint, no password column and no session table.
 Supabase Auth issues the tokens, and `fastify.requireUser` resolves each one by asking Supabase who
@@ -16,40 +16,44 @@ thing that needs the secret key. See `src/services/auth/supabase-auth.service.md
 `src/services/auth/supabase-admin.service.md`.
 
 **Authorization is by project.** `machines`, `plans` and `repositories` — and through them every
-build in a repository's line — belong to a project, never to a
-person. `fastify.requireMembership` reads `X-Project-Id`, resolves the caller's role and puts
-`request.membership = { projectId, role }` on the request; `fastify.requireLeader` refuses a
-`developer` on every `/machines` route but the list, and on the member routes. A `users.is_app_owner` row resolves as `leader` of every
-project without holding a membership. A project the caller is not in answers **404**; a role they do
-not hold answers **403**. See `plans/006-projects-and-roles.md`. Every `/github` route is leader-only
-(its `autohooks.ts`); `/repositories` lists to any member — the plan picker names machines by
-repository, and the line's chat is a member's — and refuses everything else to a developer. See
-`plans/008-machine-onboarding.md`. The line — builds, dependencies, integration, verify — is
-`src/controllers/line/README.md` and `plans/009-the-line.md`.
+build in a repository's line — belong to a project, never to a person. `fastify.requireMembership`
+reads `X-Project-Id`, resolves the caller's role and puts `request.membership = { projectId, role }`
+on the request; `fastify.requireLeader` refuses a `developer`. A `users.is_app_owner` row resolves as
+`leader` of every project without holding a membership. A project the caller is not in answers
+**404**; a role they do not hold answers **403**. See `plans/006-projects-and-roles.md` and
+`plans/008-machine-onboarding.md`; which folder carries which gate is in
+[agent-docs/hooks.md](./agent-docs/hooks.md). The line — builds, dependencies, integration, verify —
+is `src/controllers/line/README.md` and `plans/009-the-line.md`.
 
 **The GitHub App's private key is read in one place**, `src/services/github/github-app.service.ts`,
 the same containment `SUPABASE_SECRET_KEY` gets. No GitHub token is written to the database: see
 `github-app.service.md`.
 
 `/enroll`, `/agent/ws`, `/install.sh`, `/mcp-presets` and `/health` stay unauthenticated by design —
-they are the agent's and the installer's surface. `/github/webhook` carries no bearer token either:
-GitHub's `X-Hub-Signature-256` over the raw body, checked against `GITHUB_WEBHOOK_SECRET`, is its
-credential.
+they are the agent's and the installer's surface (`/agent/*` authenticates with the machine key
+instead of a bearer token). The webhooks carry no bearer token either: `/github/webhook` is
+authenticated by GitHub's `X-Hub-Signature-256` over the raw body, checked against
+`GITHUB_WEBHOOK_SECRET`; `/azure/webhook/:repositoryId` by a per-repository header secret compared
+against its stored hash.
 
 ## Tech Stack
 
 - **Fastify 5** — HTTP server. Routes auto-loaded from `src/api/routes/` via `@fastify/autoload`
+- **@fastify/websocket** — the agent socket (`/agent/ws`) and the browser socket (`/ui/ws`)
 - **Drizzle ORM** (`drizzle-orm/postgres-js` over the `postgres` driver) for type-safe Postgres access
 - **Zod v4** for validation — request/response schemas wired through `fastify-type-provider-zod`
-  (`validatorCompiler` + `serializerCompiler`), env validation, and repo-boundary parsing
+  (`validatorCompiler` + `serializerCompiler`), socket frames, env validation, and repo-boundary
+  parsing
 - **TypeScript** (CommonJS target), run via `ts-node`/`nodemon` in dev, compiled with `tsc` for
   production. Path alias `src/*` → `./src/*`, resolved at runtime by `tsconfig-paths`
+- **Vitest** for unit tests; **ESLint** with `eslint-plugin-boundaries` and `eslint-plugin-sonarjs`;
+  **jscpd** for duplication
 - **@fastify/swagger** + **swagger-ui** at `/api/documentation`, registered only when `NODE_ENV` is
   `local` or `staging`
 - **pnpm** as the package manager (engine-strict; supply-chain guards live in `pnpm-workspace.yaml`,
   not `.npmrc`)
 
-Listens on `HOST`/`PORT` from `.env` — **127.0.0.1:1506** locally.
+Listens on `HOST`/`PORT` from `.env` — **127.0.0.1:1506** locally. Routes have no `/api` prefix.
 
 ## Development Patterns
 
@@ -60,105 +64,105 @@ Strict one-way dependency direction:
 ```
 route handler → controller → repo → database
 route handler → route schema (Zod validates request + serializes response)
-controller   → (injected repo | db.transaction)
+controller   → (injected repos + services | db.transaction)
 repo         → Drizzle → Postgres
 ```
 
-- **Route handler** (`src/api/routes/<entity>/*.route.ts`) — HTTP boundary. A Fastify plugin that
-  declares the Zod `schema` (`body` / `params` / `querystring` / `response`), pulls its dependencies
-  off the `fastify` instance (`fastify.db`, and the repos once they exist), calls a controller, and
-  returns the result. Zero business logic, no Drizzle. `health.route.ts` is the shape to copy
-- **Controller** (`src/controllers/<entity>/<verb>.ts`) — business logic, one exported function per
-  file. A controller that outgrows one file becomes `<verb>/index.ts` + `<verb>/utils/`; helpers
-  shared by two controllers move to `src/controllers/<domain>/shared/`. Receives its dependencies
-  (repos, `db`) as an object parameter — it never reaches for a global. Throws `HttpError` for
-  client-facing failures. Owns transactions for multi-step writes
+- **Route** (`src/api/routes/<domain>/*.route.ts`) — HTTP/WebSocket boundary. Declares the Zod
+  `schema`, reads deps off `fastify` (`repos`, `services`, `env`, `db`) and the caller off the request
+  (`user`, `membership`, `agent`), calls a controller, returns. Zero business logic, no Drizzle
+- **Controller** (`src/controllers/<domain>/<verb>.ts`) — business logic, one exported controller per
+  file; helpers shared by two move to `src/controllers/<domain>/shared/`. Receives its dependencies as
+  object params, never a global. Throws `HttpError`. Owns transactions and the background timers
 - **Repo** (`src/repos/<domain>/<entity>.repo.ts`) — the ONLY layer that touches the DB. A factory
-  `getXRepo(db): XRepo` returning Drizzle queries, one query per method, each parsed through its Zod
-  entity schema before returning. Assembled and exported from `src/repos/index.ts`
-- **Service** (`src/services/<name>/`) — infrastructure and third-party wrappers (`drizzle`, `env`,
-  and later the socket registry, hashing, id generation). Provider-agnostic, no business logic
-- **Utils** (`src/utils/`) — pure, domain-free helpers importable from any layer. Small helpers go in
-  `general.ts`; a helper that is large or owns private sub-helpers gets its own file. No DB, no
-  repos, no I/O, no domain types
-- **Errors** (`src/api/errors/`) — `HttpError` (status + message) and the global `errorHandler`
-- **Plugins** (`src/api/plugins/`) — cross-cutting concerns wired in `build-server.ts` (logging,
-  swagger). Bootstrap order lives in `build-server.ts` and nowhere else
+  `getXRepo(db)` of single-query methods, each result parsed through its Zod schema. Registered in
+  `src/repos/index.ts`
+- **Service** (`src/services/<name>/`) — infrastructure, third-party wrappers (Supabase, GitHub,
+  Azure, web push, crypto) and process-local state (socket registry, tickets, locks). No business
+  logic, no DB. Assembled in `src/services/index.ts`
+- **Declaration layers** — `src/api/routes/schemas/` (route schemas), `src/types/` (domain schemas,
+  socket protocol, `EnvSchema`, `fastify.d.ts`), `src/api/errors/` (`HttpError`, `errorHandler`),
+  `src/utils/` (pure, domain-free helpers). Importable from any layer
+- **Plugins / hooks** (`src/api/plugins/`, `autohooks.ts` per route folder) — logging, swagger, auth
+  gates. Bootstrap order lives in `src/api/build-server.ts` and nowhere else
 
-`src/controllers/`, `src/repos/` and `src/utils/` are currently empty placeholders. The first file in
-each establishes nothing new — it follows the layout above.
+**The layering is mechanically enforced.** `eslint-plugin-boundaries` in `eslint.config.mjs`
+(`BE_ELEMENTS` / `BE_POLICIES`) refuses any import that breaks the direction above: a route
+importing a repo, a repo importing a controller or a route schema, a util importing anything but
+utils and `src/api/errors` (so `orNotFound` can throw its 404). Services are importable by every
+layer. `pnpm lint` fails on a violation — fix the dependency, don't disable the rule.
 
 ### Dependency Injection (the house pattern)
 
-Controllers are pure functions with explicit dependencies — this is the biggest convention to honor:
+Controllers are functions with explicit dependencies — the biggest convention to honor:
 
-- `build-server.ts` decorates the instance (`server.decorate('db', getDb(...))`), and each new
-  decorator is declared on `FastifyInstance` in `src/types/fastify.d.ts`
-- Route handlers read those decorators and pass exactly what the controller needs:
+- `build-server.ts` decorates the instance with `db`, `env`, `repos`, `services` and the auth hooks;
+  every decorator is typed on `FastifyInstance` in `src/types/fastify.d.ts`
+- Routes read those and pass exactly what the controller needs:
 
   ```ts
-  const machine = await createMachine({ machineRepo: fastify.repos.machineRepo, data: req.body });
+  const created = await createMachine({
+  	machineRepo: fastify.repos.machineRepo,
+  	idService: fastify.services.idService,
+  	projectId: req.membership!.projectId,
+  	name: req.body.name
+  });
   ```
 
-- Controllers accept `{ machineRepo, … }` as an object param and never import a global. This keeps
-  them trivially testable and the dependency graph explicit
+- A domain whose controllers share a large set takes a bundle built once — `lineDeps(fastify)`,
+  `onboardingDeps(fastify)` — so the socket, routes, webhooks and timers cannot assemble it differently
 
 ### Validation
 
-- Validation lives in the Fastify route `schema`, not in handler bodies. `withTypeProvider<ZodTypeProvider>()`
-  makes `req.body` / `req.params` / `req.query` fully typed from the Zod schemas, and the response
-  serializer validates the `response[statusCode]` schema on the way out
-- Request schemas: `*ReqSchema`. Response schemas: `*RespSchema`. Route-boundary schemas live in
-  `src/api/routes/schemas/<entity>/`; domain/entity schemas live in `src/types/`
-- Repos re-parse rows through the entity schema (`MachineSchema.parse(row)`) so callers can trust the
-  type unconditionally
-- Env is validated once at startup by `EnvSchema.parse(process.env)` (`src/services/env/env.service.ts`,
-  imported first in `build-server.ts`) — the server refuses to boot on a bad `.env`. Every new env var
-  goes in `src/types/EnvSchema.ts`, and in `.env.example` alongside it. No `transform` in `EnvSchema` —
-  it must not rewrite `process.env`
+- HTTP: in the route `schema`, never in the handler body. Request schemas `*ReqSchema`, response
+  `*RespSchema`, in `src/api/routes/schemas/<domain>/`; domain schemas in `src/types/`
 - **Anything arriving over a socket is validated the same way.** WebSocket frames are not HTTP, so the
   route schema does not cover them: parse every inbound frame with its Zod schema before acting on it,
   and log-and-drop what fails rather than partially handling it
+- Env is validated once at startup by `EnvSchema.parse(process.env)` (`getEnv()` in
+  `src/services/env/env.service.ts`, called first in `buildServer`) — the server refuses to boot on a
+  bad `.env`. `process.env` is read nowhere else
 
-### Error Handling
+Transactions, error handling and the database each have their own doc below; the one-line rules
+that apply everywhere are under General Rules.
 
-- Throw `new HttpError(statusCode, message, { cause })` for anything the client should see. The global
-  `errorHandler` formats it and collapses any 5xx to `Internal server error`
-- Never write `try/catch` in a route just to convert an error — let it propagate to `errorHandler`.
-  Logs feed error metrics, so the thrown type matters
+## Agent Docs
 
-### Database
+Read the relevant doc before creating or modifying that layer:
 
-- `getDb(opts)` (`src/services/drizzle/drizzle.service.ts`) builds the Drizzle client with
-  `casing: 'snake_case'`; it is decorated as `fastify.db`. The connection string is the validated
-  `DATABASE_URL`
-- Schema in `src/services/drizzle/schema.ts`. Migrations in `drizzle-out/`, generated with
-  `pnpm db:migration:generate` — never hand-written. Fix the schema, not the generated SQL
-- Apply what you generated with `pnpm db:migration:run`. A generated-but-unapplied migration leaves
-  every later session running against a schema that does not match the code. Never `drizzle-kit push`,
-  and never edit or delete a migration that has already been applied
-- Connect to Postgres on the **direct** port, not a transaction-mode pooler — `drizzle-kit migrate`
-  fails against pgbouncer in transaction mode
-
-### Transactions
-
-- Multi-step writes are wrapped in a single transaction at the **controller** level, with tx-scoped
-  repos built inside so every call participates in the same transaction. A route handler never opens
-  one
-- **No external I/O inside a transaction** — an HTTP call, a socket send, anything that can hang ties
-  up the DB connection and holds locks. Do it before the transaction (if the result is needed) or
-  after it commits (side effects only)
+- [Routes](./agent-docs/routes.md) — autoload URL rules, Zod type provider, wiring deps, schema
+  placement
+- [Controllers](./agent-docs/controllers.md) — shape, deps bundles, project scoping, transactions,
+  timers
+- [Repos](./agent-docs/repos.md) — factories, `DbOrTx`, one query per method, column maps, Zod parsing
+- [Services](./agent-docs/services.md) — what each wraps, `getServices`, env as options, per-process
+  state
+- [Database](./agent-docs/database.md) — schema conventions, ids, migrations, connection
+- [Types](./agent-docs/types.md) — route vs domain schemas, protocol types, naming, `EnvSchema`
+- [Errors](./agent-docs/errors.md) — `HttpError`, the global handler, status choice, provider errors
+- [Plugins](./agent-docs/plugins.md) — logger/swagger/auth plugins, CORS, bootstrap order in
+  `build-server.ts`
+- [Hooks](./agent-docs/hooks.md) — `autohooks.ts`, the auth gates, which folder has which gate,
+  unauthenticated routes
+- [Sockets](./agent-docs/sockets.md) — the agent and browser WebSockets, frame validation, ordering,
+  the registry — read before touching `agent/ws.route.ts`, `frame-router.ts`, `ui/` or
+  `services/sockets/`
 
 ## General Rules
 
 - Use the `src/...` path alias for cross-layer imports. Relative imports only for adjacent /
   same-feature files
+- Layer imports are enforced by `eslint-plugin-boundaries` (see Layered Architecture). Routes never
+  import repos; repos never import controllers, routes or route schemas
 - Route handlers contain zero business logic — declare schema → read deps off `fastify` → call
   controller → return
-- Controllers NEVER access the DB directly and NEVER import a global repos object — they receive
-  repos/`db` as injected params
-- Repos: one method = one Drizzle query; parse the result through its Zod entity schema before
-  returning; register new repos in `src/repos/index.ts`
+- Controllers NEVER access Drizzle directly and NEVER import a global repos or services object —
+  they receive repos/services/`db` as injected params
+- Repos: one method = one Drizzle query; parse the result through its Zod schema before returning;
+  register new repos in `src/repos/index.ts`
+- **Scope by project in the query.** A browser-reachable read or write goes through a repo's
+  `*Owned*` method with `projectId` from `req.membership`; a row the caller's project does not own
+  answers 404, exactly like a missing one
 - A function with two or more parameters of the same type takes a single object param:
 
   ```ts
@@ -172,14 +176,29 @@ Controllers are pure functions with explicit dependencies — this is the bigges
   primitives/generics (no domain types, no repos, no I/O) goes in `src/utils/general.ts` — not as a
   module-private function next to the first controller that needs it. Private helpers are invisible to
   the next controller, so they get retyped. Big helpers (>~25 lines, or owning private sub-helpers)
-  get their own file. Check `general.ts` before writing a new one
+  get their own file (`env-path.ts`). Check `general.ts` before writing a new one
 - Batch reads — never `Promise.all(ids.map(id => repo.getById(id)))`; add a method using `inArray(...)`
 - Parallelize independent reads — when a controller issues 2+ reads with no data dependency between
   them, run them concurrently via `Promise.all([...])` instead of sequential `await`s. Keep dependent
   reads sequential
+- Multi-step writes go in one `db.transaction` opened in the **controller**, with repos built from
+  the `tx` inside. **No external I/O inside a transaction** — an HTTP call, a socket send, anything
+  that can hang ties up the connection and holds locks. Do it before (if the result is needed) or
+  after the commit (side effects only)
+- Throw `HttpError` for anything the client should see; never `try/catch` in a route just to reshape
+  an error. Outside a request (socket handlers, timers, fire-and-forget) catch and log — an unhandled
+  rejection takes the process down
+- Always generate migrations with `pnpm db:migration:generate` and apply them with
+  `pnpm db:migration:run`. Never hand-write migration SQL, never `drizzle-kit push`, never edit or
+  delete an applied migration. See [agent-docs/database.md](./agent-docs/database.md)
+- Every new env var goes in `src/types/EnvSchema.ts` (no `transform`), `.env.example`, and on Fly —
+  see Deployment
 - Secrets are stored hashed and compared in constant time; a plaintext credential is returned in
   exactly one response and is never retrievable again. Never log one — `logger.plugin.ts` redacts
-  `authorization`, and anything equivalent you add must be redacted there too
+  `authorization`, passwords, PATs and webhook secrets, and anything equivalent you add must be
+  redacted there too
+- A change to a socket frame or the project-config grammar changes `agent/`'s hand-written mirror in
+  the same piece of work. See [agent-docs/types.md](./agent-docs/types.md)
 
 ## Preflight
 
@@ -191,7 +210,7 @@ Lint is a **two-tier policy** documented at the top of `eslint.config.mjs`: comp
 are never switched off for production code, size rules (Tier 2) are exemptible per shape. Exemptions
 are granted exactly two ways — a glob in `eslint.config.mjs` with the reason stated, or a one-off
 `// eslint-disable-next-line <rule> -- <reason>`. Silencing a Tier 1 rule instead of refactoring is
-not one of them.
+not one of them, and neither is disabling a `boundaries` rule to let an import through.
 
 ## Deployment
 
@@ -233,7 +252,9 @@ of the first and the third.
   an expected range, stub out the thing under test, `.skip` it, or delete it because it is in the way —
   fix the code, or explain why the test's expectation was wrong and change it deliberately. Deleting a
   test is legitimate in exactly one case: it fails the gate above and never should have been written
-- Tests live beside the code as `<file>.test.ts` and run under Vitest (`pnpm test`)
+- Tests live beside the code as `<file>.test.ts` and run under Vitest (`pnpm test`). Controllers are
+  tested by injecting fakes for their deps (`{ deleteOwned } as unknown as MachineRepo`), never by
+  standing up Fastify or a database
 
 ## Engineering docs
 
@@ -245,6 +266,10 @@ surface, and what was tried and rejected**. Never restate the API: the signature
 doc that paraphrases them rots on the first refactor while looking authoritative. Update the doc in
 the **same commit** as the change that invalidates it — a stale engineering doc is worse than none,
 because it gets believed.
+
+The existing ones are indexed in [agent-docs/controllers.md](./agent-docs/controllers.md) (domain
+READMEs) and [agent-docs/services.md](./agent-docs/services.md) (service docs). `agent-docs/` itself
+is the layer-convention layer: when a convention changes, update its agent-doc in the same commit.
 
 ## HARD RULES
 

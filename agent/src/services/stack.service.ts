@@ -182,6 +182,12 @@ async function answersOnlyOnIpv6(ready: string): Promise<boolean> {
 	return answers(url.toString(), PROBE_TIMEOUT_MS);
 }
 
+async function timedOut(opts: { ready: string; timeoutSeconds: number }): Promise<string> {
+	return (await answersOnlyOnIpv6(opts.ready))
+		? `answers on [::1] but not on ${opts.ready} — it is bound to localhost; start it on 127.0.0.1 (for Vite, --host 127.0.0.1)`
+		: `did not answer ${opts.ready} within ${opts.timeoutSeconds}s`;
+}
+
 async function waitReady(opts: { running: Running; ready: string | null; timeoutSeconds: number }): Promise<string | null> {
 	if (opts.ready === null) {
 		await Promise.race([opts.running.exited, sleep(NO_READY_GRACE_MS)]);
@@ -201,9 +207,7 @@ async function waitReady(opts: { running: Running; ready: string | null; timeout
 		}
 
 		if (Date.now() >= deadline) {
-			return (await answersOnlyOnIpv6(opts.ready))
-				? `answers on [::1] but not on ${opts.ready} — it is bound to localhost; start it on 127.0.0.1 (for Vite, --host 127.0.0.1)`
-				: `did not answer ${opts.ready} within ${opts.timeoutSeconds}s`;
+			return timedOut({ ready: opts.ready, timeoutSeconds: opts.timeoutSeconds });
 		}
 
 		await Promise.race([opts.running.exited, sleep(POLL_MS)]);

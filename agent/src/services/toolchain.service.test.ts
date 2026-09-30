@@ -92,7 +92,7 @@ describe('withToolchainPath', () => {
 
 describe('checksums', () => {
 	it('finds the line for exactly the file asked for', () => {
-		const sums = `aaa  node-v1.2.3-linux-x64.tar.gz.sig\nBBB  node-v1.2.3-linux-x64.tar.gz\n`;
+		const sums = 'aaa  node-v1.2.3-linux-x64.tar.gz.sig\nBBB  node-v1.2.3-linux-x64.tar.gz\n';
 
 		expect(findShasum({ sums, file: 'node-v1.2.3-linux-x64.tar.gz' })).toBe('bbb');
 		expect(findShasum({ sums, file: 'node-v1.2.3-darwin-x64.tar.gz' })).toBeNull();

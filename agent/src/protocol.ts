@@ -6,9 +6,7 @@ import {
 	OnboardingStartMsgSchema,
 	RepoAttachedMsgSchema,
 	RepoAttachMsgSchema,
-	RepoErrorMsgSchema,
-	RunPolicySchema,
-	SealedValueSchema
+	RepoErrorMsgSchema
 } from './onboarding-frames';
 import {
 	BuildSummarizeMsgSchema,
@@ -36,10 +34,29 @@ import {
 	BugfixStartMsgSchema,
 	BugfixTextMsgSchema
 } from './bugfix-frames';
-import { ChatAttachmentSchema } from './chat-attachment';
-import { FootprintSchema } from './footprint';
-import { ProjectProfileSchema } from './project-profile';
 import { CommitOutcomeSchema } from './commit-outcome';
+import {
+	EnvDeleteMsgSchema,
+	EnvErrorMsgSchema,
+	EnvSavedMsgSchema,
+	EnvSetMsgSchema,
+	EnvSetSummarySchema,
+	SecretsSetMsgSchema
+} from './env-frames';
+import {
+	PlanAnswerMsgSchema,
+	PlanAnswerSchema,
+	PlanCancelMsgSchema,
+	PlanModesMsgSchema,
+	PlanQuestionSchema,
+	PlanSayMsgSchema,
+	PlanStartMsgSchema
+} from './plan-frames';
+import {
+	ExecAnswerMsgSchema,
+	ExecCancelMsgSchema,
+	ExecStartMsgSchema
+} from './exec-frames';
 import { QuickFixDoneMsgSchema, QuickFixErrorMsgSchema, QuickFixStartMsgSchema } from './quick-fix-frames';
 
 export {
@@ -69,31 +86,6 @@ export const MachineMemorySchema = z.object({
 });
 
 export type MachineMemory = z.infer<typeof MachineMemorySchema>;
-
-// Everything about an env set except its values, which never leave the machine.
-export const EnvSetSummarySchema = z.object({
-	path: z.string(),
-	keys: z.array(z.string()),
-	updatedAt: z.string()
-});
-
-export type EnvSetSummary = z.infer<typeof EnvSetSummarySchema>;
-
-// What the store takes, after the agent has opened what the browser sealed.
-export interface EnvVarInput {
-	key: string;
-	// Null keeps the stored value: the browser never holds one to send back.
-	value: string | null;
-}
-
-// What arrives on the frame: each value sealed in the browser to this machine's
-// key, so the backend relays ciphertext and nothing it could read.
-export const SealedEnvVarInputSchema = z.object({
-	key: z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/),
-	value: SealedValueSchema.nullable()
-});
-
-export type SealedEnvVarInput = z.infer<typeof SealedEnvVarInputSchema>;
 
 export const HelloMsgSchema = z.object({
 	type: z.literal('hello'),
@@ -149,21 +141,6 @@ export const PongMsgSchema = z.object({
 	id: z.string(),
 	at: z.number()
 });
-
-export const PlanQuestionSchema = z.object({
-	header: z.string(),
-	question: z.string(),
-	options: z.array(z.object({ label: z.string(), description: z.string() })),
-	multiSelect: z.boolean()
-});
-
-export type PlanQuestion = z.infer<typeof PlanQuestionSchema>;
-
-// One entry per question in the same order, so an answer needs no key back to
-// the question it belongs to and cannot be paired with the wrong one.
-export const PlanAnswerSchema = z.object({ selected: z.array(z.string()).min(1) });
-
-export type PlanAnswer = z.infer<typeof PlanAnswerSchema>;
 
 export const PlanTextMsgSchema = z.object({
 	type: z.literal('plan.text'),
@@ -247,21 +224,6 @@ export const UpgradeDeclinedMsgSchema = z.object({
 	queued: z.boolean().default(false)
 });
 
-// The whole summary after the change, so the browser never has to merge one.
-export const EnvSavedMsgSchema = z.object({
-	type: z.literal('env.saved'),
-	requestId: z.string(),
-	envSets: z.array(EnvSetSummarySchema),
-	sessionSecrets: z.array(z.string()).optional()
-});
-
-export const EnvErrorMsgSchema = z.object({
-	type: z.literal('env.error'),
-	requestId: z.string(),
-	// Paths and key names only — never a value.
-	message: z.string()
-});
-
 export const AgentMsgSchema = z.discriminatedUnion('type', [
 	HelloMsgSchema,
 	PreflightMsgSchema,
@@ -322,206 +284,6 @@ export const ShutdownMsgSchema = z.object({
 	reason: z.string()
 });
 
-export const PlanStartMsgSchema = z.object({
-	type: z.literal('plan.start'),
-	planId: z.string(),
-	input: z.string(),
-	verifyInUi: z.boolean().default(true),
-	// The grill answers itself: the session takes its own recommendation instead of
-	// stopping for a person who is not there.
-	auto: z.boolean().default(false),
-	// The operator's standing "Plan" instructions from the machine's saved
-	// profile. Planning gets them for the same reason execution does: a
-	// convention nobody can read off the code — a skill this repository expects
-	// a session to invoke, a rule the team keeps in its head — is exactly what a
-	// session cannot discover for itself.
-	planInstructions: z.string().nullable().default(null),
-	// The repository's config, for a machine with one attached.
-	config: z.string().nullable().default(null)
-});
-
-// The published plan as it stands, carried on the frame rather than fetched:
-// the agent keeps no plan state, so a revision session that starts an hour after
-// the grill ended needs the artifact handed to it.
-export const PlanSnapshotSchema = z.object({
-	verifyInUi: z.boolean(),
-	auto: z.boolean(),
-	title: z.string().nullable(),
-	bodyMd: z.string().nullable(),
-	acs: z.array(
-		z.object({
-			code: z.string(),
-			text: z.string(),
-			sliceOrdinal: z.number().int().nullable()
-		})
-	),
-	slices: z.array(
-		z.object({
-			ordinal: z.number().int(),
-			kind: z.enum(['build', 'verify']),
-			title: z.string(),
-			bodyMd: z.string().nullable(),
-			foundation: z.boolean(),
-			footprint: FootprintSchema
-		})
-	)
-});
-
-// A line the person typed into the plan's chat. It reaches a live session as
-// another turn on its stdin; when the session is already over it starts a
-// revision session with the published plan in front of it.
-export type PlanSnapshot = z.infer<typeof PlanSnapshotSchema>;
-
-export const PlanSayMsgSchema = z.object({
-	type: z.literal('plan.say'),
-	planId: z.string(),
-	text: z.string(),
-	attachments: z.array(ChatAttachmentSchema).default([]),
-	notes: z.string().nullable().default(null),
-	config: z.string().nullable().default(null),
-	plan: PlanSnapshotSchema
-});
-
-// A person flipped a flag while the grill is running. It reaches a live session
-// only; one that has already ended reads the flags off the next \`plan.say\`.
-export const PlanModesMsgSchema = z.object({
-	type: z.literal('plan.modes'),
-	planId: z.string(),
-	verifyInUi: z.boolean(),
-	auto: z.boolean()
-});
-
-export const PlanAnswerMsgSchema = z.object({
-	type: z.literal('plan.answer'),
-	planId: z.string(),
-	questionId: z.string(),
-	answers: z.array(PlanAnswerSchema).min(1)
-});
-
-export const PlanCancelMsgSchema = z.object({
-	type: z.literal('plan.cancel'),
-	planId: z.string()
-});
-
-export const ExecSliceSchema = z.object({
-	ordinal: z.number().int(),
-	kind: z.enum(['build', 'verify']),
-	title: z.string(),
-	bodyMd: z.string().nullable()
-});
-
-export const ExecFindingSchema = z.object({
-	id: z.string(),
-	acCode: z.string().nullable(),
-	kind: z.enum(['criterion', 'console', 'network', 'visual']),
-	reproduction: z.string(),
-	severity: z.enum(['high', 'medium', 'low'])
-});
-
-export type ExecFinding = z.infer<typeof ExecFindingSchema>;
-
-export const ExecPriorProposalSchema = z.object({
-	title: z.string(),
-	input: z.string(),
-	status: z.enum(['open', 'dismissed'])
-});
-
-export type ExecPriorProposal = z.infer<typeof ExecPriorProposalSchema>;
-
-// Null on a build bullet. A verify slice runs as several sessions: a drive in the
-// lane, a fix in a build slot, and a re-check of what the fix repaired.
-export const RunPhaseSchema = z.enum(['drive', 'fix', 'recheck']);
-
-// Everything the session needs travels in the frame. The agent holds no plan
-// state of its own, so a slice dispatched after a reconnect needs no lookup and
-// no cache that could disagree with the row the backend scheduled from.
-export const ExecStartMsgSchema = z.object({
-	type: z.literal('exec.start'),
-	runId: z.string(),
-	buildId: z.string(),
-	worktreePath: z.string(),
-	branch: z.string(),
-	baseRef: z.string(),
-	// An AFK plan's bullets are given no way to ask.
-	afk: z.boolean(),
-	planId: z.string(),
-	sliceId: z.string(),
-	planNumber: z.number().int(),
-	planTitle: z.string(),
-	planBodyMd: z.string(),
-	// A machine with no repository runs on the profile edited in the browser. A
-	// repository machine runs on the config bosun holds for it, and takes
-	// `policy` — the one environment fact the config never holds, and only the
-	// lane's — from here.
-	profile: ProjectProfileSchema,
-	config: z.string().nullable().default(null),
-	policy: RunPolicySchema.nullable().default(null),
-	portBase: z.number().int(),
-	slice: ExecSliceSchema,
-	phase: RunPhaseSchema.nullable(),
-	acs: z.array(z.object({ code: z.string(), text: z.string() })),
-	// Every criterion in the plan, not only this bullet's — a verify session is
-	// measured against the whole feature.
-	planAcs: z.array(z.object({ code: z.string(), text: z.string() })),
-	decisions: z.array(z.object({ fork: z.string(), chose: z.string() })),
-	doneSlices: z.array(z.object({ ordinal: z.number().int(), title: z.string() })),
-	// What bosun changed about this plan to fit the others: standing instruction.
-	amendments: z.array(z.string()),
-	// Provider branches merged in before the bullet, so a stacked plan builds on
-	// whatever its provider gained since it started.
-	mergeIn: z.array(z.string()),
-	// Push the branch after committing.
-	push: z.boolean(),
-	// A bullet restarted after its question was answered.
-	answer: z
-		.object({ questions: z.array(PlanQuestionSchema), answers: z.array(PlanAnswerSchema) })
-		.nullable(),
-	findings: z.array(ExecFindingSchema),
-	// What fix sessions already proposed for this repository and nobody started.
-	// Defaulted so a frame from a backend that predates proposals still parses.
-	priorProposals: z.array(ExecPriorProposalSchema).default([]),
-	// The criteria a re-check drives, or a fix-again session is limited to. Empty on
-	// a first fix, which is how that session knows the codebase sweep is still its job.
-	recheckCodes: z.array(z.string()),
-	// The most memory this session may use, chosen by the scheduler so the limits
-	// of everything running fit the machine. Null when the machine has not
-	// reported its memory; the session is then limited to what the machine can spare.
-	memoryMaxBytes: z.number().int().positive().nullable().default(null)
-});
-
-export const ExecCancelMsgSchema = z.object({ type: z.literal('exec.cancel'), runId: z.string() });
-
-export const ExecAnswerMsgSchema = z.object({
-	type: z.literal('exec.answer'),
-	runId: z.string(),
-	questionId: z.string(),
-	answers: z.array(PlanAnswerSchema).min(1)
-});
-
-// Both are answered on the socket that asked, never through the sink: somebody
-// in the browser is waiting on this request, and a reply replayed on another
-// connection answers nobody. `vars` replaces the stored set for the path whole.
-export const EnvSetMsgSchema = z.object({
-	type: z.literal('env.set'),
-	requestId: z.string(),
-	path: z.string(),
-	vars: z.array(SealedEnvVarInputSchema).min(1)
-});
-
-// The session secrets, replaced whole. Answered like `env.set`.
-export const SecretsSetMsgSchema = z.object({
-	type: z.literal('secrets.set'),
-	requestId: z.string(),
-	vars: z.array(SealedEnvVarInputSchema)
-});
-
-// The stored set only. `.env` files already written into worktrees stay.
-export const EnvDeleteMsgSchema = z.object({
-	type: z.literal('env.delete'),
-	requestId: z.string(),
-	path: z.string()
-});
-
 export const ServerMsgSchema = z.discriminatedUnion('type', [
 	RefreshMsgSchema,
 	UpgradeMsgSchema,
@@ -556,8 +318,6 @@ export const ServerMsgSchema = z.discriminatedUnion('type', [
 
 export type ServerMsg = z.infer<typeof ServerMsgSchema>;
 
-export type ExecStart = z.infer<typeof ExecStartMsgSchema>;
-
 export {
 	type BuildSummarize,
 	type BuildWorktreeEnsure,
@@ -570,3 +330,43 @@ export {
 
 export { type BugfixStart, type BugfixSay } from './bugfix-frames';
 export { type QuickFixStart } from './quick-fix-frames';
+
+export {
+	EnvSetSummarySchema,
+	type EnvSetSummary,
+	type EnvVarInput,
+	SealedEnvVarInputSchema,
+	type SealedEnvVarInput,
+	EnvSavedMsgSchema,
+	EnvErrorMsgSchema,
+	EnvSetMsgSchema,
+	SecretsSetMsgSchema,
+	EnvDeleteMsgSchema
+} from './env-frames';
+
+export {
+	PlanQuestionSchema,
+	type PlanQuestion,
+	PlanAnswerSchema,
+	type PlanAnswer,
+	PlanStartMsgSchema,
+	PlanSnapshotSchema,
+	type PlanSnapshot,
+	PlanSayMsgSchema,
+	PlanModesMsgSchema,
+	PlanAnswerMsgSchema,
+	PlanCancelMsgSchema
+} from './plan-frames';
+
+export {
+	ExecSliceSchema,
+	ExecFindingSchema,
+	type ExecFinding,
+	ExecPriorProposalSchema,
+	type ExecPriorProposal,
+	RunPhaseSchema,
+	ExecStartMsgSchema,
+	ExecCancelMsgSchema,
+	ExecAnswerMsgSchema,
+	type ExecStart
+} from './exec-frames';

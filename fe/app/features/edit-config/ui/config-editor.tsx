@@ -5,18 +5,28 @@ import { useSaveConfig } from '~/features/edit-config/api/use-save-config'
 import { configIssues } from '~/features/edit-config/lib/config-issues'
 
 const PLACEHOLDER = `Toolchain:
-- Node: 24.15.0
-- Package manager: pnpm@11.8.0
+- Node 24.15.0
+- pnpm 11.8.0
 
-Install: pnpm install --frozen-lockfile
+Install:
+- be: pnpm install
+- fe: pnpm install
 
 Apps:
-web:
-- Start: pnpm dev --port {port}
-- Ready: {url.web}
+be:
+- Migrate: pnpm db:migrate
+- Start: pnpm dev
+- Test: pnpm test
+fe:
+- Start: pnpm dev
+- Test: pnpm test
 
 Feedback loops:
-web: npm run ci`
+- be: pnpm lint && pnpm test
+- fe: pnpm lint && pnpm test
+
+Test accounts:
+- admin: TEST_ADMIN_EMAIL / TEST_ADMIN_PASSWORD`
 
 export function ConfigEditor ({
 	repositoryId,
