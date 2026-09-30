@@ -80,8 +80,6 @@ export const RepositoryMessagesRespSchema = z.array(RepositoryMessageSchema);
 
 export const AskLineReqSchema = z.object({ question: z.string().min(1).max(4000) });
 
-export const UpdateRepositoryReqSchema = z.object({ autoResolveConflicts: z.boolean() });
-
 export const UpdateMachineCapacityReqSchema = z
 	.object({
 		verifyLanes: z.number().int().min(0).max(4),

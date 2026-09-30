@@ -19,7 +19,6 @@ const columns = {
 	providerDefaultBranch: repositories.defaultBranch,
 	defaultBranchOverride: repositories.defaultBranchOverride,
 	config: repositories.config,
-	autoResolveConflicts: repositories.autoResolveConflicts,
 	lastSyncedAt: repositories.lastSyncedAt,
 	azureSyncMode: repositories.azureSyncMode,
 	createdAt: repositories.createdAt
@@ -222,16 +221,6 @@ export function getRepositoryRepo(db: DbOrTx) {
 			const rows = await db.select(columns).from(repositories).where(eq(repositories.githubRepoId, githubRepoId));
 
 			return rows.map((row) => RepositorySchema.parse(row));
-		},
-
-		async saveAutoResolve(opts: { id: string; projectId: string; autoResolveConflicts: boolean }): Promise<Repository | null> {
-			const [row] = await db
-				.update(repositories)
-				.set({ autoResolveConflicts: opts.autoResolveConflicts })
-				.where(and(eq(repositories.id, opts.id), eq(repositories.projectId, opts.projectId)))
-				.returning(columns);
-
-			return row ? RepositorySchema.parse(row) : null;
 		},
 
 		async saveDefaultBranchOverride(opts: { id: string; projectId: string; defaultBranchOverride: string | null }): Promise<Repository | null> {

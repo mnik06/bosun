@@ -1,7 +1,6 @@
 import { type WebSocket } from '@fastify/websocket';
 import { type RawData } from 'ws';
 import { FastifyBaseLogger, FastifyInstance, FastifyPluginAsync } from 'fastify';
-import { type MachineRepo } from 'src/repos/machines/machine.repo';
 import { markMachineOffline } from 'src/controllers/machines/mark-machine-offline';
 import { markMachineOnline } from 'src/controllers/machines/mark-machine-online';
 import { reconcileRepository } from 'src/controllers/machines/reconcile-repository';
@@ -38,7 +37,7 @@ const TOUCH_MS = 60_000;
 function startHeartbeat(opts: {
 	socket: WebSocket;
 	machineId: string;
-	machineRepo: MachineRepo;
+	machineRepo: FastifyInstance['repos']['machineRepo'];
 	log: FastifyBaseLogger;
 }): () => void {
 	let missed = 0;

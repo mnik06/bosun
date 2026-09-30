@@ -56,7 +56,9 @@ export const IntegrateStartMsgSchema = z.object({
 	branch: z.string(),
 	onto: z.string(),
 	config: z.string().nullable(),
-	autoResolve: z.boolean(),
+	// Always true: conflict and red-check sessions always run. Kept on the wire
+	// because agents before 4.0.16 require it; drop once none are left.
+	autoResolve: z.literal(true),
 	criteria: PlanCriteriaSchema,
 	portBase: z.number().int(),
 	memoryMaxBytes: z.number().int().positive().nullable()

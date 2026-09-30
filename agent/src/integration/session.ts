@@ -182,10 +182,6 @@ export function createIntegrationSessions(opts: { services: Services; send: (mes
 		files: string[];
 		env: NodeJS.ProcessEnv;
 	}): Promise<{ ok: true; resolved: ResolvedConflict[] } | Outcome> {
-		if (!ctx.msg.autoResolve) {
-			return needsYou('conflict', `merging ${ctx.msg.onto} conflicts in ${ctx.files.join(', ')}, and this repository resolves conflicts by hand`);
-		}
-
 		const branchHead = await ctx.git.headSha();
 		let gaveUp: string | null = null;
 
@@ -280,10 +276,6 @@ export function createIntegrationSessions(opts: { services: Services; send: (mes
 
 		if (first.ok) {
 			return first;
-		}
-
-		if (!ctx.msg.autoResolve) {
-			return needsYou('checks', `\`${first.check}\` is red after merging ${ctx.msg.onto}:\n${first.output}`);
 		}
 
 		opts.send({ type: 'integrate.activity', integrationId: ctx.msg.integrationId, label: 'Repairing a red check' });

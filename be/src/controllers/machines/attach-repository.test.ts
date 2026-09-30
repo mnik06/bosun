@@ -38,7 +38,6 @@ const REPOSITORY: Repository = {
 	fullName: 'acme/app',
 	defaultBranch: 'main',
 	config: null,
-	autoResolveConflicts: true,
 	lastSyncedAt: null,
 	azureSyncMode: null,
 	createdAt: new Date()

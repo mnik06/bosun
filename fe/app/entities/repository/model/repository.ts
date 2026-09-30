@@ -64,7 +64,6 @@ export const RepositorySchema = z.object({
 	providerDefaultBranch: z.string().nullish(),
 	defaultBranchOverride: z.string().nullish(),
 	config: z.string().nullable(),
-	autoResolveConflicts: z.boolean(),
 	lastSyncedAt: z.iso.datetime().nullable(),
 	azureSyncMode: z.enum(['webhook', 'polling']).nullable(),
 	createdAt: z.iso.datetime()

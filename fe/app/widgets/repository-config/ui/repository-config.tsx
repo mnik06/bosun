@@ -3,7 +3,6 @@ import { Alert, Card, Stack, Text } from '@mantine/core'
 import type { Machine } from '~/entities/machine'
 import { useRepositoriesQuery, useRepositoryConfigQuery } from '~/entities/repository'
 import { ConfigEditor } from '~/features/edit-config'
-import { AutoResolveSwitch } from '~/features/toggle-auto-resolve'
 import { toErrorMessage } from '~/shared/lib'
 import { SectionLoader } from '~/shared/ui'
 
@@ -36,8 +35,6 @@ function ConfigPane ({ repositoryId }: { repositoryId: string }) {
 						Shared by every machine attached to {fullName}.
 					</Text>
 				</Stack>
-
-				{repository === undefined ? null : <AutoResolveSwitch repository={repository} />}
 
 				<ConfigEditor key={initialText} repositoryId={repositoryId} initialText={initialText} />
 			</Stack>

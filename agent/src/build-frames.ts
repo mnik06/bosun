@@ -59,7 +59,6 @@ export const IntegrateStartMsgSchema = z.object({
 	branch: z.string(),
 	onto: z.string(),
 	config: z.string().nullable(),
-	autoResolve: z.boolean(),
 	criteria: PlanCriteriaSchema,
 	portBase: z.number().int(),
 	memoryMaxBytes: z.number().int().positive().nullable()

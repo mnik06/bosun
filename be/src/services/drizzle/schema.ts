@@ -196,7 +196,6 @@ export const repositories = pgTable(
 		// write, so a config that reaches a machine is one its schema accepts. Null
 		// means no config yet — never a file bosun reads from the customer's tree.
 		config: text(),
-		autoResolveConflicts: boolean().notNull().default(true),
 		// Azure has no equivalent of a GitHub webhook installation event to announce
 		// a first successful sync, so the UI reads this instead — a PAT-connected
 		// GitHub repository writes it too, from the same webhook delivery or the

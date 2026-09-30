@@ -1,7 +1,67 @@
 import globals from 'globals';
 import pluginJs from '@eslint/js';
+import boundaries from 'eslint-plugin-boundaries';
 import sonarjs from 'eslint-plugin-sonarjs';
 import tsEslint from 'typescript-eslint';
+
+/**
+ * Layered architecture, mechanically enforced. See CLAUDE.md § Layered Architecture
+ * and agent-docs/controllers.md. Dependencies flow one way only:
+ *
+ *   route -> controller -> repo -> db
+ *
+ * `api/routes/schemas` and `api/errors` are declaration layers that merely live under
+ * `api/`; every layer may import them. The one-way ban is about routes and repos: a repo
+ * never reaches back up into a controller or a route, and a route never reaches past its
+ * controller into a repo.
+ */
+const BE_ELEMENTS = [
+  { type: 'route-schema', pattern: 'src/api/routes/schemas', partialMatch: false },
+  { type: 'route', pattern: 'src/api/routes', partialMatch: false },
+  { type: 'errors', pattern: 'src/api/errors', partialMatch: false },
+  { type: 'api-infra', pattern: 'src/api', partialMatch: false },
+  { type: 'controller', pattern: 'src/controllers/*', capture: ['domain'], partialMatch: false },
+  { type: 'repo', pattern: 'src/repos', partialMatch: false },
+  { type: 'service', pattern: 'src/services/*', capture: ['service'], partialMatch: false },
+  { type: 'util', pattern: 'src/utils', partialMatch: false },
+  { type: 'domain-type', pattern: 'src/types', partialMatch: false }
+];
+
+const DECLARATIVE = ['domain-type', 'util', 'errors'];
+
+const BE_POLICIES = [
+  // `HttpError` is a declaration, not a dependency: a lookup helper may throw the 404 itself.
+  { from: { element: { type: 'util' } }, allow: { to: { element: { type: ['util', 'errors'] } } } },
+  {
+    from: { element: { type: 'route-schema' } },
+    allow: { to: { element: { type: [...DECLARATIVE, 'service'] } } }
+  },
+  { from: { element: { type: 'errors' } }, allow: { to: { element: { type: [...DECLARATIVE, 'service'] } } } },
+  {
+    from: { element: { type: 'domain-type' } },
+    allow: { to: { element: { type: [...DECLARATIVE, 'service', 'repo'] } } }
+  },
+  { from: { element: { type: 'repo' } }, allow: { to: { element: { type: [...DECLARATIVE, 'service'] } } } },
+  {
+    from: { element: { type: 'service' } },
+    allow: { to: { element: { type: [...DECLARATIVE, 'service', 'repo'] } } }
+  },
+  {
+    from: { element: { type: 'controller' } },
+    allow: {
+      to: { element: { type: [...DECLARATIVE, 'service', 'repo', 'route-schema', 'controller'] } }
+    }
+  },
+  {
+    from: { element: { type: 'route' } },
+    allow: {
+      to: {
+        element: { type: [...DECLARATIVE, 'service', 'controller', 'route-schema', 'api-infra'] }
+      }
+    }
+  },
+  { from: { element: { type: 'api-infra' } }, allow: { to: { element: { type: '*' } } } }
+];
 
 /**
  * Two-tier lint policy.
@@ -110,6 +170,20 @@ export default [
       ]
     }
   }),
+
+  {
+    files: ['src/**/*.ts'],
+    plugins: { boundaries },
+    settings: {
+      'boundaries/elements': BE_ELEMENTS,
+      'import/resolver': {
+        typescript: { alwaysTryTypes: true, project: './tsconfig.json' }
+      }
+    },
+    rules: {
+      'boundaries/dependencies': ['error', { default: 'disallow', policies: BE_POLICIES }]
+    }
+  },
 
   // Repo factories: `getXRepo(db)` returns an object of N small methods, so
   // ESLint scores the whole factory as one long function. Tier 1 still applies,

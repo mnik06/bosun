@@ -223,7 +223,7 @@ export async function dispatchIntegration(
 				branch: moved.branch,
 				onto: claimed.onto,
 				config: opts.repository.config,
-				autoResolve: opts.repository.autoResolveConflicts,
+				autoResolve: true,
 				criteria,
 				portBase: moved.portBase,
 				memoryMaxBytes: opts.memoryMaxBytes

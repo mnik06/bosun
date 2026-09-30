@@ -1,5 +1,6 @@
 import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import boundaries from 'eslint-plugin-boundaries'
 import jsxA11y from 'eslint-plugin-jsx-a11y'
 import reactPlugin from 'eslint-plugin-react'
 import reactHooks from 'eslint-plugin-react-hooks'
@@ -29,6 +30,44 @@ const tsconfigRootDir = dirname(fileURLToPath(import.meta.url))
  *   - a one-off          -> `// eslint-disable-next-line <rule> -- <reason>`
  * `reportUnusedDisableDirectives` keeps the second kind from going stale.
  */
+
+/**
+ * Capped FSD import direction, mechanically enforced. See agent-docs/architecture.md
+ * § Import direction. Top consumes bottom, never the reverse:
+ *
+ *   views -> widgets -> features -> entities -> shared
+ *
+ * A slice is consumed through its barrel; everything else in it is private. Each
+ * exception added below must be a considered decision, not drift, and state its reason.
+ */
+const FSD_ELEMENTS = [
+	{ type: 'shared', pattern: 'app/shared', partialMatch: false },
+	{ type: 'entity', pattern: 'app/entities/*', capture: ['slice'], partialMatch: false },
+	{ type: 'feature', pattern: 'app/features/*', capture: ['slice'], partialMatch: false },
+	{ type: 'widget', pattern: 'app/widgets/*', capture: ['slice'], partialMatch: false },
+	{ type: 'view', pattern: 'app/views/*', capture: ['slice'], partialMatch: false },
+	{ type: 'app-root', pattern: 'app', partialMatch: false }
+]
+
+const FSD_POLICIES = [
+	{ from: { element: { type: 'entity' } }, allow: { to: { element: { type: 'shared' } } } },
+	{ from: { element: { type: 'feature' } }, allow: { to: { element: { type: ['shared', 'entity'] } } } },
+	{
+		from: { element: { type: 'widget' } },
+		allow: { to: { element: { type: ['shared', 'entity', 'feature'] } } }
+	},
+	{
+		from: { element: { type: 'view' } },
+		allow: { to: { element: { type: ['shared', 'entity', 'feature', 'widget'] } } }
+	},
+	{ from: { element: { type: 'app-root' } }, allow: { to: { element: { type: '*' } } } }
+]
+
+const FSD_BARREL_POLICY = {
+	to: { element: { type: ['entity', 'feature', 'widget'] } },
+	disallow: { to: { element: { fileInternalPath: '!index.ts' } } },
+	message: 'The barrel is the slice public API — import "{{to.element.captured.slice}}" through its index.ts'
+}
 
 export default defineConfig(
 	globalIgnores([
@@ -176,6 +215,33 @@ export default defineConfig(
 			'max-lines-per-function': 'off',
 			'sonarjs/cognitive-complexity': 'off',
 			'sonarjs/no-nested-conditional': 'off'
+		}
+	},
+
+	{
+		files: ['app/**/*.{ts,tsx}'],
+		plugins: { boundaries },
+		settings: {
+			'boundaries/elements': FSD_ELEMENTS,
+			'boundaries/files': [{ category: 'test', pattern: '**/*.test.{ts,tsx}' }],
+			'import/resolver': {
+				typescript: { alwaysTryTypes: true, project: './tsconfig.json' }
+			}
+		},
+		rules: {
+			'boundaries/dependencies': [
+				'error',
+				{ default: 'disallow', policies: [...FSD_POLICIES, FSD_BARREL_POLICY] }
+			]
+		}
+	},
+
+	// Tests reach a slice's fixtures, constants and types directly, so the barrel
+	// requirement is lifted for them. Every direction rule above still applies.
+	{
+		files: ['app/**/*.test.{ts,tsx}'],
+		rules: {
+			'boundaries/dependencies': ['error', { default: 'disallow', policies: FSD_POLICIES }]
 		}
 	},
 

@@ -24,7 +24,6 @@ function repository(overrides: Partial<Repository> = {}): Repository {
 		fullName: 'o/r',
 		defaultBranch: 'main',
 		config: null,
-		autoResolveConflicts: false,
 		lastSyncedAt: null,
 		azureSyncMode: null,
 		createdAt: new Date(),

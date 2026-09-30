@@ -47,7 +47,6 @@ export const RepositorySchema = z.object({
 	config: z.string().nullable(),
 	// Whether an integration may hand a real conflict to a session. Off, a conflict
 	// outside `regenerate` paths goes straight to needs you.
-	autoResolveConflicts: z.boolean(),
 	// The UI's "last synced" line — Azure, and a PAT-connected GitHub repository,
 	// both write it (a webhook delivery or the sync job's poll). Null for an
 	// App-connected GitHub repository, which has no equivalent "last synced"

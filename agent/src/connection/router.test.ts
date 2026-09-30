@@ -577,7 +577,6 @@ describe('integration frames', () => {
 		branch: 'bosun/plan/4-comments',
 		onto: 'main',
 		config: null,
-		autoResolve: true,
 		criteria: { planNumber: 4, title: 'Comments', acs: [] },
 		portBase: 4100,
 		memoryMaxBytes: null

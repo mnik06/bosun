@@ -1,0 +1,1 @@
+ALTER TABLE "repositories" DROP COLUMN "auto_resolve_conflicts";
