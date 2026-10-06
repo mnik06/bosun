@@ -4,7 +4,7 @@ import { createStreamParser } from '../planning/stream-parser';
 import { drivePrompt } from '../prompts/drive';
 import { executionPrompt } from '../prompts/execution';
 import { fixPrompt } from '../prompts/fix';
-import { type RunContext, type RunMode } from '../prompts/shared';
+import { type DatabasePrep, type RunContext, type RunMode } from '../prompts/shared';
 import { type ProjectConfig } from '../project-config';
 import { type AgentMsg, type ExecStart, type PlanAnswer } from '../protocol';
 import { resolveProjectConfig } from '../services/config-resolution';
@@ -74,6 +74,7 @@ function promptFor(opts: {
 	providedEnv: { path: string; keys: string[] }[];
 	project: Project;
 	sessionSecrets: string[];
+	database: DatabasePrep | null;
 }): string {
 	const { msg } = opts;
 	const mode = modeOf(msg);
@@ -87,7 +88,7 @@ function promptFor(opts: {
 		worktreePath: msg.worktreePath,
 		profile: msg.profile,
 		config: opts.project.config,
-		applyMigrations: msg.policy?.applyMigrations ?? msg.profile.applyMigrations,
+		database: opts.database,
 		sessionSecrets: opts.sessionSecrets,
 		portBase: msg.portBase,
 		afk: msg.afk,
@@ -367,11 +368,15 @@ export function createExecutionSessions(opts: {
 	// drive and migrated to this branch's schema, so a verdict is never reached
 	// against another plan's unmerged schema. Both steps are policy-gated — a
 	// machine pointed at a database bosun must not migrate is not one to reset.
-	const prepareDatabase = async (msg: ExecStart, project: Project): Promise<void> => {
+	const prepareDatabase = async (msg: ExecStart, project: Project): Promise<DatabasePrep> => {
 		const config = project.config;
 
-		if (config === null || !(msg.policy?.applyMigrations ?? false)) {
-			return;
+		if (!(msg.policy?.applyMigrations ?? false)) {
+			return 'forbidden';
+		}
+
+		if (config === null) {
+			return 'unconfigured';
 		}
 
 		const reset = config.verify?.resetDatabase;
@@ -381,6 +386,10 @@ export function createExecutionSessions(opts: {
 				definition.migrate === undefined ? [] : [{ label: `Migrate ${app}`, cwd: definition.cwd, run: definition.migrate }]
 			)
 		];
+
+		if (steps.length === 0) {
+			return 'unconfigured';
+		}
 
 		for (const step of steps) {
 			opts.send({ type: 'exec.activity', runId: msg.runId, label: step.label });
@@ -395,6 +404,8 @@ export function createExecutionSessions(opts: {
 				throw new Error(`${step.label} failed (${result.detail})${result.tail.trim() === '' ? '' : `:\n${result.tail.trim().slice(-TAIL_KEPT_CHARS)}`}`);
 			}
 		}
+
+		return 'migrated';
 	};
 
 	const stackFor = (opts2: {
@@ -440,9 +451,7 @@ export function createExecutionSessions(opts: {
 		const providedEnv = written.providedEnv;
 		const project = await prepareProject(msg);
 
-		if (modeOf(msg) === 'lane') {
-			await prepareDatabase(msg, project);
-		}
+		const database = modeOf(msg) === 'lane' ? await prepareDatabase(msg, project) : null;
 
 		if (run.cancelled) {
 			return;
@@ -526,7 +535,8 @@ export function createExecutionSessions(opts: {
 				msg,
 				providedEnv,
 				project,
-				sessionSecrets: project.repository ? opts.services.projectEnv.secretNames() : []
+				sessionSecrets: project.repository ? opts.services.projectEnv.secretNames() : [],
+				database
 			}),
 			mcpConfigPath: mcp.configPath,
 			userServerNames: modeOf(msg) === 'fix' ? [] : userMcp.serverNames,

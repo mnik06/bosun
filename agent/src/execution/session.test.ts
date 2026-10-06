@@ -328,6 +328,28 @@ describe('lane sessions', () => {
 		expect(runShell).not.toHaveBeenCalled();
 	});
 
+	// A repository with no migrate command was driven against an unmigrated
+	// database by a session told it had been migrated, and it blamed the database.
+	it('tells a drive the database was not migrated when the repository has no migrate command', async () => {
+		const deps = services(async () => ({ ok: true, detail: 'cleaned' }), null, undefined, 'repo_1');
+
+		await createExecutionSessions({ services: deps, send: vi.fn() }).start({
+			...START,
+			worktreePath: '/nonexistent-worktree',
+			phase: 'drive',
+			config: null,
+			policy: { applyMigrations: true }
+		});
+
+		const { runShell } = await import('../services/setup-steps.service');
+		const { spawnClaudeSession } = await import('../sessions/process');
+		const session = vi.mocked(spawnClaudeSession).mock.calls[0]![0];
+
+		expect(runShell).not.toHaveBeenCalled();
+		expect(session.prompt).toContain('bosun did **not** migrate the database');
+		expect(session.prompt).not.toContain('applied every migration');
+	});
+
 	// A drive that failed to reset must not go on to drive: its verdict would be
 	// against whatever the database held.
 	it('fails the drive on a database step that fails, before any session starts', async () => {

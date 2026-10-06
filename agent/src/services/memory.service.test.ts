@@ -144,11 +144,26 @@ describe('scopedCommand', () => {
 			args: ['--print']
 		});
 
-		expect(command).toBe('systemd-run');
+		expect(command).toBe('sh');
 		expect(args).toEqual(
 			expect.arrayContaining(['--user', '--scope', '--unit=bosun-run-sr_1', `MemoryMax=${3 * GIB}`, 'OOMPolicy=continue'])
 		);
 		expect(args.slice(-3)).toEqual(['--', 'claude', '--print']);
+	});
+
+	it('stops a scope a previous attempt of the same run left loaded before starting it again', () => {
+		const { command, args } = scopedCommand({
+			scope: { unit: 'bosun-run-sr_1', memoryMaxBytes: 3 * GIB },
+			command: 'claude',
+			args: ['--print']
+		});
+		const script = args[1] ?? '';
+		const [unit, ...rest] = args.slice(3);
+
+		expect(command).toBe('sh');
+		expect(script.indexOf('systemctl --user stop "$1.scope"')).toBeLessThan(script.indexOf('exec systemd-run "$@"'));
+		expect(unit).toBe('bosun-run-sr_1');
+		expect(rest[0]).toBe('--user');
 	});
 });
 

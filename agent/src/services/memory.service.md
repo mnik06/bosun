@@ -20,6 +20,13 @@ is still `claude`'s and killing its process group still reaps everything the ses
   standing. That is also why `run` stops its machine's `bosun-run-<machineId>-*.scope` on startup: a
   session the previous process left behind would otherwise keep writing to a worktree the backend is
   about to hand the same bullet to again.
+- **A retry stops its own leftover scope first.** A scope lives as long as anything in it does, and a
+  session's dev server or daemonised database outlives `claude`. Nothing stops the scope when the
+  session ends, so the next attempt of the same run hit `Unit bosun-run-<machineId>-<runId>.scope was
+  already loaded` and failed in three seconds. `scopedCommand` runs `systemctl --user stop` on the
+  unit before `systemd-run`, inside one `sh -c … exec` so the agent still holds the session's pid. A
+  per-attempt name was rejected: it would start the retry beside the old attempt's processes, still
+  holding the worktree and its ports.
 - **The machine id is in the name because scopes belong to the user, not the agent.** Every agent under
   that user sees every scope. When the pattern was `bosun-run-*`, a verify session that enrolled a test
   machine and started a second agent on the box killed every session the real agent was running, its

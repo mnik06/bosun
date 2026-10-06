@@ -72,13 +72,23 @@ export function scopeUnitFor(opts: { machineId: string; runId: string }): string
 // `systemd-run --scope` registers the scope and then execs the command in the
 // same process, so the pid the agent spawned is still `claude`'s and killing its
 // process group still reaps everything the session started.
+//
+// A scope outlives its `claude` for as long as anything it started does — a dev
+// server, a database the session daemonised — and nothing stops it when the
+// session ends. A retry of the same run then reuses the name and systemd refuses
+// it as "already loaded", so the leftover scope is stopped first. `exec` keeps the
+// pid the agent spawned, which `systemd-run` in turn hands to the command.
 export function scopedCommand(opts: { scope: SessionScope; command: string; args: string[] }): {
 	command: string;
 	args: string[];
 } {
 	return {
-		command: 'systemd-run',
+		command: 'sh',
 		args: [
+			'-c',
+			'systemctl --user stop "$1.scope" >/dev/null 2>&1; shift; exec systemd-run "$@"',
+			'sh',
+			opts.scope.unit,
 			'--user',
 			'--scope',
 			'--quiet',

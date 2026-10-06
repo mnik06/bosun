@@ -8,6 +8,8 @@ import { type ReadTree } from '../services/repo.service';
 // re-check — drives the product against a database bosun prepared, and keeps nothing.
 export type RunMode = 'build' | 'lane' | 'fix';
 
+export type DatabasePrep = 'migrated' | 'forbidden' | 'unconfigured';
+
 export interface RunContext {
 	mode: RunMode;
 	planNumber: number;
@@ -20,8 +22,9 @@ export interface RunContext {
 	// The config bosun holds for the repository. Null on a machine with no
 	// repository, which runs on `profile` as before.
 	config: ProjectConfig | null;
-	// Policy, not a fact about the code: whether this machine's lane may migrate.
-	applyMigrations: boolean;
+	// What bosun did to the development database before a lane session; null
+	// outside the lane, which never touches it.
+	database: DatabasePrep | null;
 	// Session-secret names in the session's environment. Never the values.
 	sessionSecrets: string[];
 	portBase: number;
@@ -338,9 +341,19 @@ blocked: say so, and do not work around it.`;
 // The database belongs to the lane. Every worktree gets the same env, so a bullet
 // that migrated would put its unmerged schema under every other plan on the box —
 // and a verify that passed against another plan's schema proves nothing.
-export function migrationRule(context: Pick<RunContext, 'mode' | 'applyMigrations'>): string {
+const DATABASE_STATE: Record<DatabasePrep, string> = {
+	migrated: 'bosun reset this machine\'s development database and applied every migration before you started.',
+	forbidden: 'bosun left the database alone before you started — this machine may not be migrated.',
+	// Said plainly so a schema behind the branch is reported as the config gap it
+	// is: a session told the database was migrated blamed the shared database
+	// instead, and nobody looked at the missing command.
+	unconfigured:
+		'bosun did **not** migrate the database: this repository has no config in bosun, or its config has no `migrate` command. A missing table or column this branch adds is that gap — report it once as a blocker naming the missing `migrate` command, which a leader adds to the repository\'s config from the browser.'
+};
+
+export function migrationRule(context: Pick<RunContext, 'mode' | 'database'>): string {
 	if (context.mode === 'lane') {
-		return `Migrations: bosun ${context.applyMigrations ? 'reset this machine\'s development database and applied every migration' : 'left the database alone — this machine may not be migrated —'} before you started. **Never generate, apply or roll back a migration, and never reset or seed the database yourself.**`;
+		return `Migrations: ${DATABASE_STATE[context.database ?? 'forbidden']} **Never generate, apply or roll back a migration, and never reset or seed the database yourself.**`;
 	}
 
 	return `Migrations: **never apply one, and never run a test that needs a database.** Change the schema and
