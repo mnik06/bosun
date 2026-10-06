@@ -78,6 +78,12 @@ function menuItems (opts: { detail: Detail, state: PlanState }): ReactNode[] {
 	}
 
 	const cancel = <BuildMenuItem key="cancel" buildId={build.id} control="cancel" />
+	// The backend refuses the rest: an unbuilt plan has nothing to verify, and an
+	// overlap waits on its decision.
+	const reverify =
+		build.builtAt !== null && build.needsYouReason !== 'overlap'
+			? [<BuildMenuItem key="reverify" buildId={build.id} control="reverify" />]
+			: []
 
 	switch (opts.state) {
 		case 'scheduled':
@@ -86,14 +92,16 @@ function menuItems (opts: { detail: Detail, state: PlanState }): ReactNode[] {
 		case 'building':
 		case 'integrating':
 		case 'verifying':
-		case 'needs_you':
-		case 'failed':
 		case 'fixing_bugs':
 			return [cancel]
+		case 'needs_you':
+		case 'failed':
+			return [...reverify, cancel]
 		case 'in_review':
-			return foundationShippable(opts.detail)
-				? [<ShipFoundationMenuItem key="ship" buildId={build.id} planId={plan.id} />]
-				: []
+			return [
+				...reverify,
+				...(foundationShippable(opts.detail) ? [<ShipFoundationMenuItem key="ship" buildId={build.id} planId={plan.id} />] : [])
+			]
 		case 'drafting':
 		case 'needs_approval':
 		case 'merged':

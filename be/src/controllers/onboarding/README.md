@@ -6,8 +6,18 @@ happens once per machine. A run keeps the phase it was started as and moves thro
 ```
 discover:  discovering ──► needs_input ──► verifying ──► ready
 verify:                    needs_input ──► verifying ──► ready
+config:    discovering ──────────────────────────────► ready
                  └────────────── failed ◄───────┘
 ```
+
+A **config** run regenerates the repository's config and nothing else. The agent runs it as an
+ordinary discovery (the frame says `discover`; an agent knows only two phases), but bosun settles it
+at `ready` the moment the session ends with a published config: no inputs, no verify. It is left
+out of `latestForMachine`, so the machine's onboarding, its inputs and the verify that
+`maybeStartVerify` would start all stay with the run before it — regenerating a config that a
+schema change wiped must not make an onboarded machine look new. It still holds the port range and
+counts as the machine's one active run while it lasts. Its requirements and assumptions stay on its
+own row: the latest *discovery* is what a second machine copies.
 
 ## Why it is shaped this way
 

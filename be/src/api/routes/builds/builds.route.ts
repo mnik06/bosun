@@ -12,7 +12,7 @@ import { acceptGaps, fixAgain } from 'src/controllers/line/recheck-choice';
 import { shipFoundation } from 'src/controllers/line/ship-foundation';
 import { BuildSchema } from 'src/types/BuildSchema';
 
-const ACTIONS: BuildAction[] = ['hold', 'release', 'cancel', 'front', 'retry'];
+const ACTIONS: BuildAction[] = ['hold', 'release', 'cancel', 'front', 'retry', 'reverify'];
 
 const routes: FastifyPluginAsync = async function (f) {
 	const fastify = f.withTypeProvider<ZodTypeProvider>();

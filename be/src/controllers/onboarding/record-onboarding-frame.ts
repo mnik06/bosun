@@ -38,17 +38,20 @@ export async function recordOnboardingFrame(
 		return;
 	}
 
+	// A config run has published what it was started for; inputs and verify belong
+	// to the machine's own onboarding, which it leaves alone.
+	const awaitsInputs = run.status === 'discovering' && run.phase !== 'config';
 	const next = await deps.onboardingRunRepo.update(
-		run.status === 'discovering'
+		awaitsInputs
 			? { id: run.id, status: 'needs_input', portBase: null }
-			: { id: run.id, status: 'ready', finishedAt: new Date() }
+			: { id: run.id, status: 'ready', portBase: null, finishedAt: new Date() }
 	);
 	const settled = next ?? run;
 
 	announceOnboarding({ socketRegistry: deps.socketRegistry, projectId: opts.projectId, run: settled });
 	await notifyOnboardingStatus(deps, { projectId: opts.projectId, run: settled });
 
-	if (run.status === 'discovering') {
+	if (awaitsInputs) {
 		await maybeStartVerify(deps, { machineId: opts.machineId });
 	}
 }

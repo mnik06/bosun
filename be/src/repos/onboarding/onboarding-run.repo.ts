@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, isNull, ne, sql } from 'drizzle-orm';
 import { type DbOrTx } from 'src/services/drizzle/drizzle.service';
 import { onboardingRuns } from 'src/services/drizzle/schema';
 import {
@@ -66,11 +66,24 @@ export function getOnboardingRunRepo(db: DbOrTx) {
 			return row ? OnboardingRunSchema.parse(row) : null;
 		},
 
+		// The run that stands for the machine's onboarding. A config-only run is
+		// left out: regenerating the config does not un-onboard the machine.
 		async latestForMachine(machineId: string): Promise<OnboardingRun | null> {
 			const [row] = await db
 				.select(columns)
 				.from(onboardingRuns)
-				.where(eq(onboardingRuns.machineId, machineId))
+				.where(and(eq(onboardingRuns.machineId, machineId), ne(onboardingRuns.phase, 'config')))
+				.orderBy(desc(onboardingRuns.startedAt))
+				.limit(1);
+
+			return row ? OnboardingRunSchema.parse(row) : null;
+		},
+
+		async latestConfigRunForMachine(machineId: string): Promise<OnboardingRun | null> {
+			const [row] = await db
+				.select(columns)
+				.from(onboardingRuns)
+				.where(and(eq(onboardingRuns.machineId, machineId), eq(onboardingRuns.phase, 'config')))
 				.orderBy(desc(onboardingRuns.startedAt))
 				.limit(1);
 

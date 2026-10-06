@@ -26,7 +26,8 @@ export const RepoErrorMsgSchema = z.object({
 export const OnboardingStartMsgSchema = z.object({
 	type: z.literal('onboarding.start'),
 	runId: z.string(),
-	phase: OnboardingPhaseSchema,
+	// The agent knows only these two: a `config` run is a discovery to it.
+	phase: OnboardingPhaseSchema.exclude(['config']),
 	portBase: z.number().int(),
 	// Null when the repository has no config yet.
 	config: z.string().nullable(),

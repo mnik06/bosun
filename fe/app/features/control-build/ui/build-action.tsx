@@ -1,5 +1,5 @@
 import { Button, Menu } from '@mantine/core'
-import { ArrowUpToLine, Hand, Play, RotateCcw, Square, X, type LucideIcon } from 'lucide-react'
+import { ArrowUpToLine, Hand, Play, RotateCcw, ScanSearch, Square, X, type LucideIcon } from 'lucide-react'
 
 import { useControlBuild, type BuildAction } from '~/features/control-build/api/use-control-build'
 import { confirmAction } from '~/shared/lib'
@@ -30,6 +30,16 @@ const CONTROLS: Record<BuildControl, ControlSpec> = {
 	},
 	release: { action: 'release', label: 'Release', icon: Play },
 	retry: { action: 'retry', label: 'Retry', icon: RotateCcw },
+	reverify: {
+		action: 'reverify',
+		label: 'Run verify again',
+		icon: ScanSearch,
+		confirm: {
+			title: 'Run verify again?',
+			body: 'Every finding and verdict from the last verify is discarded and the plan goes back into the verify line for a fresh drive. The branch and every built bullet stay; an open pull request is updated once the new verify finishes.',
+			label: 'Verify again'
+		}
+	},
 	front: { action: 'front', label: 'Move to front', icon: ArrowUpToLine },
 	cancel: {
 		action: 'cancel',

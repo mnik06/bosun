@@ -8,7 +8,8 @@ import { onboardingBlock } from '~/features/start-onboarding/lib/onboarding-bloc
 
 const DEFAULT_LABELS: Record<OnboardingPhase, string> = {
 	discover: 'Start onboarding',
-	verify: 'Run verify'
+	verify: 'Run verify',
+	config: 'Generate config'
 }
 
 export function StartOnboardingButton ({

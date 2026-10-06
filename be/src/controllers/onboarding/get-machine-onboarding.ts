@@ -10,9 +10,12 @@ export async function getMachineOnboarding(opts: {
 	onboardingRunRepo: OnboardingRunRepo;
 	machineId: string;
 	projectId: string;
-}): Promise<{ run: OnboardingRun; missing: OnboardingRequirement[] }> {
+}): Promise<{ run: OnboardingRun; missing: OnboardingRequirement[]; configRun: OnboardingRun | null }> {
 	const machine = await getMachine({ machineRepo: opts.machineRepo, id: opts.machineId, projectId: opts.projectId });
-	const run = await opts.onboardingRunRepo.latestForMachine(machine.id);
+	const [run, configRun] = await Promise.all([
+		opts.onboardingRunRepo.latestForMachine(machine.id),
+		opts.onboardingRunRepo.latestConfigRunForMachine(machine.id)
+	]);
 
 	if (!run) {
 		throw new HttpError(404, 'This machine has not been onboarded');
@@ -20,5 +23,5 @@ export async function getMachineOnboarding(opts: {
 
 	const requirements = run.requirements.map((requirement) => ({ ...requirement, optional: isOptionalRequirement(requirement) }));
 
-	return { run: { ...run, requirements }, missing: missingRequirements({ requirements, machine }) };
+	return { run: { ...run, requirements }, missing: missingRequirements({ requirements, machine }), configRun };
 }

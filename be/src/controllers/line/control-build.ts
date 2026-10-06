@@ -6,10 +6,16 @@ import { getOwnedBuild } from 'src/controllers/line/shared/build-access';
 import { removeWorktree, stopRunningJobs } from 'src/controllers/line/shared/lifecycle';
 import { nextJob, waitingStatus } from 'src/controllers/line/shared/next-job';
 import { notifyBuildStatus } from 'src/controllers/line/shared/notify';
+import { getBuildRepo } from 'src/repos/builds/build.repo';
+import { getIntegrationRepo } from 'src/repos/builds/integration.repo';
+import { getSliceRunRepo } from 'src/repos/builds/slice-run.repo';
+import { getVerifyFindingRepo } from 'src/repos/builds/verify-finding.repo';
+import { getAcRepo } from 'src/repos/plans/ac.repo';
 import { type Build, type BuildStatus } from 'src/types/BuildSchema';
+import { type Plan } from 'src/types/PlanSchema';
 import { orNotFound } from 'src/utils/general';
 
-export type BuildAction = 'hold' | 'release' | 'cancel' | 'front' | 'retry';
+export type BuildAction = 'hold' | 'release' | 'cancel' | 'front' | 'retry' | 'reverify';
 
 const HOLDABLE: BuildStatus[] = ['scheduled', 'building', 'waiting_answer', 'integrating', 'waiting_verify', 'driving', 'fixing', 'rechecking'];
 
@@ -19,13 +25,17 @@ const CANCELLABLE: BuildStatus[] = [...HOLDABLE, 'held', 'in_review', 'fixing_bu
 // re-check by fix again or accept.
 const RETRYABLE_NEEDS_YOU = new Set(['integration', 'checks', 'provider_failed', 'worktree']);
 
+// Nothing is running in any of these, so the verify slice can be rebuilt under
+// it. An overlap waits on a decision, not on a verdict.
+const REVERIFIABLE: BuildStatus[] = ['in_review', 'needs_you', 'failed'];
+
 function refuse(build: Build, allowed: BuildStatus[], message: string): void {
 	if (!allowed.includes(build.status)) {
 		throw new HttpError(409, message);
 	}
 }
 
-async function waitingFor(deps: LineDeps, build: Build): Promise<BuildStatus> {
+async function waitingFor(deps: Pick<LineDeps, 'sliceRunRepo' | 'integrationRepo'>, build: Build): Promise<BuildStatus> {
 	const [runs, integrations] = await Promise.all([
 		deps.sliceRunRepo.listForBuild(build.id),
 		deps.integrationRepo.listForBuild(build.id)
@@ -89,11 +99,63 @@ async function retry(deps: LineDeps, build: Build): Promise<Build | null> {
 	return deps.buildRepo.update({ id: build.id, status: await waitingFor(deps, build), needsYouReason: null, failureReason: null });
 }
 
-const ACTIONS: Record<BuildAction, (deps: LineDeps, build: Build) => Promise<Build | null>> = { hold, release, cancel, front, retry };
+// The whole verify slice again, from a fresh drive: a verdict reached against a
+// database that was never migrated, or a stack that never came up, is not one to
+// fix from. Findings and every criterion's verdict go with it, so the new drive
+// examines everything. `verifiedAt` is cleared so the pull request is published
+// again — updated in place when one is open — once the new verdict lands.
+async function reverify(deps: LineDeps, build: Build, plan: Plan): Promise<Build | null> {
+	refuse(build, REVERIFIABLE, 'Only a plan in review, failed or waiting on you can be verified again');
+
+	if (build.status === 'needs_you' && build.needsYouReason === 'overlap') {
+		throw new HttpError(409, 'Decide the overlap before verifying again');
+	}
+
+	const runs = await deps.sliceRunRepo.listForBuild(build.id);
+	const drive = runs.find((run) => run.phase === 'drive');
+
+	if (build.builtAt === null || runs.some((run) => run.phase === null && run.status !== 'done')) {
+		throw new HttpError(409, 'Only a plan whose bullets are all built can be verified again');
+	}
+
+	if (!drive) {
+		throw new HttpError(409, 'This plan has no verify slice');
+	}
+
+	return deps.db.transaction(async (tx) => {
+		const sliceRunRepo = getSliceRunRepo(tx);
+		const integrationRepo = getIntegrationRepo(tx);
+
+		await sliceRunRepo.deleteUnfinishedVerifyRuns(build.id);
+		await getVerifyFindingRepo(tx).deleteForBuild(build.id);
+		await getAcRepo(tx).resetVerification(plan.id);
+		await integrationRepo.resetForBuild({ buildId: build.id, from: ['needs_you'] });
+		await sliceRunRepo.createMany([
+			{ id: deps.idService.createSliceRunId(), buildId: build.id, sliceId: drive.sliceId, ordinal: drive.ordinal, phase: 'drive' }
+		]);
+
+		return getBuildRepo(tx).update({
+			id: build.id,
+			status: await waitingFor({ sliceRunRepo, integrationRepo }, build),
+			needsYouReason: null,
+			failureReason: null,
+			verifiedAt: null
+		});
+	});
+}
+
+const ACTIONS: Record<BuildAction, (deps: LineDeps, build: Build, plan: Plan) => Promise<Build | null>> = {
+	hold,
+	release,
+	cancel,
+	front,
+	retry,
+	reverify
+};
 
 export async function controlBuild(deps: LineDeps, opts: { id: string; projectId: string; action: BuildAction }): Promise<Build> {
 	const { build, plan } = await getOwnedBuild(deps, opts);
-	const updated = await orNotFound(ACTIONS[opts.action](deps, build), 'Build not found');
+	const updated = await orNotFound(ACTIONS[opts.action](deps, build, plan), 'Build not found');
 
 	announceBuild({ socketRegistry: deps.socketRegistry, projectId: plan.projectId, build: updated });
 

@@ -22,7 +22,8 @@ export const OnboardingRunRespSchema = z.object({ run: OnboardingRunSchema });
 
 export const MachineOnboardingRespSchema = z.object({
 	run: OnboardingRunSchema,
-	missing: z.array(OnboardingRequirementSchema)
+	missing: z.array(OnboardingRequirementSchema),
+	configRun: OnboardingRunSchema.nullable()
 });
 
 export const SaveSessionSecretsReqSchema = z.object({ vars: z.array(EnvVarInputSchema).max(50) });

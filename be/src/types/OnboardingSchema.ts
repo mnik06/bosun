@@ -2,7 +2,9 @@ import { z } from 'zod';
 
 const ENV_KEY = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
-export const OnboardingPhaseSchema = z.enum(['discover', 'verify']);
+// `config` is a discovery that only rewrites the repository's config: it ends at
+// `ready` with no inputs or verify, and never stands for the machine's onboarding.
+export const OnboardingPhaseSchema = z.enum(['discover', 'verify', 'config']);
 
 export type OnboardingPhase = z.infer<typeof OnboardingPhaseSchema>;
 

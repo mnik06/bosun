@@ -170,6 +170,18 @@ export function getSliceRunRepo(db: DbOrTx) {
 			return rows.length;
 		},
 
+		// A verify run again starts from a fresh drive: a pending fix or re-check
+		// from the attempt it replaces would otherwise run first, against findings
+		// that no longer exist.
+		async deleteUnfinishedVerifyRuns(buildId: string): Promise<number> {
+			const rows = await db
+				.delete(sliceRuns)
+				.where(and(eq(sliceRuns.buildId, buildId), isNotNull(sliceRuns.phase), inArray(sliceRuns.status, ['pending', 'failed'])))
+				.returning({ id: sliceRuns.id });
+
+			return rows.length;
+		},
+
 		async listQuestionsAskedBefore(before: Date): Promise<SliceRun[]> {
 			const rows = await db
 				.select(columns)

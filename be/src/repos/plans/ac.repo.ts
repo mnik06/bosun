@@ -97,6 +97,12 @@ export function getAcRepo(db: DbOrTx) {
 			return row ? AcSchema.parse(row) : null;
 		},
 
+		// Every criterion back to unproven, so a drive run again has to examine each
+		// one: the drive gate skips a criterion already verified or explained.
+		async resetVerification(planId: string): Promise<void> {
+			await db.update(acs).set({ verified: false, blockedReason: null }).where(eq(acs.planId, planId));
+		},
+
 		async updateInPlan(opts: {
 			id: string;
 			planId: string;

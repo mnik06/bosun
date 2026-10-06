@@ -32,9 +32,11 @@ function refusal(opts: { machine: Machine; connected: boolean }): string | null 
 		: 'the claude check is not green on this machine — run `bosun-agent setup` there';
 }
 
+// A config run is the same discovery session, so the agent is told `discover`;
+// what differs is only how bosun settles it.
 async function startDiscovery(
 	deps: OnboardingDeps,
-	opts: { machine: Machine; repository: Repository }
+	opts: { machine: Machine; repository: Repository; phase: 'discover' | 'config' }
 ): Promise<OnboardingRun> {
 	const admission = await onboardingAdmission(deps, { machineId: opts.machine.id });
 
@@ -46,7 +48,7 @@ async function startDiscovery(
 		id: deps.idService.createOnboardingRunId(),
 		repositoryId: opts.repository.id,
 		machineId: opts.machine.id,
-		phase: 'discover',
+		phase: opts.phase,
 		status: 'discovering',
 		portBase: ONBOARDING_PORT_BASE
 	});
@@ -140,9 +142,9 @@ export async function startOnboarding(
 	}
 
 	const run =
-		opts.phase === 'discover'
-			? await startDiscovery(deps, { machine, repository })
-			: await startVerify(deps, { machine, repository });
+		opts.phase === 'verify'
+			? await startVerify(deps, { machine, repository })
+			: await startDiscovery(deps, { machine, repository, phase: opts.phase });
 
 	announceOnboarding({ socketRegistry: deps.socketRegistry, projectId: machine.projectId, run });
 	await notifyOnboardingStatus(deps, { projectId: machine.projectId, run });

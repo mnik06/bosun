@@ -33,6 +33,12 @@ export function getVerifyFindingRepo(db: DbOrTx) {
 			return VerifyFindingSchema.parse(row);
 		},
 
+		async deleteForBuild(buildId: string): Promise<number> {
+			const rows = await db.delete(verifyFindings).where(eq(verifyFindings.buildId, buildId)).returning({ id: verifyFindings.id });
+
+			return rows.length;
+		},
+
 		async getById(id: string): Promise<VerifyFinding | null> {
 			const [row] = await db.select(columns).from(verifyFindings).where(eq(verifyFindings.id, id));
 

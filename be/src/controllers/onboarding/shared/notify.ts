@@ -28,6 +28,7 @@ export async function notifyOnboardingStatus(deps: OnboardingDeps, opts: { proje
 
 	const machine = await deps.machineRepo.getById(opts.run.machineId);
 	const name = machine?.name ?? 'A machine';
+	const subject = opts.run.phase === 'config' ? 'Config generation' : 'Onboarding';
 	const summary = SUMMARY[opts.run.status];
 	const recipientIds = await deps.projectMemberRepo.listLeaders(opts.projectId);
 
@@ -35,8 +36,8 @@ export async function notifyOnboardingStatus(deps: OnboardingDeps, opts: { proje
 		recipientIds,
 		projectId: opts.projectId,
 		kind,
-		title: `Onboarding ${summary}`,
-		body: opts.run.status === 'failed' && opts.run.failureReason ? `${name}: ${opts.run.failureReason}` : `${name} — onboarding ${summary}`,
+		title: `${subject} ${summary}`,
+		body: opts.run.status === 'failed' && opts.run.failureReason ? `${name}: ${opts.run.failureReason}` : `${name} — ${subject.toLowerCase()} ${summary}`,
 		url: `${deps.appUrl}/machines/${opts.run.machineId}`
 	});
 }

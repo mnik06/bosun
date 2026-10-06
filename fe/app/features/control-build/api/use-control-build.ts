@@ -4,7 +4,7 @@ import { BuildSchema, refreshAfterBuild, type Build } from '~/entities/plan'
 import { apiClient } from '~/shared/api'
 import { notifyError } from '~/shared/lib'
 
-export type BuildAction = 'hold' | 'release' | 'cancel' | 'front' | 'retry' | 'fix-again' | 'accept-gaps'
+export type BuildAction = 'hold' | 'release' | 'cancel' | 'front' | 'retry' | 'reverify' | 'fix-again' | 'accept-gaps'
 
 const FAILURE_TITLE: Record<BuildAction, string> = {
 	hold: 'Could not hold the plan',
@@ -12,6 +12,7 @@ const FAILURE_TITLE: Record<BuildAction, string> = {
 	cancel: 'Could not cancel the build',
 	front: 'Could not move the plan to the front',
 	retry: 'Could not retry the build',
+	reverify: 'Could not verify the plan again',
 	'fix-again': 'Could not start another fix',
 	'accept-gaps': 'Could not accept the known gaps'
 }

@@ -114,7 +114,7 @@ export const OnboardingStatusSchema = z.enum(['discovering', 'needs_input', 'ver
 
 export type OnboardingStatus = z.infer<typeof OnboardingStatusSchema>
 
-export const OnboardingPhaseSchema = z.enum(['discover', 'verify'])
+export const OnboardingPhaseSchema = z.enum(['discover', 'verify', 'config'])
 
 export type OnboardingPhase = z.infer<typeof OnboardingPhaseSchema>
 
@@ -170,7 +170,10 @@ export type OnboardingRun = z.infer<typeof OnboardingRunSchema>
 
 export const MachineOnboardingSchema = z.object({
 	run: OnboardingRunSchema,
-	missing: z.array(OnboardingRequirementSchema)
+	missing: z.array(OnboardingRequirementSchema),
+	// The latest config-only run, which never stands for the machine's onboarding.
+	// Defaulted for a backend that predates it.
+	configRun: OnboardingRunSchema.nullable().default(null)
 })
 
 export type MachineOnboarding = z.infer<typeof MachineOnboardingSchema>

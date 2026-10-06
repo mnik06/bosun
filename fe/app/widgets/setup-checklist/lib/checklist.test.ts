@@ -38,7 +38,7 @@ function run (overrides: Partial<OnboardingRun>): OnboardingRun {
 }
 
 function onboarding (runOverrides: Partial<OnboardingRun>, missing: MachineOnboarding['missing'] = []): MachineOnboarding {
-	return { run: run(runOverrides), missing }
+	return { run: run(runOverrides), missing, configRun: null }
 }
 
 function states (input: ChecklistInput): Record<ChecklistRowId, [ChecklistState, ChecklistAction]> {
