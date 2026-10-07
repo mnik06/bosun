@@ -27,29 +27,37 @@ const BUILT_AND_VERIFIED = [run({ id: 'sr_bullet' }), run({ id: 'sr_drive', slic
 function deps(opts: { theBuild: Build; runs: SliceRun[] }) {
 	// Resolves to no build, so a call that gets this far ends in the 404 after it.
 	const transaction = vi.fn().mockResolvedValue(null);
+	const update = vi.fn();
+	const sendToAgent = vi.fn();
 
 	return {
 		transaction,
+		update,
+		sendToAgent,
 		lineDeps: {
 			buildRepo: { getOwnedById: vi.fn().mockResolvedValue(opts.theBuild) },
 			planRepo: { getOwnedById: vi.fn().mockResolvedValue(PLAN) },
-			sliceRunRepo: { listForBuild: vi.fn().mockResolvedValue(opts.runs) },
+			sliceRunRepo: { listForBuild: vi.fn().mockResolvedValue(opts.runs), update },
+			integrationRepo: { listForBuild: vi.fn().mockResolvedValue([]), resetForBuild: vi.fn() },
+			bugfixSessionRepo: { getRunningForBuild: vi.fn().mockResolvedValue(null) },
+			socketRegistry: { sendToAgent },
+			runActivity: { forget: vi.fn() },
 			db: { transaction }
 		} as unknown as LineDeps
 	};
 }
 
 async function reverify(opts: { theBuild: Build; runs?: SliceRun[] }) {
-	const { lineDeps, transaction } = deps({ theBuild: opts.theBuild, runs: opts.runs ?? BUILT_AND_VERIFIED });
+	const { lineDeps, ...fakes } = deps({ theBuild: opts.theBuild, runs: opts.runs ?? BUILT_AND_VERIFIED });
 	const result = controlBuild(lineDeps, { id: 'bld_1', projectId: 'prj_1', action: 'reverify' });
 
-	return { result, transaction };
+	return { result, ...fakes };
 }
 
 // Rebuilding the verify slice deletes findings and verdicts, so every refusal has
 // to land before the transaction that does it.
 describe('controlBuild reverify', () => {
-	it.each(['building', 'driving', 'fixing', 'fixing_bugs', 'merged', 'cancelled'] as const)('refuses a %s build', async (status) => {
+	it.each(['building', 'integrating', 'fixing_bugs', 'merged', 'cancelled'] as const)('refuses a %s build', async (status) => {
 		const { result, transaction } = await reverify({ theBuild: build({ status }) });
 
 		await expect(result).rejects.toMatchObject({ statusCode: 409 });
@@ -89,5 +97,19 @@ describe('controlBuild reverify', () => {
 
 		await expect(result).rejects.toMatchObject({ statusCode: 404 });
 		expect(transaction).toHaveBeenCalledOnce();
+	});
+
+	// The running session has to be back to pending before the transaction, or the
+	// delete of unfinished verify runs leaves it behind still running.
+	it('stops the running verify session before rebuilding the slice', async () => {
+		const { result, transaction, update, sendToAgent } = await reverify({
+			theBuild: build({ status: 'driving', machineId: 'mch_1' }),
+			runs: [run({ id: 'sr_bullet' }), run({ id: 'sr_drive', sliceId: 'sl_verify', ordinal: 2, phase: 'drive', status: 'running' })]
+		});
+
+		await expect(result).rejects.toMatchObject({ statusCode: 404 });
+		expect(sendToAgent).toHaveBeenCalledWith({ machineId: 'mch_1', message: { type: 'exec.cancel', runId: 'sr_drive' } });
+		expect(update).toHaveBeenCalledWith(expect.objectContaining({ id: 'sr_drive', status: 'pending' }));
+		expect(update.mock.invocationCallOrder[0]).toBeLessThan(transaction.mock.invocationCallOrder[0]);
 	});
 });

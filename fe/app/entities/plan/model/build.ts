@@ -136,7 +136,7 @@ export const VerifyFindingSchema = z.object({
 	buildId: z.string(),
 	runId: z.string(),
 	acCode: z.string().nullable(),
-	kind: z.enum(['criterion', 'console', 'network', 'visual']),
+	kind: z.enum(['criterion', 'console', 'network', 'visual', 'setup']),
 	reproduction: z.string(),
 	severity: z.enum(['high', 'medium', 'low']),
 	status: z.enum(['open', 'fixed', 'left', 'accepted']),

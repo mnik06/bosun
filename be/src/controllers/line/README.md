@@ -37,7 +37,9 @@ scheduled ─slot─► building ─last bullet─► integrating ─► waiting
 ```
 
 **Verify again** (`control-build.ts`, `reverify`) rebuilds the verify slice under a built plan that
-is in review, failed or waiting on you: unfinished drive/fix/recheck runs and every finding are
+is verifying, in review, failed or waiting on you. A verify still under way has its session cancelled
+first (`stopRunningJobs`), so its run is back to pending and goes with the rest; a result the agent
+still sends for it finds no running run and is dropped. Then unfinished drive/fix/recheck runs and every finding are
 deleted, each criterion goes back to unproven, a fresh `drive` is queued and `verifiedAt` is cleared,
 so the pull request is published again — updated in place — when the new verdict lands. It exists
 for verdicts reached against an environment that was wrong (an unmigrated database, a stack that

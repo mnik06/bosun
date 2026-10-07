@@ -619,7 +619,7 @@ export const verifyFindings = pgTable(
 			.notNull()
 			.references(() => sliceRuns.id, { onDelete: 'cascade' }),
 		acCode: text(),
-		kind: text().$type<'criterion' | 'console' | 'network' | 'visual'>().notNull(),
+		kind: text().$type<'criterion' | 'console' | 'network' | 'visual' | 'setup'>().notNull(),
 		reproduction: text().notNull(),
 		severity: text().$type<'high' | 'medium' | 'low'>().notNull().default('medium'),
 		status: text().$type<FindingStatus>().notNull().default('open'),

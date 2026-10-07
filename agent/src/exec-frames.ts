@@ -13,7 +13,7 @@ export const ExecSliceSchema = z.object({
 export const ExecFindingSchema = z.object({
 	id: z.string(),
 	acCode: z.string().nullable(),
-	kind: z.enum(['criterion', 'console', 'network', 'visual']),
+	kind: z.enum(['criterion', 'console', 'network', 'visual', 'setup']),
 	reproduction: z.string(),
 	severity: z.enum(['high', 'medium', 'low'])
 });

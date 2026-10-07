@@ -66,9 +66,15 @@ ${asking}
 - **Never end your turn with a sub-agent still running.** This process exits when your turn ends, so
   anything outstanding is killed mid-call and the bullet is re-run from scratch. Await every \`Agent\`
   call and read its report inside the same turn.
-- If something genuinely cannot be done here — no network route, a credential you lack, an infra
-  change only a person can make — do not ask for it. Finish everything else and say what is blocked,
-  what you tried, and what a human must do.`;
+- **Unblock yourself.** This machine is a server bosun runs for this project, and its worktree is
+  yours: a missing env variable, a migration that did not apply, missing seed or test data, a
+  dependency not installed, a stale build, a script that needs a flag — find the cause and fix it,
+  then carry on. A blocker you could have removed with the shell you already have is a wasted
+  session. Say in your report what was in the way and what you did about it.
+- Blocked means only what no command here can fix — a secret value you were never given, an account
+  or service outside this machine that only a person controls, or a rule below that protects the other
+  plans on this machine. Then do not ask for it: finish everything else and say what is blocked, what
+  you tried, and what a human must do.`;
 }
 
 // Verify bullets used to arrive at a worktree with no database URL and build a
@@ -94,7 +100,9 @@ They are the real connections — the database and services this project runs ag
 placeholders. Never override those keys, never point them anywhere else, and never start a local
 database, container, proxy or PGlite in their place. Never print or quote their values — not in a
 command's output you repeat, not in a brief, not in your report. If one of them is unreachable, that
-is a blocker: report it with the error it gave.`;
+is a blocker: report it with the error it gave. A key the app needs that is **not** in these files —
+\`NODE_ENV\`, a feature flag, a port, anything that is not a secret — you add yourself, to the env file
+the app reads.`;
 }
 
 export function commandList(entries: { label: string; cwd?: string; run: string }[]): string {
@@ -313,8 +321,10 @@ killed by the kernel halfway through its work.
   installed into \`/tmp\`. **A session never starts its own database, under any circumstances** — not
   embedded, not in a container, not "just for the tests", not even when this project's own scripts
   would start one. No database connection configured is a blocker to report, not something to build.
-  If the app needs a service that is not reachable, that is a blocker to report with what you tried —
-  a stand-in costs this machine memory it does not have and proves nothing about the real one.`;
+  If the app needs a service that is not reachable, rule out your own side first — a wrong URL, a
+  missing variable, a port — and fix that; only a service that is really down or absent is a blocker
+  to report with what you tried. A stand-in costs this machine memory it does not have and proves
+  nothing about the real one.`;
 }
 
 export function portsRule(context: Pick<RunContext, 'portBase'>): string {
@@ -342,23 +352,35 @@ blocked: say so, and do not work around it.`;
 // that migrated would put its unmerged schema under every other plan on the box —
 // and a verify that passed against another plan's schema proves nothing.
 const DATABASE_STATE: Record<DatabasePrep, string> = {
-	migrated: 'bosun reset this machine\'s development database and applied every migration before you started.',
+	// "Ran" is not "applied": drizzle skips a migration older than the newest one
+	// in the database and still exits 0, and a drive told the schema was current
+	// called the missing column an infra gap nobody could act on.
+	migrated:
+		'bosun ran this repository\'s `migrate` command before you started. That is not proof every migration applied: a table or column this branch adds that is still missing means the tool skipped it — find out why (a migration journal out of order is the usual cause), make it apply, and run the `migrate` command again.',
 	forbidden: 'bosun left the database alone before you started — this machine may not be migrated.',
-	// Said plainly so a schema behind the branch is reported as the config gap it
-	// is: a session told the database was migrated blamed the shared database
-	// instead, and nobody looked at the missing command.
 	unconfigured:
-		'bosun did **not** migrate the database: this repository has no config in bosun, or its config has no `migrate` command. A missing table or column this branch adds is that gap — report it once as a blocker naming the missing `migrate` command, which a leader adds to the repository\'s config from the browser.'
+		'bosun did **not** migrate the database: this repository has no config in bosun, or its config has no `migrate` command. Find how this project migrates from its scripts and run it yourself before you drive.'
 };
 
+// The lane database is this machine's alone, and bosun re-prepares it before the
+// next drive, so a drive may migrate and fill it. `forbidden` is a person's
+// decision about a database bosun must not change, so it is the one state that
+// still stops a session.
 export function migrationRule(context: Pick<RunContext, 'mode' | 'database'>): string {
 	if (context.mode === 'lane') {
-		return `Migrations: ${DATABASE_STATE[context.database ?? 'forbidden']} **Never generate, apply or roll back a migration, and never reset or seed the database yourself.**`;
+		const database = context.database ?? 'forbidden';
+
+		return database === 'forbidden'
+			? `Migrations: ${DATABASE_STATE.forbidden} **Never apply or roll back a migration, and never reset or seed the database.** A table or column the branch needs that is missing is a blocker to report.`
+			: `Migrations: ${DATABASE_STATE[database]} The development database is yours to make usable: apply migrations, run the project's seeds, create the records a criterion needs. **Never drop or reset it** — other people may read it — and never edit a migration's SQL; a change to how one is ordered or registered you make, and report as a \`setup\` finding so it is committed.`;
 	}
 
 	return `Migrations: **never apply one, and never run a test that needs a database.** Change the schema and
 generate the migration with this project's own generator, then leave it in the tree to be committed
-with your work. Bosun applies migrations only when it verifies the plan, against a database it resets
+with your work. A hand-written migration still goes through the generator (drizzle: \`--custom\`): never
+write a journal entry or its timestamp yourself, because a tool that orders by timestamp skips every
+migration dated before one you invented. A drive finding that a migration exists but never applied is
+yours to repair in those files. Bosun applies migrations only when it verifies the plan, against a database it resets
 first, and renumbers generated migrations when this plan lands beside others. A check that needs a
 database is not part of your loop — say in your report which ones you skipped.`;
 }

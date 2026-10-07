@@ -36,8 +36,23 @@ function reachTheApp(context: DriveContext): string {
 
 	return `${start}
 
-Confirm the entry screen renders before you test anything. If the app will not come up, record every
-criterion as blocked with what stopped it — never claim one verified without opening it.`;
+Confirm the entry screen renders before you test anything. If the app will not come up, or a screen
+fails for a reason outside the feature, unblock it — see below. Only what you cannot unblock is
+recorded as blocked against the criteria behind it — never claim one verified without opening it.
+
+## Unblocking
+
+A missing env variable, a migration that did not apply, an empty table a screen needs, a dependency
+not installed, a stack that needs a restart after your change — fix it and carry on driving. An env
+file, the database, the stack and the installed dependencies are all yours to change. The product's
+source is not: never edit code to make a criterion pass, because a verdict on code you changed proves
+nothing about the branch.
+
+Bosun cleans this worktree before the next session, so what you change in the tree does not survive
+you. Report each unblock that touched a file as a \`report_finding\` with \`kind: "setup"\`: what was in
+the way, the exact change that removed it (file and content), and why it belongs in the repository —
+the fix session commits it. Something that lives outside the repository (a value in bosun's env sets, a
+line in its config) is still a \`setup\` finding, saying what a person should add where.`;
 }
 
 function scope(context: DriveContext): string {
@@ -74,8 +89,8 @@ export function drivePrompt(context: DriveContext): string {
 
 Every build bullet of this plan is committed in this worktree and the branch has been integrated with
 its base. **None of them drove a browser** — the browser pass happens here, once, against the finished
-feature. You are its only driver. You change nothing: a separate session fixes what you find, from
-what you record.
+feature. You are its only driver. You never change the product's code: a separate session fixes what
+you find, from what you record. Everything else between you and a working app is yours to fix.
 
 ${unattended(false)}
 
@@ -134,7 +149,7 @@ driving it. That substitution reads like a pass and is worth less than nothing.
 Call \`stack_down\` the moment the pass is over. Nothing after it drives the app, and a running stack
 holds memory other plans are waiting for. The session ending stops it too, however it ends.
 
-**Do not fix anything.** No edits, no restarts to try a theory, no second pass. Every criterion must end
+**Do not fix the product.** No edits to its code, no second pass. Every criterion must end
 verified, blocked, or with a criterion finding — one left silent is the one nobody looked at, and it
 fails this session.
 

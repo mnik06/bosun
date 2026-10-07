@@ -36,7 +36,7 @@ const CONTROLS: Record<BuildControl, ControlSpec> = {
 		icon: ScanSearch,
 		confirm: {
 			title: 'Run verify again?',
-			body: 'Every finding and verdict from the last verify is discarded and the plan goes back into the verify line for a fresh drive. The branch and every built bullet stay; an open pull request is updated once the new verify finishes.',
+			body: 'A verify still running is stopped. Every finding and verdict from the last verify is discarded and the plan goes back into the verify line for a fresh drive. The branch and every built bullet stay; an open pull request is updated once the new verify finishes.',
 			label: 'Verify again'
 		}
 	},

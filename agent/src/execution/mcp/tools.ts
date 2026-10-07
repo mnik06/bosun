@@ -66,7 +66,7 @@ const MARK_VERIFIED_DEFINITION = mcpToolDefinition({
 
 export const ReportFindingArgsSchema = z.object({
 	acCode: z.string().min(1).nullable().optional().describe('the criterion this finding fails, for kind "criterion"'),
-	kind: z.enum(['criterion', 'console', 'network', 'visual']),
+	kind: z.enum(['criterion', 'console', 'network', 'visual', 'setup']),
 	reproduction: z
 		.string()
 		.min(1)
@@ -80,7 +80,7 @@ export const ReportFindingArgsSchema = z.object({
 const REPORT_FINDING_DEFINITION = mcpToolDefinition({
 	name: 'report_finding',
 	description:
-		'Record something broken you saw in the running product: a criterion that fails (kind "criterion" with its acCode), a console error, a failed request, or a visual defect. Each one is handed to the fix session as written, so the reproduction must stand on its own.',
+		'Record something broken you saw in the running product: a criterion that fails (kind "criterion" with its acCode), a console error, a failed request, a visual defect, or a setup change you made to reach the app that the repository should keep (kind "setup"). Each one is handed to the fix session as written, so the reproduction must stand on its own.',
 	schema: ReportFindingArgsSchema
 });
 

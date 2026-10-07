@@ -168,7 +168,7 @@ export const IntegrationSchema = z.object({
 
 export type Integration = z.infer<typeof IntegrationSchema>;
 
-export const FindingKindSchema = z.enum(['criterion', 'console', 'network', 'visual']);
+export const FindingKindSchema = z.enum(['criterion', 'console', 'network', 'visual', 'setup']);
 
 export const FindingStatusSchema = z.enum(['open', 'fixed', 'left', 'accepted']);
 

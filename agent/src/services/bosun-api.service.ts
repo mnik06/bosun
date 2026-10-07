@@ -276,7 +276,7 @@ export function getBosunApiService(deps: { serverUrl: string; machineKey?: strin
 			buildId: string;
 			runId: string;
 			acCode: string | null;
-			kind: 'criterion' | 'console' | 'network' | 'visual';
+			kind: 'criterion' | 'console' | 'network' | 'visual' | 'setup';
 			reproduction: string;
 			severity: 'high' | 'medium' | 'low';
 		}): Promise<unknown> {

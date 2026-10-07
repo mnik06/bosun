@@ -25,9 +25,11 @@ const CANCELLABLE: BuildStatus[] = [...HOLDABLE, 'held', 'in_review', 'fixing_bu
 // re-check by fix again or accept.
 const RETRYABLE_NEEDS_YOU = new Set(['integration', 'checks', 'provider_failed', 'worktree']);
 
-// Nothing is running in any of these, so the verify slice can be rebuilt under
-// it. An overlap waits on a decision, not on a verdict.
-const REVERIFIABLE: BuildStatus[] = ['in_review', 'needs_you', 'failed'];
+// A verify under way is stopped first, then rebuilt from scratch like a finished
+// one. An overlap waits on a decision, not on a verdict.
+const VERIFYING: BuildStatus[] = ['waiting_verify', 'waiting_answer', 'driving', 'fixing', 'rechecking'];
+
+const REVERIFIABLE: BuildStatus[] = [...VERIFYING, 'in_review', 'needs_you', 'failed'];
 
 function refuse(build: Build, allowed: BuildStatus[], message: string): void {
 	if (!allowed.includes(build.status)) {
@@ -105,7 +107,7 @@ async function retry(deps: LineDeps, build: Build): Promise<Build | null> {
 // examines everything. `verifiedAt` is cleared so the pull request is published
 // again — updated in place when one is open — once the new verdict lands.
 async function reverify(deps: LineDeps, build: Build, plan: Plan): Promise<Build | null> {
-	refuse(build, REVERIFIABLE, 'Only a plan in review, failed or waiting on you can be verified again');
+	refuse(build, REVERIFIABLE, 'Only a plan verifying, in review, failed or waiting on you can be verified again');
 
 	if (build.status === 'needs_you' && build.needsYouReason === 'overlap') {
 		throw new HttpError(409, 'Decide the overlap before verifying again');
@@ -120,6 +122,12 @@ async function reverify(deps: LineDeps, build: Build, plan: Plan): Promise<Build
 
 	if (!drive) {
 		throw new HttpError(409, 'This plan has no verify slice');
+	}
+
+	// The cancelled session's run goes back to pending, so it is dropped with the
+	// rest of the unfinished verify runs below; a result it still sends is ignored.
+	if (VERIFYING.includes(build.status)) {
+		await stopRunningJobs(deps, { build });
 	}
 
 	return deps.db.transaction(async (tx) => {

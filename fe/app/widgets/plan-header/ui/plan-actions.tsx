@@ -91,9 +91,10 @@ function menuItems (opts: { detail: Detail, state: PlanState }): ReactNode[] {
 			return [<BuildMenuItem key="front" buildId={build.id} control="front" />, cancel]
 		case 'building':
 		case 'integrating':
-		case 'verifying':
 		case 'fixing_bugs':
 			return [cancel]
+		case 'verifying':
+			return [...reverify, cancel]
 		case 'needs_you':
 		case 'failed':
 			return [...reverify, cancel]

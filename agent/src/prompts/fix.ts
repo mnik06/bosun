@@ -252,7 +252,10 @@ wrote, \`git log -S\` or \`git blame\` against \`${context.baseRef}\` for what w
 ## What happens to it — the first rule that matches
 
 1. **Every drive finding** is repaired, unless it needs a feature nobody built — then it is left, with that
-   reason.
+   reason. A \`setup\` finding is a change the drive made to reach the app, which bosun cleaned away:
+   commit it in the repository, where it belongs, so no later drive trips on it. What lives outside the
+   repository — a value in bosun's env sets, a line of its config — is left, its note saying exactly what
+   a person adds where.
 2. **Introduced and critical → fix it,** whatever it takes inside the feature. Critical: it breaks
    behaviour, loses or corrupts data, opens a security hole, is the wrong side of a diverged twin, or
    leaves the codebase with two implementations of one job because the branch wrote a second one.
