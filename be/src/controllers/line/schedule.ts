@@ -193,9 +193,11 @@ async function machineLoad(pass: Pass): Promise<MachineLoad> {
 	};
 }
 
-// Ordered by: every provider verified — a plan never verifies against a provider
-// whose own verify could still change it — then the order plans finished building,
-// then the line's own order.
+// Ordered by: every whole-feature provider verified — a plan never verifies against
+// a feature whose own verify could still change it — then the order plans finished
+// building, then the line's own order. A foundation dependency gates nothing here:
+// it was released when that bullet finished, and holding the dependent until the
+// provider's whole plan verified parked it behind criteria it never uses.
 export function verifyLine(snapshot: RepositorySnapshot): BuildState[] {
 	const verified = (planId: string) => {
 		const build = snapshot.providers.get(planId)?.build ?? null;
@@ -208,7 +210,9 @@ export function verifyLine(snapshot: RepositorySnapshot): BuildState[] {
 			(state) =>
 				state.build.status === 'waiting_verify' &&
 				nextJob(state)?.kind === 'lane' &&
-				state.dependencies.filter((dependency) => dependency.overriddenAt === null).every((dependency) => verified(dependency.providerPlanId))
+				state.dependencies
+					.filter((dependency) => dependency.overriddenAt === null && dependency.providerSliceId === null)
+					.every((dependency) => verified(dependency.providerPlanId))
 		)
 		.sort(
 			(a, b) =>

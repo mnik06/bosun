@@ -78,8 +78,11 @@ and no holder yields its slot. A build with no cap still waits for memory: nothi
 many. Every session keeps its per-job limit, so the overcommit lands on swap, and lanes still share
 the machine's one development database.
 
-**The verify line** is ordered by every provider verified, then `built_at`, then position. A plan
-never drives against a provider whose own verify could still change it.
+**The verify line** is ordered by every whole-feature provider verified, then `built_at`, then
+position. A plan never drives against a feature whose own verify could still change it. A foundation
+dependency does not hold a verify: it released when that bullet finished, and waiting for the
+provider's whole plan parked the dependent behind criteria it never uses — for as long as the provider
+sat held.
 
 ## Dependencies and stacking
 
