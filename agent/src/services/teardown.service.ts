@@ -55,7 +55,7 @@ export function agentFiles(opts: {
 	];
 }
 
-export function getTeardownService(deps: { homeDir?: string; execPath?: string }) {
+export function getTeardownService(deps: { homeDir?: string; execPath?: string; stopServices?: () => Promise<void> }) {
 	const homeDir = deps.homeDir ?? os.homedir();
 	const binPath = deps.execPath ?? process.execPath;
 	// Under `node dist/src/index.js` the running executable is node. Deleting the
@@ -100,6 +100,11 @@ export function getTeardownService(deps: { homeDir?: string; execPath?: string }
 		// is gone from bosun and every credential it holds is now litter.
 		async terminateSelf(opts: { configPath: string; reason: string }): Promise<never> {
 			console.log(`removing bosun from this machine: ${opts.reason}`);
+
+			// Before `~/.bosun` goes: the ledger naming them and the worktrees they were
+			// started from both live there, and a container left running holds its
+			// memory and ports with nothing left to stop it.
+			await deps.stopServices?.().catch(() => undefined);
 
 			if (!(await disableUnit())) {
 				console.error(`could not disable ${UNIT} — remove the unit by hand if one exists`);

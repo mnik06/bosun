@@ -56,3 +56,13 @@ stranded by the kernel killing the agent is reported as out of memory rather tha
   was killed for memory and git refused the push, surfacing only as `Killed`. Scoping the push was
   rejected — the hook would still die, just in a scope. The project's checks already ran under a limit
   before any push. Git LFS is uploaded by name, since its hook is the one that moves data.
+
+## Services run outside every scope
+
+A config's `Services:` (`services.service.md`) start containers through the project's own command —
+`supabase start`, `docker compose up -d`. The processes doing the work belong to `dockerd`, not to
+anything the agent spawned, so they sit under neither a run's scope nor `bosun-agent.service`: no
+`MemoryMax=` applies, and stopping a scope or reaping orphans leaves them running. That is what a
+machine-shared service needs. Their memory is still counted where it matters: `hello`'s live
+`memory.available` is read from the machine, so once they are up every build is admitted against
+what is left.

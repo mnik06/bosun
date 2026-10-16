@@ -40,6 +40,9 @@ export const OnboardingStartMsgSchema = z.object({
 	phase: z.enum(['discover', 'verify']),
 	portBase: z.number().int(),
 	config: z.string().nullable(),
+	// The leader's instructions the config is compiled from. Absent from a backend
+	// older than instructions, and from a verify.
+	instructions: z.string().nullable().optional(),
 	applyMigrations: z.boolean(),
 	memoryMaxBytes: z.number().int().positive().nullable(),
 	// The branch the scratch checkout is cut from. Absent from a backend older than

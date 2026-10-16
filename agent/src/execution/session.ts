@@ -23,7 +23,7 @@ import {
 	type ExecutionPhase,
 	type SessionStack
 } from './mcp/tools';
-import { prepareRunEnvironment } from './run-environment';
+import { ensureProjectServices, prepareRunEnvironment } from './run-environment';
 
 const REPORT_KEPT_CHARS = 4_000;
 const TAIL_KEPT_CHARS = 1_500;
@@ -348,6 +348,12 @@ export function createExecutionSessions(opts: {
 		}
 
 		if (config !== null) {
+			const serviced = await ensureProjectServices({ services: opts.services, config, worktreePath: msg.worktreePath, env: environment.env });
+
+			if (!serviced.ok) {
+				throw new Error(serviced.detail);
+			}
+
 			const rerun = await opts.services.setupSteps.rerunChanged({
 				key,
 				worktreePath: msg.worktreePath,
@@ -421,16 +427,24 @@ export function createExecutionSessions(opts: {
 		}
 
 		return {
-			up: async (apps) =>
-				opts.services.stack.up({
+			up: async (apps) => {
+				const env = project.env ?? opts.services.claudeAuth.sessionEnv();
+				const serviced = await ensureProjectServices({ services: opts.services, config, worktreePath: msg.worktreePath, env });
+
+				if (!serviced.ok) {
+					return { ok: false, app: serviced.service, reason: serviced.reason, logTail: serviced.tail };
+				}
+
+				return opts.services.stack.up({
 					key: msg.runId,
 					config,
 					worktreePath: msg.worktreePath,
 					portBase: msg.portBase,
-					env: project.env ?? opts.services.claudeAuth.sessionEnv(),
+					env,
 					apps,
 					memoryMaxBytes: opts2.scope?.memoryMaxBytes ?? msg.memoryMaxBytes ?? null
-				}),
+				});
+			},
 			down: async () => opts.services.stack.down(msg.runId)
 		};
 	};

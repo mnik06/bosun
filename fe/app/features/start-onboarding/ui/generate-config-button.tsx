@@ -36,7 +36,7 @@ export function GenerateConfigButton ({
 						? () => {
 							confirmAction({
 								title: 'Generate the config again?',
-								body: 'A session on this machine reads the repository and publishes a new config, starting from the current one. It replaces the saved config for every machine on this repository; onboarding and verify are not re-run.',
+								body: 'A session on this machine reads the repository and your instructions and publishes a new config, starting from the current one. It replaces the saved config for every machine on this repository; onboarding and verify are not re-run.',
 								confirmLabel: 'Generate',
 								cancelLabel: 'Keep it',
 								color: 'blue',

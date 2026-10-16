@@ -162,6 +162,16 @@ export function checksSection(config: ProjectConfig): string {
 		: `- The project's checks — the core of your loop:\n${commandList(config.checks.map((check, index) => ({ label: check.name ?? `check ${index + 1}`, cwd: check.cwd, run: check.run })))}`;
 }
 
+// A session that "cleans up" a shared database container takes it from every
+// plan on the machine, and a wiped volume takes the lane's migrated data with it.
+export function servicesSection(config: ProjectConfig): string {
+	const names = Object.keys(config.services);
+
+	return names.length === 0
+		? ''
+		: `- Services already running for you, shared by every plan on this machine: ${names.map((name) => `\`${name}\``).join(', ')}. bosun starts them and checks them before you begin. **Never stop, restart or recreate them** — never their stop command, no \`docker compose down\` (with or without \`-v\`), no \`docker volume prune\` or \`docker system prune\`. Data is reset only through the project's reset command, run by bosun. One that is not answering is a blocker to report.`;
+}
+
 export function notesSection(config: ProjectConfig): string {
 	return config.notes === undefined ? '' : `- Notes: ${config.notes.trim()}`;
 }
@@ -182,6 +192,7 @@ export function configuredProject(context: RunContext): string[] {
 	return [
 		toolchainSection(config),
 		setupSection(config, { rerun: true }),
+		servicesSection(config),
 		apps.length === 0
 			? ''
 			: `- Apps, started only with the \`stack_up\` tool — never by running their start command yourself:\n${apps.map(([name, app]) => `  - \`${name}\` on port ${ports[name]} (http://127.0.0.1:${ports[name]})${app.cwd === undefined ? '' : ` in \`${app.cwd}\``}${app.dependsOn === undefined ? '' : `, after ${app.dependsOn.join(', ')}`}`).join('\n')}`,

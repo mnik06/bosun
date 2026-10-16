@@ -1,4 +1,5 @@
-import { Alert, Card, Group, Stack, Text } from '@mantine/core'
+import { Alert, Anchor, Badge, Card, Code, Collapse, Group, Stack, Text } from '@mantine/core'
+import { useDisclosure } from '@mantine/hooks'
 
 import type { Machine } from '~/entities/machine'
 import {
@@ -7,7 +8,7 @@ import {
 	useRepositoryConfigQuery,
 	type OnboardingRun
 } from '~/entities/repository'
-import { ConfigEditor } from '~/features/edit-config'
+import { InstructionsEditor } from '~/features/edit-instructions'
 import { GenerateConfigButton } from '~/features/start-onboarding'
 import { toErrorMessage } from '~/shared/lib'
 import { SectionLoader } from '~/shared/ui'
@@ -18,7 +19,7 @@ function ConfigRunStatus ({ run }: { run: OnboardingRun | null }) {
 	if (run?.status === 'discovering') {
 		return (
 			<Alert color="blue" title="Generating the config">
-				{run.steps.at(-1)?.label ?? 'Reading the repository'} — the editor refreshes once the new config is published.
+				{run.steps.at(-1)?.label ?? 'Reading the repository'} — what bosun understood refreshes once the new config is published.
 			</Alert>
 		)
 	}
@@ -32,6 +33,37 @@ function ConfigRunStatus ({ run }: { run: OnboardingRun | null }) {
 	}
 
 	return null
+}
+
+// Collapsed: the compiled config is bosun's, read to check it, never edited.
+function CompiledConfig ({ config, stale }: { config: string | null, stale: boolean }) {
+	const [opened, { toggle }] = useDisclosure(false)
+
+	return (
+		<Stack gap={6}>
+			<Group gap="xs">
+				<Anchor component="button" type="button" size="sm" onClick={toggle}>
+					What bosun understood — {opened ? 'hide' : 'show'}
+				</Anchor>
+				{stale ? (
+					<Badge size="sm" variant="light" color="yellow">
+						Out of date
+					</Badge>
+				) : null}
+			</Group>
+			<Collapse expanded={opened}>
+				{config === null ? (
+					<Text size="sm" c="dimmed">
+						None yet.
+					</Text>
+				) : (
+					<Code block className="text-xs whitespace-pre-wrap break-words">
+						{config}
+					</Code>
+				)}
+			</Collapse>
+		</Stack>
+	)
 }
 
 function ConfigPane ({ machine, repositoryId }: { machine: ConfigMachine, repositoryId: string }) {
@@ -54,28 +86,30 @@ function ConfigPane ({ machine, repositoryId }: { machine: ConfigMachine, reposi
 		)
 	}
 
-	const initialText = config.data.config ?? ''
+	const instructions = config.data.instructions ?? ''
 
 	return (
 		<Card withBorder padding="md" radius="md">
 			<Stack gap="md">
 				<Group justify="space-between" align="flex-start" wrap="wrap" gap="sm">
 					<Stack gap={4}>
-						<Text fw={600}>Project config</Text>
+						<Text fw={600}>Project instructions</Text>
 						<Text size="xs" c="dimmed">
-							Shared by every machine attached to {fullName}.
+							Shared by every machine attached to {fullName}. Bosun compiles its config from them.
 						</Text>
 					</Stack>
 					<GenerateConfigButton
 						machine={machine}
-						hasConfig={initialText.trim() !== ''}
+						hasConfig={config.data.config !== null}
 						running={configRun?.status === 'discovering'}
 					/>
 				</Group>
 
 				<ConfigRunStatus run={configRun} />
 
-				<ConfigEditor key={initialText} repositoryId={repositoryId} initialText={initialText} />
+				<InstructionsEditor key={instructions} repositoryId={repositoryId} initialText={instructions} />
+
+				<CompiledConfig config={config.data.config} stale={config.data.stale} />
 			</Stack>
 		</Card>
 	)

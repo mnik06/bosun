@@ -1,4 +1,4 @@
-import { prepareRunEnvironment } from '../execution/run-environment';
+import { ensureProjectServices, prepareRunEnvironment } from '../execution/run-environment';
 import { exitMessage } from '../execution/session';
 import { type ProjectConfig } from '../project-config';
 import { type AgentMsg, type QuickFixStart } from '../protocol';
@@ -202,6 +202,12 @@ export function createQuickFixSessions(opts: {
 		}
 
 		if (config !== null) {
+			const serviced = await ensureProjectServices({ services: opts.services, config, worktreePath, env: environment.env });
+
+			if (!serviced.ok) {
+				throw new Error(serviced.detail);
+			}
+
 			const ran = await opts.services.setupSteps.runAll({
 				key: msg.quickFixId,
 				worktreePath,

@@ -123,7 +123,7 @@ nobody.
 
 `404` for not found or not owned, `403` for a role the caller lacks, `409` for a conflict, `400` for
 a request that is well-formed but refused. Use `details` when the client acts field by field
-(`repositories/save-config.ts`). A bare `Error` becomes a `500` with a generic message. See
+(`github/shared/github-pat-errors.ts`). A bare `Error` becomes a `500` with a generic message. See
 [errors.md](./errors.md).
 
 ### Don't reshape repo output cosmetically

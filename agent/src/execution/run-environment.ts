@@ -1,5 +1,6 @@
 import { type ProjectConfig } from '../project-config';
 import { type Services } from '../services/index';
+import { type ServicesEnsure } from '../services/services.service';
 import { withToolchainPath } from '../services/toolchain.service';
 
 export type RunEnvironment = { ok: true; env: NodeJS.ProcessEnv } | { ok: false; detail: string };
@@ -30,6 +31,22 @@ export async function prepareRunEnvironment(opts: {
 	}
 
 	return { ok: true, env: opts.includeSecrets ? { ...env, ...opts.services.projectEnv.secretValues() } : env };
+}
+
+// Every session that runs a project's commands calls this before them: a
+// container stopped by a reboot or by hand since the last build is started
+// again here rather than found missing by a migration or a test.
+export async function ensureProjectServices(opts: {
+	services: Pick<Services, 'machineServices'>;
+	config: ProjectConfig;
+	worktreePath: string;
+	env: NodeJS.ProcessEnv;
+}): Promise<ServicesEnsure> {
+	if (Object.keys(opts.config.services).length === 0) {
+		return { ok: true };
+	}
+
+	return opts.services.machineServices.ensure({ config: opts.config, worktreePath: opts.worktreePath, env: opts.env });
 }
 
 // Laid over a session that must not publish anything: the empty helper clears

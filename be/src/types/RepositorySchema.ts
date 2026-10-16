@@ -42,9 +42,12 @@ export const RepositorySchema = z.object({
 	defaultBranch: z.string(),
 	providerDefaultBranch: z.string(),
 	defaultBranchOverride: z.string().nullable(),
-	// The repository's whole config, in bosun's own text grammar. Null means no
-	// config yet — never a file bosun reads from the customer's tree.
+	// The repository's whole config, in bosun's own text grammar, compiled from
+	// `instructions` by a config run. Null means no config yet — never a file
+	// bosun reads from the customer's tree.
 	config: z.string().nullable(),
+	instructions: z.string().nullable(),
+	configCompiledFrom: z.string().nullable(),
 	// Whether an integration may hand a real conflict to a session. Off, a conflict
 	// outside `regenerate` paths goes straight to needs you.
 	// The UI's "last synced" line — Azure, and a PAT-connected GitHub repository,

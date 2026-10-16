@@ -178,8 +178,12 @@ export const MachineOnboardingSchema = z.object({
 
 export type MachineOnboarding = z.infer<typeof MachineOnboardingSchema>
 
+// `stale`: the instructions changed since the config was compiled from them.
+// Defaulted for a backend that predates instructions.
 export const RepositoryConfigSchema = z.object({
-	config: z.string().nullable()
+	config: z.string().nullable(),
+	instructions: z.string().nullable().default(null),
+	stale: z.boolean().default(false)
 })
 
 export type RepositoryConfig = z.infer<typeof RepositoryConfigSchema>

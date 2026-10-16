@@ -23,6 +23,17 @@ config as it should be, recording each change as an assumption (AC-38). Publishi
 bosun held before — there is no draft, no tracked file and no pull request; the published text is the
 repository's config from that point on.
 
+## Instructions compile into the config
+
+Leaders no longer write the config; they write free-text **instructions**, and the config is compiled
+from them by a discovery. `onboarding.start` carries them (optional, so an older backend's frame still
+parses), and the prompt makes them authoritative: every command they name lands in the config field it
+belongs to, over what the session would have inferred, with an assumption where they contradict the
+tree. The session writes no `Notes:` — on publish the backend replaces whatever notes the text carries
+with the instructions, verbatim, before validating it, so every session after reads the leader's own
+words through notes rather than a model's paraphrase of them. Without instructions the session's own
+notes stand.
+
 ## The branch a run reads
 
 The scratch checkout is cut from the `baseBranch` the backend names — bosun's default branch, which a

@@ -19,6 +19,25 @@ schema change wiped must not make an onboarded machine look new. It still holds 
 counts as the machine's one active run while it lasts. Its requirements and assumptions stay on its
 own row: the latest *discovery* is what a second machine copies.
 
+## Instructions compile into the config
+
+Nobody writes the config. A leader writes **instructions** — free text, like a system prompt — and
+saving them (`repositories/save-instructions.ts`) starts a config run on the first online machine
+attached to the repository; the config is what that run compiles from them. The structured config
+stays because verify, worktrees and the stack read it deterministically; it is internal.
+
+- **The instructions travel with the run.** `onboarding.start` carries them, and the run row keeps the
+  copy it was sent. On publish, bosun replaces whatever `Notes:` the model wrote with that copy,
+  verbatim (`shared/config-notes.ts`), and records it as `repositories.config_compiled_from`. The
+  run's copy, not the repository's: instructions edited mid-run leave the config marked out of date
+  instead of passing an older compile off as current. An agent too old to read the field still
+  publishes a config whose notes bosun overwrites, so every session reads the leader's words.
+- **Out of date** is `instructions !== config_compiled_from` with instructions present. Saving with no
+  machine online, a config run already in flight, or a machine that refuses the run still saves; the
+  response says why nothing started, and the leader's Generate button is the retry. Nothing starts
+  the run later on its own — a machine coming online does not.
+- With no instructions the model's own notes stand, as before instructions existed.
+
 ## Why it is shaped this way
 
 - **Discovery reports; it never asks.** Nothing in it waits on a person: what it cannot find it

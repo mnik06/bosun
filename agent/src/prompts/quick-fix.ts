@@ -8,6 +8,7 @@ import {
 	migrateSection,
 	notesSection,
 	providedEnv,
+	servicesSection,
 	setupSection,
 	testSection,
 	toolchainSection,
@@ -37,6 +38,7 @@ function configuredChecks(config: ProjectConfig | null): string {
 	const lines = [
 		toolchainSection(config),
 		setupSection(config, { rerun: false }),
+		servicesSection(config),
 		codegenSection(config),
 		migrateSection(config),
 		testSection(config),

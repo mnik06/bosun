@@ -12,6 +12,7 @@ import { getMemoryService } from './memory.service';
 import { getPreflightService } from './preflight.service';
 import { getProjectEnvService } from './project-env.service';
 import { getRepoService } from './repo.service';
+import { getServicesService } from './services.service';
 import { getSetupStepsService } from './setup-steps.service';
 import { getSkillsService } from './skills.service';
 import { getStackService } from './stack.service';
@@ -39,6 +40,7 @@ export function getServices(opts: { config: AgentConfig; configPath: string; env
 	// agent runs is the one every service works in from that moment.
 	const repoPath = () => workspace.repoPath();
 	const repo = getRepoService({ exec, repoPath });
+	const machineServices = getServicesService({});
 	const bosunApi = getBosunApiService({
 		serverUrl: opts.config.serverUrl,
 		machineKey: opts.config.machineKey
@@ -66,10 +68,13 @@ export function getServices(opts: { config: AgentConfig; configPath: string; env
 		}),
 		projectEnv,
 		repo,
+		machineServices,
 		setupSteps: getSetupStepsService({ exec }),
 		skills: getSkillsService({ repoPath }),
 		stack: getStackService({ memory }),
-		teardown: getTeardownService({}),
+		teardown: getTeardownService({
+			stopServices: async () => machineServices.stopAll({ checkoutPath: repoPath(), env: claudeAuth.sessionEnv() })
+		}),
 		toolchain: getToolchainService({ exec }),
 		upgrade: getUpgradeService({ exec }),
 		workspace,

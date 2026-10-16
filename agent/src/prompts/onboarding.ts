@@ -7,6 +7,12 @@ Install:
 - be: pnpm install
 - fe: pnpm install
 
+Services:
+db:
+- Start: supabase start
+- Check: supabase status
+- Stop: supabase stop
+
 Apps:
 be:
 - Migrate: pnpm db:migration:run
@@ -21,7 +27,7 @@ Feedback loops:
 - fe: pnpm preflight
 
 Test accounts:
-- leader: TEST_LEADER_EMAIL / TEST_LEADER_PASSWORD. No signup, created by hand in Supabase.
+- leader: TEST_LEADER_EMAIL / TEST_LEADER_PASSWORD. No signup, created by hand.
 
 Notes:
 - DATABASE_URL must use the session pooler (5432), not 6543 — 6543 breaks migrations.
@@ -39,6 +45,19 @@ appears at most once, in any order; an unrecognized line is refused, and there i
   digits, dashes), at most 10, **backends before the frontends that call them** — the order is the
   start order. Each takes \`Start:\` and, when it has them, \`Migrate:\` and \`Test:\` — the plain script
   a person runs, never a port, a host or an env variable.
+- \`Services:\` at most 5 blocks, one per thing a person starts once in the background and leaves up —
+  \`docker compose up -d\`, \`supabase start\`, a \`db:up\`-style script. Look for \`docker-compose.yml\`,
+  \`compose.yaml\`, \`supabase/config.toml\` and such scripts in \`package.json\`. Each takes \`Start:\`,
+  which must return once the service is up (never a foreground \`docker compose up\`), \`Check:\`, which
+  exits 0 only while it is up (\`supabase status\`, \`docker compose exec db pg_isready\`), and, when it
+  has one, \`Stop:\`; \`Cwd:\` when it is not the root, \`Ready timeout:\` in seconds when a first start
+  pulls images (default 120). Bosun runs them from every worktree, each a different folder, so a
+  \`docker compose\` command names its project (\`docker compose -p <repo> up -d\`) unless the compose
+  file sets \`name:\` — otherwise each worktree starts a stack of its own. Bosun starts them before
+  anything else and keeps them running for every plan on this machine. Never put one under \`Apps:\`.
+  When a project has one, run
+  \`docker info\`; if it fails, say so with a failed \`report_step\` — docker must be installed and this
+  machine's bosun user in the \`docker\` group before verify can pass.
 - \`Test accounts:\` \`- <role>: <KEY_NAMES> <one line on the account>\`. The credential keys are the
   SCREAMING_SNAKE names of env variables, never values.
 - \`Notes:\` free text to the end of the document, **only** for what is critical and cannot be learned
@@ -69,9 +88,30 @@ ${opts.existingConfig}
 \`\`\``;
 }
 
+function instructionsSection(opts: { instructions: string | null }): string {
+	if (opts.instructions === null) {
+		return '';
+	}
+
+	return `
+
+# The operator's instructions
+
+The operator wrote these instructions for this repository. **They are authoritative**: every command
+they name goes into the config field it belongs to — install, migrate, start, checks, reset database,
+services — in preference to what you would have inferred. Where they disagree with the tree, follow
+them and record an assumption citing the file. **Do not write a \`Notes:\` section** — bosun appends
+these instructions verbatim as the config's notes, so every session reads them.
+
+\`\`\`
+${opts.instructions}
+\`\`\``;
+}
+
 export function discoveryPrompt(opts: {
 	portBase: number;
 	existingConfig: string | null;
+	instructions: string | null;
 }): string {
 	return `You are onboarding a repository onto bosun. Bosun runs coding sessions on this machine, and before
 any of them can build, test or start this project it needs a config bosun holds: plain text that says
@@ -105,7 +145,7 @@ it, and never go longer than a couple of minutes without a line:
 **Report every requirement the moment you find it**, not at the end. The operator can start filling
 them in while you work, and verify starts sooner.
 
-${existingSection(opts)}
+${existingSection(opts)}${instructionsSection(opts)}
 
 # The branch you onboard
 

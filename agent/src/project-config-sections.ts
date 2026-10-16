@@ -6,6 +6,7 @@
 
 import { LineMap, splitLabel, splitSections, type ConfigIssue, type Header, type Section } from './project-config-grammar';
 import { parseApps } from './project-config-apps';
+import { parseServices } from './project-config-services';
 
 const RERUN_WHEN = /^(.*) \(rerun when: (.+)\)$/;
 
@@ -328,6 +329,17 @@ function applyApps(sections: Sections, raw: Raw, lineMap: LineMap, issues: Confi
 	raw.apps = parseApps(section, issues, lineMap);
 }
 
+function applyServices(sections: Sections, raw: Raw, lineMap: LineMap, issues: ConfigIssue[]): void {
+	const section = sections.get('Services:');
+
+	if (!section) {
+		return;
+	}
+
+	lineMap.note(['services'], section.startLine);
+	raw.services = parseServices(section, issues, lineMap);
+}
+
 function applyRegenerate(sections: Sections, raw: Raw, lineMap: LineMap, issues: ConfigIssue[]): void {
 	const section = sections.get('Regenerate:');
 
@@ -387,12 +399,13 @@ function applyNotes(notes: { line: number; text: string } | null, raw: Raw, line
 export function parseSource(source: string): { raw: Raw; issues: ConfigIssue[]; lineMap: LineMap } {
 	const { sections, notes, issues } = splitSections(source);
 	const lineMap = new LineMap();
-	const raw: Raw = { version: 1, setup: [], apps: {}, checks: [], regenerate: [], testAccounts: [] };
+	const raw: Raw = { version: 1, setup: [], apps: {}, services: {}, checks: [], regenerate: [], testAccounts: [] };
 
 	applyToolchain(sections, raw, lineMap, issues);
 	applyInstall(sections, raw, lineMap, issues);
 	applyFeedbackLoops(sections, raw, lineMap, issues);
 	applyApps(sections, raw, lineMap, issues);
+	applyServices(sections, raw, lineMap, issues);
 	applyRegenerate(sections, raw, lineMap, issues);
 	applyResetDatabase(sections, raw, lineMap, issues);
 	applyTestAccounts(sections, raw, lineMap, issues);

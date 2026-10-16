@@ -26,8 +26,7 @@ new HttpError(statusCode, message, { cause?, details? })
 - `message` is written for the person using the app — it is sent verbatim
 - `cause` preserves the underlying error for the log
 - `details` is spread **beside** `message` in the body, for a refusal the client acts on field by
-  field: `repositories/save-config.ts` sends every config issue, `github-pat-errors.ts` sends the
-  `ssoUrl` the form links to
+  field: `github-pat-errors.ts` sends the `ssoUrl` the form links to
 
 ## How the handler responds
 

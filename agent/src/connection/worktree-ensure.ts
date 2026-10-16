@@ -1,4 +1,4 @@
-import { prepareRunEnvironment } from '../execution/run-environment';
+import { ensureProjectServices, prepareRunEnvironment } from '../execution/run-environment';
 import { type AgentMsg, type BuildWorktreeEnsure } from '../protocol';
 import { resolveProjectConfig } from '../services/config-resolution';
 import { type Services } from '../services/index';
@@ -38,6 +38,12 @@ async function runSetup(opts: { services: Services; msg: BuildWorktreeEnsure; wo
 
 	if (!environment.ok) {
 		return environment;
+	}
+
+	const serviced = await ensureProjectServices({ services, config: resolved.config, worktreePath, env: environment.env });
+
+	if (!serviced.ok) {
+		return { ok: false, detail: serviced.detail };
 	}
 
 	const ran = await (msg.fresh ? services.setupSteps.runAll : services.setupSteps.rerunChanged)({

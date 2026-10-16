@@ -1,7 +1,7 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { NO_PUSH_GIT_ENV, prepareRunEnvironment } from '../execution/run-environment';
+import { ensureProjectServices, NO_PUSH_GIT_ENV, prepareRunEnvironment } from '../execution/run-environment';
 import { createStreamParser } from '../planning/stream-parser';
 import { type ProjectConfig } from '../project-config';
 import { DISCOVERY_NUDGE, discoveryPrompt, signInPrompt } from '../prompts/onboarding';
@@ -66,6 +66,7 @@ export function verifyPlanTotal(opts: { config: ProjectConfig; applyMigrations: 
 
 	return (
 		3 +
+		(Object.keys(opts.config.services).length > 0 ? 1 : 0) +
 		Math.max(1, opts.config.setup.length) +
 		codegen +
 		(opts.applyMigrations ? migrate : 1) +
@@ -298,7 +299,7 @@ export function createOnboardingSessions(opts: { services: Services; send: (mess
 			runId: msg.runId,
 			run,
 			cwd: scratch,
-			prompt: discoveryPrompt({ portBase: msg.portBase, existingConfig }),
+			prompt: discoveryPrompt({ portBase: msg.portBase, existingConfig, instructions: msg.instructions ?? null }),
 			builtin: DISCOVERY_TOOLS,
 			mcpTools: DISCOVERY_MCP_TOOLS,
 			definitions: DISCOVERY_DEFINITIONS,
@@ -480,6 +481,18 @@ export function createOnboardingSessions(opts: { services: Services; send: (mess
 		step('Provision the toolchain', 'passed', toolchain === undefined
 			? 'the config names none — the machine\'s own tools'
 			: [`node ${toolchain.node}`, toolchain.packageManager].filter(Boolean).join(', '));
+
+		if (Object.keys(resolved.config.services).length > 0) {
+			report({ runId: msg.runId, run, label: 'Start the services', status: 'running', detail: null });
+
+			const serviced = await ensureProjectServices({ services, config: resolved.config, worktreePath: scratch, env: environment.env });
+
+			step('Start the services', serviced.ok ? 'passed' : 'failed', serviced.ok ? Object.keys(resolved.config.services).join(', ') : serviced.detail);
+
+			if (!serviced.ok) {
+				return { ok: false, message: `Start the services: ${clipTail(serviced.detail, DETAIL_CHARS)}` };
+			}
+		}
 
 		return { ok: true, config: resolved.config, env: environment.env };
 	}

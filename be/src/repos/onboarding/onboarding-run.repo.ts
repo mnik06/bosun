@@ -43,10 +43,19 @@ export function getOnboardingRunRepo(db: DbOrTx) {
 			requirements?: OnboardingRequirement[];
 			assumptions?: OnboardingAssumption[];
 			config?: string | null;
+			instructions?: string | null;
 		}): Promise<OnboardingRun> {
 			const [row] = await db.insert(onboardingRuns).values(opts).returning(columns);
 
 			return OnboardingRunSchema.parse(row);
+		},
+
+		// Kept off `OnboardingRun`: only the publish of the run's own config reads it,
+		// and the browser already has the repository's instructions.
+		async getInstructionsById(id: string): Promise<string | null> {
+			const [row] = await db.select({ instructions: onboardingRuns.instructions }).from(onboardingRuns).where(eq(onboardingRuns.id, id));
+
+			return row?.instructions ?? null;
 		},
 
 		async getById(id: string): Promise<OnboardingRun | null> {

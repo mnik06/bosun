@@ -37,6 +37,9 @@ onboarding's verify, a second machine — and the session only decides *when*. T
 - **Process groups, not pids.** Each app is `sh -c <start>` in a group of its own; stopping signals the
   whole group — SIGTERM, then SIGKILL after five seconds — and signals it even when the shell has
   already exited, because `pnpm dev` leaves a server behind its shell. Dependents are stopped first.
+- **Services come up first, and are not the stack's.** A session's `stack_up` ensures the config's
+  `Services:` before starting any app, and a service that will not come up is returned as the app that
+  failed. `down` never stops one: they are shared by every build (`services.service.md`).
 - **One stack per key.** A second `up` for the same key (a run id) stops the first. The session that
   owns the key calls `down` when it ends, however it ends, and the agent calls `downAll` on shutdown.
 

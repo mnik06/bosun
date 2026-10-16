@@ -195,7 +195,14 @@ export const repositories = pgTable(
 		// The repository's whole config, in bosun's own text grammar. Validated on
 		// write, so a config that reaches a machine is one its schema accepts. Null
 		// means no config yet — never a file bosun reads from the customer's tree.
+		// Compiled from `instructions` by a config run, not written by a person.
 		config: text(),
+		// The leader's own account of how to work in this repository, free text.
+		// Null means none written.
+		instructions: text(),
+		// The `instructions` the current `config` was compiled from. Differing from
+		// `instructions` is what marks the config out of date.
+		configCompiledFrom: text(),
 		// Azure has no equivalent of a GitHub webhook installation event to announce
 		// a first successful sync, so the UI reads this instead — a PAT-connected
 		// GitHub repository writes it too, from the same webhook delivery or the
@@ -299,6 +306,9 @@ export const onboardingRuns = pgTable(
 		requirements: jsonb().$type<OnboardingRequirement[]>().notNull().default([]),
 		assumptions: jsonb().$type<OnboardingAssumption[]>().notNull().default([]),
 		config: text(),
+		// The repository's instructions as this run was sent them: what its published
+		// config's notes become, and what that config counts as compiled from.
+		instructions: text(),
 		// A discovery that found the project on another branch than the default one
 		// onboards that branch and says so here; verify waits until it is the
 		// repository's default branch in bosun.

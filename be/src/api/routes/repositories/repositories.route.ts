@@ -4,12 +4,13 @@ import {
 	RepositoryConfigRespSchema,
 	RepositoryIdParamsSchema,
 	RepositoryListRespSchema,
-	RepositoryRespSchema,
-	SaveConfigReqSchema
+	SaveInstructionsReqSchema,
+	SaveInstructionsRespSchema
 } from 'src/api/routes/schemas/repositories/RepositorySchemas';
 import { getRepositoryConfig } from 'src/controllers/repositories/get-repository-config';
+import { onboardingDeps } from 'src/controllers/onboarding/onboarding-deps';
 import { listRepositories } from 'src/controllers/repositories/list-repositories';
-import { saveConfig } from 'src/controllers/repositories/save-config';
+import { saveInstructions } from 'src/controllers/repositories/save-instructions';
 
 const routes: FastifyPluginAsync = async function (f) {
 	const fastify = f.withTypeProvider<ZodTypeProvider>();
@@ -34,21 +35,13 @@ const routes: FastifyPluginAsync = async function (f) {
 	);
 
 	fastify.put(
-		'/:id/config',
+		'/:id/instructions',
 		{
 			preValidation: fastify.requireLeader,
-			schema: { params: RepositoryIdParamsSchema, body: SaveConfigReqSchema, response: { 200: RepositoryRespSchema } }
+			schema: { params: RepositoryIdParamsSchema, body: SaveInstructionsReqSchema, response: { 200: SaveInstructionsRespSchema } }
 		},
 		async (req) => {
-			const repository = await saveConfig({
-				repositoryRepo: fastify.repos.repositoryRepo,
-				socketRegistry: fastify.services.socketRegistry,
-				id: req.params.id,
-				projectId: req.membership!.projectId,
-				text: req.body.text
-			});
-
-			return { repository };
+			return saveInstructions(onboardingDeps(fastify), { id: req.params.id, projectId: req.membership!.projectId, text: req.body.text });
 		}
 	);
 };

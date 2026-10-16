@@ -23,6 +23,7 @@ const HEADERS = [
 	'Install:',
 	'Feedback loops:',
 	'Apps:',
+	'Services:',
 	'Regenerate:',
 	'Reset database:',
 	'Test accounts:',

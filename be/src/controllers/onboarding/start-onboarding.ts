@@ -50,7 +50,8 @@ async function startDiscovery(
 		machineId: opts.machine.id,
 		phase: opts.phase,
 		status: 'discovering',
-		portBase: ONBOARDING_PORT_BASE
+		portBase: ONBOARDING_PORT_BASE,
+		instructions: opts.repository.instructions
 	});
 	const sent = deps.socketRegistry.sendToAgent({
 		machineId: opts.machine.id,
@@ -60,6 +61,7 @@ async function startDiscovery(
 			phase: 'discover',
 			portBase: ONBOARDING_PORT_BASE,
 			config: opts.repository.config,
+			instructions: opts.repository.instructions,
 			applyMigrations: opts.machine.policy.applyMigrations,
 			memoryMaxBytes: admission.limitBytes,
 			baseBranch: opts.repository.defaultBranch

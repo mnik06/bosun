@@ -1,6 +1,6 @@
 import path from 'path';
 import { syncWithRemote } from '../execution/commit';
-import { NO_PUSH_GIT_ENV, prepareRunEnvironment } from '../execution/run-environment';
+import { ensureProjectServices, NO_PUSH_GIT_ENV, prepareRunEnvironment } from '../execution/run-environment';
 import { createActivityTracker } from '../planning/activity-labels';
 import { createStreamParser } from '../planning/stream-parser';
 import { conflictPrompt, repairPrompt } from '../prompts/conflict';
@@ -439,6 +439,12 @@ export function createIntegrationSessions(opts: { services: Services; send: (mes
 
 		if (config === null) {
 			return { ok: true, regenerated: [] };
+		}
+
+		const serviced = await ensureProjectServices({ services, config, worktreePath: msg.worktreePath, env: ctx.env });
+
+		if (!serviced.ok) {
+			return needsYou('error', serviced.detail);
 		}
 
 		const regenerated = await regenerate({ ...ctx, config });

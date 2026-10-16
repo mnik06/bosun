@@ -31,6 +31,9 @@ export const OnboardingStartMsgSchema = z.object({
 	portBase: z.number().int(),
 	// Null when the repository has no config yet.
 	config: z.string().nullable(),
+	// The leader's instructions a discovery compiles the config from. Absent from a
+	// verify, which runs the config it is given.
+	instructions: z.string().nullable().optional(),
 	applyMigrations: z.boolean(),
 	memoryMaxBytes: z.number().int().positive().nullable(),
 	// The branch the scratch checkout is cut from — bosun's default branch, which a

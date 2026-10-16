@@ -16,6 +16,10 @@ export const MAX_APPS = 10;
 
 export const DEFAULT_READY_TIMEOUT_SECONDS = 90;
 
+export const DEFAULT_SERVICE_READY_TIMEOUT_SECONDS = 120;
+
+const MAX_SERVICES = 5;
+
 const MAX_SOURCE_CHARS = 100_000;
 
 const APP_NAME = /^[a-z][a-z0-9-]{0,30}$/;
@@ -66,6 +70,19 @@ const AppSchema = z
 		dependsOn: z.array(z.string()).max(MAX_APPS).optional(),
 		migrate: CommandSchema.optional(),
 		codegen: CommandSchema.optional()
+	})
+	.strict();
+
+// A machine-wide background process a person starts once and leaves up — a
+// docker compose stack, `supabase start`. Shared by every build on the machine,
+// so it has no port of its own and no placeholders.
+const ServiceSchema = z
+	.object({
+		cwd: RelativePathSchema.optional(),
+		start: CommandSchema,
+		check: CommandSchema,
+		stop: CommandSchema.optional(),
+		readyTimeoutSeconds: z.number().int().min(1).max(900).optional()
 	})
 	.strict();
 
@@ -121,6 +138,7 @@ const BaseSchema = z
 		toolchain: ToolchainSchema.optional(),
 		setup: z.array(SetupStepSchema).max(30).default([]),
 		apps: z.record(z.string().regex(APP_NAME, 'app names are lowercase letters, digits and dashes'), AppSchema).default({}),
+		services: z.record(z.string().regex(APP_NAME, 'service names are lowercase letters, digits and dashes'), ServiceSchema).default({}),
 		checks: z.array(CheckSchema).max(30).default([]),
 		regenerate: z.array(RegenerateRuleSchema).max(10).default([]),
 		verify: VerifySchema.optional(),
@@ -251,6 +269,10 @@ export const ProjectConfigSchema = BaseSchema.superRefine((config, ctx) => {
 	});
 
 	checkApps(config, report);
+
+	if (Object.keys(config.services).length > MAX_SERVICES) {
+		report({ path: ['services'], message: `at most ${MAX_SERVICES} services` });
+	}
 
 	config.testAccounts.forEach((account, index) => {
 		checkPlaceholders({ value: account.description, path: ['testAccounts', index, 'description'], apps, insideApp: false, report });

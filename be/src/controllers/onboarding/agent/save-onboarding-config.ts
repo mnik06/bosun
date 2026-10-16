@@ -1,5 +1,6 @@
 import { HttpError } from 'src/api/errors/HttpError';
 import { type OnboardingDeps } from 'src/controllers/onboarding/onboarding-deps';
+import { withInstructionsAsNotes } from 'src/controllers/onboarding/shared/config-notes';
 import { announceOnboarding, getActiveRunForMachine } from 'src/controllers/onboarding/shared/onboarding-runs';
 import { announceRepository } from 'src/controllers/repositories/shared/announce-repository';
 import { type ConfigIssue, parseProjectConfig } from 'src/types/ProjectConfigSchema';
@@ -17,15 +18,19 @@ export async function saveOnboardingConfig(
 		throw new HttpError(409, 'only a discovery publishes a config');
 	}
 
-	const parsed = parseProjectConfig(opts.text);
+	// The run's own copy, not the repository's: instructions edited while this run
+	// was compiling must leave its config out of date rather than marked current.
+	const instructions = await deps.onboardingRunRepo.getInstructionsById(run.id);
+	const text = withInstructionsAsNotes({ config: opts.text, instructions });
+	const parsed = parseProjectConfig(text);
 
 	if (!parsed.ok) {
 		return { ok: false, issues: parsed.issues };
 	}
 
 	const [updated, repository] = await Promise.all([
-		deps.onboardingRunRepo.update({ id: run.id, config: opts.text }),
-		deps.repositoryRepo.saveConfig({ id: run.repositoryId, config: opts.text })
+		deps.onboardingRunRepo.update({ id: run.id, config: text }),
+		deps.repositoryRepo.saveConfig({ id: run.repositoryId, config: text, configCompiledFrom: instructions })
 	]);
 
 	if (repository) {

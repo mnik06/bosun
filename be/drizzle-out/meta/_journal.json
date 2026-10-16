@@ -288,6 +288,13 @@
       "when": 1790760720210,
       "tag": "0040_mature_nicolaos",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1792148514743,
+      "tag": "0041_lively_forgotten_one",
+      "breakpoints": true
     }
   ]
 }

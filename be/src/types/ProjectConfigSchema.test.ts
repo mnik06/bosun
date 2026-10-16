@@ -221,6 +221,62 @@ Notes:`
 		]);
 	});
 
+	it('parses Services: in the order written', () => {
+		const source = PLAN_EXAMPLE.replace(
+			'Feedback loops:',
+			`Services:
+db:
+- Start: supabase start
+- Check: supabase status
+- Stop: supabase stop
+- Cwd: .
+- Ready timeout: 180
+cache:
+- Start: docker compose up -d redis
+- Check: docker compose exec redis redis-cli ping
+
+Feedback loops:`
+		);
+		const parsed = parseProjectConfig(source);
+
+		expect(parsed.ok).toBe(true);
+		expect(parsed.ok && Object.keys(parsed.config.services)).toEqual(['db', 'cache']);
+		expect(parsed.ok && parsed.config.services.db).toEqual({
+			start: 'supabase start',
+			check: 'supabase status',
+			stop: 'supabase stop',
+			cwd: '.',
+			readyTimeoutSeconds: 180
+		});
+	});
+
+	it('refuses a service without a check, at its name', () => {
+		const source = 'Services:\ndb:\n- Start: supabase start\n';
+
+		expect(issues(source)).toEqual([{ line: 2, message: 'Invalid input: expected string, received undefined' }]);
+	});
+
+	it('refuses an unknown service field and a field before any service name', () => {
+		const source = 'Services:\n- Start: up\ndb:\n- Start: up\n- Check: status\n- Port: 5432\n';
+
+		expect(issues(source)).toEqual([
+			{ line: 2, message: 'expected a service name (e.g. `db:`) before its fields' },
+			{ line: 6, message: 'expected `- Field: value` — one of Cwd, Start, Check, Stop, Ready timeout' }
+		]);
+	});
+
+	it('refuses a ready timeout out of range, at its line', () => {
+		const source = 'Services:\ndb:\n- Start: up\n- Check: status\n- Ready timeout: 1000\n';
+
+		expect(issues(source)).toEqual([{ line: 5, message: 'Too big: expected number to be <=900' }]);
+	});
+
+	it('refuses a sixth service at the section header', () => {
+		const services = Array.from({ length: 6 }, (_, index) => `s${index}:\n- Start: up\n- Check: status`).join('\n');
+
+		expect(issues(`Services:\n${services}\n`)).toEqual([{ line: 1, message: 'at most 5 services' }]);
+	});
+
 	it('refuses empty or whitespace-only text without a line', () => {
 		expect(issues('')).toEqual([{ line: null, message: 'must not be empty' }]);
 		expect(issues('   \n\t\n')).toEqual([{ line: null, message: 'must not be empty' }]);
