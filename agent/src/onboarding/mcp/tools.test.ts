@@ -32,7 +32,7 @@ describe('publish_config', () => {
 	// one would send the run to needs_input with no config behind it.
 	it('counts only an accepted config as published', async () => {
 		const refused = dispatchWith({ ok: false, issues: [{ line: 4, message: 'Required' }] });
-		const result = (await refused.dispatch('publish_config', { text: 'Apps:\n' })) as { content: { text: string }[]; isError: boolean };
+		const result = (await refused.dispatch('publish_config', { text: 'Apps:\n', instructions: 'Install with pnpm install.' })) as { content: { text: string }[]; isError: boolean };
 
 		expect(refused.onPublished).not.toHaveBeenCalled();
 		expect(result.isError).toBe(true);
@@ -40,7 +40,7 @@ describe('publish_config', () => {
 
 		const accepted = dispatchWith({ ok: true });
 
-		await accepted.dispatch('publish_config', { text: 'Apps:\n' });
+		await accepted.dispatch('publish_config', { text: 'Apps:\n', instructions: 'Install with pnpm install.' });
 		expect(accepted.onPublished).toHaveBeenCalledOnce();
 	});
 

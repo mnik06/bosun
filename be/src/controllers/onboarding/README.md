@@ -36,7 +36,12 @@ stays because verify, worktrees and the stack read it deterministically; it is i
   machine online, a config run already in flight, or a machine that refuses the run still saves; the
   response says why nothing started, and the leader's Generate button is the retry. Nothing starts
   the run later on its own — a machine coming online does not.
-- With no instructions the model's own notes stand, as before instructions existed.
+- **A run rewrites the instructions.** `publish_config` carries the session's own version, written
+  for a person; it becomes the notes, `config_compiled_from` and — only while the repository still
+  holds the instructions the run started from — `repositories.instructions`. An edit made mid-run is
+  newer than the rewrite, so it stays and the config reads as out of date against it. An older agent
+  sends none, and the run's copy is used as before.
+- With no instructions at all the model's own notes stand.
 
 ## Why it is shaped this way
 

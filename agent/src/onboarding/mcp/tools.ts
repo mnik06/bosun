@@ -9,7 +9,7 @@ export const ReportStepArgsSchema = z.object({
 	progress: z.number().min(0).max(1).optional()
 });
 
-export const PublishConfigArgsSchema = z.object({ text: z.string().min(1).max(100_000) });
+export const PublishConfigArgsSchema = z.object({ text: z.string().min(1).max(100_000), instructions: z.string().trim().min(1).max(10_000) });
 
 export const ReportRequirementArgsSchema = z
 	.object({
@@ -69,7 +69,7 @@ export const DISCOVERY_DEFINITIONS = [
 	mcpToolDefinition({
 		name: 'publish_config',
 		description:
-			"Publish the whole config you have written, in bosun's plain-text grammar. Bosun validates it: when it is refused you get every field that is wrong, each with its line, and must fix them and publish again. Publishing again replaces what you published before. Discovery fails unless a publish succeeds.",
+			"Publish the whole config you have written, in bosun's plain-text grammar, with instructions: the same project written in plain sentences for a person, which become the repository's instructions in bosun. Bosun validates the config: when it is refused you get every field that is wrong, each with its line, and must fix them and publish again. Publishing again replaces what you published before. Discovery fails unless a publish succeeds.",
 		schema: PublishConfigArgsSchema
 	}),
 	mcpToolDefinition({

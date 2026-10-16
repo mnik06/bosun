@@ -10,7 +10,11 @@ export const RunIdParamsSchema = z.object({ runId: z.string().min(1) });
 
 export const OnboardingStepReqSchema = OnboardingStepInputSchema;
 
-export const OnboardingConfigReqSchema = z.object({ text: z.string().min(1).max(100_000) });
+// `instructions` is absent from an agent older than the one that writes them.
+export const OnboardingConfigReqSchema = z.object({
+	text: z.string().min(1).max(100_000),
+	instructions: z.string().trim().min(1).max(10_000).optional()
+});
 
 export const OnboardingConfigRespSchema = z.union([
 	z.object({ ok: z.literal(true) }),

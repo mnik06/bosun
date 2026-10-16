@@ -29,10 +29,13 @@ Leaders no longer write the config; they write free-text **instructions**, and t
 from them by a discovery. `onboarding.start` carries them (optional, so an older backend's frame still
 parses), and the prompt makes them authoritative: every command they name lands in the config field it
 belongs to, over what the session would have inferred, with an assumption where they contradict the
-tree. The session writes no `Notes:` — on publish the backend replaces whatever notes the text carries
-with the instructions, verbatim, before validating it, so every session after reads the leader's own
-words through notes rather than a model's paraphrase of them. Without instructions the session's own
-notes stand.
+tree.
+
+`publish_config` also carries **`instructions`: the same project written for a person**, which become
+the repository's instructions in bosun — the config's readable face, since nobody reads the grammar. A
+leader's own text is rewritten in full, every fact and command it states kept. The session writes no
+`Notes:`: on publish the backend replaces whatever notes the text carries with those instructions,
+verbatim, so every session after reads the same words the leader sees and edits.
 
 ## The branch a run reads
 

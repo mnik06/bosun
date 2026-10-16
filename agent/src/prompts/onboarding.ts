@@ -100,8 +100,8 @@ function instructionsSection(opts: { instructions: string | null }): string {
 The operator wrote these instructions for this repository. **They are authoritative**: every command
 they name goes into the config field it belongs to — install, migrate, start, checks, reset database,
 services — in preference to what you would have inferred. Where they disagree with the tree, follow
-them and record an assumption citing the file. **Do not write a \`Notes:\` section** — bosun appends
-these instructions verbatim as the config's notes, so every session reads them.
+them and record an assumption citing the file. Your \`instructions\` rewrite them in full: **every fact
+and command they state survives**, worded the way the rest of yours are.
 
 \`\`\`
 ${opts.instructions}
@@ -211,8 +211,16 @@ The text's exact shape:
 
 ${CONFIG_REFERENCE}
 
-Call \`publish_config\` with the whole text. When it is refused, fix every field it names and publish
-again, until it is accepted. Do not stop with a config that was never accepted — that fails onboarding.
+**Do not write a \`Notes:\` section.** Alongside the text, \`publish_config\` takes \`instructions\`: the
+same project written for a person — what a new engineer would be told on their first day. Short plain
+sentences or bullets, grouped by task (installing, the database and other services, migrations,
+starting the apps, checking work, test accounts), every command in backticks exactly as typed. No
+section headers from the grammar, no ports bosun assigns, no secret values. It replaces the
+repository's instructions in bosun, the operator reads and edits it there, and bosun appends it
+verbatim to the config as its notes, so every session reads it.
+
+Call \`publish_config\` with the whole text and the instructions. When it is refused, fix every field it
+names and publish again, until it is accepted. Do not stop with a config that was never accepted — that fails onboarding.
 
 Before you finish, check that every env key, every test-account secret and the migration policy you
 found has been reported as a requirement, and every guess recorded as an assumption.

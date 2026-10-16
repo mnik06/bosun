@@ -19,7 +19,7 @@ function ConfigRunStatus ({ run }: { run: OnboardingRun | null }) {
 	if (run?.status === 'discovering') {
 		return (
 			<Alert color="blue" title="Generating the config">
-				{run.steps.at(-1)?.label ?? 'Reading the repository'} — what bosun understood refreshes once the new config is published.
+				{run.steps.at(-1)?.label ?? 'Reading the repository'} — the instructions are rewritten once the new config is published.
 			</Alert>
 		)
 	}
@@ -43,7 +43,7 @@ function CompiledConfig ({ config, stale }: { config: string | null, stale: bool
 		<Stack gap={6}>
 			<Group gap="xs">
 				<Anchor component="button" type="button" size="sm" onClick={toggle}>
-					What bosun understood — {opened ? 'hide' : 'show'}
+					Raw config — {opened ? 'hide' : 'show'}
 				</Anchor>
 				{stale ? (
 					<Badge size="sm" variant="light" color="yellow">
@@ -95,7 +95,7 @@ function ConfigPane ({ machine, repositoryId }: { machine: ConfigMachine, reposi
 					<Stack gap={4}>
 						<Text fw={600}>Project instructions</Text>
 						<Text size="xs" c="dimmed">
-							Shared by every machine attached to {fullName}. Bosun compiles its config from them.
+							Shared by every machine attached to {fullName}. Generating the config rewrites them from what bosun found.
 						</Text>
 					</Stack>
 					<GenerateConfigButton

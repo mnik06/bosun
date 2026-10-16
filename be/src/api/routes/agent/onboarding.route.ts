@@ -43,7 +43,8 @@ const routes: FastifyPluginAsync = async function (f) {
 				runId: req.params.runId,
 				machineId: req.agent!.machineId,
 				projectId: req.agent!.projectId,
-				text: req.body.text
+				text: req.body.text,
+				instructions: req.body.instructions ?? null
 			});
 		}
 	);
