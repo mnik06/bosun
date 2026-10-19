@@ -86,6 +86,7 @@ restarts holds nothing, so its runs fail with "the agent restarted" rather than 
 ## Failure modes
 
 - **No repository attached** — fails before anything runs, with the attach instruction.
+- **origin cannot be fetched** — fails with the fetch error rather than onboarding a stale tree.
 - **Scratch checkout cannot be made** — the `git worktree add` error, verbatim.
 - **Discovery never publishes a valid config** — fails after one nudge.
 - **A verify step fails** — the run fails with that step's label and the tail of its output (≤1500

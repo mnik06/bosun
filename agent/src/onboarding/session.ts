@@ -143,7 +143,13 @@ export function createOnboardingSessions(opts: { services: Services; send: (mess
 			throw new Error(NO_REPOSITORY);
 		}
 
-		await services.repo.fetch();
+		// A failed fetch would leave the scratch tree on whatever origin looked like
+		// last time, and a config written from it describes code main has moved past.
+		const fetched = await services.repo.fetch();
+
+		if (!fetched.ok) {
+			throw new Error(`could not fetch the latest ${msg.baseBranch ?? 'default branch'} from origin: ${fetched.detail}`);
+		}
 
 		const ref = msg.baseBranch === undefined ? await services.repo.baseRef() : `origin/${msg.baseBranch}`;
 
