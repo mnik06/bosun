@@ -15,7 +15,7 @@ import { type Plan, type SliceKind } from 'src/types/PlanSchema';
 // A plan holds its build slot to its last bullet, so a twelve-bullet plan holds one
 // for most of a day and every plan waiting on its whole feature waits with it. Six
 // leaves room for a foundation bullet on top of the three or four the prompt asks for.
-const MAX_BUILD_BULLETS = 6;
+const MAX_BUILD_BULLETS = 10;
 
 interface PublishAc {
 	code: string;

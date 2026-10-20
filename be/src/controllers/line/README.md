@@ -15,6 +15,14 @@ A build runs **one job at a time in its worktree** — a bullet, a verify phase 
 `slice_runs.claim` and `integrations.claim` both refuse while anything else of the build is running;
 that SQL, not the scheduler's reading of it, is what stops two sessions writing one tree.
 
+A plan approved again — revised after a failed build, say — gets a new build on the same branch, so
+the bullets an earlier build delivered are already there. `shared/carried-bullets.ts` starts the
+**leading** build bullets whose criteria are all implemented as `done`, carrying the earlier run's
+commit so a dependent still stacks on it; the first bullet with an open criterion runs, and
+everything after it runs too, since it may have been built on what that bullet is about to change.
+A bullet with no criteria proves nothing and runs; the verify slice always runs. Renumbering a
+finished bullet's criteria in the revision therefore re-runs it — the safe direction.
+
 What a build does next follows from its pending work (`shared/next-job.ts`), not from its status: a
 pending integration first, then the earliest pending run. Status says what the build **holds**:
 

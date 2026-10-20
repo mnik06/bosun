@@ -2,6 +2,7 @@ import { HttpError } from 'src/api/errors/HttpError';
 import { type LineDeps } from 'src/controllers/line/line-deps';
 import { scheduleRepository } from 'src/controllers/line/schedule';
 import { announceBuild, announcePlanChanged } from 'src/controllers/line/shared/announce';
+import { carriedBullets, type CarriedBullet } from 'src/controllers/line/shared/carried-bullets';
 import {
 	consumeInstead,
 	detectDependencies,
@@ -20,7 +21,7 @@ import { getSliceRunRepo } from 'src/repos/builds/slice-run.repo';
 import { getPlanRepo } from 'src/repos/plans/plan.repo';
 import { getSliceRepo } from 'src/repos/plans/slice.repo';
 import { type OverlapDecisionView } from 'src/api/routes/schemas/plans/PlanRespSchemas';
-import { ACTIVE_BUILD_STATUSES, type Build } from 'src/types/BuildSchema';
+import { ACTIVE_BUILD_STATUSES, BuildStatusSchema, type Build } from 'src/types/BuildSchema';
 import { type Plan, type Slice } from 'src/types/PlanSchema';
 
 // The approved, unmerged plans in the repository, in the order they were approved:
@@ -50,6 +51,16 @@ async function providerPlans(deps: LineDeps, plan: Plan): Promise<ProviderPlan[]
 		});
 }
 
+async function priorBullets(deps: LineDeps, opts: { plan: Plan; slices: Slice[] }): Promise<Map<string, CarriedBullet>> {
+	const [acs, priorBuilds] = await Promise.all([
+		deps.acRepo.listByPlan(opts.plan.id),
+		deps.buildRepo.listByPlans({ planIds: [opts.plan.id], statuses: BuildStatusSchema.options })
+	]);
+	const priorRuns = await deps.sliceRunRepo.listForBuilds(priorBuilds.map((build) => build.id));
+
+	return carriedBullets({ slices: opts.slices, acs, priorRuns });
+}
+
 function refusal(opts: { plan: Plan; live: Build | null; slices: Slice[] }): string | null {
 	if (opts.plan.status !== 'ready') {
 		return 'This plan is still being written';
@@ -66,7 +77,10 @@ function refusal(opts: { plan: Plan; live: Build | null; slices: Slice[] }): str
 	return opts.slices.length === 0 ? 'This plan has nothing to build yet' : null;
 }
 
-async function write(deps: LineDeps, opts: { plan: Plan; slices: Slice[]; detection: Detection; providers: ProviderPlan[] }): Promise<Build> {
+async function write(
+	deps: LineDeps,
+	opts: { plan: Plan; slices: Slice[]; detection: Detection; providers: ProviderPlan[]; carried: Map<string, CarriedBullet> }
+): Promise<Build> {
 	const { plan, slices, detection } = opts;
 	const numberOf = new Map(opts.providers.map((provider) => [provider.planId, provider.number]));
 
@@ -110,13 +124,18 @@ async function write(deps: LineDeps, opts: { plan: Plan; slices: Slice[]; detect
 		});
 
 		await getSliceRunRepo(tx).createMany(
-			slices.map((slice) => ({
-				id: deps.idService.createSliceRunId(),
-				buildId: build.id,
-				sliceId: slice.id,
-				ordinal: slice.ordinal,
-				phase: slice.kind === 'verify' ? ('drive' as const) : null
-			}))
+			slices.map((slice) => {
+				const carried = opts.carried.get(slice.id);
+
+				return {
+					id: deps.idService.createSliceRunId(),
+					buildId: build.id,
+					sliceId: slice.id,
+					ordinal: slice.ordinal,
+					phase: slice.kind === 'verify' ? ('drive' as const) : null,
+					...(carried ? { status: 'done' as const, commitSha: carried.commitSha, finishedAt: new Date() } : {})
+				};
+			})
 		);
 
 		return build;
@@ -142,7 +161,7 @@ export async function approvePlan(
 
 	const providers = await providerPlans(deps, plan);
 	const detection = detectDependencies({ candidate: { planId: plan.id, number: plan.number, slices }, providers });
-	const build = await write(deps, { plan, slices, detection, providers });
+	const build = await write(deps, { plan, slices, detection, providers, carried: await priorBullets(deps, { plan, slices }) });
 	const approved = (await deps.planRepo.getById(plan.id)) ?? plan;
 
 	// Sign-off ends the warm grill: a revision of an approved plan starts from the

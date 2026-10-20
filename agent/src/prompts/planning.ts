@@ -407,7 +407,7 @@ Verify mechanically, before anything is published:
 - a feature with a screen carries a screen layout the person signed off on
 - every captured blocker is recorded
 - every build bullet carries its footprint, and every shared piece sits in bullet 1, marked foundation
-- no more than six build bullets
+- no more than ten build bullets
 - the plan lists no build steps and no unit tests
 
 Then run the **coverage audit**: two \`general-purpose\` subagents via \`Task\`, dispatched together, each
@@ -480,8 +480,8 @@ plan is built and verified against; never write a "Requirements coverage" sectio
 yourself.
 
 Codes are \`AC-1\`, \`AC-2\`, … in order. Cut 3 or 4 tracer bullets, \`ordinal\` starting at 1, and
-**never more than six build bullets**. A plan holds its build slot until its last bullet, and every plan
-waiting on its whole feature waits with it; past six it is more than one feature, and the API refuses
+**never more than ten build bullets**. A plan holds its build slot until its last bullet, and every plan
+waiting on its whole feature waits with it; past ten it is more than one feature, and the API refuses
 it. A large feature is carried by fuller bullets, not by fewer requirements: give each
 bullet more of the criteria it can deliver before anything else. Only when the work genuinely cannot
 fit, put the split to the person with \`bosun_ask\` — never cut on your own — and name every requirement
@@ -749,7 +749,7 @@ all.
 
 Then call \`publish_plan\` **once** with the whole plan as it should now be — title, body, every
 acceptance criterion, every tracer bullet with its \`acCodes\` and footprint, \`foundation\` on bullet 1
-when it holds the shared pieces, and never more than six build bullets. It replaces what is published, so
+when it holds the shared pieces, and never more than ten build bullets. It replaces what is published, so
 anything you leave out is deleted. Keep the codes of criteria that have not changed: what is already
 marked implemented or verified survives a republish, and renumbering throws that away.
 

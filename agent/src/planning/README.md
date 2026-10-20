@@ -42,7 +42,7 @@ whole feature.
 
 The shape lives in `footprint.ts`, mirroring the backend's, with a description on every field because
 the model fills it in from the tool schema alone. The rules — every build bullet has one, shared pieces
-only in bullet 1, at most six build bullets — are enforced by the backend and returned as a refusal the
+only in bullet 1, at most ten build bullets — are enforced by the backend and returned as a refusal the
 session reads and republishes against; the prompt states them so the first publish usually passes.
 
 There used to be a second kind of planning session, which rewrote several confirmed plans around a

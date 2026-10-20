@@ -61,7 +61,17 @@ export interface RunChanges {
 export function getSliceRunRepo(db: DbOrTx) {
 	return {
 		async createMany(
-			rows: { id: string; buildId: string; sliceId: string; ordinal: number; phase: RunPhase | null; acCodes?: string[] | null }[]
+			rows: {
+				id: string;
+				buildId: string;
+				sliceId: string;
+				ordinal: number;
+				phase: RunPhase | null;
+				acCodes?: string[] | null;
+				status?: SliceRunStatus;
+				commitSha?: string | null;
+				finishedAt?: Date | null;
+			}[]
 		): Promise<SliceRun[]> {
 			if (rows.length === 0) {
 				return [];
