@@ -252,6 +252,61 @@ describe('the plan branch on the remote', () => {
 	});
 });
 
+describe('a plan branch an earlier build still holds', () => {
+	const branch = 'bosun/plan/7-again';
+	let root: string;
+	let clone: string;
+	let earlier: string;
+	let current: string;
+
+	beforeEach(async () => {
+		({ root, worktree: clone } = await bootstrapBareRemote('bosun-holder-'));
+		earlier = path.join(root, 'worktrees', 'bld-earlier');
+		current = path.join(root, 'worktrees', 'bld-current');
+
+		fs.writeFileSync(path.join(clone, 'base.txt'), 'base\n');
+		await git(clone, ['add', '-A']);
+		await git(clone, ['commit', '-m', 'base']);
+		await git(clone, ['push', '-u', 'origin', 'main']);
+		await git(clone, ['worktree', 'add', '-b', branch, earlier]);
+		fs.writeFileSync(path.join(earlier, 'slice-one.txt'), 'one\n');
+		await git(earlier, ['add', '-A']);
+		await git(earlier, ['commit', '-m', 'slice one']);
+		await git(earlier, ['push', '-u', 'origin', branch]);
+		await git(clone, ['worktree', 'add', '--detach', current]);
+	});
+
+	afterEach(() => {
+		fs.rmSync(root, { recursive: true, force: true });
+	});
+
+	function start() {
+		return getCommitService({ exec }).startBuildBranch({ worktreePath: current, branch, baseRef: 'main', fresh: false, startFrom: null, mergeIn: [] });
+	}
+
+	// Found on a real plan: the cancelled build's removal never reached the machine,
+	// and the plan approved again failed on "already used by worktree".
+	it('removes it when everything it committed is on origin, and continues the branch', async () => {
+		const started = await start();
+
+		expect(started.ok).toBe(true);
+		expect(fs.existsSync(earlier)).toBe(false);
+		expect(fs.existsSync(path.join(current, 'slice-one.txt'))).toBe(true);
+	});
+
+	it('refuses, and keeps it, when it holds a commit origin does not', async () => {
+		fs.writeFileSync(path.join(earlier, 'unpushed.txt'), 'only here\n');
+		await git(earlier, ['add', '-A']);
+		await git(earlier, ['commit', '-m', 'unpushed']);
+
+		const started = await start();
+
+		expect(started.ok).toBe(false);
+		expect(started.detail).toContain(earlier);
+		expect(fs.existsSync(path.join(earlier, 'unpushed.txt'))).toBe(true);
+	});
+});
+
 describe('a stacked plan', () => {
 	const provider = 'bosun/plan/3-avatars';
 	const second = 'bosun/plan/5-invites';

@@ -66,6 +66,11 @@ no repository yet has no path, and `readTree` refuses rather than reading an arb
   `cleanTree`, and `pushBranch` before every push, merge in whatever `origin/<plan branch>` gained (a
   reviewer's push, "Update branch"). Without that the push after the bullet is refused as a
   non-fast-forward.
+- **A plan branch held by an earlier build's worktree is released, not fought.** Git lets one worktree
+  hold a branch, and a cancelled build whose `build.worktree.remove` never arrived keeps it — the plan,
+  approved again, failed on "already used by worktree". `startBuildBranch` removes a sibling worktree
+  holding the branch when every commit in it is on origin, and refuses, naming it, when one is not; a
+  holder outside `~/.bosun/worktrees` is never touched.
 
 ## Where it is called
 

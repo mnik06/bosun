@@ -1,4 +1,5 @@
 import { type ExecResult, type ExecService } from '../services/exec.service';
+import { releaseStaleHolder } from './stale-holder';
 
 const NETWORK_TIMEOUT_MS = 180_000;
 
@@ -285,6 +286,12 @@ export function getCommitService(deps: { exec: ExecService }) {
 			await git(opts.worktreePath, ['clean', '-fd']);
 
 			const fetched = await git(opts.worktreePath, ['fetch', 'origin', '--prune']);
+			const released = await releaseStaleHolder({ exec: deps.exec, worktreePath: opts.worktreePath, branch: opts.branch });
+
+			if (!released.ok) {
+				return released;
+			}
+
 			const local = (await git(opts.worktreePath, ['rev-parse', '-q', '--verify', `refs/heads/${opts.branch}`])).ok;
 			let detail: string;
 
