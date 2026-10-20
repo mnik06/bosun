@@ -19,7 +19,7 @@ async function adoptInstructions(
 		return current;
 	}
 
-	return deps.repositoryRepo.saveInstructions({ id: opts.repositoryId, projectId: opts.projectId, instructions: opts.written });
+	return deps.repositoryRepo.saveInstructions({ id: opts.repositoryId, projectId: opts.projectId, instructions: opts.written, by: 'bosun' });
 }
 
 // Validation failures go back to the session as an answer, not an HTTP error: the

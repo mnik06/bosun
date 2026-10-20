@@ -200,6 +200,11 @@ export const repositories = pgTable(
 		// The leader's own account of how to work in this repository, free text.
 		// Null means none written.
 		instructions: text(),
+		// Who wrote `instructions` last: a leader saving them, or a config run
+		// rewriting them. Only a leader's are authoritative to the next run — a run's
+		// own are checked against the tree like the config, so a misreading is not
+		// handed back to the next run as an order. Null reads as the leader's.
+		instructionsBy: text().$type<'operator' | 'bosun'>(),
 		// The `instructions` the current `config` was compiled from. Differing from
 		// `instructions` is what marks the config out of date.
 		configCompiledFrom: text(),

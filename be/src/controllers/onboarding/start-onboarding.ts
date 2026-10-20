@@ -62,6 +62,7 @@ async function startDiscovery(
 			portBase: ONBOARDING_PORT_BASE,
 			config: opts.repository.config,
 			instructions: opts.repository.instructions,
+			instructionsBy: opts.repository.instructionsBy ?? 'operator',
 			applyMigrations: opts.machine.policy.applyMigrations,
 			memoryMaxBytes: admission.limitBytes,
 			baseBranch: opts.repository.defaultBranch

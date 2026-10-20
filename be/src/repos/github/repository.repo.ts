@@ -20,6 +20,7 @@ const columns = {
 	defaultBranchOverride: repositories.defaultBranchOverride,
 	config: repositories.config,
 	instructions: repositories.instructions,
+	instructionsBy: repositories.instructionsBy,
 	configCompiledFrom: repositories.configCompiledFrom,
 	lastSyncedAt: repositories.lastSyncedAt,
 	azureSyncMode: repositories.azureSyncMode,
@@ -217,10 +218,10 @@ export function getRepositoryRepo(db: DbOrTx) {
 			return row ? RepositorySchema.parse(row) : null;
 		},
 
-		async saveInstructions(opts: { id: string; projectId: string; instructions: string | null }): Promise<Repository | null> {
+		async saveInstructions(opts: { id: string; projectId: string; instructions: string | null; by: 'operator' | 'bosun' }): Promise<Repository | null> {
 			const [row] = await db
 				.update(repositories)
-				.set({ instructions: opts.instructions })
+				.set({ instructions: opts.instructions, instructionsBy: opts.by })
 				.where(and(eq(repositories.id, opts.id), eq(repositories.projectId, opts.projectId)))
 				.returning(columns);
 

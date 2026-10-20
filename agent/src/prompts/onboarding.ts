@@ -9,9 +9,14 @@ Install:
 
 Services:
 db:
-- Start: supabase start
+- Cwd: be
+- Start: pnpm db:local:setup
 - Check: supabase status
 - Stop: supabase stop
+
+Reset database:
+- Cwd: be
+- Run: pnpm db:local:reset
 
 Apps:
 be:
@@ -58,6 +63,17 @@ appears at most once, in any order; an unrecognized line is refused, and there i
   When a project has one, run
   \`docker info\`; if it fails, say so with a failed \`report_step\` — docker must be installed and this
   machine's bosun user in the \`docker\` group before verify can pass.
+- **The scripts are the truth about a local stack, not the READMEs.** Read every \`package.json\`'s
+  scripts for \`supabase start\`, \`docker compose up\`, \`docker run\` and anything calling them — under
+  any name (\`db:local:setup\`, \`db:up\`, \`local:env\`). A README naming a script that no longer exists
+  is stale documentation, not proof the stack is gone: find the script that replaced it. An
+  \`.env.example\` pointing at \`127.0.0.1\`/\`localhost\` ports such as 54321/54322 or 5432 is a local
+  stack too. Only when no script, compose file or \`supabase/\` folder starts one does the project use a
+  database that already exists elsewhere — then it is a requirement.
+- \`Reset database:\` the one command that wipes the local database back to a known state, usually the
+  stack's own (\`supabase db reset\`, or a script wrapping it with migrations and seeds). Bosun runs it
+  before verifying a plan, never in a build. Write it only for a local database — never for one other
+  people share.
 - \`Test accounts:\` \`- <role>: <KEY_NAMES> <one line on the account>\`. The credential keys are the
   SCREAMING_SNAKE names of env variables, never values.
 - \`Notes:\` free text to the end of the document, **only** for what is critical and cannot be learned
@@ -88,9 +104,27 @@ ${opts.existingConfig}
 \`\`\``;
 }
 
-function instructionsSection(opts: { instructions: string | null }): string {
+function instructionsSection(opts: { instructions: string | null; instructionsBy: 'operator' | 'bosun' }): string {
 	if (opts.instructions === null) {
 		return '';
+	}
+
+	// An earlier run's rewrite handed back as an order would carry its misreading
+	// forward forever; only a person's text outranks the tree.
+	if (opts.instructionsBy === 'bosun') {
+		return `
+
+# The instructions bosun holds
+
+An earlier onboarding wrote these instructions, and nobody has edited them since. **They are not
+authoritative** — treat them like the existing config: check every claim against the tree as it is
+now, keep what still holds, and correct what does not, recording an assumption for each change with
+the file that proves it. A statement that something does not exist, or must not be started, is a
+claim to check like any other. Your \`instructions\` replace them in full.
+
+\`\`\`
+${opts.instructions}
+\`\`\``;
 	}
 
 	return `
@@ -112,6 +146,7 @@ export function discoveryPrompt(opts: {
 	portBase: number;
 	existingConfig: string | null;
 	instructions: string | null;
+	instructionsBy: 'operator' | 'bosun';
 }): string {
 	return `You are onboarding a repository onto bosun. Bosun runs coding sessions on this machine, and before
 any of them can build, test or start this project it needs a config bosun holds: plain text that says
@@ -201,7 +236,9 @@ the time the operator waits. Read the scripts and write what they say.
 - **Only inside this checkout.** Never write anywhere else, never commit, never push.
 - **One command at a time, in the foreground.** This machine may be running other work.
 - **Ports ${opts.portBase}–${opts.portBase + 9} only**, for anything that listens.
-- **Never start a database, a container, a proxy or any stand-in service.** A missing service is a requirement.
+- **Never start a database, a container, a proxy or any stand-in service yourself** — not even one the
+  project's own scripts start. That is not a missing service: write it under \`Services:\` and bosun
+  starts it. Only a service the project expects to exist somewhere else is a requirement.
 - **Never write, print or invent a secret value.** Key names only, everywhere.
 - A command that fails for want of a secret or a service is expected: note it and move on.
 

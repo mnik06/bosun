@@ -47,6 +47,7 @@ export const RepositorySchema = z.object({
 	// bosun reads from the customer's tree.
 	config: z.string().nullable(),
 	instructions: z.string().nullable(),
+	instructionsBy: z.enum(['operator', 'bosun']).nullable(),
 	configCompiledFrom: z.string().nullable(),
 	// Whether an integration may hand a real conflict to a session. Off, a conflict
 	// outside `regenerate` paths goes straight to needs you.

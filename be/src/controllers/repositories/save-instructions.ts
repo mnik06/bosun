@@ -48,7 +48,7 @@ export async function saveInstructions(
 	await getOwnedRepository({ repositoryRepo: deps.repositoryRepo, id: opts.id, projectId: opts.projectId });
 
 	const repository = await orNotFound(
-		deps.repositoryRepo.saveInstructions({ id: opts.id, projectId: opts.projectId, instructions: opts.text === '' ? null : opts.text }),
+		deps.repositoryRepo.saveInstructions({ id: opts.id, projectId: opts.projectId, instructions: opts.text === '' ? null : opts.text, by: 'operator' }),
 		'Repository not found'
 	);
 

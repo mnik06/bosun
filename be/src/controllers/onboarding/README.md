@@ -41,6 +41,12 @@ stays because verify, worktrees and the stack read it deterministically; it is i
   holds the instructions the run started from — `repositories.instructions`. An edit made mid-run is
   newer than the rewrite, so it stays and the config reads as out of date against it. An older agent
   sends none, and the run's copy is used as before.
+- **Only a leader's instructions are authoritative.** `repositories.instructions_by` says who wrote
+  them last: `operator` on save, `bosun` when a run's rewrite is adopted. `onboarding.start` carries it,
+  and a run handed `bosun` instructions checks them against the tree like the existing config instead
+  of obeying them — otherwise one run's misreading ("there is no local stack") is handed to every run
+  after as an order. Rows from before the column are backfilled as `bosun` where the instructions equal
+  `config_compiled_from`; null reads as `operator`.
 - With no instructions at all the model's own notes stand.
 
 ## Why it is shaped this way

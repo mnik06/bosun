@@ -43,6 +43,9 @@ export const OnboardingStartMsgSchema = z.object({
 	// The leader's instructions the config is compiled from. Absent from a backend
 	// older than instructions, and from a verify.
 	instructions: z.string().nullable().optional(),
+	// Whether a leader wrote them or an earlier run rewrote them: only a leader's
+	// outrank the tree.
+	instructionsBy: z.enum(['operator', 'bosun']).optional(),
 	applyMigrations: z.boolean(),
 	memoryMaxBytes: z.number().int().positive().nullable(),
 	// The branch the scratch checkout is cut from. Absent from a backend older than

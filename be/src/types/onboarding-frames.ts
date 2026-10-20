@@ -34,6 +34,9 @@ export const OnboardingStartMsgSchema = z.object({
 	// The leader's instructions a discovery compiles the config from. Absent from a
 	// verify, which runs the config it is given.
 	instructions: z.string().nullable().optional(),
+	// Whether a leader wrote them or an earlier run rewrote them: only a leader's
+	// outrank the tree.
+	instructionsBy: z.enum(['operator', 'bosun']).optional(),
 	applyMigrations: z.boolean(),
 	memoryMaxBytes: z.number().int().positive().nullable(),
 	// The branch the scratch checkout is cut from — bosun's default branch, which a

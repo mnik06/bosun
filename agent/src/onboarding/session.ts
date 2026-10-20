@@ -305,7 +305,7 @@ export function createOnboardingSessions(opts: { services: Services; send: (mess
 			runId: msg.runId,
 			run,
 			cwd: scratch,
-			prompt: discoveryPrompt({ portBase: msg.portBase, existingConfig, instructions: msg.instructions ?? null }),
+			prompt: discoveryPrompt({ portBase: msg.portBase, existingConfig, instructions: msg.instructions ?? null, instructionsBy: msg.instructionsBy ?? 'operator' }),
 			builtin: DISCOVERY_TOOLS,
 			mcpTools: DISCOVERY_MCP_TOOLS,
 			definitions: DISCOVERY_DEFINITIONS,

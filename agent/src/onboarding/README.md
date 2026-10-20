@@ -37,6 +37,11 @@ leader's own text is rewritten in full, every fact and command it states kept. T
 `Notes:`: on publish the backend replaces whatever notes the text carries with those instructions,
 verbatim, so every session after reads the same words the leader sees and edits.
 
+Because a run's rewrite becomes the next run's input, `onboarding.start` says who wrote the instructions
+(`instructionsBy`). A leader's are obeyed; bosun's own are checked against the tree like the existing
+config, so a misreading — a local stack declared gone because a README names a deleted script — is
+corrected by the next run instead of enforced by it.
+
 ## The branch a run reads
 
 The scratch checkout is cut from the `baseBranch` the backend names — bosun's default branch, which a
