@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
+import { and, asc, count, eq, gte, inArray, isNull, sql } from 'drizzle-orm';
 import { type DbOrTx } from 'src/services/drizzle/drizzle.service';
 import { acs } from 'src/services/drizzle/schema';
 import { AcSchema, type Ac } from 'src/types/PlanSchema';
@@ -88,13 +88,26 @@ export function getAcRepo(db: DbOrTx) {
 			blockedReason?: string | null;
 		}): Promise<Ac | null> {
 			const { planId, code, ...values } = opts;
+			const implementedAt =
+				opts.implemented === undefined
+					? {}
+					: { implementedAt: opts.implemented ? sql`coalesce(${acs.implementedAt}, now())` : null };
 			const [row] = await db
 				.update(acs)
-				.set(values)
+				.set({ ...values, ...implementedAt })
 				.where(and(eq(acs.planId, planId), eq(acs.code, code)))
 				.returning(columns);
 
 			return row ? AcSchema.parse(row) : null;
+		},
+
+		async countImplementedSince(opts: { sliceId: string; since: Date }): Promise<number> {
+			const [row] = await db
+				.select({ value: count() })
+				.from(acs)
+				.where(and(eq(acs.sliceId, opts.sliceId), eq(acs.implemented, true), gte(acs.implementedAt, opts.since)));
+
+			return row?.value ?? 0;
 		},
 
 		// Every criterion back to unproven, so a drive run again has to examine each

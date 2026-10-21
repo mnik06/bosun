@@ -190,12 +190,47 @@ async function afterDone(deps: LineDeps, opts: { located: Located; frame: DoneFr
 	return run.phase === 'recheck' && stopOnFailedRecheck(deps, located);
 }
 
+// A bullet too big for one session ends with its gate unmet but its work
+// committed and pushed, and a person pressing retry was all that stood between it
+// and the next pass. Run again only while it advances: a run that ticked nothing
+// would tick nothing again, and that one fails for a person to look at.
+async function rerunIfAdvancing(deps: LineDeps, opts: { located: Located; frame: DoneFrame }): Promise<boolean> {
+	const { run, build, plan } = opts.located;
+
+	if (run.phase !== null || run.startedAt === null) {
+		return false;
+	}
+
+	if ((await deps.acRepo.countImplementedSince({ sliceId: run.sliceId, since: run.startedAt })) === 0) {
+		return false;
+	}
+
+	deps.runActivity.forget(run.id);
+	await deps.sliceRunRepo.update({
+		id: run.id,
+		status: 'pending',
+		failureReason: null,
+		report: opts.frame.report,
+		questionId: null,
+		question: null,
+		questionAskedAt: null,
+		startedAt: null,
+		finishedAt: null
+	});
+	announcePlanChanged({ socketRegistry: deps.socketRegistry, projectId: plan.projectId, planId: plan.id });
+	await scheduleRepository(deps, { repositoryId: build.repositoryId });
+
+	return true;
+}
+
 async function recordDone(deps: LineDeps, opts: { located: Located; frame: DoneFrame }): Promise<void> {
 	const { located, frame } = opts;
 	const gate = await gateFor(deps, located);
 
 	if (gate !== null) {
-		await failRun(deps, { located, message: gate, report: frame.report });
+		if (!(await rerunIfAdvancing(deps, opts))) {
+			await failRun(deps, { located, message: gate, report: frame.report });
+		}
 
 		return;
 	}

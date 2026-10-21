@@ -468,7 +468,11 @@ export const acs = pgTable(
 		// app that will not start is a fact for the reviewer, not a reason to hold
 		// the whole branch back. Set means "explained"; null with `verified` false
 		// means "silently skipped", which is what the gate still refuses.
-		blockedReason: text()
+		blockedReason: text(),
+		// When it was first ticked. A bullet that fails its gate having ticked some
+		// of its criteria in that run is making progress and is run again; one that
+		// ticked none is stuck and waits for a person.
+		implementedAt: timestamp({ withTimezone: true })
 	},
 	(table) => [
 		index('acs_plan_id_idx').on(table.planId),

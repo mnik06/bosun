@@ -147,6 +147,11 @@ run and the build goes to the front; the restarted bullet reads it in its prompt
   job the agent no longer held (`stall-machine-builds.ts`). Release continues from the last commit.
 - **`needs_you: provider_failed`** — the provider failed or was cancelled before releasing the
   dependency. Retry when it runs again, revise, or override the dependency.
+- **A bullet ends with criteria unticked** — its work is committed and pushed either way. If it ticked
+  any of its criteria in that run (`acs.implemented_at` after the run started) it goes back to
+  `pending` and runs again, the next session continuing from the branch; a bullet too big for one
+  session finishes over several. A run that ticked nothing fails the build, since another would tick
+  nothing too.
 - **A stacked plan's pull request still targets a merged branch** — the retarget call failed; the
   reason is on the build, and the next integration's publish sets the base again.
 
