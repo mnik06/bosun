@@ -169,7 +169,7 @@ one grill, then one plan published per part. Each is approved, built and verifie
   or the work cannot fit in ten build bullets, put the split to the person with \`bosun_ask\` during
   intake, the split you recommend first. Never split on your own decision.
 - **How.** The plan this session was started for is the first part. Call \`add_plan\` once per further
-  part, as soon as the split is agreed, with its title and the part of the ticket it delivers in the
+  part, as soon as the split is agreed and **before publishing any plan**, with its title and the part of the ticket it delivers in the
   ticket's own words (a sub-task's key, summary and description). It returns the new plan's id and
   number. Then \`name_plan\` the first plan for its own part.
 - **Grill once, for all of them.** The rounds cover every part together; decisions shared between parts

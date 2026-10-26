@@ -95,8 +95,9 @@ criteria and bullets, and is `planning` until the session's turn ends — the ag
 and `plan.error` for every plan the session holds, and names them all on `hello`, so `finishPlan`
 fails one the session never published and `stallMachinePlans` treats them as one unit.
 
-Plans are added only while the session plan is still `planning` with no body: a revision has no
-grill behind it to split. A message typed into an added plan's chat reaches the shared session while
+Plans are added while the session plan is `planning` — mid-grill, or because the person typed into its
+chat. Whether the session plan is already published does not matter: a session that published its
+first part before adding the rest must still be able to write them. A message typed into an added plan's chat reaches the shared session while
 it is up, which answers in the session plan's chat; once it has ended, the plan revises on its own.
 
 ## Footprints and the foundation

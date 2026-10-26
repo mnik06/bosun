@@ -31,10 +31,12 @@ export async function addSessionPlan(opts: {
 		throw new HttpError(409, 'plans are added to the plan that started the session, not to one it added');
 	}
 
-	// A revision session runs against a published plan and has no grill behind it
-	// to split; only the session that is writing the plan for the first time can.
-	if (session.status !== 'planning' || session.bodyMd !== null) {
-		throw new HttpError(409, 'plans are added while the session is writing its first plan, before anything is published');
+	// Not tied to whether the session plan is published yet: a session that published
+	// its first part and only then added the rest was refused here, and had no way left
+	// to write the second plan. A ready plan is back in `planning` the moment the
+	// person types into its chat, so this only refuses a plan nobody is talking to.
+	if (session.status !== 'planning') {
+		throw new HttpError(409, 'plans are added by a session that is running');
 	}
 
 	const siblings = await opts.planRepo.listInSession(session.id);
