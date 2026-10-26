@@ -24,6 +24,8 @@ const PlanCriteriaRespSchema = z.array(
 	})
 );
 
+const SessionPlanRespSchema = z.object({ planId: z.string(), number: z.number().int() });
+
 const PlanBugRespSchema = z.object({
 	id: z.string(),
 	buildId: z.string(),
@@ -148,6 +150,12 @@ export function getBosunApiService(deps: { serverUrl: string; machineKey?: strin
 				authorized: true,
 				body: { title: opts.title }
 			});
+		},
+
+		async addSessionPlan(opts: { planId: string; title: string; input: string }): Promise<{ planId: string; number: number }> {
+			const { planId, ...body } = opts;
+
+			return SessionPlanRespSchema.parse(await post({ path: `/agent/plans/${planId}/session-plans`, authorized: true, body }));
 		},
 
 		// The whole artifact in one call. Publishing it piece by piece put a plan

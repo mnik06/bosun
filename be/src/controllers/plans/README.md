@@ -82,6 +82,23 @@ and a build of the approved version that is not yet in review leaves the line, i
 change bosun makes to fit a plan to the others — an amendment, a merge of its base, a regenerated
 file — never goes through here, which is why it never clears an approval.
 
+## One session, several plans
+
+A ticket that is really several features — a Jira story with two sub-tasks — is grilled once and
+published as several plans. The plan the session was started for stays the session's own: its
+transcript holds the whole grill, and its `plan.cancel` ends the session. `addSessionPlan` creates
+each further plan as an ordinary plan with `sessionPlanId` pointing back at it, copying its settings
+because the grill writing it runs under them, and the session publishes each one under its own id.
+
+Nothing else about a plan changes. Each is approved, built and verified on its own, has its own
+criteria and bullets, and is `planning` until the session's turn ends — the agent sends `plan.done`
+and `plan.error` for every plan the session holds, and names them all on `hello`, so `finishPlan`
+fails one the session never published and `stallMachinePlans` treats them as one unit.
+
+Plans are added only while the session plan is still `planning` with no body: a revision has no
+grill behind it to split. A message typed into an added plan's chat reaches the shared session while
+it is up, which answers in the session plan's chat; once it has ended, the plan revises on its own.
+
 ## Footprints and the foundation
 
 Every build bullet publishes a footprint: the schema, contracts and modules it creates or changes,

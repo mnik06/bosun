@@ -110,6 +110,8 @@ export const AnswerPlanRespSchema = z.object({ status: z.literal('accepted') });
 
 export const AgentPlanRespSchema = z.object({ planId: z.string() });
 
+export const AgentSessionPlanRespSchema = z.object({ planId: z.string(), number: z.number().int() });
+
 export const AgentAcRespSchema = z.object({
 	code: z.string(),
 	implemented: z.boolean(),

@@ -25,6 +25,7 @@ const PLANNING_TOOLS = {
 	mcp: [
 		'mcp__bosun__bosun_ask',
 		'mcp__bosun__list_plans',
+		'mcp__bosun__add_plan',
 		'mcp__bosun__name_plan',
 		'mcp__bosun__set_blockers',
 		'mcp__bosun__publish_plan'
@@ -73,9 +74,13 @@ interface Session {
 	// A turn finished. The session stays up for follow-ups, and this is when it
 	// went quiet — a session mid-grill has never settled.
 	idleAt: number | null;
-	// Whether a plan has actually been written. A revision starts true, because
-	// the plan it was handed is already published.
-	published: boolean;
+	// Every plan this session writes: the one it was started for, keyed in the
+	// sessions map, and any it added. They finish, fail and are named on `hello`
+	// together, because the backend settles each one by those frames alone.
+	plans: Set<string>;
+	// The ones not written yet. A revision starts empty, because the plan it was
+	// handed is already published.
+	unpublished: Set<string>;
 	// Whether a `bosun_ask` question has been answered. What separates a plan the
 	// person shaped from one the model wrote for itself.
 	grilled: boolean;
@@ -137,11 +142,23 @@ export function createPlanningSessions(opts: {
 	}) => string;
 }): PlanningSessions {
 	const sessions = new Map<string, Session>();
+	// An added plan, by id, to the session that writes it and its number — the
+	// number is how a message from its chat is introduced to that session.
+	const added = new Map<string, { key: string; number: number }>();
+
+	const forgetAdded = (key: string): void => {
+		for (const [planId, owner] of added) {
+			if (owner.key === key) {
+				added.delete(planId);
+			}
+		}
+	};
 
 	const teardown = (planId: string): void => {
 		const session = sessions.get(planId);
 
 		teardownSession(sessions, planId);
+		forgetAdded(planId);
 		void session?.served?.close();
 		opts.services.attachments.release(planId);
 	};
@@ -168,7 +185,10 @@ export function createPlanningSessions(opts: {
 		}
 
 		session.idleAt = Date.now();
-		opts.send({ type: 'plan.done', planId });
+
+		for (const id of session.plans) {
+			opts.send({ type: 'plan.done', planId: id });
+		}
 	};
 
 	// A turn that ends without an outcome is nudged rather than reported as
@@ -181,7 +201,7 @@ export function createPlanningSessions(opts: {
 			return;
 		}
 
-		if (session.published || session.nudges >= MAX_NUDGES || !session.process) {
+		if (session.unpublished.size === 0 || session.nudges >= MAX_NUDGES || !session.process) {
 			done(planId);
 
 			return;
@@ -198,28 +218,48 @@ export function createPlanningSessions(opts: {
 	// publish — `publish_plan` refuses in that state, so the nudge would only spend a
 	// turn being refused.
 	const nudgeFor = (session: Session): { label: string; text: string } => {
-		return session.requireGrill && !session.grilled
-			? { label: 'Asking the session to keep grilling', text: UNGRILLED_NUDGE }
-			: { label: 'Asking the session to publish', text: UNPUBLISHED_NUDGE };
+		if (session.requireGrill && !session.grilled) {
+			return { label: 'Asking the session to keep grilling', text: UNGRILLED_NUDGE };
+		}
+
+		const waiting = [...session.unpublished].filter((id) => added.has(id));
+		const text = waiting.length === 0 ? UNPUBLISHED_NUDGE : `${UNPUBLISHED_NUDGE} Every plan you added is published too, with its \`planId\` — still unpublished: ${waiting.join(', ')}.`;
+
+		return { label: 'Asking the session to publish', text };
 	};
 
 	const fail = (planId: string, message: string): void => {
-		if (!sessions.has(planId)) {
+		const session = sessions.get(planId);
+
+		if (!session) {
 			return;
 		}
 
-		opts.send({ type: 'plan.error', planId, message });
+		for (const id of session.plans) {
+			opts.send({ type: 'plan.error', planId: id, message });
+		}
+
 		teardown(planId);
 	};
 
 	// Read off the map rather than closed over: the session object does not exist
 	// when a dispatch is built, and by the time a tool can fire it is registered.
-	const onPublished = (planId: string) => (): void => {
-		const current = sessions.get(planId);
+	const onPublished = (key: string) => (planId: string): void => {
+		sessions.get(key)?.unpublished.delete(planId);
+	};
+
+	const onPlanAdded = (key: string) => (plan: { planId: string; number: number }): void => {
+		const current = sessions.get(key);
 
 		if (current) {
-			current.published = true;
+			current.plans.add(plan.planId);
+			current.unpublished.add(plan.planId);
+			added.set(plan.planId, { key, number: plan.number });
 		}
+	};
+
+	const holds = (key: string) => (planId: string): boolean => {
+		return sessions.get(key)?.plans.has(planId) ?? false;
 	};
 
 	const onGrilled = (planId: string) => (): void => {
@@ -326,7 +366,8 @@ export function createPlanningSessions(opts: {
 			cancelled: false,
 			startedAt: Date.now(),
 			idleAt: null,
-			published: opts2.published,
+			plans: new Set([planId]),
+			unpublished: new Set(opts2.published ? [] : [planId]),
 			grilled: false,
 			nudges: 0,
 			requireGrill: opts2.requireGrill,
@@ -391,6 +432,7 @@ export function createPlanningSessions(opts: {
 				// before the first result leaves a plan stuck in `planning`.
 				if (session.idleAt !== null) {
 					sessions.delete(planId);
+					forgetAdded(planId);
 					void session.mcp.close();
 					void session.served?.close();
 					opts.services.attachments.release(planId);
@@ -454,6 +496,8 @@ export function createPlanningSessions(opts: {
 				requireGrill: payload.requireGrill,
 				requireCoverage: payload.requireCoverage,
 				bosunApi: opts.services.bosunApi,
+				holds: holds(payload.planId),
+				onPlanAdded: onPlanAdded(payload.planId),
 				onPublished: onPublished(payload.planId),
 				onGrilled: onGrilled(payload.planId),
 				onQuestion: onQuestion(payload.planId)
@@ -522,16 +566,21 @@ export function createPlanningSessions(opts: {
 		// reconnect from one that died with the agent process. Everything it has
 		// marked `planning` and this does not name has nothing left to finish it.
 		held(): string[] {
-			return [...sessions.keys()];
+			return [...sessions.keys(), ...added.keys()];
 		},
 
 		// Delivered to the session that is already up whenever there is one, so the
 		// person is talking to something that remembers the grill. Otherwise the
 		// plan travels on the frame and a revision session starts from it.
 		async say(payload): Promise<void> {
-			const session = sessions.get(payload.planId);
+			const owner = added.get(payload.planId);
+			const key = owner?.key ?? payload.planId;
+			const session = sessions.get(key);
+			// An added plan's chat talks to the session that writes it, which answers
+			// in its own plan's chat, so it is told which plan the message is about.
+			const text = owner ? `(From the chat of plan #${owner.number}, \`planId\` ${payload.planId}.)\n\n${payload.text}` : payload.text;
 			const stage = async () =>
-				opts.services.attachments.stageTurn({ key: payload.planId, text: payload.text, attachments: payload.attachments });
+				opts.services.attachments.stageTurn({ key, text, attachments: payload.attachments });
 
 			if (session?.process) {
 				session.idleAt = null;
@@ -541,7 +590,7 @@ export function createPlanningSessions(opts: {
 
 						// Torn down while the files were fetched: the plan was confirmed or
 						// the session failed, and neither leaves anything to deliver to.
-						if (sessions.get(payload.planId) === session) {
+						if (sessions.get(key) === session) {
 							session.process?.send(turn.text, turn.images);
 						}
 					})
@@ -596,14 +645,15 @@ export function createPlanningSessions(opts: {
 		},
 
 		answer(payload): void {
-			sessions.get(payload.planId)?.mcp.answer(payload);
+			sessions.get(added.get(payload.planId)?.key ?? payload.planId)?.mcp.answer(payload);
 		},
 
 		// With no session up there is nothing to retune: the next `plan.say` carries
 		// the flags on its snapshot. The note joins the same chain as the person's
 		// messages, so it cannot overtake one they sent before flipping the switch.
 		modes(payload): void {
-			const session = sessions.get(payload.planId);
+			const key = added.get(payload.planId)?.key ?? payload.planId;
+			const session = sessions.get(key);
 
 			if (!session) {
 				return;
@@ -621,7 +671,7 @@ export function createPlanningSessions(opts: {
 			session.idleAt = null;
 			session.turns = session.turns
 				.then(() => {
-					if (sessions.get(payload.planId) === session) {
+					if (sessions.get(key) === session) {
 						session.process?.send(note);
 					}
 				})
@@ -630,7 +680,19 @@ export function createPlanningSessions(opts: {
 				});
 		},
 
+		// An added plan being approved or discarded only lets go of that plan: the
+		// session is its own plan's, and ends when that one does.
 		cancel(planId): void {
+			const owner = added.get(planId);
+
+			if (owner) {
+				added.delete(planId);
+				sessions.get(owner.key)?.plans.delete(planId);
+				sessions.get(owner.key)?.unpublished.delete(planId);
+
+				return;
+			}
+
 			const session = sessions.get(planId);
 
 			if (session) {

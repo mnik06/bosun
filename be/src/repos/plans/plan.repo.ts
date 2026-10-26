@@ -22,6 +22,7 @@ const planColumns = {
 	input: plans.input,
 	summary: plans.summary,
 	summarisedAt: plans.summarisedAt,
+	sessionPlanId: plans.sessionPlanId,
 	createdAt: plans.createdAt
 };
 
@@ -36,13 +37,15 @@ export function getPlanRepo(db: DbOrTx) {
 		async create(opts: {
 			id: string;
 			projectId: string;
-			createdByUserId: string;
+			createdByUserId: string | null;
 			machineId: string;
 			repositoryId: string | null;
 			input: string;
 			verifyInUi: boolean;
 			auto: boolean;
 			afk: boolean;
+			title?: string;
+			sessionPlanId?: string;
 		}): Promise<Plan> {
 			const [row] = await db
 				.insert(plans)
@@ -159,6 +162,16 @@ export function getPlanRepo(db: DbOrTx) {
 				.select(planColumns)
 				.from(plans)
 				.where(and(eq(plans.machineId, machineId), eq(plans.status, 'planning')));
+
+			return rows.map((row) => PlanSchema.parse(row));
+		},
+
+		async listInSession(sessionPlanId: string): Promise<Plan[]> {
+			const rows = await db
+				.select(planColumns)
+				.from(plans)
+				.where(eq(plans.sessionPlanId, sessionPlanId))
+				.orderBy(asc(plans.number));
 
 			return rows.map((row) => PlanSchema.parse(row));
 		},

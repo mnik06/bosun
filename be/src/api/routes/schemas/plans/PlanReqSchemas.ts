@@ -55,6 +55,8 @@ export const AnswerPlanReqSchema = z.object({
 
 export const AgentPlanNameReqSchema = z.object({ title: z.string().min(1) });
 
+export const AgentAddSessionPlanReqSchema = z.object({ title: z.string().min(1), input: z.string().min(1) });
+
 export const AgentPublishReqSchema = z.object({
 	title: z.string().min(1),
 	bodyMd: z.string().min(1),

@@ -11,13 +11,29 @@ import { type PlanAnswer, type PlanQuestion } from '../../protocol';
 import { type BosunApiService } from '../../services/bosun-api.service';
 import { CoverageEntrySchema, coverageRefusal } from '../coverage';
 
-export const NamePlanArgsSchema = z.object({ title: z.string().min(1) });
+const TargetPlanSchema = z
+	.string()
+	.min(1)
+	.optional()
+	.describe('the plan this call is for, as `add_plan` returned it; leave it out for the plan this session was started for');
+
+export const NamePlanArgsSchema = z.object({ planId: TargetPlanSchema, title: z.string().min(1) });
+
+export const AddPlanArgsSchema = z.object({
+	title: z.string().min(1),
+	input: z
+		.string()
+		.min(1)
+		.describe('the part of the ticket this plan delivers, in the ticket\'s own words — the sub-task\'s key, summary and description, or the requirements it takes — so a person reading the new plan knows what it was cut from')
+});
 
 export const SetBlockersArgsSchema = z.object({
+	planId: TargetPlanSchema,
 	blockedByNumbers: z.array(z.number().int().positive())
 });
 
 export const PublishPlanArgsSchema = z.object({
+	planId: TargetPlanSchema,
 	title: z.string().min(1),
 	bodyMd: z.string().min(1),
 	acs: z.array(z.object({ code: z.string().min(1), text: z.string().min(1) })).min(1),
@@ -48,6 +64,8 @@ export const PublishPlanArgsSchema = z.object({
 const DESCRIPTIONS: Record<string, string> = {
 	list_plans:
 		'List every plan written for this repository — number, title, state, its tracer bullets, and for every approved plan not yet merged the footprint of each bullet: the tables and columns, API contracts and shared modules it creates or changes. Call this during recon, before you write anything: it is how you find work already covered, and pieces another plan already builds that yours should consume rather than build a second copy of.',
+	add_plan:
+		'Add another plan to this session, for when the ticket is really several features — sub-tasks the person wants planned separately, or work you proposed splitting and the person agreed to. The plan this session was started for is the first; each call adds one more and returns its id and number. Every plan is grilled in this session and published by `publish_plan` with its `planId`, and each is approved, built and verified on its own. Only while nothing is published yet; never on your own decision — the person asked for it, or agreed to it through `bosun_ask`.',
 	name_plan:
 		'Name this plan. Call it as soon as you know what the ticket is about, before the grill starts — until you do, the person watching a list of running sessions sees "Untitled". Call it again if the scope turns out to be something else.',
 	set_blockers:
@@ -58,6 +76,7 @@ const DESCRIPTIONS: Record<string, string> = {
 
 export const TOOL_SCHEMAS = {
 	list_plans: z.object({}),
+	add_plan: AddPlanArgsSchema,
 	name_plan: NamePlanArgsSchema,
 	set_blockers: SetBlockersArgsSchema,
 	publish_plan: PublishPlanArgsSchema
@@ -87,10 +106,23 @@ const GRILL_REQUIRED = [
 
 // Asked of the prompt alone, a session published 22 criteria from a ticket that
 // stated 126, and nothing downstream reads the ticket again to notice.
+const NOT_HELD = 'Refused: that is not a plan this session writes. Use the id `add_plan` returned, or leave `planId` out for the plan this session was started for.';
+
 const COVERAGE_REQUIRED = [
 	'Refused: a new plan is published with its `coverage` ledger.',
 	'List every requirement from the ticket and its sources, and every gap you found, each with the criteria that deliver it or the non-goal it became.'
 ].join(' ');
+
+async function addPlan(
+	opts: { planId: string; bosunApi: BosunApiService; onPlanAdded: (plan: { planId: string; number: number }) => void },
+	args: unknown
+) {
+	const added = await opts.bosunApi.addSessionPlan({ planId: opts.planId, ...AddPlanArgsSchema.parse(args) });
+
+	opts.onPlanAdded(added);
+
+	return textToolResult(JSON.stringify(added));
+}
 
 export function createPlanDispatch(opts: {
 	planId: string;
@@ -102,7 +134,11 @@ export function createPlanDispatch(opts: {
 	// Off for a revision too: its criteria haven't changed, so there is no new ledger to check.
 	requireCoverage: boolean;
 	bosunApi: BosunApiService;
-	onPublished: () => void;
+	// Whether `planId` is one of this session's plans: the one it was started for,
+	// or one it added. A session must not be able to write over any other plan on the machine.
+	holds: (planId: string) => boolean;
+	onPlanAdded: (plan: { planId: string; number: number }) => void;
+	onPublished: (planId: string) => void;
 	onGrilled: () => void;
 	onQuestion: (payload: {
 		questionId: string;
@@ -122,6 +158,41 @@ export function createPlanDispatch(opts: {
 			}
 		});
 
+		const target = (planId: string | undefined): string => {
+			const id = planId ?? opts.planId;
+
+			if (opts.holds(id)) {
+				return id;
+			}
+
+			throw new Error(NOT_HELD);
+		};
+
+		const publish = async (args: unknown) => {
+			if (opts.requireGrill && !grilled) {
+				throw new Error(GRILL_REQUIRED);
+			}
+
+			const { planId, coverage, ...artifact } = PublishPlanArgsSchema.parse(args);
+			const id = target(planId);
+
+			if (opts.requireCoverage && coverage === undefined) {
+				throw new Error(COVERAGE_REQUIRED);
+			}
+
+			const refusal = coverage === undefined ? null : coverageRefusal({ acCodes: artifact.acs.map((ac) => ac.code), coverage });
+
+			if (refusal !== null) {
+				throw new Error(refusal);
+			}
+
+			const saved = await opts.bosunApi.publishPlan({ planId: id, artifact });
+
+			opts.onPublished(id);
+
+			return textToolResult(JSON.stringify(saved));
+		};
+
 		return async function dispatch(name: string, args: unknown) {
 			if (name === 'bosun_ask') {
 				return ask(args);
@@ -131,49 +202,28 @@ export function createPlanDispatch(opts: {
 				return textToolResult(JSON.stringify(await opts.bosunApi.listMachinePlans()));
 			}
 
-			if (name === 'name_plan') {
-				await opts.bosunApi.savePlanName({
-					planId: opts.planId,
-					...NamePlanArgsSchema.parse(args)
-				});
+			if (name === 'add_plan') {
+				return addPlan(opts, args);
+			}
 
-				return textToolResult(opts.planId);
+			if (name === 'name_plan') {
+				const { planId, title } = NamePlanArgsSchema.parse(args);
+				const id = target(planId);
+
+				await opts.bosunApi.savePlanName({ planId: id, title });
+
+				return textToolResult(id);
 			}
 
 			if (name === 'set_blockers') {
-				const saved = await opts.bosunApi.setPlanBlockers({
-					planId: opts.planId,
-					...SetBlockersArgsSchema.parse(args)
-				});
+				const { planId, blockedByNumbers } = SetBlockersArgsSchema.parse(args);
+				const saved = await opts.bosunApi.setPlanBlockers({ planId: target(planId), blockedByNumbers });
 
 				return textToolResult(JSON.stringify(saved));
 			}
 
 			if (name === 'publish_plan') {
-				if (opts.requireGrill && !grilled) {
-					throw new Error(GRILL_REQUIRED);
-				}
-
-				const { coverage, ...artifact } = PublishPlanArgsSchema.parse(args);
-
-				if (opts.requireCoverage && coverage === undefined) {
-					throw new Error(COVERAGE_REQUIRED);
-				}
-
-				const refusal = coverage === undefined ? null : coverageRefusal({ acCodes: artifact.acs.map((ac) => ac.code), coverage });
-
-				if (refusal !== null) {
-					throw new Error(refusal);
-				}
-
-				const saved = await opts.bosunApi.publishPlan({
-					planId: opts.planId,
-					artifact
-				});
-
-				opts.onPublished();
-
-				return textToolResult(JSON.stringify(saved));
+				return publish(args);
 			}
 
 			throw new Error(`unknown tool ${name}`);

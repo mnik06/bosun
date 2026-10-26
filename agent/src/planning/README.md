@@ -49,6 +49,28 @@ There used to be a second kind of planning session, which rewrote several confir
 shared foundation plan. It is gone: the foundation is a bullet inside the plan that first needs it, so
 nothing is rewritten, nobody re-reads a plan they already signed off, and no second grill is run.
 
+## One session can write several plans
+
+A ticket that is several features is grilled once and published as several plans, because the person
+wants one conversation, not one per sub-task. `add_plan` asks the backend for a further plan row and
+the session publishes each with its `planId`; the session stays keyed by the plan it was started
+for, whose chat holds the grill and whose `plan.cancel` ends it.
+
+What makes that safe is that the backend settles plans from frames alone. So every plan the session
+holds gets the `plan.done` or `plan.error`, and `held()` names them all on `hello` — leave one out and
+it sits in `planning` until it is failed as a restart. `publish_plan`, `name_plan` and `set_blockers`
+refuse any `planId` the session did not start or add: the agent's key reaches every plan on the
+machine, and a session must not be able to write over one that is not its own. A turn is settled
+only when every plan is published; until then the nudge names the ones still missing.
+
+A `plan.cancel` for an added plan — it was approved or discarded — only lets go of that plan. A
+message typed into an added plan's chat goes to the live session, prefixed with that plan's number and
+id, and the answer shows in the session plan's chat; once the session has ended, it starts an
+ordinary revision session for that plan alone.
+
+Rejected: a session per sub-task, started together. Each would grill the person on the decisions the
+sub-tasks share, once per sub-task, and the answers would drift.
+
 ## Why the CLI and not the Agent SDK
 
 The CLI adds no npm dependency to a binary that is compiled with `bun build --compile`, and the same

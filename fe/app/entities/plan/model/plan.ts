@@ -79,6 +79,8 @@ export const PlanSchema = z.object({
 	state: PlanStateSchema.nullish().default(null),
 	summary: PlanSummarySchema.nullish().default(null),
 	summarisedAt: z.iso.datetime().nullish().default(null),
+	// The plan whose planning session also wrote this one. Its chat holds the grill.
+	sessionPlanId: z.string().nullish().default(null),
 	createdAt: z.iso.datetime()
 })
 

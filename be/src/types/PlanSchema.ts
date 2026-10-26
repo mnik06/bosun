@@ -27,6 +27,7 @@ export const PlanSchema = z.object({
 	input: z.string(),
 	summary: PlanSummarySchema.nullable(),
 	summarisedAt: z.date().nullable(),
+	sessionPlanId: z.string().nullable(),
 	createdAt: z.date()
 });
 

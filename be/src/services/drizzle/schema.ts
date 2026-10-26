@@ -1,4 +1,5 @@
 import {
+	type AnyPgColumn,
 	bigint,
 	boolean,
 	customType,
@@ -372,6 +373,10 @@ export const plans = pgTable(
 		// that exists, not the plan that asked for it.
 		summary: jsonb().$type<PlanSummary>(),
 		summarisedAt: timestamp({ withTimezone: true }),
+		// The plan whose planning session also wrote this one, when one ticket was
+		// grilled once and published as several plans. Null on the session's own
+		// plan, and on a plan whose session plan was discarded.
+		sessionPlanId: text().references((): AnyPgColumn => plans.id, { onDelete: 'set null' }),
 		createdAt: timestamp({ withTimezone: true }).notNull().defaultNow()
 	},
 	(table) => [

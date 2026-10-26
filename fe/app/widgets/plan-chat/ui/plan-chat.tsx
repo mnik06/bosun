@@ -1,5 +1,6 @@
-import { Alert, Loader, ScrollArea, Stack, Text } from '@mantine/core'
+import { Alert, Anchor, Loader, ScrollArea, Stack, Text } from '@mantine/core'
 import { useEffect, useRef } from 'react'
+import { Link } from 'react-router'
 
 import { findPendingQuestion, type Plan, type PlanMessage } from '~/entities/plan'
 import { QuestionPrompt, useAnswerQuestion } from '~/features/answer-question'
@@ -33,6 +34,17 @@ export function PlanChat ({
 		<div className="flex min-h-0 grow flex-col gap-3">
 			<ScrollArea className="min-h-0 grow" type="auto">
 				<Stack gap="lg" pr="md">
+					{plan.sessionPlanId === null ? null : (
+						<Text size="xs" c="dimmed">
+							Grilled in one session with other plans from the same ticket. While that session is up,
+							what you say here goes to it and it answers in{' '}
+							<Anchor component={Link} to={`/plans/${plan.sessionPlanId}`} size="xs">
+								the plan it started from
+							</Anchor>
+							.
+						</Text>
+					)}
+
 					<Transcript planId={plan.id} messages={messages} streamingText={streamingText} activity={activity} />
 
 					{plan.status === 'failed' ? (
