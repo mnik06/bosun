@@ -29,14 +29,21 @@ turned the first step of onboarding into "create a user and log in again". The i
    never launches. A failure is reported, not fatal: the agent's `browser` check launches the build
    and names the missing library.
 4. `useradd --create-home bosun`, unless `BOSUN_USER` names an existing user (a `BOSUN_USER` that names
-   nobody is refused rather than created), then `loginctl enable-linger` and a wait for the user
-   manager's socket.
-5. Runs the saved copy as that user through a non-login `runuser`, which keeps the exported
+   nobody is refused rather than created).
+5. Docker, unless `BOSUN_SKIP_DOCKER=1`: `apt-get install docker.io` when `docker` is missing,
+   `systemctl enable --now docker`, and the agent user into the `docker` group. Most projects run their
+   database as containers (`supabase start`, `docker compose up -d`), and a config's `Services:` fail
+   at verify without it — the agent can never install it later, it does not run as root. Before linger
+   on purpose: the unit runs under the user manager, which keeps the groups the user had when it
+   started, so a group added after it is up does not reach the agent until `systemctl restart
+   user@<uid>`. A failure is a note, not fatal: the agent's `docker` check names the fix.
+6. `loginctl enable-linger` and a wait for the user manager's socket.
+7. Runs the saved copy as that user through a non-login `runuser`, which keeps the exported
    environment. `BOSUN_TOKEN` travels that way — never as an argument, because argv is world-readable
    in `/proc` — along with `XDG_RUNTIME_DIR`, without which `systemctl --user` cannot reach the user
    manager. `cd /` first: root's home is unreadable to that user, and node refuses a working directory
    it cannot read.
-6. Runs `bosun-agent setup </dev/tty` as that user, once. The user phase is told to skip it
+8. Runs `bosun-agent setup </dev/tty` as that user, once. The user phase is told to skip it
    (`BOSUN_SKIP_SETUP=1`) so the wizard runs from the shell that holds the operator's terminal.
 
 **User phase** — the script as a non-root user, or the copy root hands over:
@@ -54,6 +61,10 @@ turned the first step of onboarding into "create a user and log in again". The i
   phase: root installed them before the user existed, and the agent user has no sudo, so a prompt
   there is one nobody can answer — it only checks. Whatever is still missing ends in a `WARNING` line
   with the command, since the next thing to fail would be a verify an hour later.
+- Docker, the same way as the Chromium libraries: when `docker info` fails, `sudo` installs
+  `docker.io` and adds the user to the `docker` group, then says the group reaches the agent only
+  after `sudo systemctl restart user@<uid>`. Without sudo — or under the root phase, which already did
+  it — it only prints the root command.
 - `~/.bosun/env`, `~/.bosun/mcp.json` and the unit, with bosun's node and `~/.local/bin` first on the
   unit's `PATH`. A re-run restarts the unit, so it runs the binary and config it just wrote.
   `XDG_RUNTIME_DIR` is forced to `/run/user/<uid>` before any `systemctl --user`: `su <user>` without

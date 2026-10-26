@@ -67,15 +67,24 @@ describe('services', () => {
 	});
 
 	it('names the service, the step and the tail when start fails', async () => {
-		const { ensure } = harness({ 'db-status': [FAILED], 'db-up': [{ ok: false, tail: 'permission denied on docker.sock\n', detail: 'exited with 1' }] });
+		const { ensure } = harness({ 'db-status': [FAILED], 'db-up': [{ ok: false, tail: 'port 55322 already in use\n', detail: 'exited with 1' }] });
 
 		expect(await ensure()).toEqual({
 			ok: false,
 			service: 'db',
 			reason: 'start failed (exited with 1)',
-			tail: 'permission denied on docker.sock',
-			detail: 'service "db" start failed (exited with 1):\npermission denied on docker.sock'
+			tail: 'port 55322 already in use',
+			detail: 'service "db" start failed (exited with 1):\nport 55322 already in use'
 		});
+	});
+
+	it('ends a docker failure with the root command that fixes it', async () => {
+		const tail = 'failed to inspect container health: docker: command not found (podman also not found)\n';
+		const { ensure } = harness({ 'db-status': [FAILED], 'db-up': [{ ok: false, tail, detail: 'exited with 1' }] });
+		const result = await ensure();
+
+		expect(result.ok).toBe(false);
+		expect(result.ok ? '' : result.detail).toMatch(/\ndocker is not installed — as root: apt-get install -y docker\.io && usermod -aG docker \S+ && systemctl restart user@\d+$/);
 	});
 
 	// Two builds taking a slot at once would otherwise both see the check fail and

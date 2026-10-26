@@ -2,6 +2,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { DEFAULT_SERVICE_READY_TIMEOUT_SECONDS, type ProjectConfig } from '../project-config';
+import { classifyDocker, dockerFix } from './docker';
 import { runShell, type ShellResult } from './setup-steps.service';
 
 const LEDGER_FILENAME = 'services.json';
@@ -43,7 +44,11 @@ type Failure = Extract<ServicesEnsure, { ok: false }>;
 function failure(opts: { service: string; step: string; result: ShellResult }): Failure {
 	const tail = opts.result.tail.trim().slice(-TAIL_KEPT_CHARS);
 	const reason = `${opts.step} failed (${opts.result.detail})`;
-	const detail = `service "${opts.service}" ${reason}${tail === '' ? '' : `:\n${tail}`}`;
+	// Most services are a container stack, and the docker error buried in the tail
+	// names the symptom; the fix is a root command on this box nobody can guess.
+	const docker = classifyDocker(tail);
+	const hint = docker === null ? '' : `\n${dockerFix(docker)}`;
+	const detail = `service "${opts.service}" ${reason}${tail === '' ? '' : `:\n${tail}`}${hint}`;
 
 	return { ok: false, service: opts.service, reason, tail, detail };
 }

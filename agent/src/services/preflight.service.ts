@@ -3,6 +3,7 @@ import os from 'os';
 import path from 'path';
 import { launchBrowser } from './browser.service';
 import { type ClaudeAuthService } from './claude-auth.service';
+import { classifyDocker, dockerFix } from './docker';
 import { type ExecService } from './exec.service';
 import { type McpConfigService } from './mcp-config.service';
 import { formatGib, type MemoryService } from './memory.service';
@@ -293,6 +294,25 @@ export function getPreflightService(deps: {
 			};
 	}
 
+	// Green when it is absent: only a config with Services needs it, and this
+	// machine is not handed its config until a session starts. Red when it is
+	// installed and still unusable — nobody installs docker to not use it.
+	async function checkDocker(): Promise<PreflightCheck> {
+		const info = await deps.exec.run('docker', ['info', '--format', '{{.ServerVersion}}'], { timeoutMs: 30_000 });
+
+		if (info.ok) {
+			return { name: 'docker', ok: true, detail: `server ${info.stdout}` };
+		}
+
+		const state = classifyDocker(`${info.reason}\n${info.stderr}\n${info.stdout}`);
+
+		if (state === 'missing') {
+			return { name: 'docker', ok: true, detail: `not installed — needed only by a config with Services: ${dockerFix(state)}` };
+		}
+
+		return { name: 'docker', ok: false, detail: state === null ? `docker info: ${info.reason}` : dockerFix(state) };
+	}
+
 	// Never red: plenty of projects need no connection at all. It is here so that an
 	// operator can see before a verify bullet runs that it will have no database.
 	function checkEnv(): PreflightCheck {
@@ -304,9 +324,15 @@ export function getPreflightService(deps: {
 
 	return {
 		async collect(): Promise<PreflightCheck[]> {
-			const [claude, git, gh, browser] = await Promise.all([checkClaude(), checkGit(), checkGh(), checkBrowser()]);
+			const [claude, git, gh, browser, docker] = await Promise.all([
+				checkClaude(),
+				checkGit(),
+				checkGh(),
+				checkBrowser(),
+				checkDocker()
+			]);
 
-			return [claude, git, gh, checkCustomMcp(), browser, checkMemory(), checkEnv()];
+			return [claude, git, gh, checkCustomMcp(), browser, docker, checkMemory(), checkEnv()];
 		}
 	};
 }

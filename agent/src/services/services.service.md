@@ -44,8 +44,15 @@ expects to find.
   and the tail of the output: `service "db" start failed (exited with 1): … permission denied …`. A
   worktree ensure fails the build, a session fails its start, `stack_up` returns it as the app that did
   not come up, an integration stops as needing a person.
-- **Docker missing or not usable by the bosun user** surfaces as exactly that tail. Discovery is told
-  to look for it (`docker info`) and say so before verify runs the config.
+- **Docker missing or not usable by the bosun user** surfaces as that tail, followed by the root
+  command that fixes it: when the tail carries docker's own words for a missing CLI, a denied socket
+  or a stopped daemon (`docker.ts`), the detail ends with `apt-get install -y docker.io && usermod
+  …`, the `usermod` alone, or `systemctl enable --now docker`. Bosun still never assumes docker — the
+  hint is read off whatever the start printed. The `docker` preflight check shows the same before any
+  verify: green when docker is absent, since the machine holds no config to know it is needed, red when
+  it is installed and unusable. The installer puts it on new machines; an existing one runs the
+  command, since the agent cannot install anything as root. Discovery is told to look for it (`docker
+  info`) and say so before verify runs the config.
 - **A start command that backgrounds a process holding its output** (`some-server &`) keeps the pipes
   open and is read as still running until the fifteen-minute start timeout. `Start` must be a command
   that returns once the service is up — `docker compose up -d`, `supabase start`.

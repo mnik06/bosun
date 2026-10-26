@@ -128,6 +128,34 @@ chromium_libraries() {
 	fi
 }
 
+# Most projects run their database as containers (`supabase start`, `docker
+# compose up -d`), and only root can install the engine or open its socket to the
+# agent user. Added to the group before linger starts the user manager: the unit
+# runs under that manager, which keeps the groups the user had when it started.
+docker_engine() {
+	[ "${BOSUN_SKIP_DOCKER:-0}" != "1" ] || return 0
+
+	if ! command -v docker >/dev/null 2>&1; then
+		if ! command -v apt-get >/dev/null 2>&1; then
+			note "no apt-get here — skipped installing docker; install it with this system's package manager and add $AGENT_USER to the docker group"
+
+			return 0
+		fi
+
+		note "installing docker"
+
+		if ! DEBIAN_FRONTEND=noninteractive apt-get install -y -qq docker.io >/dev/null; then
+			note "apt-get could not install docker.io — install docker yourself and add $AGENT_USER to the docker group"
+
+			return 0
+		fi
+	fi
+
+	systemctl enable --now docker >/dev/null 2>&1 || note "could not start the docker daemon — systemctl enable --now docker"
+	getent group docker >/dev/null 2>&1 || groupadd docker
+	usermod -aG docker "$AGENT_USER" || note "could not add $AGENT_USER to the docker group — usermod -aG docker $AGENT_USER"
+}
+
 ensure_agent_user() {
 	[ "$AGENT_USER" != "root" ] || die "BOSUN_USER=root — the agent never runs as root; name another user"
 
@@ -189,6 +217,7 @@ root_phase() {
 	apt_install
 	chromium_libraries
 	ensure_agent_user
+	docker_engine
 
 	uid="$(id -u "$AGENT_USER")"
 	home="$(getent passwd "$AGENT_USER" | cut -d: -f6)"
@@ -345,7 +374,7 @@ can_sudo() {
 	! sudo -n true 2>/dev/null || return 0
 	( : </dev/tty ) 2>/dev/null || return 1
 
-	note "the libraries headless Chromium links against need root — sudo will ask for your password"
+	note "$1 — sudo will ask for your password"
 	sudo -v </dev/tty
 }
 
@@ -359,7 +388,7 @@ chromium_libraries_as_user() {
 	missing="$(unresolved_libraries "$cache")"
 	[ -n "$missing" ] || return 0
 
-	if [ "${BOSUN_ROOT_PHASE:-0}" != "1" ] && [ -n "$NODE_DIR" ] && command -v apt-get >/dev/null 2>&1 && can_sudo; then
+	if [ "${BOSUN_ROOT_PHASE:-0}" != "1" ] && [ -n "$NODE_DIR" ] && command -v apt-get >/dev/null 2>&1 && can_sudo "the libraries headless Chromium links against need root"; then
 		note "installing the system libraries headless Chromium needs"
 
 		sudo env "PATH=$NODE_DIR/bin:$PATH" npx -y playwright install-deps chromium >"$TMP/install-deps.log" 2>&1 ||
@@ -371,6 +400,41 @@ chromium_libraries_as_user() {
 
 	note "WARNING: Chromium cannot start, missing: $missing"
 	note "install them as a user with sudo: sudo env \"PATH=${NODE_DIR:-<node dir>}/bin:\$PATH\" npx -y playwright install-deps chromium"
+}
+
+# The user-phase twin of `docker_engine`. A group added here reaches this shell
+# and the unit only once the user manager restarts, so it says so rather than
+# leaving a check that stays red with no reason given.
+docker_as_user() {
+	[ "${BOSUN_SKIP_DOCKER:-0}" != "1" ] || return 0
+	! docker info >/dev/null 2>&1 || return 0
+
+	user="$(id -un)"
+	regroup="usermod -aG docker $user && systemctl restart user@$(id -u)"
+
+	if [ "${BOSUN_ROOT_PHASE:-0}" != "1" ] && command -v apt-get >/dev/null 2>&1 && can_sudo "docker needs root to install and to open to $user"; then
+		if ! command -v docker >/dev/null 2>&1; then
+			note "installing docker"
+			{ sudo apt-get update -qq >/dev/null && sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq docker.io >/dev/null; } ||
+				note "apt-get could not install docker.io"
+		fi
+
+		if command -v docker >/dev/null 2>&1; then
+			sudo systemctl enable --now docker >/dev/null 2>&1 || true
+			sudo usermod -aG docker "$user" || true
+			note "added $user to the docker group — it reaches the agent once its user manager restarts: sudo systemctl restart user@$(id -u)"
+
+			return 0
+		fi
+	fi
+
+	[ "${BOSUN_ROOT_PHASE:-0}" != "1" ] || return 0
+
+	if command -v docker >/dev/null 2>&1; then
+		note "docker is installed but $user cannot use it — as root: $regroup"
+	else
+		note "docker is not installed — a project whose config has Services needs it; as root: apt-get install -y docker.io && $regroup"
+	fi
 }
 
 seed_files() {
@@ -545,6 +609,7 @@ user_phase() {
 	install_claude
 	install_browser
 	chromium_libraries_as_user
+	docker_as_user
 	seed_files
 	resolve_service_path
 	install_service
