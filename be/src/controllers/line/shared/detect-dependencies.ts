@@ -164,7 +164,13 @@ function compareWith(opts: { candidate: FootprintPlan; provider: ProviderPlan; c
 			continue;
 		}
 
-		const source = theirs.find((located) => (located.piece.creates || located.piece.changes) && uses(ours.piece, located.piece));
+		// A plan that creates a piece never waits on another plan's change to it: the
+		// change is built on the creation, not the other way round. Approved after the
+		// plans extending what it creates, the creator used to wait on all of them
+		// while they waited on it, and nothing in the line could start.
+		const source = theirs.find(
+			(located) => (located.piece.creates || (located.piece.changes && !ours.piece.creates)) && uses(ours.piece, located.piece)
+		);
 
 		if (source) {
 			collector.depend({

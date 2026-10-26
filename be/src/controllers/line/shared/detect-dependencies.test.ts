@@ -78,6 +78,15 @@ describe('detectDependencies', () => {
 		]);
 	});
 
+	// Approved after the plans that extend what it creates, the creator used to
+	// wait on them while they waited on it — a cycle nothing could start.
+	it('does not make a plan wait on another plan\'s change to a piece it creates', () => {
+		const extension = provider({ id: 'p6', number: 6, slices: [{ contracts: [{ op: 'change', method: 'GET', path: '/forecast/snapshots/:id', shape: '' }] }] });
+		const creator = plan({ id: 'p5', number: 5, slices: [{ contracts: [{ op: 'create', method: 'GET', path: '/forecast/snapshots/:snapshotId', shape: '' }] }] });
+
+		expect(detectDependencies({ candidate: creator, providers: [extension] }).dependencies).toEqual([]);
+	});
+
 	it('treats a column added to a table another plan creates as using that table', () => {
 		const earlier = provider({ id: 'p1', number: 1, slices: [{ schema: [{ op: 'create_table', table: 'invites', definition: '' }] }] });
 		const later = plan({ id: 'p2', number: 2, slices: [{ schema: [{ op: 'add_column', table: 'invites', column: 'resent_at', definition: 'timestamptz' }] }] });
