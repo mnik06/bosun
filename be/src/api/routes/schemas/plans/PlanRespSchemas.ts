@@ -93,6 +93,7 @@ export const PlanDetailRespSchema = z.object({
 	runs: z.array(SliceRunDetailSchema),
 	dependencies: z.array(DependencyViewSchema),
 	dependents: z.array(PlanRefSchema),
+	draftParts: z.array(PlanRefSchema.omit({ planId: true })),
 	amendments: z.array(PlanAmendmentSchema),
 	overlapDecisions: z.array(OverlapDecisionViewSchema),
 	integrations: z.array(IntegrationSchema),
@@ -127,6 +128,8 @@ export const AgentMachinePlansRespSchema = z.array(
 		title: z.string().nullable(),
 		status: z.string(),
 		state: PlanStateSchema,
+		approved: z.boolean(),
+		sameRepository: z.boolean(),
 		summary: z.string().nullable(),
 		slices: z.array(
 			z.object({
@@ -140,6 +143,26 @@ export const AgentMachinePlansRespSchema = z.array(
 		dependsOn: z.array(z.number().int())
 	})
 );
+
+export const AgentPlanReadRespSchema = z.object({
+	number: z.number().int(),
+	title: z.string().nullable(),
+	status: z.string(),
+	state: PlanStateSchema,
+	approved: z.boolean(),
+	bodyMd: z.string().nullable(),
+	acs: z.array(z.object({ code: z.string(), text: z.string() })),
+	slices: z.array(
+		z.object({
+			ordinal: z.number().int(),
+			kind: z.string(),
+			title: z.string(),
+			bodyMd: z.string().nullable(),
+			foundation: z.boolean(),
+			footprint: FootprintSchema.nullable()
+		})
+	)
+});
 
 export const AgentPlanCriteriaRespSchema = z.array(PlanCriteriaSchema);
 

@@ -11,7 +11,7 @@ import { type StackUpResult } from '../../services/stack.service';
 const LIST_PLANS_DEFINITION = mcpToolDefinition({
 	name: 'list_plans',
 	description:
-		'List every plan written for this repository — number, title, state, its tracer bullets, and for approved plans not yet merged the footprint of each bullet (the schema, contracts and modules it creates or changes). Use it when your work touches something you suspect another plan owns, so you use it rather than duplicating or pre-empting it.',
+		'List every plan in this project, in every state — number, title, state, whether it is approved and in this repository, its tracer bullets and the footprint of each build bullet (the schema, contracts and modules it creates or changes). Use it when your work touches something you suspect another plan owns, so you use it rather than duplicating or pre-empting it.',
 	schema: z.object({})
 });
 

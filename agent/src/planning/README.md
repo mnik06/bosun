@@ -35,9 +35,11 @@ against the tree it can see, and a tree that is days old answers confidently and
 it creates or changes, and the pieces of other approved plans it consumes — and marks bullet 1 as the
 **foundation** when it holds every shared piece. The backend compares footprints deterministically when
 a plan is approved and decides from them what waits for what; no session is ever asked. That is why
-`list_plans` returns the footprints of every approved, unmerged plan in the repository: a plan written
-second says `consumes` instead of building a second copy, and waits for one bullet rather than a whole
-feature. `set_blockers` is left for the one dependency a footprint cannot say — needing another plan's
+`list_plans` returns every plan in the project with the footprint of every build bullet, whatever its
+state: a plan written second says `consumes` instead of building a second copy, and waits for one bullet
+rather than a whole feature. Footprints used to be shown for approved plans only, and a session could not
+see that a sibling still waiting for sign-off already built the table it was about to build too.
+`read_plan` fetches one plan whole when its summary is not enough. `set_blockers` is left for the one dependency a footprint cannot say — needing another plan's
 whole feature.
 
 The shape lives in `footprint.ts`, mirroring the backend's, with a description on every field because
@@ -55,6 +57,12 @@ A ticket that is several features is grilled once and published as several plans
 wants one conversation, not one per sub-task. `add_plan` asks the backend for a further plan row and
 the session publishes each with its `planId`; the session stays keyed by the plan it was started
 for, whose chat holds the grill and whose `plan.cancel` ends it.
+
+An added plan is hidden from the person until the session has published every plan it writes, and the
+session plan is published last — `publish_plan` refuses it while an added plan is unpublished — so its
+publish is the one that shows them all together. Plans listed the moment the split was agreed sat empty
+beside the one being grilled, with chats nobody asked anything in. The number is real from `add_plan`
+on, because plans of one session cite each other by it in footprints, blockers and bodies.
 
 What makes that safe is that the backend settles plans from frames alone. So every plan the session
 holds gets the `plan.done` or `plan.error`, and `held()` names them all on `hello` — leave one out and

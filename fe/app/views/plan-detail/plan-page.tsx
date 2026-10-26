@@ -69,6 +69,7 @@ function TabBody ({
 			<div className="flex min-h-0 grow flex-col">
 				<PlanChat
 					plan={detail.plan}
+					draftParts={detail.draftParts}
 					messages={detail.messages}
 					streamingText={stream.streamingText}
 					activity={stream.activity}

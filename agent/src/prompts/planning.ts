@@ -171,11 +171,15 @@ one grill, then one plan published per part. Each is approved, built and verifie
 - **How.** The plan this session was started for is the first part. Call \`add_plan\` once per further
   part, as soon as the split is agreed and **before publishing any plan**, with its title and the part of the ticket it delivers in the
   ticket's own words (a sub-task's key, summary and description). It returns the new plan's id and
-  number. Then \`name_plan\` the first plan for its own part.
+  number. Then \`name_plan\` the first plan for its own part. The person does not see an added plan
+  until every plan of this session is published — they all appear together — but its number is real
+  from the start: cite it in footprints, blockers and bodies.
 - **Grill once, for all of them.** The rounds cover every part together; decisions shared between parts
   are asked once. Keep a separate requirements ledger per plan — every ledger line belongs to exactly one.
-- **Publish every one.** Call \`publish_plan\` once per plan, passing \`planId\` for each plan you added
-  (leave it out for the first). Each carries its own body, criteria numbered from \`AC-1\`, bullets,
+- **Publish every one, this session's own plan last.** Call \`publish_plan\` once per plan, passing
+  \`planId\` for each plan you added, and only then the plan this session was started for (leave
+  \`planId\` out for it) — it is refused while an added plan is unpublished, because its publish is what
+  shows them all to the person. Each carries its own body, criteria numbered from \`AC-1\`, bullets,
   footprints and its own \`coverage\`: a requirement another of these plans delivers is a line with a
   \`nonGoal\` naming that plan by number. \`set_blockers\` and \`name_plan\` take \`planId\` the same way.
 - **Between them.** A piece one of these plans builds and another uses is built in the first one's
@@ -398,16 +402,20 @@ feature with no user-facing surface.
 
 ## Phase 5 — Self-check, then the unknowns hunter
 
-**Call \`list_plans\` during recon, before you write anything.** It returns every plan already written
-for this repository — its number, title, state and tracer bullets — and, for every plan approved and not
-yet merged, the **footprint** of each bullet: the tables and columns, API contracts and shared modules it
-creates or changes. The repository tells you what exists; this tells you what is *about to*. Four things
-come out of it:
+**Call \`list_plans\` during recon, before you write anything.** It returns every plan in the project, in
+every state — approved or waiting for sign-off, building, merged, failed, and ones another session is still
+writing — with its number, title, state, a summary, its tracer bullets and the **footprint** of each build
+bullet: the tables and columns, API contracts and shared modules it creates or changes. \`approved\` says
+which are signed off; a plan with \`sameRepository: false\` belongs to another repository's line and is
+context only — never consumed or blocked on. When a summary is not enough to tell whether a plan covers or
+collides with yours, \`read_plan\` it by number for its whole body, criteria and bullets. The repository
+tells you what exists; this tells you what is *about to*. Four things come out of it:
 
 - Work already covered by another plan is not yours to plan again. Say which plan owns it and leave
   it there.
-- A piece another approved plan creates — a table, a column, an endpoint, a shared component — that
-  this plan needs is **consumed, never built twice**: the bullet that uses it lists it under
+- A piece another plan creates — a table, a column, an endpoint, a shared component — that this plan
+  needs is **consumed, never built twice**, whether that plan is approved yet or not (when it is not, say
+  in the body that it is approved first): the bullet that uses it lists it under
   \`footprint.consumes\` with that plan's number and the piece's key, and the plan body says it comes from
   that plan. Bosun makes this plan wait for exactly the bullet that builds it.
 - A plan whose whole feature this one needs — not a piece of it — is declared with \`set_blockers\` by

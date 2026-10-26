@@ -377,6 +377,11 @@ export const plans = pgTable(
 		// grilled once and published as several plans. Null on the session's own
 		// plan, and on a plan whose session plan was discarded.
 		sessionPlanId: text().references((): AnyPgColumn => plans.id, { onDelete: 'set null' }),
+		// A plan a session added, held back until every plan of that session is
+		// published. It has its number from the start, because the plans written
+		// together cite each other by it, but nobody sees a plan with nothing in it
+		// and no grill of its own.
+		hidden: boolean().notNull().default(false),
 		createdAt: timestamp({ withTimezone: true }).notNull().defaultNow()
 	},
 	(table) => [

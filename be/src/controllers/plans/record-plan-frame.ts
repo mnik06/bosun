@@ -1,3 +1,4 @@
+import { announcePlanChanged } from 'src/controllers/line/shared/announce';
 import { failPlan } from 'src/controllers/plans/fail-plan';
 import { finishPlan } from 'src/controllers/plans/finish-plan';
 import { announcePlanMessage } from 'src/controllers/plans/shared/plan-broadcast';
@@ -113,6 +114,19 @@ export async function recordPlanFrame(
 
 	if (opts.frame.type === 'plan.question') {
 		await recordQuestion({ ...opts, plan, frame: opts.frame });
+
+		return;
+	}
+
+	// Still hidden when its session settles means the session ended before it had
+	// published every plan it writes. The person never saw this one, so it goes
+	// rather than turning up as a failure nobody can place.
+	if (plan.hidden && (opts.frame.type === 'plan.done' || opts.frame.type === 'plan.error')) {
+		await opts.planRepo.deleteHidden([plan.id]);
+
+		if (plan.sessionPlanId !== null) {
+			announcePlanChanged({ socketRegistry: opts.socketRegistry, projectId: plan.projectId, planId: plan.sessionPlanId });
+		}
 
 		return;
 	}

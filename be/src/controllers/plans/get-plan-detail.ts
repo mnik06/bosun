@@ -68,6 +68,18 @@ function runDetails(opts: { runs: SliceRun[]; slices: Slice[]; deps: LineDeps })
 	}));
 }
 
+// The plans this one's session is still writing. Numbered already, but hidden
+// until the session publishes all of them, so this page is the only place they show.
+async function draftParts(deps: LineDeps, plan: Plan) {
+	if (plan.sessionPlanId !== null) {
+		return [];
+	}
+
+	const siblings = await deps.planRepo.listInSession(plan.id);
+
+	return siblings.filter((sibling) => sibling.hidden).map((sibling) => ({ number: sibling.number, title: sibling.title }));
+}
+
 async function dependents(deps: LineDeps, plan: Plan) {
 	const edges = await deps.planDependencyRepo.listByProviders([plan.id]);
 	const plans = await deps.planRepo.listByIds([...new Set(edges.map((edge) => edge.planId))]);
@@ -110,6 +122,7 @@ export async function getPlanDetail(deps: LineDeps, opts: { id: string; projectI
 		runs: runDetails({ runs, slices, deps }),
 		dependencies: await dependencyViews(deps, { dependencies }),
 		dependents: await dependents(deps, plan),
+		draftParts: await draftParts(deps, plan),
 		amendments,
 		overlapDecisions: await overlapViews(deps, { decisions: decisionsOpen }),
 		integrations,

@@ -29,6 +29,7 @@ function plan(overrides: Partial<Plan> = {}): Plan {
 		status: 'planning',
 		failureReason: null,
 		input: 'make the thing',
+		hidden: false,
 		createdAt: new Date('2026-01-01T11:00:00.000Z'),
 		...overrides
 	};
@@ -36,17 +37,20 @@ function plan(overrides: Partial<Plan> = {}): Plan {
 
 function build(opts: { running: Plan[]; heldPlanIds?: string[] }) {
 	const failMany = vi.fn().mockResolvedValue([]);
+	const deleteHidden = vi.fn().mockResolvedValue(undefined);
 	const sendToAgent = vi.fn().mockReturnValue(true);
 
 	return {
 		failMany,
+		deleteHidden,
 		sendToAgent,
 		run: async () =>
 			stallMachinePlans({
 				...notNotified,
 				planRepo: {
 					listPlanningOnMachine: vi.fn().mockResolvedValue(opts.running),
-					failMany
+					failMany,
+					deleteHidden
 				} as unknown as PlanRepo,
 				planTextService: { drop: vi.fn() } as unknown as PlanTextService,
 				socketRegistry: { sendToAgent, broadcastToUi: vi.fn() } as unknown as SocketRegistry,
@@ -90,6 +94,20 @@ describe('stallMachinePlans', () => {
 		await run();
 
 		expect(failMany).not.toHaveBeenCalled();
+	});
+
+	// A plan its session added and never got to publish was never seen by anyone;
+	// failing it would turn up a plan nobody can place.
+	it('deletes a hidden plan the agent no longer holds instead of failing it', async () => {
+		const { failMany, deleteHidden, run } = build({
+			running: [plan(), plan({ id: 'p_2', hidden: true, sessionPlanId: 'p_1' })],
+			heldPlanIds: []
+		});
+
+		await run();
+
+		expect(deleteHidden).toHaveBeenCalledWith(['p_2']);
+		expect(failMany).toHaveBeenCalledWith({ ids: ['p_1'], reason: expect.any(String) });
 	});
 
 	// An agent too old to report holds nothing across a reconnect, so absent means

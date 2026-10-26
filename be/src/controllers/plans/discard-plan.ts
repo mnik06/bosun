@@ -15,6 +15,10 @@ export async function discardPlan(deps: LineDeps, opts: { id: string; projectId:
 		removeWorktree(deps, { build: live });
 	}
 
+	// Its own: the parts its session has not published yet are nobody else's, and
+	// once this row is gone nothing points at them to reveal or remove them.
+	await deps.planRepo.deleteHiddenInSession(plan.id);
+
 	if (!(await deps.planRepo.deleteOwned({ id: plan.id, projectId: opts.projectId }))) {
 		throw new HttpError(404, 'Plan not found');
 	}

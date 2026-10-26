@@ -95,6 +95,18 @@ criteria and bullets, and is `planning` until the session's turn ends — the ag
 and `plan.error` for every plan the session holds, and names them all on `hello`, so `finishPlan`
 fails one the session never published and `stallMachinePlans` treats them as one unit.
 
+An added plan is created `hidden`: numbered from the start, because the plans of one session cite each
+other by number while they are written, but left out of the plans list and never announced. The session
+plan's page lists them as its draft parts. `publishPlan` reveals them all once the session plan and every
+sibling have a body — the agent publishes the session plan last, so that is normally its publish; a plan
+added after the session plan was already out reveals itself on its own publish. A plan still hidden when
+its session settles (`plan.done`, `plan.error`, a restart, the stale sweep) was never seen by anyone and is
+deleted rather than failed; discarding the session plan deletes its hidden parts with it.
+
+Rejected: no row until the end, with parts named by a placeholder the batch publish rewrites into numbers.
+Every footprint, blocker and body would need rewriting, and a number reserved without a row would need its
+own allocation beside `max + 1`.
+
 Plans are added while the session plan is `planning` — mid-grill, or because the person typed into its
 chat. Whether the session plan is already published does not matter: a session that published its
 first part before adding the rest must still be able to write them. A message typed into an added plan's chat reaches the shared session while

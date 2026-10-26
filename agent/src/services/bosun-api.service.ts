@@ -204,6 +204,10 @@ export function getBosunApiService(deps: { serverUrl: string; machineKey?: strin
 			return get('/agent/plans', true);
 		},
 
+		async readPlan(number: number): Promise<unknown> {
+			return get(`/agent/plans/by-number/${number}`, true);
+		},
+
 		async recordPlanDecision(opts: {
 			planId: string;
 			fork: string;

@@ -23,6 +23,7 @@ const planColumns = {
 	summary: plans.summary,
 	summarisedAt: plans.summarisedAt,
 	sessionPlanId: plans.sessionPlanId,
+	hidden: plans.hidden,
 	createdAt: plans.createdAt
 };
 
@@ -46,6 +47,7 @@ export function getPlanRepo(db: DbOrTx) {
 			afk: boolean;
 			title?: string;
 			sessionPlanId?: string;
+			hidden?: boolean;
 		}): Promise<Plan> {
 			const [row] = await db
 				.insert(plans)
@@ -58,21 +60,27 @@ export function getPlanRepo(db: DbOrTx) {
 			return PlanSchema.parse(row);
 		},
 
-		// Everything a session may reason about when it asks what else exists. The
-		// repository is the line a plan joins, so it is what a session is shown; a
-		// machine with none sees what was planned on it.
-		async listForContext(opts: { machineId: string; repositoryId: string | null }): Promise<Plan[]> {
+		// Everything a session may reason about when it asks what else exists: every
+		// plan in the project, whatever state it is in, including the ones another
+		// session is still writing. A plan nobody has approved yet is still work
+		// somebody means to do, and the session that cannot see it plans a second copy.
+		async listInProject(projectId: string): Promise<Plan[]> {
 			const rows = await db
 				.select(planColumns)
 				.from(plans)
-				.where(
-					opts.repositoryId === null
-						? eq(plans.machineId, opts.machineId)
-						: eq(plans.repositoryId, opts.repositoryId)
-				)
+				.where(eq(plans.projectId, projectId))
 				.orderBy(asc(plans.number));
 
 			return rows.map((row) => PlanSchema.parse(row));
+		},
+
+		async getInProjectByNumber(opts: { projectId: string; number: number }): Promise<Plan | null> {
+			const [row] = await db
+				.select(planColumns)
+				.from(plans)
+				.where(and(eq(plans.projectId, opts.projectId), eq(plans.number, opts.number)));
+
+			return row ? PlanSchema.parse(row) : null;
 		},
 
 		// Scheduler-only and unscoped: reached from a build whose ownership has
@@ -112,7 +120,7 @@ export function getPlanRepo(db: DbOrTx) {
 			const rows = await db
 				.select(planColumns)
 				.from(plans)
-				.where(eq(plans.projectId, projectId))
+				.where(and(eq(plans.projectId, projectId), eq(plans.hidden, false)))
 				.orderBy(desc(plans.createdAt));
 
 			return rows.map((row) => PlanSchema.parse(row));
@@ -222,6 +230,32 @@ export function getPlanRepo(db: DbOrTx) {
 				.returning(planColumns);
 
 			return row ? PlanSchema.parse(row) : null;
+		},
+
+		async reveal(ids: string[]): Promise<Plan[]> {
+			if (ids.length === 0) {
+				return [];
+			}
+
+			const rows = await db
+				.update(plans)
+				.set({ hidden: false })
+				.where(and(inArray(plans.id, ids), eq(plans.hidden, true)))
+				.returning(planColumns);
+
+			return rows.map((row) => PlanSchema.parse(row));
+		},
+
+		async deleteHidden(ids: string[]): Promise<void> {
+			if (ids.length === 0) {
+				return;
+			}
+
+			await db.delete(plans).where(and(inArray(plans.id, ids), eq(plans.hidden, true)));
+		},
+
+		async deleteHiddenInSession(sessionPlanId: string): Promise<void> {
+			await db.delete(plans).where(and(eq(plans.sessionPlanId, sessionPlanId), eq(plans.hidden, true)));
 		},
 
 		async deleteOwned(opts: { id: string; projectId: string }): Promise<boolean> {

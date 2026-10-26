@@ -25,6 +25,7 @@ const PLANNING_TOOLS = {
 	mcp: [
 		'mcp__bosun__bosun_ask',
 		'mcp__bosun__list_plans',
+		'mcp__bosun__read_plan',
 		'mcp__bosun__add_plan',
 		'mcp__bosun__name_plan',
 		'mcp__bosun__set_blockers',
@@ -223,7 +224,7 @@ export function createPlanningSessions(opts: {
 		}
 
 		const waiting = [...session.unpublished].filter((id) => added.has(id));
-		const text = waiting.length === 0 ? UNPUBLISHED_NUDGE : `${UNPUBLISHED_NUDGE} Every plan you added is published too, with its \`planId\` — still unpublished: ${waiting.join(', ')}.`;
+		const text = waiting.length === 0 ? UNPUBLISHED_NUDGE : `${UNPUBLISHED_NUDGE} Every plan you added is published too, with its \`planId\`, before the plan this session was started for — still unpublished: ${waiting.join(', ')}.`;
 
 		return { label: 'Asking the session to publish', text };
 	};
@@ -256,6 +257,10 @@ export function createPlanningSessions(opts: {
 			current.unpublished.add(plan.planId);
 			added.set(plan.planId, { key, number: plan.number });
 		}
+	};
+
+	const unpublishedAdded = (key: string) => (): string[] => {
+		return [...(sessions.get(key)?.unpublished ?? [])].filter((planId) => planId !== key);
 	};
 
 	const holds = (key: string) => (planId: string): boolean => {
@@ -498,6 +503,7 @@ export function createPlanningSessions(opts: {
 				bosunApi: opts.services.bosunApi,
 				holds: holds(payload.planId),
 				onPlanAdded: onPlanAdded(payload.planId),
+				unpublishedAdded: unpublishedAdded(payload.planId),
 				onPublished: onPublished(payload.planId),
 				onGrilled: onGrilled(payload.planId),
 				onQuestion: onQuestion(payload.planId)

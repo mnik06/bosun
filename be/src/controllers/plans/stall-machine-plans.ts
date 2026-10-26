@@ -36,9 +36,14 @@ export async function stallMachinePlans(
 		(plan) => !held.has(plan.id) && plan.createdAt <= opts.connectedAt
 	);
 
-	if (stranded.length > 0) {
+	// A hidden plan died with its session before the person ever saw it.
+	await opts.planRepo.deleteHidden(stranded.filter((plan) => plan.hidden).map((plan) => plan.id));
+
+	const shown = stranded.filter((plan) => !plan.hidden);
+
+	if (shown.length > 0) {
 		const failed = await opts.planRepo.failMany({
-			ids: stranded.map((plan) => plan.id),
+			ids: shown.map((plan) => plan.id),
 			reason: RESTARTED
 		});
 

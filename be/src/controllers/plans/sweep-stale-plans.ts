@@ -16,9 +16,13 @@ interface Deps extends PlanNotifyDeps {
 }
 
 async function sweep(deps: Deps): Promise<void> {
-	const stale = await deps.planRepo.listStalePlanning({
+	const found = await deps.planRepo.listStalePlanning({
 		unseenSince: new Date(Date.now() - SESSION_MAX_MS)
 	});
+
+	await deps.planRepo.deleteHidden(found.filter((plan) => plan.hidden).map((plan) => plan.id));
+
+	const stale = found.filter((plan) => !plan.hidden);
 
 	if (stale.length === 0) {
 		return;

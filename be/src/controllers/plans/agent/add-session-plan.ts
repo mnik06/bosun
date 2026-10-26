@@ -1,6 +1,6 @@
 import { HttpError } from 'src/api/errors/HttpError';
 import { getMachinePlan } from 'src/controllers/plans/shared/plan-access';
-import { announcePlan } from 'src/controllers/plans/shared/plan-broadcast';
+import { announcePlanChanged } from 'src/controllers/line/shared/announce';
 import { type PlanMessageRepo } from 'src/repos/plans/plan-message.repo';
 import { type PlanRepo } from 'src/repos/plans/plan.repo';
 import { type IdService } from 'src/services/ids/id.service';
@@ -15,6 +15,11 @@ export const MAX_PLANS_PER_SESSION = 6;
 // plan that happens to have been written by another plan's session: it carries
 // that plan's settings because the grill that writes it ran under them, and it
 // is `planning` until the session's turn ends, exactly like the plan it sits beside.
+//
+// It is hidden until the session has published every plan it writes. A plan
+// listed the moment the split was agreed sat empty beside the one being grilled,
+// with a chat nobody asked anything in. Its number is taken now regardless,
+// because the plans of one session cite each other by it while they are written.
 export async function addSessionPlan(opts: {
 	planRepo: PlanRepo;
 	planMessageRepo: PlanMessageRepo;
@@ -56,7 +61,8 @@ export async function addSessionPlan(opts: {
 		auto: session.auto,
 		afk: session.afk,
 		title: opts.title,
-		sessionPlanId: session.id
+		sessionPlanId: session.id,
+		hidden: true
 	});
 
 	await opts.planMessageRepo.append({
@@ -66,7 +72,7 @@ export async function addSessionPlan(opts: {
 		content: { text: opts.input }
 	});
 
-	announcePlan({ socketRegistry: opts.socketRegistry, plan });
+	announcePlanChanged({ socketRegistry: opts.socketRegistry, projectId: session.projectId, planId: session.id });
 
 	return plan;
 }

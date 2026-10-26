@@ -182,6 +182,7 @@ export const PlanDetailSchema = z.object({
 	runs: z.array(SliceRunSchema),
 	dependencies: z.array(DependencyViewSchema),
 	dependents: z.array(PlanRefSchema),
+	draftParts: z.array(PlanRefSchema.omit({ planId: true })).default([]),
 	amendments: z.array(PlanAmendmentSchema),
 	overlapDecisions: z.array(OverlapDecisionViewSchema),
 	integrations: z.array(IntegrationSchema),

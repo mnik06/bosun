@@ -1,3 +1,4 @@
+import { announcePlanChanged } from 'src/controllers/line/shared/announce';
 import { getMachinePlan } from 'src/controllers/plans/shared/plan-access';
 import { announcePlan } from 'src/controllers/plans/shared/plan-broadcast';
 import { type PlanRepo } from 'src/repos/plans/plan.repo';
@@ -21,7 +22,13 @@ export async function savePlanName(opts: {
 	});
 	const updated = await orNotFound(opts.planRepo.update({ id: plan.id, title: opts.title }), 'Plan not found');
 
-	announcePlan({ socketRegistry: opts.socketRegistry, plan: updated });
+	// A hidden plan is shown only as a part listed on the plan its session started
+	// from, so that is the page whose name for it just changed.
+	if (updated.hidden && updated.sessionPlanId !== null) {
+		announcePlanChanged({ socketRegistry: opts.socketRegistry, projectId: updated.projectId, planId: updated.sessionPlanId });
+	} else {
+		announcePlan({ socketRegistry: opts.socketRegistry, plan: updated });
+	}
 
 	return updated;
 }

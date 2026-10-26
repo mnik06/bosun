@@ -2,18 +2,20 @@ import { Alert, Anchor, Loader, ScrollArea, Stack, Text } from '@mantine/core'
 import { useEffect, useRef } from 'react'
 import { Link } from 'react-router'
 
-import { findPendingQuestion, type Plan, type PlanMessage } from '~/entities/plan'
+import { findPendingQuestion, type Plan, type PlanDetail, type PlanMessage } from '~/entities/plan'
 import { QuestionPrompt, useAnswerQuestion } from '~/features/answer-question'
 import { PlanComposer } from '~/features/say-to-plan'
 import { Transcript } from '~/widgets/plan-chat/ui/transcript'
 
 export function PlanChat ({
 	plan,
+	draftParts,
 	messages,
 	streamingText,
 	activity
 }: {
 	plan: Plan
+	draftParts: PlanDetail['draftParts']
 	messages: PlanMessage[]
 	streamingText: string
 	activity: string | null
@@ -42,6 +44,14 @@ export function PlanChat ({
 								the plan it started from
 							</Anchor>
 							.
+						</Text>
+					)}
+
+					{draftParts.length === 0 ? null : (
+						<Text size="xs" c="dimmed">
+							This session also writes{' '}
+							{draftParts.map((part) => `#${part.number} ${part.title ?? 'Untitled'}`).join(', ')}.
+							They appear in the plans list together, once every one of them is published.
 						</Text>
 					)}
 

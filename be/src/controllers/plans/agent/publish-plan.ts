@@ -1,6 +1,6 @@
 import { HttpError } from 'src/api/errors/HttpError';
 import { type LineDeps } from 'src/controllers/line/line-deps';
-import { announceBuild } from 'src/controllers/line/shared/announce';
+import { announceBuild, announcePlanChanged } from 'src/controllers/line/shared/announce';
 import { removeWorktree, stopRunningJobs } from 'src/controllers/line/shared/lifecycle';
 import { notifyBuildStatus } from 'src/controllers/line/shared/notify';
 import { getMachinePlan } from 'src/controllers/plans/shared/plan-access';
@@ -200,10 +200,37 @@ export async function publishPlan(
 		await withdrawBuild(deps, plan);
 	}
 
-	announcePlan({ socketRegistry: deps.socketRegistry, plan: published });
-	await announcePlanArtifact({ socketRegistry: deps.socketRegistry, acRepo: deps.acRepo, sliceRepo: deps.sliceRepo, planId: plan.id });
+	if (!published.hidden) {
+		announcePlan({ socketRegistry: deps.socketRegistry, plan: published });
+		await announcePlanArtifact({ socketRegistry: deps.socketRegistry, acRepo: deps.acRepo, sliceRepo: deps.sliceRepo, planId: plan.id });
+	}
+
+	await revealSession(deps, published);
 
 	return published;
+}
+
+// The plans one session writes appear together, once the last of them is
+// published. The session publishes the plan it started from last, so in the
+// usual order that is the publish that reveals the rest; a plan added after the
+// first was already out reveals itself on its own publish.
+async function revealSession(deps: LineDeps, plan: Plan): Promise<void> {
+	const sessionPlanId = plan.sessionPlanId ?? plan.id;
+	const [root, siblings] = await Promise.all([
+		plan.sessionPlanId === null ? plan : deps.planRepo.getById(sessionPlanId),
+		deps.planRepo.listInSession(sessionPlanId)
+	]);
+	const hidden = siblings.filter((sibling) => sibling.hidden);
+
+	if (root === null || hidden.length === 0 || [root, ...siblings].some((entry) => entry.bodyMd === null)) {
+		return;
+	}
+
+	for (const revealed of await deps.planRepo.reveal(hidden.map((entry) => entry.id))) {
+		announcePlan({ socketRegistry: deps.socketRegistry, plan: revealed });
+	}
+
+	announcePlanChanged({ socketRegistry: deps.socketRegistry, projectId: root.projectId, planId: root.id });
 }
 
 // Matched by ordinal so a republish keeps the slice rows a build may already have

@@ -107,6 +107,8 @@ export const AgentPlanCriteriaQuerySchema = z.object({
 		.transform((value) => value.split(',').map(Number))
 });
 
+export const AgentPlanNumberParamsSchema = z.object({ number: z.coerce.number().int().positive() });
+
 export const AgentBuildIdParamsSchema = z.object({ buildId: z.string().min(1) });
 
 export const AgentFindingReqSchema = z.object({
