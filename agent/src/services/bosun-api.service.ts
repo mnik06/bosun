@@ -14,6 +14,11 @@ const ErrorRespSchema = z.object({ message: z.string() });
 // never hears what the person said.
 const ATTACHMENT_TIMEOUT_MS = 60_000;
 
+// Most calls here answer a session's tool call, and Claude waits on
+// a tool for a day. A request the backend never answers otherwise freezes the
+// session mid-turn, with every later chat message queued behind it.
+const REQUEST_TIMEOUT_MS = 60_000;
+
 const GitCredentialRespSchema = z.object({ token: z.string(), expiresAt: z.string() });
 
 const PlanCriteriaRespSchema = z.array(
@@ -80,7 +85,8 @@ export function getBosunApiService(deps: { serverUrl: string; machineKey?: strin
 				'content-type': 'application/json',
 				...(opts.authorized ? { authorization: `Bearer ${deps.machineKey ?? ''}` } : {})
 			},
-			body: JSON.stringify(opts.body)
+			body: JSON.stringify(opts.body),
+			signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
 		});
 		const payload: unknown = await res.json().catch(() => null);
 
@@ -93,7 +99,8 @@ export function getBosunApiService(deps: { serverUrl: string; machineKey?: strin
 
 	async function get(path: string, authorized = false): Promise<unknown> {
 		const res = await fetch(`${base}${path}`, {
-			headers: authorized ? { authorization: `Bearer ${deps.machineKey ?? ''}` } : {}
+			headers: authorized ? { authorization: `Bearer ${deps.machineKey ?? ''}` } : {},
+			signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
 		});
 		const payload: unknown = await res.json().catch(() => null);
 
