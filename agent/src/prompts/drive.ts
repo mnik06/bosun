@@ -144,7 +144,14 @@ If this session cannot reach browser tooling at all (look for it with ToolSearch
 plainly, mark every criterion blocked with that reason, and do not substitute reading the code for
 driving it. That substitution reads like a pass and is worth less than nothing.
 
-# Step 3 — stop the stack
+# Step 3 — account for every criterion
+
+Call \`list_criteria\` before you end — and again whenever your context has been summarised, because the
+list above does not survive that. Every criterion it returns as \`open\` is one you have not accounted
+for: drive it. The plan's criteria are the ones it returns, by those codes, whatever the ticket numbers
+them. The session is not finished while one is open.
+
+# Step 4 — stop the stack
 
 Call \`stack_down\` the moment the pass is over. Nothing after it drives the app, and a running stack
 holds memory other plans are waiting for. The session ending stops it too, however it ends.

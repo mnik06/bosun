@@ -29,6 +29,11 @@ const PlanCriteriaRespSchema = z.array(
 	})
 );
 
+export const RunCriteriaRespSchema = z.object({
+	required: z.boolean(),
+	criteria: z.array(z.object({ code: z.string(), text: z.string(), state: z.enum(['verified', 'blocked', 'reported', 'open']) }))
+});
+
 const SessionPlanRespSchema = z.object({ planId: z.string(), number: z.number().int() });
 
 const PlanBugRespSchema = z.object({
@@ -302,6 +307,12 @@ export function getBosunApiService(deps: { serverUrl: string; machineKey?: strin
 			const { buildId, ...body } = opts;
 
 			return post({ path: `/agent/builds/${encodeURIComponent(buildId)}/findings`, body, authorized: true });
+		},
+
+		async runCriteria(opts: { buildId: string; runId: string }): Promise<z.infer<typeof RunCriteriaRespSchema>> {
+			return RunCriteriaRespSchema.parse(
+				await get(`/agent/builds/${encodeURIComponent(opts.buildId)}/runs/${encodeURIComponent(opts.runId)}/criteria`, true)
+			);
 		},
 
 		async resolveFinding(opts: { findingId: string; status: 'fixed' | 'left'; note: string }): Promise<unknown> {

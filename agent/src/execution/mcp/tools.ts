@@ -64,6 +64,16 @@ const MARK_VERIFIED_DEFINITION = mcpToolDefinition({
 	schema: MarkAcArgsSchema
 });
 
+// The criteria list lives in the prompt, and a long drive compacts it away. A
+// drive that lost it went on from the ticket's own numbering and ended sure it
+// had covered a plan it had not.
+const LIST_CRITERIA_DEFINITION = mcpToolDefinition({
+	name: 'list_criteria',
+	description:
+		'List every acceptance criterion this session must account for, with its text and where it stands: `verified`, `blocked`, `reported` (a finding with its code from this session), or `open` — not yet accounted for. The plan\'s criteria are these, by these codes, whatever a ticket or an earlier summary numbers them. Call it after your context is summarised, and before you end: the session is not finished while one is `open`.',
+	schema: z.object({})
+});
+
 export const ReportFindingArgsSchema = z.object({
 	acCode: z.string().min(1).nullable().optional().describe('the criterion this finding fails, for kind "criterion"'),
 	kind: z.enum(['criterion', 'console', 'network', 'visual', 'setup']),
@@ -160,7 +170,7 @@ export function executionDefinitions(opts: ToolSet): { name: string }[] {
 		];
 	case 'drive':
 	case 'recheck':
-		return [MARK_VERIFIED_DEFINITION, BLOCK_AC_DEFINITION, REPORT_FINDING_DEFINITION, ...stack];
+		return [LIST_CRITERIA_DEFINITION, MARK_VERIFIED_DEFINITION, BLOCK_AC_DEFINITION, REPORT_FINDING_DEFINITION, ...stack];
 	case 'fix':
 		return [LIST_PLANS_DEFINITION, RECORD_DECISION_DEFINITION, RESOLVE_FINDING_DEFINITION, PROPOSE_PLAN_DEFINITION];
 	}
@@ -235,6 +245,8 @@ export function createExecutionDispatch(opts: {
 				return ask(args);
 			case 'list_plans':
 				return textToolResult(JSON.stringify(await opts.bosunApi.listMachinePlans()));
+			case 'list_criteria':
+				return textToolResult(JSON.stringify((await opts.bosunApi.runCriteria({ buildId: opts.buildId, runId: opts.runId })).criteria));
 			case 'stack_up':
 			case 'stack_down':
 				return stackTool({ name, args, stack: opts.stack! });

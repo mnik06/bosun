@@ -172,6 +172,12 @@ export const AgentDecisionRespSchema = z.object({ decisionId: z.string() });
 
 export const AgentFindingRespSchema = z.object({ findingId: z.string() });
 
+export const AgentRunCriteriaRespSchema = z.object({
+	// Whether the drive must account for every criterion before it ends.
+	required: z.boolean(),
+	criteria: z.array(z.object({ code: z.string(), text: z.string(), state: z.enum(['verified', 'blocked', 'reported', 'open']) }))
+});
+
 export const AgentProposePlanRespSchema = z.object({ proposalId: z.string() });
 
 export const PlanProposalListEntrySchema = PlanProposalSchema.extend({

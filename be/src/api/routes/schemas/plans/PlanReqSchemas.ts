@@ -111,6 +111,8 @@ export const AgentPlanNumberParamsSchema = z.object({ number: z.coerce.number().
 
 export const AgentBuildIdParamsSchema = z.object({ buildId: z.string().min(1) });
 
+export const AgentRunParamsSchema = z.object({ buildId: z.string().min(1), runId: z.string().min(1) });
+
 export const AgentFindingReqSchema = z.object({
 	runId: z.string().min(1),
 	acCode: z.string().min(1).nullable().default(null),

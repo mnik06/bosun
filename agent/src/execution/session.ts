@@ -26,6 +26,18 @@ import {
 import { ensureProjectServices, prepareRunEnvironment } from './run-environment';
 
 const REPORT_KEPT_CHARS = 4_000;
+
+// Twice, as planning does: a session reminded twice of what is still open has had
+// the chance a person would give it, and past that the gate fails it as before.
+const MAX_CRITERIA_NUDGES = 2;
+
+function criteriaNudge(open: string[]): string {
+	return [
+		`Your turn ended, but ${open.join(', ')} ${open.length === 1 ? 'has' : 'have'} no verdict yet, and the drive fails while any criterion is unaccounted for.`,
+		'Call `list_criteria` for each one\'s text, then drive it: `mark_ac_verified` if you watch it hold, `report_finding` with its code if it fails, or `mark_ac_blocked` with the reason if it truly cannot be driven.',
+		'The plan\'s criteria are the ones `list_criteria` returns, whatever the ticket numbers them.'
+	].join(' ');
+}
 const TAIL_KEPT_CHARS = 1_500;
 
 // A provider branch that would not merge before the bullet started. Reported as
@@ -153,6 +165,7 @@ interface Run {
 	process: ClaudeSession | null;
 	cancelled: boolean;
 	settled: boolean;
+	nudges: number;
 	report: string;
 	// The `.env` files written before the session started, kept out of the commit.
 	envFiles: string[];
@@ -278,6 +291,41 @@ export function createExecutionSessions(opts: {
 		} finally {
 			teardown(msg.runId);
 		}
+	};
+
+	// Empty when the backend cannot say: an older backend has no such endpoint, and
+	// a drive is never failed by the question of whether it is finished.
+	const openCriteria = async (msg: ExecStart): Promise<string[]> => {
+		try {
+			const listed = await opts.services.bosunApi.runCriteria({ buildId: msg.buildId, runId: msg.runId });
+
+			return listed.required ? listed.criteria.filter((criterion) => criterion.state === 'open').map((criterion) => criterion.code) : [];
+		} catch (error) {
+			console.error(`[${msg.runId}] could not list the criteria: ${error instanceof Error ? error.message : String(error)}`);
+
+			return [];
+		}
+	};
+
+	// A drive whose turn ends with criteria still open is handed them while its
+	// session is alive, rather than failed by the gate after it is gone.
+	const settle = async (msg: ExecStart): Promise<void> => {
+		const run = runs.get(msg.runId);
+
+		if (!run || run.settled) {
+			return;
+		}
+
+		const open = modeOf(msg) === 'lane' && run.nudges < MAX_CRITERIA_NUDGES ? await openCriteria(msg) : [];
+
+		if (open.length > 0 && run.process && runs.get(msg.runId) === run && !run.settled) {
+			run.nudges += 1;
+			run.process.send(criteriaNudge(open));
+
+			return;
+		}
+
+		await finish(msg);
 	};
 
 	// Named, synced with its own remote, and — for a stacked plan — merged with
@@ -533,7 +581,7 @@ export function createExecutionSessions(opts: {
 				}
 
 				if (event.ok) {
-					void finish(msg);
+					void settle(msg);
 				} else {
 					fail(msg.runId, event.message);
 				}
@@ -609,6 +657,7 @@ export function createExecutionSessions(opts: {
 				process: null,
 				cancelled: false,
 				settled: false,
+				nudges: 0,
 				report: '',
 				envFiles: []
 			};

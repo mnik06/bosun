@@ -4,10 +4,12 @@ import {
 	AgentBuildIdParamsSchema,
 	AgentFindingIdParamsSchema,
 	AgentFindingReqSchema,
-	AgentResolveFindingReqSchema
+	AgentResolveFindingReqSchema,
+	AgentRunParamsSchema
 } from 'src/api/routes/schemas/plans/PlanReqSchemas';
-import { AgentFindingRespSchema } from 'src/api/routes/schemas/plans/PlanRespSchemas';
+import { AgentFindingRespSchema, AgentRunCriteriaRespSchema } from 'src/api/routes/schemas/plans/PlanRespSchemas';
 import { reportFinding, resolveFinding } from 'src/controllers/line/agent/findings';
+import { listRunCriteria } from 'src/controllers/line/agent/run-criteria';
 import { lineDeps } from 'src/controllers/line/line-deps';
 
 const routes: FastifyPluginAsync = async function (f) {
@@ -25,6 +27,12 @@ const routes: FastifyPluginAsync = async function (f) {
 
 			return { findingId: finding.id };
 		}
+	);
+
+	fastify.get(
+		'/builds/:buildId/runs/:runId/criteria',
+		{ schema: { params: AgentRunParamsSchema, response: { 200: AgentRunCriteriaRespSchema } } },
+		async (req) => listRunCriteria(lineDeps(fastify), { ...req.params, machineId: req.agent!.machineId })
 	);
 
 	fastify.post(

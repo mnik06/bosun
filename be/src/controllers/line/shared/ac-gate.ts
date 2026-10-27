@@ -15,10 +15,39 @@ export async function bulletGateFailure(deps: { acRepo: AcRepo }, opts: { sliceI
 	return open.length === 0 ? null : `the bullet finished without marking ${codes(open)} implemented`;
 }
 
+export type CriterionState = 'verified' | 'blocked' | 'reported' | 'open';
+
 // The drive asks for an account, not for success. A criterion is settled when it
 // was watched holding, explained as blocked, or reported failing with a
 // reproduction — the fix session is given the last kind. What still fails is
-// silence: a criterion nobody looked at.
+// silence: a criterion nobody looked at, which is `open` here.
+export async function driveCriteria(
+	deps: { acRepo: AcRepo; verifyFindingRepo: VerifyFindingRepo },
+	opts: { planId: string; buildId: string; runId: string; acCodes: string[] | null }
+): Promise<{ code: string; text: string; state: CriterionState }[]> {
+	const [acs, findings] = await Promise.all([
+		deps.acRepo.listByPlan(opts.planId),
+		deps.verifyFindingRepo.listForBuild(opts.buildId)
+	]);
+	const reported = new Set(
+		findings.filter((finding) => finding.runId === opts.runId && finding.acCode !== null).map((finding) => finding.acCode)
+	);
+	const scope = opts.acCodes === null ? acs : acs.filter((ac) => opts.acCodes!.includes(ac.code));
+	const stateOf = (ac: (typeof acs)[number]): CriterionState => {
+		if (ac.verified) {
+			return 'verified';
+		}
+
+		if (ac.blockedReason !== null) {
+			return 'blocked';
+		}
+
+		return reported.has(ac.code) ? 'reported' : 'open';
+	};
+
+	return scope.map((ac) => ({ code: ac.code, text: ac.text, state: stateOf(ac) }));
+}
+
 export async function driveGateFailure(
 	deps: { acRepo: AcRepo; verifyFindingRepo: VerifyFindingRepo },
 	opts: { plan: Plan; buildId: string; runId: string; acCodes: string[] | null }
@@ -27,15 +56,8 @@ export async function driveGateFailure(
 		return null;
 	}
 
-	const [acs, findings] = await Promise.all([
-		deps.acRepo.listByPlan(opts.plan.id),
-		deps.verifyFindingRepo.listForBuild(opts.buildId)
-	]);
-	const reported = new Set(
-		findings.filter((finding) => finding.runId === opts.runId && finding.acCode !== null).map((finding) => finding.acCode)
-	);
-	const scope = opts.acCodes === null ? acs : acs.filter((ac) => opts.acCodes!.includes(ac.code));
-	const unaccounted = scope.filter((ac) => !ac.verified && ac.blockedReason === null && !reported.has(ac.code));
+	const criteria = await driveCriteria(deps, { planId: opts.plan.id, buildId: opts.buildId, runId: opts.runId, acCodes: opts.acCodes });
+	const unaccounted = criteria.filter((criterion) => criterion.state === 'open');
 
 	return unaccounted.length === 0
 		? null

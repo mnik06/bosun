@@ -310,6 +310,42 @@ describe('lane sessions', () => {
 		expect(session.tools.mcp).not.toContain('mcp__bosun__bosun_ask');
 	});
 
+	// A drive that compacted ended its turn sure it had covered every criterion
+	// while ten were never opened, and the gate failed a 74-minute session for it.
+	it('hands a drive the criteria still open instead of ending it, and ends it once none are', async () => {
+		const deps = services(async () => ({ ok: true, detail: 'cleaned' }));
+		const runCriteria = vi
+			.fn()
+			.mockResolvedValueOnce({ required: true, criteria: [{ code: 'AC-1', text: 'x', state: 'verified' }, { code: 'AC-2', text: 'y', state: 'open' }] })
+			.mockResolvedValueOnce({ required: true, criteria: [{ code: 'AC-2', text: 'y', state: 'blocked' }] });
+		const send = vi.fn();
+		const { spawnClaudeSession } = await import('../sessions/process');
+		const turn = vi.fn();
+
+		Object.assign(deps, { bosunApi: { runCriteria } });
+		vi.mocked(spawnClaudeSession).mockReturnValueOnce({ kill: vi.fn(), send: turn });
+
+		await createExecutionSessions({ services: deps, send }).start({
+			...START,
+			phase: 'drive',
+			slice: { ordinal: 2, kind: 'verify', title: 'verify', bodyMd: null }
+		});
+
+		const { onStdout } = vi.mocked(spawnClaudeSession).mock.calls[0]![0];
+		const result = `${JSON.stringify({ type: 'result', subtype: 'success', is_error: false, result: 'done' })}\n`;
+
+		onStdout(result);
+		await vi.waitFor(() => expect(turn).toHaveBeenCalledTimes(1));
+
+		expect(turn.mock.calls[0]![0]).toContain('AC-2');
+		expect(send).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'exec.done' }));
+
+		onStdout(result);
+		await vi.waitFor(() => expect(send).toHaveBeenCalledWith(expect.objectContaining({ type: 'exec.done', runId: 'sr_1' })));
+
+		expect(turn).toHaveBeenCalledTimes(1);
+	});
+
 	// A machine pointed at a database bosun must not migrate is not one to reset
 	// either.
 	it('leaves the database alone where the machine does not allow migrations', async () => {
