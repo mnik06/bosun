@@ -92,6 +92,14 @@ dependency does not hold a verify: it released when that bullet finished, and wa
 provider's whole plan parked the dependent behind criteria it never uses — for as long as the provider
 sat held.
 
+**A plan builds on its own machine.** The line is the repository's, but a machine admits only a
+build whose plan names it (`plans.machine_id`, picked when the plan is started) — or, once started,
+the build's own `machine_id`, where its worktree is. Any free machine on the repository used to take
+the next build: a machine enrolled without docker took four plans it could not run the moment it came
+online. `move-plan.ts` changes the machine while nothing of the plan lives on one — written, and no
+worktree cut — and clears the build's `machine_id` and port block with it. A plan whose machine is
+gone waits until it is moved.
+
 ## Dependencies and stacking
 
 Dependencies are rows (`plan_dependencies`), from three sources: `planned` (a session declared a

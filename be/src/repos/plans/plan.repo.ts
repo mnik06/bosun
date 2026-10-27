@@ -154,6 +154,7 @@ export function getPlanRepo(db: DbOrTx) {
 			afk?: boolean;
 			verifyInUi?: boolean;
 			auto?: boolean;
+			machineId?: string;
 		}): Promise<Plan | null> {
 			const { id, ...values } = opts;
 			const [row] = await db

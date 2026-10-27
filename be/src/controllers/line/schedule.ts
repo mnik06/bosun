@@ -228,7 +228,7 @@ function runnableScheduled(pass: Pass): BuildState[] {
 
 		return (
 			state.build.status === 'scheduled' &&
-			(state.build.machineId === null || state.build.machineId === pass.machine.id) &&
+			(state.build.machineId ?? state.plan.machineId) === pass.machine.id &&
 			(kind === 'bullet' || kind === undefined) &&
 			blocking(state, snapshot.providers).length === 0
 		);

@@ -21,6 +21,8 @@ export const UpdatePlanReqSchema = z
 	.object({ afk: z.boolean(), verifyInUi: z.boolean(), auto: z.boolean() })
 	.partial();
 
+export const MovePlanReqSchema = z.object({ machineId: z.string().min(1) });
+
 const ChatAttachmentUploadSchema = z.object({
 	name: z.string().trim().min(1).max(255),
 	mediaType: z.string().trim().max(255),
