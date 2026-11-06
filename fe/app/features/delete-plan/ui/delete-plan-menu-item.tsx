@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router'
 import { useDeletePlan } from '~/features/delete-plan/api/use-delete-plan'
 import { confirmPlanDeletion } from '~/features/delete-plan/ui/confirm-plan-deletion'
 
-export function DeletePlanMenuItem ({ planId }: { planId: string }) {
+export function DeletePlanMenuItem ({ planId, warning }: { planId: string, warning?: string | undefined }) {
 	const navigate = useNavigate()
 	const remove = useDeletePlan()
 
@@ -17,6 +17,7 @@ export function DeletePlanMenuItem ({ planId }: { planId: string }) {
 			onClick={() => {
 				confirmPlanDeletion({
 					title: 'Discard this plan?',
+					warning,
 					onConfirm: () => {
 						remove.mutate(planId, {
 							onSuccess: () => {

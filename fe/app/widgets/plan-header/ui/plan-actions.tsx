@@ -68,6 +68,20 @@ function foundationShippable (detail: Detail): boolean {
 	)
 }
 
+// What discarding a plan in review leaves behind: bosun deletes its own rows, and
+// nothing on the provider or in the plans stacked on it.
+function discardWarning (detail: Detail): string | undefined {
+	const count = detail.dependents.length
+	const parts = [
+		...(detail.build?.prUrl ? ['Its pull request and branch stay on the remote, so close them there.'] : []),
+		...(count > 0
+			? [`${count} ${count === 1 ? 'plan depends' : 'plans depend'} on it: they stop waiting for it, and any already stacked keep its branch as their base.`]
+			: [])
+	]
+
+	return parts.length > 0 ? parts.join(' ') : undefined
+}
+
 function menuItems (opts: { detail: Detail, state: PlanState }): ReactNode[] {
 	const { build, plan } = opts.detail
 
@@ -101,7 +115,8 @@ function menuItems (opts: { detail: Detail, state: PlanState }): ReactNode[] {
 		case 'in_review':
 			return [
 				...reverify,
-				...(foundationShippable(opts.detail) ? [<ShipFoundationMenuItem key="ship" buildId={build.id} planId={plan.id} />] : [])
+				...(foundationShippable(opts.detail) ? [<ShipFoundationMenuItem key="ship" buildId={build.id} planId={plan.id} />] : []),
+				<DeletePlanMenuItem key="discard" planId={plan.id} warning={discardWarning(opts.detail)} />
 			]
 		case 'drafting':
 		case 'needs_approval':
