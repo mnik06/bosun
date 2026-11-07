@@ -129,10 +129,9 @@ export function getServicesService(deps: { homeDir?: string; runShell?: RunShell
 
 			const started = await shell({ command: service.start, cwd, env: opts.env, timeoutMs: START_TIMEOUT_MS });
 
-			if (!started.ok) {
-				return failure({ service: name, step: 'start', result: started });
-			}
-
+			// A start can fail on a service that is already coming up — `supabase start`
+			// refuses a container still `starting` after a lane reset restarted it. The
+			// check decides: a start failure counts only if the service never comes up.
 			const up = await waitUntilUp({
 				command: service.check,
 				cwd,
@@ -141,7 +140,7 @@ export function getServicesService(deps: { homeDir?: string; runShell?: RunShell
 			});
 
 			if (!up.ok) {
-				return failure({ service: name, step: 'check', result: up });
+				return started.ok ? failure({ service: name, step: 'check', result: up }) : failure({ service: name, step: 'start', result: started });
 			}
 		}
 

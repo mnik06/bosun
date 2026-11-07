@@ -40,6 +40,10 @@ expects to find.
 
 ## Failure modes
 
+- **A start that fails on a service already coming up** is not a failure. A lane reset restarts the
+  database container, and `supabase start` refuses one still `starting` (`container is not ready:
+  starting`) — that failed two builds taking slots right after a verify reset. The check is polled
+  after every start, failed or not, and only a service that never comes up fails with the start's tail.
 - **A start or a readiness check that fails** fails whatever called `ensure` with the service, the step
   and the tail of the output: `service "db" start failed (exited with 1): … permission denied …`. A
   worktree ensure fails the build, a session fails its start, `stack_up` returns it as the app that did

@@ -23,7 +23,7 @@ function tempDir(): string {
 }
 
 function config(): ProjectConfig {
-	const parsed = parseProjectConfig('Services:\ndb:\n- Start: db-up\n- Check: db-status\n- Stop: db-down\n- Ready timeout: 5\n');
+	const parsed = parseProjectConfig('Services:\ndb:\n- Start: db-up\n- Check: db-status\n- Stop: db-down\n- Ready timeout: 1\n');
 
 	if (!parsed.ok) {
 		throw new Error(JSON.stringify(parsed.issues));
@@ -76,6 +76,15 @@ describe('services', () => {
 			tail: 'port 55322 already in use',
 			detail: 'service "db" start failed (exited with 1):\nport 55322 already in use'
 		});
+	});
+
+	// A lane reset restarts the database container; `supabase start` then refuses a
+	// container still starting, though the service is seconds from up.
+	it('passes when start fails on a service that comes up anyway', async () => {
+		const { calls, ensure } = harness({ 'db-status': [FAILED, FAILED, OK], 'db-up': [{ ok: false, tail: 'container is not ready: starting', detail: 'exited with 1' }] });
+
+		expect(await ensure()).toEqual({ ok: true });
+		expect(calls).toEqual(['db-status', 'db-up', 'db-status', 'db-status']);
 	});
 
 	it('ends a docker failure with the root command that fixes it', async () => {
