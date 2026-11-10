@@ -220,6 +220,12 @@ reconnects in about a second rather than inheriting the delay from an earlier ou
   the same config, each one evicting the other on connect.
 - **Green in the browser but no pong** — the socket is alive and the ping frame arrived, but the
   agent's message handler threw. Check the agent log; the loop keeps the socket open.
+- **Offline in the browser while the agent logs nothing** — the backend terminated the socket for
+  missed pongs and Fly's proxy never passed the close on, so the agent's TCP connection stayed
+  ESTABLISHED to an edge that no longer forwards anything. `silence-watch.ts` is the guard: no ping
+  or frame for 45s (three backend heartbeats) and the agent terminates it itself, logging
+  `no word from bosun`, and reconnects. Nothing gentler works — a half-open socket accepts writes,
+  so the agent cannot tell it is dead by sending.
 
 ## Refresh is the same thing as connecting
 

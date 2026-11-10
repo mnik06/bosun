@@ -19,6 +19,7 @@ import { backoffDelay, nextAttempt } from './backoff';
 import { watchBosunFiles } from './file-watch';
 import { createFrameSink, type FrameSink } from './frame-sink';
 import { parseServerFrame, routeServerFrame, type AgentState, type RouterDeps } from './router';
+import { watchSilence } from './silence-watch';
 import { createUpgradeControl } from './upgrade-control';
 
 // A refused upgrade carrying a well-formed key means the credential was
@@ -87,11 +88,17 @@ function frameHandler(routerDeps: RouterDeps): (raw: RawData) => void {
 	};
 }
 
+function openSocket(config: AgentConfig): WebSocket {
+	return watchSilence(
+		new WebSocket(socketUrl(config.serverUrl), {
+			headers: { Authorization: `Bearer ${config.machineKey}` }
+		})
+	);
+}
+
 async function connectOnce(deps: ConnectionDeps): Promise<void> {
 	return new Promise<void>((resolve, reject) => {
-		const socket = new WebSocket(socketUrl(deps.config.serverUrl), {
-			headers: { Authorization: `Bearer ${deps.config.machineKey}` }
-		});
+		const socket = openSocket(deps.config);
 		const send = socketSender(socket);
 		const summaries = createSummarySessions({
 			config: deps.config,

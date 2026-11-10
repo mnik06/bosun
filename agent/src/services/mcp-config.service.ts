@@ -11,6 +11,12 @@ const MCP_CONFIG_FILENAME = 'mcp.json';
 // with it, so the name is refused rather than merged over.
 export const RESERVED_SERVER_NAME = 'bosun';
 
+// npx resolves its project from the working directory, which is the session's
+// checkout. npm 11 refuses to run there when the repository's `devEngines` names
+// another package manager (EBADDEVENGINES), so every default server died at start
+// in any pnpm repository. ~/.bosun holds no package.json to object.
+const NPX_PREFIX = ['--prefix', path.join(os.homedir(), '.bosun')];
+
 // Bosun's opinion about what a session should have, merged underneath the user's
 // file so an entry of the same name in ~/.bosun/mcp.json wins. Setting one to
 // `null` there is how a machine opts out of a default it cannot use — a box with
@@ -26,12 +32,12 @@ export const DEFAULT_SERVERS: Record<string, unknown> = {
 		// point a bullet tried to verify something. `--headless` for the same
 		// reason: the server runs headed unless told otherwise, and there is no
 		// display on a VPS.
-		args: ['-y', '@playwright/mcp@latest', '--browser', 'chromium', '--headless']
+		args: [...NPX_PREFIX, '-y', '@playwright/mcp@latest', '--browser', 'chromium', '--headless']
 	},
 	context7: {
 		type: 'stdio',
 		command: 'npx',
-		args: ['-y', '@upstash/context7-mcp']
+		args: [...NPX_PREFIX, '-y', '@upstash/context7-mcp']
 	}
 };
 

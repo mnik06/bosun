@@ -69,6 +69,7 @@ function startHeartbeat(opts: {
 
 	const timer = setInterval(() => {
 		if (missed >= MAX_MISSED) {
+			opts.log.warn({ machineId: opts.machineId }, 'agent missed its pongs; terminating the socket');
 			opts.socket.terminate();
 
 			return;
