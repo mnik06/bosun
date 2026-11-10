@@ -224,6 +224,19 @@ export async function mergeBranches(opts: {
 	return { ok: true, detail: merged.length === 0 ? 'providers already contained' : `merged ${merged.join(', ')}` };
 }
 
+// Two providers conflicting with each other are not a broken worktree: the first
+// bullet merges them again, names the branch, and an integration resolves it.
+// Refused here, the build stopped on a person for a conflict bosun resolves itself.
+async function mergeOntoNewBranch(opts: Parameters<typeof mergeBranches>[0]): Promise<{ ok: boolean; detail: string }> {
+	const merged = await mergeBranches(opts);
+
+	if (!merged.ok && merged.conflictWith !== undefined) {
+		return { ok: true, detail: `${merged.conflictWith} left to the first bullet: it conflicts` };
+	}
+
+	return merged;
+}
+
 // eslint-disable-next-line max-lines-per-function -- a service factory returning N small git methods, same shape as *.service.ts
 export function getCommitService(deps: { exec: ExecService }) {
 	async function git(worktreePath: string, args: string[]) {
@@ -325,7 +338,7 @@ export function getCommitService(deps: { exec: ExecService }) {
 				detail = `${opts.branch} from ${start.ref}`;
 			}
 
-			const merged = await mergeBranches({ exec: deps.exec, worktreePath: opts.worktreePath, branches: opts.mergeIn });
+			const merged = await mergeOntoNewBranch({ exec: deps.exec, worktreePath: opts.worktreePath, branches: opts.mergeIn });
 
 			return merged.ok ? { ok: true, detail: `${detail}, ${merged.detail}` } : merged;
 		},

@@ -123,6 +123,12 @@ again, a real conflict to a session — after which the build goes straight back
 (`integrateBeforeBullet`). While bullets are left, a pending integration does not mean building is
 over (`hasBulletLeft`).
 
+The same holds when the branch is cut. Two providers built in parallel can conflict with each other
+(both created the shell a footprint never declared), and refusing the worktree for it parked the
+dependent on `needs_you: worktree` — a person, for a conflict the line resolves itself. The agent
+cuts the branch with whatever merged cleanly and leaves the conflicting provider to the first
+bullet, whose merge names it and takes the path above.
+
 `build.base_branch` is the pull request's base and every integration's `onto`. When a provider
 merges, `markMerged` retargets its stacked dependents to the default branch and queues a `retarget`
 integration. A `failed` dependent is retargeted too: retried later on the merged provider's branch, it

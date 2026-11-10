@@ -387,6 +387,30 @@ describe('a stacked plan', () => {
 		expect(fs.existsSync(path.join(worktree, 'invites.txt'))).toBe(true);
 	});
 
+	// Two providers that built the same files: the worktree is still made, and the
+	// conflict is left for the first bullet to name so an integration resolves it.
+	it('cuts the branch when two providers conflict, leaving the conflicting one unmerged', async () => {
+		await pushProvider(provider, ['shared.txt']);
+		await git(other, ['checkout', '-B', second, 'origin/main']);
+		await commitFile(other, 'shared.txt', 'theirs\n');
+		await git(other, ['push', '-f', 'origin', second]);
+
+		const started = await getCommitService({ exec }).startBuildBranch({
+			worktreePath: worktree,
+			branch: dependent,
+			baseRef: 'main',
+			fresh: true,
+			startFrom: null,
+			mergeIn: [provider, second]
+		});
+
+		expect(started.ok).toBe(true);
+		expect(started.detail).toContain(second);
+		expect(fs.readFileSync(path.join(worktree, 'shared.txt'), 'utf8')).toBe('shared.txt\n');
+		expect((await exec.run('git', ['-C', worktree, 'rev-parse', '-q', '--verify', 'MERGE_HEAD'], {})).ok).toBe(false);
+		expect((await mergeBranches({ exec, worktreePath: worktree, branches: [provider, second] })).conflictWith).toBe(second);
+	});
+
 	// Before each bullet a stacked plan brings in what its provider gained, and a
 	// provider already contained costs nothing but the fetch.
 	it('brings in what a provider gained since, and nothing twice', async () => {
