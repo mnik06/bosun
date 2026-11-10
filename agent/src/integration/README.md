@@ -31,6 +31,13 @@ conflict to a `claude` session.
    other plan's feature silently goes. It may edit, read and run; it may not use git, and its credential
    helper is cleared so it cannot push. It ends resolved, or with `give_up`. "Resolved" is decided here,
    not by the session: no conflict marker may remain in any file it was given.
+5a. **The provided `.env` files are written again from the store** before the merge and, after the
+   services are up, filled (`services/project-env.service.md`, "Filled by bosun") and written once
+   more. A worktree's files are whatever its last bullet wrote, and the store moves under them: a sync
+   whose checks read a `DATABASE_URL` an operator had since changed failed every test against a
+   database that was gone. A key nobody can fill is named in the activity line and does not stop the
+   sync — its checks may not read it, and the run that needs it asks for it where it can wait. A file
+   the fill creates is kept out of the commit like every other provided one.
 6. **Each `regenerate` command runs in order, then setup re-runs for changed lockfiles.** The tree is
    staged before each command, so what the command changed is exactly what is left unstaged — which is
    what the pull request lists as regenerated, rather than every file the merge brought in. Setup comes

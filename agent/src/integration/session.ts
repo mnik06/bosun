@@ -14,6 +14,7 @@ import {
 } from '../protocol';
 import { resolveProjectConfig } from '../services/config-resolution';
 import { type Services } from '../services/index';
+import { describeMissingEnv, ensureProjectEnv } from '../services/env-autofill';
 import { envFileFor } from '../services/project-env.service';
 import { runShell } from '../services/setup-steps.service';
 import { startSessionMcpServer, type SessionMcpServer } from '../sessions/mcp-server';
@@ -424,6 +425,36 @@ export function createIntegrationSessions(opts: { services: Services; send: (mes
 		return resolveConflicts({ git, msg, entry, ontoRef: onto.ref, files: real, env: ctx.env });
 	}
 
+	// The worktree's `.env` files are whatever its last bullet wrote, and the store
+	// may have moved since — a URL an operator changed, a key a fill added. The
+	// checks read the files, so they are written again from the store first; a
+	// stale DATABASE_URL failed a sync's tests against a database that was gone.
+	function writeEnv(ctx: { msg: IntegrateStart; keepOut: string[] }): { ok: true; regenerated: Regenerated[] } | Outcome {
+		let applied: { written: string[] };
+
+		try {
+			applied = services.projectEnv.applyTo(ctx.msg.worktreePath);
+		} catch (error) {
+			return needsYou('error', `could not write the provided env files: ${error instanceof Error ? error.message : 'unknown error'}`);
+		}
+
+		// A path the fill just created is written now, and must stay out of the commit
+		// like every other provided file.
+		ctx.keepOut.push(...applied.written.filter((file) => !ctx.keepOut.includes(file)));
+
+		return { ok: true, regenerated: [] };
+	}
+
+	// A key nobody can fill does not stop a sync: its checks may not read it, and
+	// the bullet or drive that needs it asks for it where it can wait.
+	async function fillEnv(ctx: { msg: IntegrateStart; config: ProjectConfig; env: NodeJS.ProcessEnv }): Promise<void> {
+		const result = await ensureProjectEnv({ projectEnv: services.projectEnv, exec: services.exec, config: ctx.config, root: ctx.msg.worktreePath, env: ctx.env });
+
+		if (result.missing.length > 0) {
+			opts.send({ type: 'integrate.activity', integrationId: ctx.msg.integrationId, label: `Env values bosun could not fill: ${describeMissingEnv(result.missing)}` });
+		}
+	}
+
 	// After regenerate, never before: a lockfile under a `regenerate` path is
 	// still the target's copy until its rule runs, and a frozen install against
 	// that copy and the branch's own manifest refuses every dependency the branch
@@ -438,13 +469,21 @@ export function createIntegrationSessions(opts: { services: Services; send: (mes
 		const { msg, config } = ctx;
 
 		if (config === null) {
-			return { ok: true, regenerated: [] };
+			return writeEnv(ctx);
 		}
 
 		const serviced = await ensureProjectServices({ services, config, worktreePath: msg.worktreePath, env: ctx.env });
 
 		if (!serviced.ok) {
 			return needsYou('error', serviced.detail);
+		}
+
+		await fillEnv({ ...ctx, config });
+
+		const written = writeEnv(ctx);
+
+		if ('kind' in written) {
+			return written;
 		}
 
 		const regenerated = await regenerate({ ...ctx, config });
@@ -493,6 +532,13 @@ export function createIntegrationSessions(opts: { services: Services; send: (mes
 
 		if (!environment.ok) {
 			return needsYou('error', environment.detail);
+		}
+
+		// Before the conflict session as well: it may run the tests it is fixing.
+		const written = writeEnv({ msg, keepOut });
+
+		if ('kind' in written) {
+			return written;
 		}
 
 		const resolution = await mergeOnto({ git, msg, entry, onto, config, env: environment.env });
