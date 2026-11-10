@@ -37,6 +37,7 @@ export {
 	type BuildSummary,
 	type DependencyView,
 	type Integration,
+	type MissingEnv,
 	type NeedsYouReason,
 	type OverlapChoice,
 	type OverlapDecisionView,

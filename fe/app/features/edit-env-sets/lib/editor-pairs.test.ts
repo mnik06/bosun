@@ -24,4 +24,20 @@ describe('editorPairs', () => {
 		])
 		expect(new Set(pairs.map((pair) => pair.id)).size).toBe(3)
 	})
+	// The badge is what tells an operator a value is bosun's to refresh, not theirs.
+	it('marks the keys bosun filled, whether pinned or only stored', () => {
+		const pairs = editorPairs({
+			required: [requirement('STRIPE_KEY'), requirement('SUPABASE_URL')],
+			storedKeys: ['SUPABASE_URL', 'SESSION_SECRET', 'DATABASE_URL'],
+			autoKeys: ['SUPABASE_URL', 'SESSION_SECRET'],
+			newId
+		})
+
+		expect(pairs.map(({ key, auto }) => ({ key, auto }))).toEqual([
+			{ key: 'STRIPE_KEY', auto: false },
+			{ key: 'SUPABASE_URL', auto: true },
+			{ key: 'SESSION_SECRET', auto: true },
+			{ key: 'DATABASE_URL', auto: false }
+		])
+	})
 })

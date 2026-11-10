@@ -12,6 +12,7 @@ export interface VarsGroup {
 interface EnvGroup extends VarsGroup {
 	path: string
 	updatedAt: string | null
+	autoKeys: string[]
 }
 
 export interface InputGroups {
@@ -79,6 +80,7 @@ export function inputGroups (opts: {
 		envs: [...paths].map((path) => ({
 			path,
 			updatedAt: stored.get(path)?.updatedAt ?? null,
+			autoKeys: stored.get(path)?.autoKeys ?? [],
 			...varsGroup(envRequired.get(path) ?? [], stored.get(path)?.keys ?? [])
 		})),
 		secrets: varsGroup(secrets, opts.sessionSecrets),

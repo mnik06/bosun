@@ -1,8 +1,16 @@
-import { ActionIcon, Group, PasswordInput, TextInput } from '@mantine/core'
+import { ActionIcon, Badge, Group, PasswordInput, TextInput, Tooltip } from '@mantine/core'
 import type { UseFormReturnType } from '@mantine/form'
 import { X } from 'lucide-react'
 
 import type { EnvPair, EnvSetForm } from '~/features/edit-env-sets/model/env-set-form'
+
+function valuePlaceholder (pair: EnvPair): string {
+	if (pair.auto === true) {
+		return 'Filled by bosun — type to use your own'
+	}
+
+	return pair.stored ? 'Held by the machine — type to replace' : 'Value'
+}
 
 export function EnvPairRow ({
 	form,
@@ -26,6 +34,18 @@ export function EnvPairRow ({
 				readOnly={pair.stored || pair.required}
 				autoComplete="off"
 				classNames={{ input: 'font-mono' }}
+				{...(pair.auto === true
+					? {
+						rightSectionWidth: 52,
+						rightSection: (
+							<Tooltip label="Filled by bosun from the example, a running service or a generated secret">
+								<Badge size="xs" variant="light" color="teal">
+									auto
+								</Badge>
+							</Tooltip>
+						)
+					}
+					: {})}
 				key={form.key(`pairs.${index}.key`)}
 				{...form.getInputProps(`pairs.${index}.key`)}
 				onPaste={(event) => {
@@ -42,7 +62,7 @@ export function EnvPairRow ({
 			<PasswordInput
 				className="min-w-0 flex-1"
 				aria-label="Value"
-				placeholder={pair.stored ? 'Held by the machine — type to replace' : 'Value'}
+				placeholder={valuePlaceholder(pair)}
 				autoComplete="new-password"
 				key={form.key(`pairs.${index}.value`)}
 				{...form.getInputProps(`pairs.${index}.value`)}

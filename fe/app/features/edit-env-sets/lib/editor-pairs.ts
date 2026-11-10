@@ -9,16 +9,18 @@ export function blankPair (id: string): EnvPair {
 export function editorPairs (opts: {
 	required: RequiredVar[],
 	storedKeys: string[],
+	autoKeys?: string[],
 	newId: () => string
 }): EnvPair[] {
 	const stored = new Set(opts.storedKeys)
+	const auto = new Set(opts.autoKeys ?? [])
 	const requiredKeys = [...new Set(opts.required.map((requirement) => requirement.key))]
 	const pinned = new Set(requiredKeys)
 
 	return [
-		...requiredKeys.map((key) => ({ id: opts.newId(), key, value: '', stored: stored.has(key), required: true })),
+		...requiredKeys.map((key) => ({ id: opts.newId(), key, value: '', stored: stored.has(key), required: true, auto: auto.has(key) })),
 		...opts.storedKeys
 			.filter((key) => !pinned.has(key))
-			.map((key) => ({ id: opts.newId(), key, value: '', stored: true, required: false }))
+			.map((key) => ({ id: opts.newId(), key, value: '', stored: true, required: false, auto: auto.has(key) }))
 	]
 }

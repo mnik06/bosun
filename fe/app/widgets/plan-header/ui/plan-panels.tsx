@@ -5,11 +5,14 @@ import { RunQuestionPanel } from '~/features/answer-run'
 import { BuildActionButton, RecheckChoice } from '~/features/control-build'
 import { OverlapDecisionPanel } from '~/features/decide-overlap'
 
+import { MissingEnvPanel } from './missing-env-panel'
+
 const REASON_TITLE: Record<Exclude<NeedsYouReason, 'overlap' | 'integration'>, string> = {
 	checks: 'The checks are still red after one repair',
 	provider_failed: 'A plan this one needs failed',
 	recheck_failed: 'A criterion still fails after its fix',
-	worktree: 'The build could not start'
+	worktree: 'The build could not start',
+	env: 'Env values bosun could not fill'
 }
 
 function NeedsYou ({ detail }: { detail: PlanDetail }) {
@@ -45,6 +48,10 @@ function NeedsYou ({ detail }: { detail: PlanDetail }) {
 						{build.failureReason}
 					</Text>
 				)}
+
+				{build.needsYouReason === 'env' && build.machineId !== null && build.missingEnv !== null ? (
+					<MissingEnvPanel machineId={build.machineId} missingEnv={build.missingEnv} />
+				) : null}
 
 				{build.needsYouReason === 'recheck_failed' ? (
 					<RecheckChoice buildId={build.id} failing={failing} />

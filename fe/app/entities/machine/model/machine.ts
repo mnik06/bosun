@@ -39,7 +39,9 @@ export type PreflightCheck = z.infer<typeof PreflightCheckSchema>
 export const EnvSetSummarySchema = z.object({
 	path: z.string(),
 	keys: z.array(z.string()),
-	updatedAt: z.iso.datetime()
+	updatedAt: z.iso.datetime(),
+	// Filled by the agent rather than an operator. Names only, like `keys`.
+	autoKeys: z.array(z.string()).optional()
 })
 
 export type EnvSetSummary = z.infer<typeof EnvSetSummarySchema>

@@ -15,7 +15,8 @@ const KIND_LABEL: Record<NeedsYouItem['kind'], string> = {
 	checks: 'Checks still red',
 	provider_failed: 'The plan it needs failed',
 	recheck_failed: 'Failed its re-check',
-	worktree: 'Could not start'
+	worktree: 'Could not start',
+	env: 'Needs env values'
 }
 
 function NotificationEntryBody ({ notification }: { notification: Notification }) {

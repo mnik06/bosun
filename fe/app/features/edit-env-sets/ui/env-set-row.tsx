@@ -32,11 +32,23 @@ export function EnvSetRow ({
 					</Group>
 
 					<Group gap={4}>
-						{envSet.keys.map((key) => (
-							<Badge key={key} size="sm" variant="default" radius="sm" tt="none" className="font-mono">
-								{key}
-							</Badge>
-						))}
+						{envSet.keys.map((key) => {
+							const auto = envSet.autoKeys?.includes(key) === true
+
+							return (
+								<Badge
+									key={key}
+									size="sm"
+									variant={auto ? 'light' : 'default'}
+									radius="sm"
+									tt="none"
+									className="font-mono"
+									{...(auto ? { color: 'teal', title: 'Filled by bosun' } : {})}
+								>
+									{key}{auto ? ' · auto' : ''}
+								</Badge>
+							)
+						})}
 					</Group>
 				</Stack>
 

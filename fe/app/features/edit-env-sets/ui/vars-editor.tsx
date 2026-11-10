@@ -20,8 +20,8 @@ import { useConfirmDeleteEnvSet } from '~/features/edit-env-sets/model/use-confi
 import { EnvPairRow } from '~/features/edit-env-sets/ui/env-pair-row'
 import { PairsActions } from '~/features/edit-env-sets/ui/pairs-actions'
 
-function initialPairs (opts: { target: VarsTarget, required: RequiredVar[], storedKeys: string[] }): EnvPair[] {
-	const pairs = editorPairs({ required: opts.required, storedKeys: opts.storedKeys, newId: randomId })
+function initialPairs (opts: { target: VarsTarget, required: RequiredVar[], storedKeys: string[], autoKeys: string[] }): EnvPair[] {
+	const pairs = editorPairs({ required: opts.required, storedKeys: opts.storedKeys, autoKeys: opts.autoKeys, newId: randomId })
 
 	return pairs.length === 0 && opts.target.kind === 'env' ? [blankPair(randomId())] : pairs
 }
@@ -43,12 +43,14 @@ export function VarsEditor ({
 	machine,
 	target,
 	required,
-	storedKeys
+	storedKeys,
+	autoKeys = []
 }: {
 	machine: Pick<Machine, 'id' | 'publicKey'>,
 	target: VarsTarget,
 	required: RequiredVar[],
-	storedKeys: string[]
+	storedKeys: string[],
+	autoKeys?: string[]
 }) {
 	const save = useSaveVars(machine)
 	const removeSet = useConfirmDeleteEnvSet(machine.id)
@@ -56,7 +58,7 @@ export function VarsEditor ({
 		mode: 'uncontrolled',
 		initialValues: {
 			path: target.kind === 'env' ? target.path : '',
-			pairs: initialPairs({ target, required, storedKeys })
+			pairs: initialPairs({ target, required, storedKeys, autoKeys })
 		},
 		validate: zod4Resolver(VarsFormSchema)
 	})

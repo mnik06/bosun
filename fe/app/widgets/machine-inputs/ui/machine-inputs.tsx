@@ -92,6 +92,7 @@ export function MachineInputs ({ machine }: { machine: Machine }) {
 								target={{ kind: 'env', path: group.path }}
 								required={group.required}
 								storedKeys={group.storedKeys}
+								autoKeys={group.autoKeys}
 							/>
 						</Tabs.Panel>
 					))}

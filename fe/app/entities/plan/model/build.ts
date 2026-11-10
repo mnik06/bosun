@@ -31,10 +31,16 @@ export const NeedsYouReasonSchema = z.enum([
 	'checks',
 	'provider_failed',
 	'recheck_failed',
-	'worktree'
+	'worktree',
+	'env'
 ])
 
 export type NeedsYouReason = z.infer<typeof NeedsYouReasonSchema>
+
+// What a build parked on `needs_you: env` waits for: key names per `.env` folder.
+export const MissingEnvSchema = z.object({ path: z.string(), keys: z.array(z.string()) })
+
+export type MissingEnv = z.infer<typeof MissingEnvSchema>
 
 export const BuildSchema = z.object({
 	id: z.string(),
@@ -51,6 +57,7 @@ export const BuildSchema = z.object({
 	prNumber: z.number().int().nullable(),
 	prUrl: z.string().nullable(),
 	failureReason: z.string().nullable(),
+	missingEnv: z.array(MissingEnvSchema).nullable().default(null),
 	createdAt: z.iso.datetime(),
 	startedAt: z.iso.datetime().nullable(),
 	builtAt: z.iso.datetime().nullable(),

@@ -11,7 +11,9 @@ const EnvPairSchema = z.object({
 	value: z.string().regex(SINGLE_LINE, 'A value must fit on one line'),
 	stored: z.boolean(),
 	// Raised by onboarding: its key is fixed and the pair cannot be removed.
-	required: z.boolean()
+	required: z.boolean(),
+	// Held by the machine as a value bosun filled itself; typing one makes it the operator's.
+	auto: z.boolean().optional()
 })
 
 export type EnvPair = z.infer<typeof EnvPairSchema>

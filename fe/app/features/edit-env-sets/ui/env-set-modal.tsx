@@ -8,7 +8,7 @@ import { AGENT_TOO_OLD_FOR_INPUTS, type EnvSetSummary, type Machine } from '~/en
 import { useSaveVars } from '~/features/edit-env-sets/api/use-save-vars'
 import { blankPair, editorPairs } from '~/features/edit-env-sets/lib/editor-pairs'
 import { toEnvSetPayload } from '~/features/edit-env-sets/lib/to-env-set-payload'
-import { EnvSetFormSchema, type EnvSetForm } from '~/features/edit-env-sets/model/env-set-form'
+import { EnvSetFormSchema, type EnvSetForm, type RequiredVar } from '~/features/edit-env-sets/model/env-set-form'
 import { pasteEnv } from '~/features/edit-env-sets/model/paste-env'
 import { EnvPairRow } from '~/features/edit-env-sets/ui/env-pair-row'
 import { PairsActions } from '~/features/edit-env-sets/ui/pairs-actions'
@@ -16,27 +16,48 @@ import { AppModal } from '~/shared/ui'
 
 type MachineKey = Pick<Machine, 'id' | 'publicKey'>
 
-function initialValues (envSet: EnvSetSummary | null): EnvSetForm {
+// Keys a stopped build asks for, pinned at the top like an onboarding input.
+export interface EnvPrefill {
+	path: string
+	keys: string[]
+}
+
+function asRequired (keys: string[]): RequiredVar[] {
+	return keys.map((key) => ({ key, why: '', evidence: '', missing: true, optional: false }))
+}
+
+function initialValues (opts: { envSet: EnvSetSummary | null, prefill: EnvPrefill | null }): EnvSetForm {
+	const { envSet, prefill } = opts
+	const required = asRequired(prefill?.keys ?? [])
+
 	if (envSet === null) {
-		return { path: '', pairs: [blankPair(randomId())] }
+		return {
+			path: prefill?.path ?? '',
+			pairs: required.length === 0 ? [blankPair(randomId())] : editorPairs({ required, storedKeys: [], newId: randomId })
+		}
 	}
 
-	return { path: envSet.path, pairs: editorPairs({ required: [], storedKeys: envSet.keys, newId: randomId }) }
+	return {
+		path: envSet.path,
+		pairs: editorPairs({ required, storedKeys: envSet.keys, autoKeys: envSet.autoKeys ?? [], newId: randomId })
+	}
 }
 
 function EnvSetFormBody ({
 	machine,
 	envSet,
+	prefill,
 	onDone
 }: {
 	machine: MachineKey,
 	envSet: EnvSetSummary | null,
+	prefill: EnvPrefill | null,
 	onDone: () => void
 }) {
 	const save = useSaveVars(machine)
 	const form = useForm<EnvSetForm>({
 		mode: 'uncontrolled',
-		initialValues: initialValues(envSet),
+		initialValues: initialValues({ envSet, prefill }),
 		validate: zod4Resolver(EnvSetFormSchema)
 	})
 	const pairs = form.getValues().pairs
@@ -61,8 +82,8 @@ function EnvSetFormBody ({
 					label="Path"
 					description="A folder inside the repository (apps/api and apps/api/.env both mean the same). The variables are written into <path>/.env in every build worktree before each bullet — the machine must be online to receive them."
 					placeholder="be"
-					readOnly={envSet !== null}
-					data-autofocus={envSet === null ? true : undefined}
+					readOnly={envSet !== null || prefill !== null}
+					data-autofocus={envSet === null && prefill === null ? true : undefined}
 					autoComplete="off"
 					classNames={{ input: 'font-mono' }}
 					key={form.key('path')}
@@ -113,11 +134,13 @@ function EnvSetFormBody ({
 export function EnvSetModal ({
 	machine,
 	envSet,
+	prefill = null,
 	opened,
 	onClose
 }: {
 	machine: MachineKey,
 	envSet: EnvSetSummary | null,
+	prefill?: EnvPrefill | null,
 	opened: boolean,
 	onClose: () => void
 }) {
@@ -137,6 +160,7 @@ export function EnvSetModal ({
 				key={`${closings}:${envSet?.path ?? ''}:${envSet?.updatedAt ?? ''}`}
 				machine={machine}
 				envSet={envSet}
+				prefill={prefill}
 				onDone={close}
 			/>
 		</AppModal>
