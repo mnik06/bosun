@@ -17,6 +17,15 @@ export const RESERVED_SERVER_NAME = 'bosun';
 // in any pnpm repository. ~/.bosun holds no package.json to object.
 const NPX_PREFIX = ['--prefix', path.join(os.homedir(), '.bosun')];
 
+// Pinned, never `@latest`: each release pulls its own Playwright, and each
+// Playwright launches exactly one Chromium revision. `@latest` moved to an alpha
+// wanting a build no machine had, and every browser tool failed overnight. Bump
+// it deliberately, with the same pin in be/assets/install.sh.
+export const PLAYWRIGHT_MCP_PACKAGE = '@playwright/mcp@0.0.85';
+
+// The browser comes from the server's own Playwright, so the two cannot drift.
+export const BROWSER_INSTALL_ARGS = [...NPX_PREFIX, '-y', '-p', PLAYWRIGHT_MCP_PACKAGE, 'playwright', 'install', 'chromium'];
+
 // Bosun's opinion about what a session should have, merged underneath the user's
 // file so an entry of the same name in ~/.bosun/mcp.json wins. Setting one to
 // `null` there is how a machine opts out of a default it cannot use — a box with
@@ -27,12 +36,12 @@ export const DEFAULT_SERVERS: Record<string, unknown> = {
 		command: 'npx',
 		// `--browser chromium` and not the default, which is the `chrome` channel —
 		// a real Google Chrome install at a system path. A machine is a headless box
-		// that has run `npx playwright install chromium`, so the default resolved to
+		// that has installed the chromium build, so the default resolved to
 		// an executable that was not there and every browser tool failed at the
 		// point a bullet tried to verify something. `--headless` for the same
 		// reason: the server runs headed unless told otherwise, and there is no
 		// display on a VPS.
-		args: [...NPX_PREFIX, '-y', '@playwright/mcp@latest', '--browser', 'chromium', '--headless']
+		args: [...NPX_PREFIX, '-y', PLAYWRIGHT_MCP_PACKAGE, '--browser', 'chromium', '--headless']
 	},
 	context7: {
 		type: 'stdio',

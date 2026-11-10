@@ -11,6 +11,7 @@ import { planningPrompt, revisionPrompt } from '../prompts/planning';
 import { summaryPrompt } from '../prompts/summary';
 import { type AgentMsg } from '../protocol';
 import { createQuickFixSessions, type QuickFixSessions } from '../quick-fix/session';
+import { ensureBrowserBuild } from '../services/browser.service';
 import { type Services } from '../services/index';
 import { createSummarySessions } from '../summary/session';
 import { sleep } from '../utils';
@@ -252,6 +253,10 @@ export async function holdConnection(opts: {
 				process.exit(0);
 			});
 		});
+	}
+
+	if (opts.services.mcpConfig.read().serverNames.includes('playwright')) {
+		void ensureBrowserBuild(opts.services.exec).then(() => announcer.current?.('change'));
 	}
 
 	// The wizard, `mcp add` and a hand edit all write these files. Watching them is

@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { type ExecService } from './exec.service';
+import { BROWSER_INSTALL_ARGS } from './mcp-config.service';
 
 function isExecutable(file: string): boolean {
 	try {
@@ -139,6 +140,17 @@ async function unresolvedLibraries(deps: { exec: ExecService; executable: string
 	return lddMissing(linked.stdout);
 }
 
+// Run on every start, which is what an upgrade is: the pinned server may want a
+// revision this machine has never downloaded. A no-op when it is already there,
+// and needs no root — only the system libraries do.
+export async function ensureBrowserBuild(exec: ExecService): Promise<void> {
+	const installed = await exec.run('npx', BROWSER_INSTALL_ARGS, { timeoutMs: 10 * 60_000 });
+
+	if (!installed.ok) {
+		console.error(`browser: could not install the chromium build the playwright server needs: ${installed.reason}`);
+	}
+}
+
 // A build in the cache is not a browser that starts. A fresh Ubuntu lacks the
 // libraries Chromium links against, and the only way to find that out is to
 // launch it — which is what a session would otherwise discover an hour into a
@@ -161,7 +173,7 @@ export async function launchBrowser(deps: {
 	if (executable === null) {
 		return {
 			ok: false,
-			detail: `no chromium build in ${deps.cachePath} — run \`npx playwright install chromium\`, or no session can drive a browser`,
+			detail: `no chromium build in ${deps.cachePath} — run \`npx ${BROWSER_INSTALL_ARGS.join(' ')}\`, or no session can drive a browser`,
 			missingLibrary: null
 		};
 	}

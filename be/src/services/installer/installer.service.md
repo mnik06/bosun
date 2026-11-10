@@ -58,7 +58,9 @@ turned the first step of onboarding into "create a user and log in again". The i
   default MCP servers are `npx` commands and have to start before any repository exists. Skipped when
   that version is already there.
 - Claude Code, with its own installer, when `claude` is neither on the PATH nor in `~/.local/bin`.
-- `npx playwright install chromium` into the user's cache.
+- `npx -p @playwright/mcp@<pin> playwright install chromium` into the user's cache — the pinned MCP
+  server's own Playwright, since each Playwright launches exactly one Chromium revision. The pin
+  matches `PLAYWRIGHT_MCP_PACKAGE` in the agent, which re-runs the same install on every start.
 - `ldd` over that build — the check Playwright itself makes before it launches — and, when libraries
   are unresolved, `sudo … npx playwright install-deps chromium`. The install is meant to leave a
   machine that works without a second command, and those libraries are the one thing a user install

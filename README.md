@@ -362,7 +362,9 @@ one `(yours)` or `(bosun default)`. Playwright ships as a default, so every mach
 running app without being configured for it.
 
 Two things a machine needs for that default to work: `npx` on the service PATH (the `package-manager`
-check covers it) and a browser build — `npx playwright install chromium`, once per machine. The
+check covers it) and the browser build the pinned `@playwright/mcp` wants. The agent installs it on
+every start through that package's own Playwright, since each Playwright launches exactly one Chromium
+revision; no root is needed for it, only for the system libraries. The
 `browser` preflight check looks for that build and goes red without it, because the server starts
 either way and its tools only fail when a bullet calls one, an hour into a plan.
 

@@ -6,7 +6,7 @@ import { getClaudeAuthService } from '../services/claude-auth.service';
 import { getEnvService } from '../services/env.service';
 import { getExecService } from '../services/exec.service';
 import { getInputsKeyService } from '../services/inputs-key.service';
-import { getMcpConfigService } from '../services/mcp-config.service';
+import { BROWSER_INSTALL_ARGS, getMcpConfigService } from '../services/mcp-config.service';
 import { browserCachePath } from '../services/preflight.service';
 import { getPromptService } from '../services/prompt.service';
 import { withLocalTools } from '../utils';
@@ -81,11 +81,11 @@ async function claudeStep(): Promise<StepResult> {
 }
 
 async function installChromium(): Promise<boolean> {
-	if (!(await confirm('Install Chromium for this user now (npx -y playwright install chromium)?'))) {
+	if (!(await confirm(`Install Chromium for this user now (npx ${BROWSER_INSTALL_ARGS.join(' ')})?`))) {
 		return false;
 	}
 
-	const installed = spawnSync('npx', ['-y', 'playwright', 'install', 'chromium'], { stdio: 'inherit' });
+	const installed = spawnSync('npx', BROWSER_INSTALL_ARGS, { stdio: 'inherit' });
 
 	if (installed.status !== 0) {
 		console.log(`✗ the install did not finish${installed.error ? `: ${installed.error.message}` : ''}`);

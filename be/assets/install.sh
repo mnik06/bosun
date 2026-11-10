@@ -375,7 +375,10 @@ install_browser() {
 
 	note "installing the Chromium build sessions drive"
 
-	if ! PATH="$NODE_DIR/bin:$PATH" npx -y playwright install chromium >"$TMP/playwright.log" 2>&1; then
+	# Through the pinned MCP server's own Playwright: each Playwright launches one
+	# Chromium revision, and a build from any other version is one the server
+	# cannot find. Same pin as PLAYWRIGHT_MCP_PACKAGE in the agent.
+	if ! PATH="$NODE_DIR/bin:$PATH" npx --prefix "$HOME/.bosun" -y -p @playwright/mcp@0.0.85 playwright install chromium >"$TMP/playwright.log" 2>&1; then
 		tail -n 3 "$TMP/playwright.log" >&2 || true
 		note "could not install Chromium — \`bosun-agent setup\` offers to try again"
 	fi

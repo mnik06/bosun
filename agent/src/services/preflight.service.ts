@@ -14,7 +14,7 @@ import { type PreflightCheck } from '../protocol';
 
 const MIN_CLAUDE_MAJOR = 2;
 
-// What `npx playwright install chromium` leaves behind. The headless shell is a
+// What a Playwright browser install leaves behind. The headless shell is a
 // separate download in recent Playwright and is what a headless launch prefers,
 // so either one means a browser this machine can drive.
 const BROWSER_PREFIXES = ['chromium-', 'chromium_headless_shell-'];
