@@ -58,6 +58,19 @@ export function hasBrowserBuild(cachePath: string): boolean {
 	}
 }
 
+const NODE_LAUNCHERS = new Set(['node', 'npx', 'npm']);
+
+function nodeServerNames(servers: Record<string, unknown>): string[] {
+	return Object.entries(servers)
+		.filter(([, server]) => NODE_LAUNCHERS.has(String((server as { command?: unknown }).command)))
+		.map(([name]) => name);
+}
+
+// Node 25+ release builds link libatomic, which a minimal Ubuntu does not ship.
+function nodeFix(reason: string): string {
+	return /libatomic\.so/.test(reason) ? ' — as root: apt-get install -y libatomic1' : '';
+}
+
 export function claudeVersionIsSupported(version: string): boolean {
 	// The stream-json event shape is a looser contract than a package version, so
 	// a major the parser has never seen is reported rather than assumed to work.
@@ -104,14 +117,11 @@ export function getPreflightService(deps: {
 
 	// Reports what is configured and parseable, not what connects: `claude mcp list`
 	// reads the CLI's own config sources rather than the one bosun assembles, so it
-	// would answer a different question. A server that parses but refuses to start
-	// surfaces in the session's own stderr.
-	function checkCustomMcp(): PreflightCheck {
+	// would answer a different question. The one launch probed is node, which every
+	// default server runs on: a node that cannot load drops them all at session start
+	// with nothing on the machine's page to say why.
+	async function checkMcp(): Promise<PreflightCheck> {
 		const config = deps.mcpConfig.read();
-
-		if (!config.present) {
-			return { name: 'mcp', ok: true, detail: 'no custom servers configured' };
-		}
 
 		if (config.error) {
 			return { name: 'mcp', ok: false, detail: `${deps.mcpConfig.configPath}: ${config.error}` };
@@ -123,6 +133,24 @@ export function getPreflightService(deps: {
 				ok: false,
 				detail: `unset in ~/.bosun/env: ${config.unresolved.join(', ')}`
 			};
+		}
+
+		const nodeServers = nodeServerNames(config.servers);
+
+		if (nodeServers.length > 0) {
+			const node = await deps.exec.run('node', ['--version']);
+
+			if (!node.ok) {
+				return {
+					name: 'mcp',
+					ok: false,
+					detail: `${nodeServers.join(', ')} cannot start — node: ${node.reason}${nodeFix(node.reason)}`
+				};
+			}
+		}
+
+		if (!config.present) {
+			return { name: 'mcp', ok: true, detail: 'no custom servers configured' };
 		}
 
 		return {
@@ -301,7 +329,11 @@ export function getPreflightService(deps: {
 		const info = await deps.exec.run('docker', ['info', '--format', '{{.ServerVersion}}'], { timeoutMs: 30_000 });
 
 		if (info.ok) {
-			return { name: 'docker', ok: true, detail: `server ${info.stdout}` };
+			const compose = await deps.exec.run('docker', ['compose', 'version', '--short'], { timeoutMs: 30_000 });
+
+			return compose.ok
+				? { name: 'docker', ok: true, detail: `server ${info.stdout} · compose ${compose.stdout}` }
+				: { name: 'docker', ok: false, detail: dockerFix('nocompose') };
 		}
 
 		const state = classifyDocker(`${info.reason}\n${info.stderr}\n${info.stdout}`);
@@ -324,15 +356,16 @@ export function getPreflightService(deps: {
 
 	return {
 		async collect(): Promise<PreflightCheck[]> {
-			const [claude, git, gh, browser, docker] = await Promise.all([
+			const [claude, git, gh, mcp, browser, docker] = await Promise.all([
 				checkClaude(),
 				checkGit(),
 				checkGh(),
+				checkMcp(),
 				checkBrowser(),
 				checkDocker()
 			]);
 
-			return [claude, git, gh, checkCustomMcp(), browser, docker, checkMemory(), checkEnv()];
+			return [claude, git, gh, mcp, browser, docker, checkMemory(), checkEnv()];
 		}
 	};
 }

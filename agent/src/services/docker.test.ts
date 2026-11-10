@@ -10,7 +10,9 @@ describe('classifyDocker', () => {
 			'permission denied while trying to connect to the Docker daemon socket at unix:///var/run/docker.sock: Get "http://%2Fvar%2Frun%2Fdocker.sock/v1.47/info"',
 			'denied'
 		],
-		['Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?', 'down']
+		['Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?', 'down'],
+		["unknown shorthand flag: 'p' in -p\n\nUsage:  docker [OPTIONS] COMMAND [ARG...]", 'nocompose'],
+		['docker: unknown command: docker compose', 'nocompose']
 	])('%s -> %s', (output, expected) => {
 		expect(classifyDocker(output)).toBe(expected);
 	});

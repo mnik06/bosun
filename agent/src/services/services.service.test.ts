@@ -93,7 +93,7 @@ describe('services', () => {
 		const result = await ensure();
 
 		expect(result.ok).toBe(false);
-		expect(result.ok ? '' : result.detail).toMatch(/\ndocker is not installed — as root: apt-get install -y docker\.io && usermod -aG docker \S+ && systemctl restart user@\d+$/);
+		expect(result.ok ? '' : result.detail).toMatch(/\ndocker is not installed — as root: apt-get install -y docker\.io docker-compose-v2 && usermod -aG docker \S+ && systemctl restart user@\d+$/);
 	});
 
 	// Two builds taking a slot at once would otherwise both see the check fail and

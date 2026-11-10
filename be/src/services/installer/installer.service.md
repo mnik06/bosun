@@ -21,8 +21,10 @@ turned the first step of onboarding into "create a user and log in again". The i
 1. Keeps a copy of the script. Under `curl | sh` it arrived on stdin and cannot be run a second time,
    so a copy saved by hand is used when `$0` is one (it carries the `# bosun-agent installer` marker),
    and otherwise the same script is fetched again from the server that served it.
-2. `apt-get install` git, curl, ca-certificates and xz-utils. No other package manager is attempted,
-   and the script says what it skipped.
+2. `apt-get install` git, curl, ca-certificates, xz-utils and libatomic1. libatomic1 because node 25+
+   release builds link it and a minimal Ubuntu lacks it: the agent's node would not load, and every
+   default MCP server (`npx`) would drop at session start. No other package manager is attempted, and
+   the script says what it skipped.
 3. Downloads the current LTS node into a temp directory, checksum-verified, and runs
    `npx playwright install-deps chromium` with it — the shared libraries headless Chromium links
    against. A fresh Ubuntu has none of them, and a browser build without them sits in the cache and
@@ -31,7 +33,10 @@ turned the first step of onboarding into "create a user and log in again". The i
 4. `useradd --create-home bosun`, unless `BOSUN_USER` names an existing user (a `BOSUN_USER` that names
    nobody is refused rather than created).
 5. Docker, unless `BOSUN_SKIP_DOCKER=1`: `apt-get install docker.io` when `docker` is missing,
-   `systemctl enable --now docker`, and the agent user into the `docker` group. Most projects run their
+   `systemctl enable --now docker`, the compose plugin when `docker compose version` fails
+   (`docker-compose-v2` on Ubuntu, `docker-compose` on Debian 13 — `docker.io` ships without it, and a
+   config's `docker compose -p x up` then dies on "unknown shorthand flag"), and the agent user into
+   the `docker` group. Most projects run their
    database as containers (`supabase start`, `docker compose up -d`), and a config's `Services:` fail
    at verify without it — the agent can never install it later, it does not run as root. Before linger
    on purpose: the unit runs under the user manager, which keeps the groups the user had when it
@@ -62,7 +67,7 @@ turned the first step of onboarding into "create a user and log in again". The i
   there is one nobody can answer — it only checks. Whatever is still missing ends in a `WARNING` line
   with the command, since the next thing to fail would be a verify an hour later.
 - Docker, the same way as the Chromium libraries: when `docker info` fails, `sudo` installs
-  `docker.io` and adds the user to the `docker` group, then says the group reaches the agent only
+  `docker.io` and the compose plugin and adds the user to the `docker` group, then says the group reaches the agent only
   after `sudo systemctl restart user@<uid>`. Without sudo — or under the root phase, which already did
   it — it only prints the root command.
 - `~/.bosun/env`, `~/.bosun/mcp.json` and the unit, with bosun's node and `~/.local/bin` first on the

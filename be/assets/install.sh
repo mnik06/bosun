@@ -93,16 +93,18 @@ fetch_node() {
 
 apt_install() {
 	if ! command -v apt-get >/dev/null 2>&1; then
-		note "no apt-get here — skipped installing git, curl, ca-certificates and the libraries headless Chromium needs; install them with this system's package manager"
+		note "no apt-get here — skipped installing git, curl, ca-certificates, libatomic1 and the libraries headless Chromium needs; install them with this system's package manager"
 
 		return 0
 	fi
 
-	note "installing git, curl, ca-certificates and xz-utils"
+	note "installing git, curl, ca-certificates, xz-utils and libatomic1"
 
+	# libatomic1 because node 25+ release builds link it and a minimal Ubuntu lacks
+	# it: the agent's node would not load, and every default MCP server with it.
 	if ! { DEBIAN_FRONTEND=noninteractive apt-get update -qq >/dev/null &&
-		DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git curl ca-certificates xz-utils >/dev/null; }; then
-		note "apt-get could not install git, curl, ca-certificates, xz-utils — install them yourself"
+		DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git curl ca-certificates xz-utils libatomic1 >/dev/null; }; then
+		note "apt-get could not install git, curl, ca-certificates, xz-utils, libatomic1 — install them yourself"
 	fi
 }
 
@@ -152,8 +154,26 @@ docker_engine() {
 	fi
 
 	systemctl enable --now docker >/dev/null 2>&1 || note "could not start the docker daemon — systemctl enable --now docker"
+	compose_plugin
 	getent group docker >/dev/null 2>&1 || groupadd docker
 	usermod -aG docker "$AGENT_USER" || note "could not add $AGENT_USER to the docker group — usermod -aG docker $AGENT_USER"
+}
+
+# Debian's docker.io ships without compose, and a config's `docker compose -p x
+# up` then dies on "unknown shorthand flag" at the first service start. Ubuntu
+# packages the plugin as docker-compose-v2, Debian 13 as docker-compose.
+compose_plugin() {
+	! docker compose version >/dev/null 2>&1 || return 0
+	command -v apt-get >/dev/null 2>&1 || { note "docker compose is not installed — install the compose plugin with this system's package manager"; return 0; }
+
+	note "installing docker compose"
+
+	for pkg in docker-compose-v2 docker-compose; do
+		${SUDO:-} env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$pkg" >/dev/null 2>&1 || continue
+		! docker compose version >/dev/null 2>&1 || return 0
+	done
+
+	note "apt-get could not install the docker compose plugin — install it yourself (Docker's docker-compose-plugin package)"
 }
 
 ensure_agent_user() {
@@ -327,6 +347,9 @@ install_node() {
 	fi
 
 	NODE_DIR="$TOOLCHAINS/node-$version"
+
+	"$NODE_DIR/bin/node" --version >/dev/null 2>&1 ||
+		note "node $version does not start here — MCP servers that run through npx will not start; as root: apt-get install -y libatomic1"
 }
 
 install_claude() {
@@ -420,6 +443,7 @@ docker_as_user() {
 		fi
 
 		if command -v docker >/dev/null 2>&1; then
+			SUDO=sudo compose_plugin
 			sudo systemctl enable --now docker >/dev/null 2>&1 || true
 			sudo usermod -aG docker "$user" || true
 			note "added $user to the docker group — it reaches the agent once its user manager restarts: sudo systemctl restart user@$(id -u)"
@@ -433,7 +457,7 @@ docker_as_user() {
 	if command -v docker >/dev/null 2>&1; then
 		note "docker is installed but $user cannot use it — as root: $regroup"
 	else
-		note "docker is not installed — a project whose config has Services needs it; as root: apt-get install -y docker.io && $regroup"
+		note "docker is not installed — a project whose config has Services needs it; as root: apt-get install -y docker.io docker-compose-v2 && $regroup"
 	fi
 }
 
