@@ -10,12 +10,18 @@ import { saveSessionSecrets } from 'src/controllers/machines/save-session-secret
 import { envRelayDeps } from 'src/controllers/machines/shared/env-relay-deps';
 import { onboardingDeps } from 'src/controllers/onboarding/onboarding-deps';
 import { maybeStartVerify } from 'src/controllers/onboarding/shared/start-verify';
-import { MachineSchema } from 'src/types/MachineSchema';
+import { lineDeps } from 'src/controllers/line/line-deps';
+import { resumeEnvBuilds } from 'src/controllers/line/shared/env-wait';
+import { type Machine, MachineSchema } from 'src/types/MachineSchema';
 
 const routes: FastifyPluginAsync = async function (f) {
 	const fastify = f.withTypeProvider<ZodTypeProvider>();
 	const startVerifyWhenSatisfied = async (machine: { id: string }) =>
 		maybeStartVerify(onboardingDeps(fastify), { machineId: machine.id });
+	const resumeWhatWaitedOnEnv = async (machine: Machine) => {
+		await startVerifyWhenSatisfied(machine);
+		await resumeEnvBuilds(lineDeps(fastify), { machine });
+	};
 
 	fastify.put(
 		'/:id/env-sets',
@@ -33,7 +39,7 @@ const routes: FastifyPluginAsync = async function (f) {
 				projectId: req.membership!.projectId,
 				path: req.body.path,
 				vars: req.body.vars,
-				onSaved: startVerifyWhenSatisfied
+				onSaved: resumeWhatWaitedOnEnv
 			});
 		}
 	);

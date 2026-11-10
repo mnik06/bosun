@@ -4,6 +4,7 @@ import { bulletGateFailure, driveGateFailure, fixGateFailure } from 'src/control
 import { announceBuild, announceNeedsYou, announcePlanChanged } from 'src/controllers/line/shared/announce';
 import { providerBranches } from 'src/controllers/line/shared/dependencies';
 import { recheckDependencyRelease } from 'src/controllers/line/shared/dependency-release';
+import { parkForEnv } from 'src/controllers/line/shared/env-wait';
 import { putRunBack, queueIntegration, settleBuild } from 'src/controllers/line/shared/lifecycle';
 import { loadProviderStates } from 'src/controllers/line/shared/line-snapshot';
 import { notifyDependents } from 'src/controllers/line/shared/merge';
@@ -299,6 +300,12 @@ export async function recordExecFrame(deps: LineDeps, opts: { machineId: string;
 		return;
 	case 'exec.error':
 		if (frame.conflictWith !== undefined && (await integrateBeforeBullet(deps, { located, onto: frame.conflictWith }))) {
+			return;
+		}
+
+		if (frame.missingEnv !== undefined && frame.missingEnv.length > 0) {
+			await parkForEnv(deps, { ...located, missingEnv: frame.missingEnv, message: frame.message });
+
 			return;
 		}
 

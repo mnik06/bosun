@@ -5,10 +5,19 @@ import { z } from 'zod';
 export const EnvSetSummarySchema = z.object({
 	path: z.string(),
 	keys: z.array(z.string()),
-	updatedAt: z.string()
+	updatedAt: z.string(),
+	// The keys the agent filled itself rather than an operator. Absent from agents
+	// older than the fill, and from a set with none.
+	autoKeys: z.array(z.string()).optional()
 });
 
 export type EnvSetSummary = z.infer<typeof EnvSetSummarySchema>;
+
+// Keys a run needs in a folder's `.env` that nobody provided and the agent could
+// not fill. Names only: the operator is asked for the values.
+export const MissingEnvSchema = z.object({ path: z.string(), keys: z.array(z.string()).min(1) });
+
+export type MissingEnv = z.infer<typeof MissingEnvSchema>;
 
 // A value sealed in the browser to the machine's public key: AES-256-GCM under a
 // fresh key, that key wrapped with RSA-OAEP-SHA256. Everything here is base64.

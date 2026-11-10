@@ -1,5 +1,6 @@
 import { and, asc, desc, eq, inArray, isNotNull, notInArray, sql } from 'drizzle-orm';
 import { type DbOrTx } from 'src/services/drizzle/drizzle.service';
+import { type MissingEnv } from 'src/types/env-sets';
 import { builds, repositories } from 'src/services/drizzle/schema';
 import {
 	BuildSchema,
@@ -23,6 +24,7 @@ const buildColumns = {
 	prNumber: builds.prNumber,
 	prUrl: builds.prUrl,
 	failureReason: builds.failureReason,
+	missingEnv: builds.missingEnv,
 	createdAt: builds.createdAt,
 	startedAt: builds.startedAt,
 	builtAt: builds.builtAt,
@@ -45,6 +47,7 @@ export interface BuildChanges {
 	prNumber?: number | null;
 	prUrl?: string | null;
 	failureReason?: string | null;
+	missingEnv?: MissingEnv[] | null;
 	startedAt?: Date | null;
 	builtAt?: Date | null;
 	verifiedAt?: Date | null;

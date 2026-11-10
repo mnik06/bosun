@@ -22,7 +22,13 @@ const DEFINITION_PATTERN = /^\s*(export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=/;
 const StoreSchema = z.object({
 	sets: z.record(
 		z.string(),
-		z.object({ vars: z.record(z.string(), z.string()), updatedAt: z.string() })
+		z.object({
+			vars: z.record(z.string(), z.string()),
+			updatedAt: z.string(),
+			// Keys the agent filled itself. A store written before the marker has none:
+			// everything in it was typed by an operator, and stays theirs.
+			auto: z.array(z.string()).default([])
+		})
 	),
 	// Put into a session's environment, never written into a worktree: a
 	// test-account password in a `.env` is one `git add -A` from a pull request.
@@ -319,11 +325,11 @@ export function getProjectEnvService(deps: { homeDir?: string }) {
 	function summarize(store: Store): EnvSetSummary[] {
 		return Object.entries(store.sets)
 			.sort(([a], [b]) => a.localeCompare(b))
-			.map(([envPath, set]) => ({
-				path: envPath,
-				keys: Object.keys(set.vars).sort(),
-				updatedAt: set.updatedAt
-			}));
+			.map(([envPath, set]) => {
+				const autoKeys = set.auto.filter((key) => Object.hasOwn(set.vars, key)).sort();
+
+				return { path: envPath, keys: Object.keys(set.vars).sort(), updatedAt: set.updatedAt, ...(autoKeys.length > 0 ? { autoKeys } : {}) };
+			});
 	}
 
 	function pathOrThrow(raw: string): string {
@@ -348,12 +354,57 @@ export function getProjectEnvService(deps: { homeDir?: string }) {
 		set(opts: { path: string; vars: EnvVarInput[] }): EnvSetSummary[] {
 			const envPath = pathOrThrow(opts.path);
 			const store = load();
-			const vars = checkedVars({ vars: opts.vars, stored: store.sets[envPath]?.vars ?? {} });
+			const previous = store.sets[envPath];
+			const vars = checkedVars({ vars: opts.vars, stored: previous?.vars ?? {} });
+			// A value the operator typed is theirs from then on, and a later fill never
+			// replaces it. One they kept untouched (null) stays bosun's to refresh.
+			const kept = new Set(opts.vars.filter((entry) => entry.value === null).map((entry) => entry.key));
+			const auto = (previous?.auto ?? []).filter((key) => kept.has(key));
 
-			store.sets[envPath] = { vars, updatedAt: new Date().toISOString() };
+			store.sets[envPath] = { vars, updatedAt: new Date().toISOString(), auto };
 			save(store);
 
 			return summarize(store);
+		},
+
+		// What a path holds, for the agent's own fill and nothing else: the values
+		// never leave this process.
+		read(rawPath: string): { vars: Record<string, string>; auto: Set<string> } {
+			const set = load().sets[pathOrThrow(rawPath)];
+
+			return { vars: { ...set?.vars }, auto: new Set(set?.auto ?? []) };
+		},
+
+		// Writes values the agent worked out itself, marked as its own. A key an
+		// operator set is never touched; one the agent set before may be refreshed.
+		// Returns the keys that changed, so nothing is saved — and no announce sent —
+		// when the fill found what was already there.
+		fill(opts: { path: string; values: Record<string, string> }): string[] {
+			const envPath = pathOrThrow(opts.path);
+			const store = load();
+			const set = store.sets[envPath] ?? { vars: {}, updatedAt: new Date().toISOString(), auto: [] };
+			const auto = new Set(set.auto);
+			const changed: string[] = [];
+
+			for (const [key, value] of Object.entries(opts.values)) {
+				const operatorOwned = Object.hasOwn(set.vars, key) && !auto.has(key);
+				const valid = KEY_PATTERN.test(key) && !/[\r\n]/.test(value) && value.length <= MAX_VALUE_LENGTH;
+
+				if (operatorOwned || !valid || set.vars[key] === value) {
+					continue;
+				}
+
+				set.vars[key] = value;
+				auto.add(key);
+				changed.push(key);
+			}
+
+			if (changed.length > 0) {
+				store.sets[envPath] = { vars: set.vars, updatedAt: new Date().toISOString(), auto: [...auto].sort() };
+				save(store);
+			}
+
+			return changed;
 		},
 
 		secretNames(): string[] {

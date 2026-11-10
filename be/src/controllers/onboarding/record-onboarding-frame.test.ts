@@ -57,6 +57,29 @@ describe('recordOnboardingFrame', () => {
 		expect(maybeStartVerify).not.toHaveBeenCalled();
 	});
 
+	// A verify that stopped for values it could not fill has not failed: the keys
+	// become inputs on the same form, and the run waits on them.
+	it('takes a verify that is missing env values back to inputs instead of failing it', async () => {
+		const run = { ...discovering('verify'), status: 'verifying' } as OnboardingRun;
+		const { onboardingDeps, update } = deps(run);
+		const upsertRequirement = vi.fn().mockResolvedValue(run);
+
+		Object.assign(onboardingDeps.onboardingRunRepo, { upsertRequirement });
+
+		await recordOnboardingFrame(onboardingDeps, {
+			machineId: 'm_1',
+			projectId: 'prj_1',
+			frame: { type: 'onboarding.error', runId: run.id, message: 'Fill the env: apps/api/.env: STRIPE_KEY', missingEnv: [{ path: './apps/api', keys: ['STRIPE_KEY'] }] }
+		});
+
+		expect(upsertRequirement).toHaveBeenCalledWith({
+			id: 'onb_1',
+			requirement: expect.objectContaining({ kind: 'env', path: 'apps/api', key: 'STRIPE_KEY', optional: false })
+		});
+		expect(update).toHaveBeenCalledWith(expect.objectContaining({ status: 'needs_input', portBase: null }));
+		expect(update).not.toHaveBeenCalledWith(expect.objectContaining({ status: 'failed' }));
+	});
+
 	it('fails a config run that never published a config', async () => {
 		const update = await done({ ...discovering('config'), config: null });
 

@@ -63,6 +63,12 @@ stays because verify, worktrees and the stack read it deterministically; it is i
   The migration policy counts only once somebody chose it (`policy.confirmed`).
 - **Verify is run by the agent, not judged by a session.** Only the sign-in uses a model. "Ready"
   means the steps ran through the same `stack_up` a bullet uses.
+- **Verify fills the env, and asks for what it cannot.** After the services start it fills every key
+  the apps' `.env.example` files name that it can (`agent/src/services/project-env.service.md`). A key
+  left over arrives as `onboarding.error.missingEnv`; the run goes back to `needs_input` with those
+  keys upserted as `env` requirements rather than failing, so the operator gets the same form and
+  saving it starts verify again. A discovery from before the repository added a key — a stale input
+  list — no longer ends in apps that crash on boot naming variables nobody was asked for.
 - **A second machine takes the latest discovery's requirements** — the latest discovery that actually
   published a config — and needs only its own inputs and a verify.
 

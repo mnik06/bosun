@@ -15,7 +15,7 @@ import {
 	uuid
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
-import { type EnvSetSummary } from 'src/types/env-sets';
+import { type EnvSetSummary, type MissingEnv } from 'src/types/env-sets';
 import { type MachineStatus, type PreflightCheck } from 'src/types/MachineSchema';
 import {
 	type MachinePolicy,
@@ -513,6 +513,7 @@ export const builds = pgTable(
 		prNumber: integer(),
 		prUrl: text(),
 		failureReason: text(),
+		missingEnv: jsonb().$type<MissingEnv[]>(),
 		createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
 		startedAt: timestamp({ withTimezone: true }),
 		builtAt: timestamp({ withTimezone: true }),

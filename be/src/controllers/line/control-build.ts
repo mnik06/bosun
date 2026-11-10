@@ -23,7 +23,7 @@ const CANCELLABLE: BuildStatus[] = [...HOLDABLE, 'held', 'in_review', 'fixing_bu
 
 // A needs-you a retry can clear. An overlap is cleared by its decision, and a failed
 // re-check by fix again or accept.
-const RETRYABLE_NEEDS_YOU = new Set(['integration', 'checks', 'provider_failed', 'worktree']);
+const RETRYABLE_NEEDS_YOU = new Set(['integration', 'checks', 'provider_failed', 'worktree', 'env']);
 
 // A verify under way is stopped first, then rebuilt from scratch like a finished
 // one. An overlap waits on a decision, not on a verdict.
@@ -98,7 +98,7 @@ async function retry(deps: LineDeps, build: Build): Promise<Build | null> {
 		return deps.buildRepo.update({ id: build.id, status: 'scheduled', needsYouReason: null, failureReason: null, startedAt: null, worktreePath: null });
 	}
 
-	return deps.buildRepo.update({ id: build.id, status: await waitingFor(deps, build), needsYouReason: null, failureReason: null });
+	return deps.buildRepo.update({ id: build.id, status: await waitingFor(deps, build), needsYouReason: null, failureReason: null, missingEnv: null });
 }
 
 // The whole verify slice again, from a fresh drive: a verdict reached against a

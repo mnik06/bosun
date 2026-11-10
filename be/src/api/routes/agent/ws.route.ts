@@ -10,10 +10,12 @@ import { sendUpgrade } from 'src/controllers/machines/shared/send-upgrade';
 import { machineOfflineDeps, notifyMachineOffline } from 'src/controllers/machines/shared/notify-offline';
 import { machineOnlineDeps, notifyMachineOnline } from 'src/controllers/machines/shared/notify-online';
 import { lineDeps } from 'src/controllers/line/line-deps';
+import { resumeEnvBuilds } from 'src/controllers/line/shared/env-wait';
 import { scheduleMachine } from 'src/controllers/line/schedule';
 import { resendWorktrees } from 'src/controllers/line/shared/dispatch';
 import { pauseMachineBuilds, stallMachineBuilds } from 'src/controllers/line/stall-machine-builds';
 import { onboardingDeps } from 'src/controllers/onboarding/onboarding-deps';
+import { maybeStartVerify } from 'src/controllers/onboarding/shared/start-verify';
 import { stallMachineOnboarding } from 'src/controllers/onboarding/stall-machine-onboarding';
 import { stallMachinePlans } from 'src/controllers/plans/stall-machine-plans';
 import { stallMachineQuickFixes } from 'src/controllers/quick-fixes/stall-machine-quick-fixes';
@@ -192,6 +194,14 @@ async function settleHello(opts: {
 		connectedAt: opts.connectedAt,
 		heldQuickFixIds: msg.quickFixIds
 	});
+
+	// Every hello carries the key names, `change` included: it is how the backend
+	// learns what the agent filled on its own or an operator edited on the box, and
+	// what waited on those keys goes on without anyone pressing a button.
+	if (msg.envSets !== undefined) {
+		await maybeStartVerify(onboardingDeps(fastify), { machineId: machine.id });
+		await resumeEnvBuilds(lineDeps(fastify), { machine });
+	}
 }
 
 export async function applyMachineFrame(opts: {

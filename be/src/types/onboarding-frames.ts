@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { MissingEnvSchema } from 'src/types/env-sets';
 import { OnboardingPhaseSchema } from 'src/types/OnboardingSchema';
 
 // The agent clones with a credential it asks bosun for on every fetch, so the
@@ -58,7 +59,9 @@ export const OnboardingDoneMsgSchema = z.object({
 export const OnboardingErrorMsgSchema = z.object({
 	type: z.literal('onboarding.error'),
 	runId: z.string(),
-	message: z.string()
+	message: z.string(),
+	// A verify stopped for env keys it could not fill: inputs to ask for, not a failure.
+	missingEnv: z.array(MissingEnvSchema).optional()
 });
 
 export const RunPolicySchema = z.object({ applyMigrations: z.boolean() });

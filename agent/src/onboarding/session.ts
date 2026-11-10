@@ -4,7 +4,9 @@ import path from 'path';
 import { ensureProjectServices, NO_PUSH_GIT_ENV, prepareRunEnvironment } from '../execution/run-environment';
 import { createStreamParser } from '../planning/stream-parser';
 import { type ProjectConfig } from '../project-config';
+import { describeMissingEnv, ensureProjectEnv } from '../services/env-autofill';
 import { DISCOVERY_NUDGE, discoveryPrompt, signInPrompt } from '../prompts/onboarding';
+import { type MissingEnv } from '../env-frames';
 import { type AgentMsg, type OnboardingStart } from '../protocol';
 import { launchBrowser } from '../services/browser.service';
 import { resolveProjectConfig } from '../services/config-resolution';
@@ -35,7 +37,7 @@ const WORKTREE_TIMEOUT_MS = 120_000;
 const DISCOVERY_TOOLS = ['Read', 'Grep', 'Glob', 'Task', 'Skill', 'Edit', 'Write', 'Bash', 'ToolSearch'];
 const SIGN_IN_TOOLS = ['Bash', 'ToolSearch'];
 
-type Outcome = { ok: true } | { ok: false; message: string };
+type Outcome = { ok: true } | { ok: false; message: string; missingEnv?: MissingEnv[] };
 
 interface Run {
 	cancelled: boolean;
@@ -65,7 +67,7 @@ export function verifyPlanTotal(opts: { config: ProjectConfig; applyMigrations: 
 	const migrate = apps.filter((app) => app.migrate !== undefined).length;
 
 	return (
-		3 +
+		4 +
 		(Object.keys(opts.config.services).length > 0 ? 1 : 0) +
 		Math.max(1, opts.config.setup.length) +
 		codegen +
@@ -445,7 +447,7 @@ export function createOnboardingSessions(opts: { services: Services; send: (mess
 		return { ok: true };
 	}
 
-	async function prepare(msg: OnboardingStart, run: Run, scratch: string): Promise<{ ok: true; config: ProjectConfig; env: NodeJS.ProcessEnv } | { ok: false; message: string }> {
+	async function prepare(msg: OnboardingStart, run: Run, scratch: string): Promise<{ ok: true; config: ProjectConfig; env: NodeJS.ProcessEnv } | { ok: false; message: string; missingEnv?: MissingEnv[] }> {
 		const step = (label: string, status: 'passed' | 'failed' | 'info', detail: string | null) => {
 			report({ runId: msg.runId, run, label, status, detail });
 		};
@@ -500,7 +502,32 @@ export function createOnboardingSessions(opts: { services: Services; send: (mess
 			}
 		}
 
-		return { ok: true, config: resolved.config, env: environment.env };
+		const filled = await fillEnv({ msg, run, scratch, config: resolved.config, env: environment.env });
+
+		return filled.ok ? { ok: true, config: resolved.config, env: environment.env } : filled;
+	}
+
+	// Before anything reads a `.env`: setup, migrate and the apps all start from
+	// what is filled here. What cannot be filled is asked for, not failed.
+	async function fillEnv(opts2: { msg: OnboardingStart; run: Run; scratch: string; config: ProjectConfig; env: NodeJS.ProcessEnv }): Promise<Outcome> {
+		const label = 'Fill the env';
+		const result = await ensureProjectEnv({ projectEnv: services.projectEnv, exec: services.exec, config: opts2.config, root: opts2.scratch, env: opts2.env });
+
+		if (result.missing.length > 0) {
+			const detail = describeMissingEnv(result.missing);
+
+			report({ runId: opts2.msg.runId, run: opts2.run, label, status: 'failed', detail: `needs a value bosun cannot fill — ${detail}` });
+
+			return { ok: false, message: `${label}: ${detail}`, missingEnv: result.missing };
+		}
+
+		if (result.filled.length > 0) {
+			services.projectEnv.applyTo(opts2.scratch);
+		}
+
+		report({ runId: opts2.msg.runId, run: opts2.run, label, status: 'passed', detail: result.filled.length === 0 ? 'nothing to fill' : `filled ${result.filled.join(', ')}` });
+
+		return { ok: true };
 	}
 
 	async function setup(msg: OnboardingStart, run: Run, scratch: string, prepared: { config: ProjectConfig; env: NodeJS.ProcessEnv }): Promise<Outcome> {
@@ -693,7 +720,16 @@ export function createOnboardingSessions(opts: { services: Services; send: (mess
 			// Out of the map before the frame goes: a discovery's `done` is answered with
 			// a verify for the same run id, and a run still held here would drop it.
 			runs.delete(msg.runId);
-			opts.send(outcome.ok ? { type: 'onboarding.done', runId: msg.runId } : { type: 'onboarding.error', runId: msg.runId, message: clipTail(outcome.message, DETAIL_CHARS) });
+			opts.send(
+				outcome.ok
+					? { type: 'onboarding.done', runId: msg.runId }
+					: {
+						type: 'onboarding.error',
+						runId: msg.runId,
+						message: clipTail(outcome.message, DETAIL_CHARS),
+						...(outcome.missingEnv === undefined ? {} : { missingEnv: outcome.missingEnv })
+					}
+			);
 		},
 
 		cancel,

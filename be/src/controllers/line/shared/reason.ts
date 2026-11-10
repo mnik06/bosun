@@ -9,7 +9,8 @@ const NEEDS_YOU: Record<NeedsYouReason, string> = {
 	checks: 'needs you: checks still red after a repair',
 	provider_failed: 'needs you: a plan it waits on stopped',
 	recheck_failed: 'needs you: a criterion failed its re-check',
-	worktree: 'needs you: its worktree could not be set up'
+	worktree: 'needs you: its worktree could not be set up',
+	env: 'needs you: env values bosun could not fill'
 };
 
 const RUNNING: Partial<Record<BuildStatus, string>> = {

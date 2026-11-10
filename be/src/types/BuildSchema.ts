@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { MissingEnvSchema } from 'src/types/env-sets';
 import { PlanAnswerSchema, PlanQuestionSchema } from 'src/types/PlanSchema';
 
 // A build is one attempt at building a plan: its branch, its worktree, its place
@@ -55,7 +56,8 @@ export const NeedsYouReasonSchema = z.enum([
 	'checks',
 	'provider_failed',
 	'recheck_failed',
-	'worktree'
+	'worktree',
+	'env'
 ]);
 
 export type NeedsYouReason = z.infer<typeof NeedsYouReasonSchema>;
@@ -75,6 +77,8 @@ export const BuildSchema = z.object({
 	prNumber: z.number().int().nullable(),
 	prUrl: z.string().nullable(),
 	failureReason: z.string().nullable(),
+	// What a build parked on `needs_you: env` waits for. Names only.
+	missingEnv: z.array(MissingEnvSchema).nullable(),
 	createdAt: z.coerce.date(),
 	startedAt: z.coerce.date().nullable(),
 	builtAt: z.coerce.date().nullable(),

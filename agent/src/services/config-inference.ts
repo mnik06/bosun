@@ -1,6 +1,7 @@
 import path from 'path';
 import { type ProjectConfig } from '../project-config';
 import { inFolder, inferRegenerate, inferRerunWhen, isDirectory, packageScripts, readText } from './config-inference-steps';
+import { ENV_EXAMPLES, parseEnvText } from './env-autofill';
 
 // A config is written the way a person would write it — `Start: pnpm dev`, no
 // ports, no env wiring, no readiness URL — and this file fills in the rest from
@@ -19,25 +20,10 @@ interface AppFacts {
 	envExample: Map<string, string>;
 }
 
-const ENV_EXAMPLES = ['.env.example', '.env.sample', '.env.template'];
 const VITE_CONFIGS = ['vite.config.ts', 'vite.config.mts', 'vite.config.js', 'vite.config.mjs'];
 const LOCAL_URL = /^https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0):(\d+)(.*)$/;
 const RUNNER = /^(pnpm|yarn|bun|npm)(?: run)? ([\w:.-]+)/;
 const DEFAULT_PORTS: Record<ServerKind, number | null> = { vite: 5173, next: 3000, other: null };
-
-function parseEnvFile(text: string | null): Map<string, string> {
-	const entries = new Map<string, string>();
-
-	for (const line of (text ?? '').split('\n')) {
-		const match = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(line);
-
-		if (match) {
-			entries.set(match[1]!, match[2]!.trim().replace(/^(['"])(.*)\1$/, '$2'));
-		}
-	}
-
-	return entries;
-}
 
 // What the start command really runs: `pnpm dev` is whatever `scripts.dev` says.
 function resolveStart(dir: string, start: string): { text: string; npm: boolean } {
@@ -74,7 +60,7 @@ function appFacts(root: string, name: string, app: App): AppFacts {
 	const dir = path.join(root, cwd ?? '.');
 	const { text, npm } = resolveStart(dir, app.start);
 	const kind = serverKind(text);
-	const envExample = parseEnvFile(ENV_EXAMPLES.map((file) => readText(path.join(dir, file))).find((entry) => entry !== null) ?? null);
+	const envExample = parseEnvText(ENV_EXAMPLES.map((file) => readText(path.join(dir, file))).find((entry) => entry !== null) ?? null);
 
 	return { name, cwd, kind, npm, ports: defaultPorts({ dir, script: text, kind, envExample }), envExample };
 }

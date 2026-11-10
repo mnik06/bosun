@@ -323,6 +323,13 @@
       "when": 1793021602172,
       "tag": "0045_colossal_radioactive_man",
       "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1794322299002,
+      "tag": "0046_furry_triathlon",
+      "breakpoints": true
     }
   ]
 }

@@ -74,3 +74,34 @@ them. The next bullet simply stops rewriting those keys. To remove them from a w
 there or cancel the build, which removes its worktree.
 
 A corrupt or unreadable store is treated as empty and logged once, without its content.
+
+## Filled by bosun
+
+An app's `.env.example` names the keys it reads, and most of them need nobody: the example's own
+local value, what a configured service prints, or a random local secret. `env-autofill.ts` fills
+those into the store before every bullet, drive and onboarding verify, after the services are up, and
+asks for the rest. Before it, an operator copied dev defaults by hand, and a branch that added a key
+started apps that crashed on boot with nothing saying which value was missing.
+
+- **What is required.** Every key an app folder's example names (`.env.example`, `.sample`,
+  `.template`), except one the config already hands the app at start (`Env`, the inferred wiring,
+  `PORT`) and one whose example value is empty — that is how a project says optional — unless it is
+  a local secret bosun can generate. A placeholder (`changeme`, `<...>`, `your-...`, `...`) means a
+  real value is needed and is never copied.
+- **In order:** the running service's value (`supabase status -o env`, through the service's own
+  start-command prefix, mapped by a small explicit table), the example's value, a generated secret.
+  A secret is generated once and kept: rotating it would sign every session out. A vendor's key or
+  token is never generated; it comes from the vendor.
+- **The operator always wins.** The store marks each key bosun wrote (`auto`). A fill never touches a
+  key without the mark; a value typed in the browser drops it, and a key the browser kept as `null`
+  keeps it. An old store without marks reads as entirely the operator's. A fill that finds what is
+  already stored saves nothing, so it does not send a `change` hello on every bullet — the hello
+  that does go out is how the backend learns the new key names.
+- **What it cannot fill is a question, not a failure.** A bullet reports it as `exec.error.missingEnv`
+  and the backend parks the build on `needs_you: env`; a verify reports `onboarding.error.missingEnv`
+  and the run goes back to `needs_input` with those keys as requirements. Saving them resumes either.
+- **Names only leave the machine.** The summary carries `autoKeys` beside `keys`. A failed
+  `supabase status` is logged by its exit reason, never its output, which is the service's keys.
+
+Discovery is told the same rules, so it no longer reports a key bosun fills as a requirement. Its
+requirements still gate verify in the backend; verify fills the rest itself.

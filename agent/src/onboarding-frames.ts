@@ -68,7 +68,9 @@ export const OnboardingDoneMsgSchema = z.object({
 export const OnboardingErrorMsgSchema = z.object({
 	type: z.literal('onboarding.error'),
 	runId: z.string(),
-	message: z.string()
+	message: z.string(),
+	// A verify stopped for env keys it could not fill: inputs to ask for, not a failure.
+	missingEnv: z.array(z.object({ path: z.string(), keys: z.array(z.string()).min(1) })).optional()
 });
 
 export const RunPolicySchema = z.object({ applyMigrations: z.boolean() });

@@ -5,10 +5,18 @@ import { SealedValueSchema } from './onboarding-frames';
 export const EnvSetSummarySchema = z.object({
 	path: z.string(),
 	keys: z.array(z.string()),
-	updatedAt: z.string()
+	updatedAt: z.string(),
+	// The keys this agent filled itself rather than the operator. Names only.
+	autoKeys: z.array(z.string()).optional()
 });
 
 export type EnvSetSummary = z.infer<typeof EnvSetSummarySchema>;
+
+// Keys a run needs in a folder's `.env` that nobody provided and the agent could
+// not fill. Names only: the operator is asked for the values.
+export const MissingEnvSchema = z.object({ path: z.string(), keys: z.array(z.string()).min(1) });
+
+export type MissingEnv = z.infer<typeof MissingEnvSchema>;
 
 // What the store takes, after the agent has opened what the browser sealed.
 export interface EnvVarInput {

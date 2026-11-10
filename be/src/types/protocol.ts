@@ -32,6 +32,7 @@ import {
 	EnvSavedMsgSchema,
 	EnvSetMsgSchema,
 	EnvSetSummarySchema,
+	MissingEnvSchema,
 	SecretsSetMsgSchema
 } from 'src/types/env-sets';
 import {
@@ -164,7 +165,8 @@ export const ExecErrorMsgSchema = z.object({
 	type: z.literal('exec.error'),
 	runId: z.string(),
 	message: z.string(),
-	conflictWith: z.string().optional()
+	conflictWith: z.string().optional(),
+	missingEnv: z.array(MissingEnvSchema).optional()
 });
 
 // The agent's answer to an upgrade it was offered and did not take. Without it

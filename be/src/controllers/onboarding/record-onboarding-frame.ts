@@ -2,6 +2,8 @@ import { type OnboardingDeps } from 'src/controllers/onboarding/onboarding-deps'
 import { announceOnboarding, failOnboardingRun, isActiveRun } from 'src/controllers/onboarding/shared/onboarding-runs';
 import { notifyOnboardingStatus } from 'src/controllers/onboarding/shared/notify';
 import { maybeStartVerify } from 'src/controllers/onboarding/shared/start-verify';
+import { normalizedRequirement } from 'src/controllers/onboarding/shared/requirements';
+import { type MissingEnv } from 'src/types/env-sets';
 import { type OnboardingRun } from 'src/types/OnboardingSchema';
 import { type AgentMsg } from 'src/types/protocol';
 
@@ -20,6 +22,37 @@ function failureFor(run: OnboardingRun, frame: OnboardingFrame): string | null {
 	return run.status === 'discovering' && run.config === null ? NO_CONFIG : null;
 }
 
+// A verify that stopped for env values the agent could not fill asks for them on
+// the form discovery's inputs use, and starts again the moment the machine holds
+// them — saved in the browser or filled on the box.
+async function askForEnv(
+	deps: OnboardingDeps,
+	opts: { run: OnboardingRun; projectId: string; missingEnv: MissingEnv[]; message: string }
+): Promise<void> {
+	const requirements = opts.missingEnv.flatMap((entry) =>
+		entry.keys.map((key) =>
+			normalizedRequirement({
+				kind: 'env',
+				path: entry.path,
+				key,
+				why: 'Verify needs it, and bosun could not fill it from the example, a service or a generated secret',
+				evidence: `${entry.path === '.' ? '' : `${entry.path}/`}.env.example`,
+				optional: false
+			})
+		)
+	);
+
+	for (const requirement of requirements) {
+		await deps.onboardingRunRepo.upsertRequirement({ id: opts.run.id, requirement });
+	}
+
+	const next = await deps.onboardingRunRepo.update({ id: opts.run.id, status: 'needs_input', portBase: null, failureReason: opts.message });
+	const settled = next ?? opts.run;
+
+	announceOnboarding({ socketRegistry: deps.socketRegistry, projectId: opts.projectId, run: settled });
+	await notifyOnboardingStatus(deps, { projectId: opts.projectId, run: settled });
+}
+
 export async function recordOnboardingFrame(
 	deps: OnboardingDeps,
 	opts: { machineId: string; projectId: string; frame: OnboardingFrame }
@@ -27,6 +60,12 @@ export async function recordOnboardingFrame(
 	const run = await deps.onboardingRunRepo.getForMachine({ id: opts.frame.runId, machineId: opts.machineId });
 
 	if (!run || !isActiveRun(run)) {
+		return;
+	}
+
+	if (opts.frame.type === 'onboarding.error' && opts.frame.missingEnv?.length && run.status === 'verifying') {
+		await askForEnv(deps, { run, projectId: opts.projectId, missingEnv: opts.frame.missingEnv, message: opts.frame.message });
+
 		return;
 	}
 

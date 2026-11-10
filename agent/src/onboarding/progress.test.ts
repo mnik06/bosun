@@ -34,19 +34,19 @@ Test accounts:
 // the end or runs past it.
 describe('verifyPlanTotal', () => {
 	it('counts every step verify reports as finished', () => {
-		// resolve, env, toolchain + 2 setup + 1 codegen + 1 migrate + start + browser + 2 sign-ins
-		expect(verifyPlanTotal({ config: FULL, applyMigrations: true })).toBe(11);
+		// resolve, env, toolchain, fill + 2 setup + 1 codegen + 1 migrate + start + browser + 2 sign-ins
+		expect(verifyPlanTotal({ config: FULL, applyMigrations: true })).toBe(12);
 	});
 
 	it('counts one skipped-migrations line in place of the migrations', () => {
-		expect(verifyPlanTotal({ config: FULL, applyMigrations: false })).toBe(11);
-		// resolve, env, toolchain + no-setup line + skipped migrations + start + no-accounts line
+		expect(verifyPlanTotal({ config: FULL, applyMigrations: false })).toBe(12);
+		// resolve, env, toolchain, fill + no-setup line + skipped migrations + start + no-accounts line
 		expect(
 			verifyPlanTotal({ config: config('Apps:\nbe:\n- Start: run\n- Migrate: a\nfe:\n- Start: run\n- Migrate: b\n'), applyMigrations: false })
-		).toBe(7);
+		).toBe(8);
 	});
 
 	it('counts the single "none" line a config with no setup or accounts reports', () => {
-		expect(verifyPlanTotal({ config: config('Notes:\nnothing configured\n'), applyMigrations: true })).toBe(6);
+		expect(verifyPlanTotal({ config: config('Notes:\nnothing configured\n'), applyMigrations: true })).toBe(7);
 	});
 });

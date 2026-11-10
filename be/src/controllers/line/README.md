@@ -140,6 +140,21 @@ merges, `markMerged` retargets its stacked dependents to the default branch and 
 integration. A `failed` dependent is retargeted too: retried later on the merged provider's branch, it
 would integrate onto it and open its pull request against it.
 
+## Env values a run needs
+
+Before a bullet or a drive the agent fills every key the app folders' `.env.example` files name that
+it can (`agent/src/services/project-env.service.md`). A key it cannot fill — a placeholder only a
+person has the value for, typically one a plan branch just added — is not the plan's failure. The
+agent reports it as `exec.error.missingEnv`; `parkForEnv` puts the run back to pending and parks the
+build on `needs_you: env` with the key names in `builds.missing_env`. Failing it instead sent a plan
+to Retry for a value nobody had been asked for.
+
+It resumes on its own (`resumeEnvBuilds`) the moment the machine holds every named key: after an env
+set saved in the browser, and after any `hello`, since the agent sends a `change` hello whenever its
+store is written. Satisfied is decided from key names, never values. The build goes back to the
+status its next job implies — `scheduled` for a bullet, `waiting_verify` for a drive — so a drive is
+not sent through the build line. Retry clears it as well.
+
 ## Integration
 
 Triggers: the last bullet (`built`), a push to the default branch (`base_moved`), a push to a

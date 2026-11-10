@@ -269,3 +269,62 @@ describe('getProjectEnvService', () => {
 		});
 	});
 });
+
+describe('auto-filled values', () => {
+	let home: string;
+
+	beforeEach(() => {
+		home = fs.mkdtempSync(path.join(os.tmpdir(), 'bosun-project-env-auto-'));
+	});
+
+	afterEach(() => {
+		fs.rmSync(home, { recursive: true, force: true });
+	});
+
+	it('marks what it fills as auto and never replaces a key the operator set', () => {
+		const env = getProjectEnvService({ homeDir: home });
+
+		env.set({ path: 'api', vars: [{ key: 'DATABASE_URL', value: SECRET }] });
+
+		const changed = env.fill({ path: 'api', values: { DATABASE_URL: 'postgres://elsewhere', SUPABASE_URL: 'http://127.0.0.1:54321' } });
+
+		expect(changed).toEqual(['SUPABASE_URL']);
+		expect(env.read('api').vars).toEqual({ DATABASE_URL: SECRET, SUPABASE_URL: 'http://127.0.0.1:54321' });
+		expect(env.summary()).toEqual([
+			{ path: 'api', keys: ['DATABASE_URL', 'SUPABASE_URL'], updatedAt: expect.any(String), autoKeys: ['SUPABASE_URL'] }
+		]);
+	});
+
+	it('refreshes its own value, and saves nothing when the fill found what was there', () => {
+		const env = getProjectEnvService({ homeDir: home });
+
+		env.fill({ path: 'api', values: { SUPABASE_URL: 'http://127.0.0.1:54321' } });
+
+		expect(env.fill({ path: 'api', values: { SUPABASE_URL: 'http://127.0.0.1:54321' } })).toEqual([]);
+		expect(env.fill({ path: 'api', values: { SUPABASE_URL: 'http://127.0.0.1:55321' } })).toEqual(['SUPABASE_URL']);
+		expect(env.read('api').vars.SUPABASE_URL).toBe('http://127.0.0.1:55321');
+	});
+
+	// The browser sends null for a value it kept and a value for one typed in: the
+	// typed one is the operator's from then on.
+	it('hands a key to the operator once they type its value, and keeps one they left alone auto', () => {
+		const env = getProjectEnvService({ homeDir: home });
+
+		env.fill({ path: 'api', values: { A: '1', B: '2' } });
+		env.set({ path: 'api', vars: [{ key: 'A', value: 'typed' }, { key: 'B', value: null }] });
+
+		expect(env.read('api').auto).toEqual(new Set(['B']));
+		expect(env.fill({ path: 'api', values: { A: 'auto again', B: 'refreshed' } })).toEqual(['B']);
+		expect(env.read('api').vars).toEqual({ A: 'typed', B: 'refreshed' });
+	});
+
+	it('reads a store written before the marker as entirely the operator\'s', () => {
+		const env = getProjectEnvService({ homeDir: home });
+
+		fs.mkdirSync(path.dirname(env.storePath), { recursive: true });
+		fs.writeFileSync(env.storePath, JSON.stringify({ sets: { api: { vars: { A: '1' }, updatedAt: '2026-01-01T00:00:00.000Z' } } }));
+
+		expect(env.fill({ path: 'api', values: { A: '2' } })).toEqual([]);
+		expect(env.summary()).toEqual([{ path: 'api', keys: ['A'], updatedAt: '2026-01-01T00:00:00.000Z' }]);
+	});
+});

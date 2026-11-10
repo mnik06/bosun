@@ -215,7 +215,11 @@ project's own account of how it is built; they outrank your habits. Find:
 - **how each proves itself**: its test command, and the one command that runs typecheck, lint and tests
 - **every env key each reads**: \`.env.example\`, config and env schemas, and the code itself. Each key
   that needs a real value from the operator is a requirement of kind \`env\`, with \`path\` set to the
-  folder whose \`.env\` it lives in (\`.\` for the root). Set \`optional\` on a key the project starts and
+  folder whose \`.env\` it lives in (\`.\` for the root). Bosun fills the rest itself before every run,
+  so none of these is a requirement: a key whose \`.env.example\` value is concrete (a local URL, a dev
+  key the repository commits), a key a configured service prints (\`supabase status\`: its URL, anon,
+  service-role and database keys), or a local secret it can generate (a session or encryption secret
+  with an empty example value). A placeholder (\`changeme\`, \`<...>\`, \`your-...\`) is a requirement. Set \`optional\` on a key the project starts and
   works without — telemetry, a feature that switches itself off, a value with a default. Verify waits
   for every input that is not optional, so a key marked required that is not blocks the operator
 - **how a user signs in**, and which credentials a test account needs. Their key names go in the test

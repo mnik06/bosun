@@ -6,14 +6,17 @@ import { executionPrompt } from '../prompts/execution';
 import { fixPrompt } from '../prompts/fix';
 import { type DatabasePrep, type RunContext, type RunMode } from '../prompts/shared';
 import { type ProjectConfig } from '../project-config';
+import { type MissingEnv } from '../env-frames';
 import { type AgentMsg, type ExecStart, type PlanAnswer } from '../protocol';
 import { resolveProjectConfig } from '../services/config-resolution';
+import { describeMissingEnv, ensureProjectEnv } from '../services/env-autofill';
 import { type Services } from '../services/index';
 import { formatGib, type SessionScope } from '../services/memory.service';
 import { runShell } from '../services/setup-steps.service';
 import { startSessionMcpServer, type SessionMcpServer } from '../sessions/mcp-server';
 import { spawnClaudeSession, type ClaudeSession, type SessionExit } from '../sessions/process';
 import { writeEnvFiles } from '../sessions/run-support';
+import { plural } from '../utils';
 import { createStderrTail, logDroppedFrame, pipeSessionOutput, reportStartFailure } from '../sessions/turn-support';
 import { commitMessageFor, mergeBranches } from './commit';
 import {
@@ -51,6 +54,14 @@ class ProviderConflict extends Error {
 	}
 }
 
+// Keys the run needs that nobody gave and the agent could not fill. Reported as
+// `missingEnv` so the backend asks the operator instead of failing the plan.
+class MissingEnvError extends Error {
+	constructor(readonly missing: MissingEnv[]) {
+		super(`env values bosun could not fill: ${describeMissingEnv(missing)}`);
+	}
+}
+
 // Execution writes. Planning's set is deliberately not reused here: the whole
 // difference between the two halves of the product is that one may change the
 // repository and the other may not.
@@ -59,6 +70,8 @@ const EXECUTION_BUILTIN_TOOLS = ['Read', 'Grep', 'Glob', 'Task', 'Skill', 'Edit'
 // A drive changes nothing and commissions nothing: it reads, runs the odd command,
 // and drives a browser through whatever MCP servers the machine has.
 const LANE_BUILTIN_TOOLS = ['Read', 'Grep', 'Glob', 'Bash', 'Skill', 'ToolSearch'];
+
+type ProvidedEnv = ReturnType<typeof writeEnvFiles>['providedEnv'];
 
 interface Project {
 	// Null on a machine with no repository, and on a repository that has no config
@@ -497,6 +510,38 @@ export function createExecutionSessions(opts: {
 		};
 	};
 
+	// After the services are up, so a service's values are the ones it is running
+	// with. The files are written again only when the fill changed something.
+	const fillProjectEnv = async (msg: ExecStart, project: Project, run: Run): Promise<ProvidedEnv | null> => {
+		if (project.config === null) {
+			return null;
+		}
+
+		const result = await ensureProjectEnv({
+			projectEnv: opts.services.projectEnv,
+			exec: opts.services.exec,
+			config: project.config,
+			root: msg.worktreePath,
+			env: project.env ?? opts.services.claudeAuth.sessionEnv()
+		});
+
+		if (result.missing.length > 0) {
+			throw new MissingEnvError(result.missing);
+		}
+
+		if (result.filled.length === 0) {
+			return null;
+		}
+
+		opts.send({ type: 'exec.activity', runId: msg.runId, label: `Filled ${plural(result.filled.length, 'env value')}` });
+
+		const rewritten = writeEnvFiles({ projectEnv: opts.services.projectEnv, worktreePath: msg.worktreePath, id: msg.runId });
+
+		run.envFiles = [...new Set([...run.envFiles, ...rewritten.written])];
+
+		return rewritten.providedEnv;
+	};
+
 	const startProcess = async (msg: ExecStart, run: Run): Promise<void> => {
 		await prepareBranch(msg);
 
@@ -510,8 +555,8 @@ export function createExecutionSessions(opts: {
 
 		run.envFiles = written.written;
 
-		const providedEnv = written.providedEnv;
 		const project = await prepareProject(msg);
+		const providedEnv = (await fillProjectEnv(msg, project, run)) ?? written.providedEnv;
 
 		const database = modeOf(msg) === 'lane' ? await prepareDatabase(msg, project) : null;
 
@@ -674,7 +719,8 @@ export function createExecutionSessions(opts: {
 						type: 'exec.error',
 						runId: msg.runId,
 						message,
-						...(error instanceof ProviderConflict ? { conflictWith: error.branch } : {})
+						...(error instanceof ProviderConflict ? { conflictWith: error.branch } : {}),
+						...(error instanceof MissingEnvError ? { missingEnv: error.missing } : {})
 					});
 				}
 			});
