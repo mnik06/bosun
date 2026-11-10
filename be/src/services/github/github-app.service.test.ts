@@ -100,6 +100,52 @@ describe('installationToken', () => {
 	});
 });
 
+describe('repositoryToken', () => {
+	function serviceRefusing(refuse: (permissions: Record<string, string>) => boolean) {
+		const asked: Record<string, string>[] = [];
+		let clock = NOW;
+		const fetchImpl = (async (_input: string | URL | Request, init?: RequestInit) => {
+			const { permissions } = JSON.parse(String(init?.body)) as { permissions: Record<string, string> };
+
+			asked.push(permissions);
+
+			return refuse(permissions)
+				? new Response(JSON.stringify({ message: 'The permissions requested are not granted to this installation.' }), { status: 422 })
+				: new Response(JSON.stringify({ token: `token-${asked.length}`, expires_at: new Date(clock + 3_600_000).toISOString() }), { status: 201 });
+		}) as typeof fetch;
+		const github = getGithubAppService({ appId: '1', slug: 'bosun', clientId: 'client', clientSecret: 'secret', privateKey: pem, fetchImpl, now: () => clock });
+
+		return { github, asked, advance: (ms: number) => { clock += ms; } };
+	}
+
+	it('carries workflow write when the installation grants it', async () => {
+		const { github, asked } = serviceRefusing(() => false);
+
+		await github.repositoryToken({ installationId: 1, githubRepoId: 7 });
+
+		expect(asked).toEqual([{ contents: 'write', workflows: 'write' }]);
+	});
+
+	// A 422 is the whole mint refused, not a narrower token: without the fallback
+	// every push from an installation that never granted workflows would fail.
+	it('falls back to contents alone, and stops asking for a while, when workflows is refused', async () => {
+		const { github, asked, advance } = serviceRefusing((permissions) => permissions.workflows !== undefined);
+
+		await expect(github.repositoryToken({ installationId: 1, githubRepoId: 7 })).resolves.toMatchObject({ token: 'token-2' });
+		await github.repositoryToken({ installationId: 1, githubRepoId: 8 });
+		advance(10 * 60_000);
+		await github.repositoryToken({ installationId: 1, githubRepoId: 9 });
+
+		expect(asked).toEqual([
+			{ contents: 'write', workflows: 'write' },
+			{ contents: 'write' },
+			{ contents: 'write' },
+			{ contents: 'write', workflows: 'write' },
+			{ contents: 'write' }
+		]);
+	});
+});
+
 describe('openOrUpdatePullRequest', () => {
 	const UNREADABLE = { message: 'Validation Failed', errors: [{ resource: 'PullRequest', code: 'custom', message: 'not all refs are readable' }] };
 	const request = { token: 'resolved-token', githubRepoId: 7, head: 'bosun/onboarding', base: 'main', title: 't', body: 'b' };

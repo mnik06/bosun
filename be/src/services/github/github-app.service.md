@@ -34,12 +34,19 @@ what reaches a box is an installation token for one repository that expires with
 - **Minted tokens name their repository by id and their permissions explicitly.** Three shapes, each
   as narrow as its caller allows: `metadataToken` (`metadata: read` — the attach flow's defensive
   re-check, which only confirms a repository is still reachable), `repositoryToken` (`contents:
-  write` — a machine's git credential, which has no business calling the Pulls API), and
+  write`, plus `workflows: write` when the installation grants it — a machine's git credential, which
+  has no business calling the Pulls API; without `workflows` GitHub refuses any push that creates or
+  changes a file under `.github/workflows/`), and
   `installationToken` (`contents: write` + `pull_requests: write`, the union every other REST call in
   this module needs — opening/editing a pull request, pointing a branch, reading or writing a file).
   A caller resolves one of these once per repository and passes that same token into every call it
   makes, rather than this module minting narrower per operation the way it used to. Tokens are cached
   in memory until five minutes before expiry and never written anywhere.
+- **`workflows` is asked for, never assumed.** A mint naming a permission the installation lacks is a
+  422 for the whole token, so `repositoryToken` falls back to `contents` alone and does not ask that
+  installation again for ten minutes. Granting it is the app owner's call (the app's *Workflows:
+  Read and write* permission, then accepting it on the installation): it lets code running on a
+  machine push workflows, which run with the repository's Actions secrets.
 - **The credential route takes no repository argument.** It answers for the machine's own
   `repository_id`, so there is nothing a session could ask for that reaches somebody else's.
 - **This module never decides which token source a repository uses.** `installationToken` and

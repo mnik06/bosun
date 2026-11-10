@@ -28,7 +28,12 @@ export class GithubError extends Error {
 	}
 }
 
-type Permissions = Partial<Record<'contents' | 'pull_requests' | 'metadata', 'read' | 'write'>>;
+type Permissions = Partial<Record<'contents' | 'pull_requests' | 'metadata' | 'workflows', 'read' | 'write'>>;
+
+// How long an installation that refused `workflows` is minted without asking
+// again: granting it is a click on GitHub, and a restart should not be the only
+// way bosun notices.
+const WORKFLOWS_REFUSAL_MS = 10 * 60_000;
 
 const TokenRespSchema = z.object({ token: z.string(), expires_at: z.string() });
 
@@ -195,6 +200,7 @@ export function getGithubAppService(deps: {
 	const now = deps.now ?? Date.now;
 	const privateKey = normalizePrivateKey(deps.privateKey);
 	const tokens = new Map<string, { token: string; expiresAt: number }>();
+	const workflowsRefusedAt = new Map<number, number>();
 
 	async function call(opts: {
 		method?: string;
@@ -549,13 +555,26 @@ export function getGithubAppService(deps: {
 		},
 
 		// What a machine's git credential helper receives: one repository, contents
-		// write, and nothing broader.
+		// write, and `workflows` write when the installation grants it. Without it
+		// GitHub refuses any push touching `.github/workflows/`, so a plan adding CI
+		// could never reach the remote. Asking for a permission the installation
+		// lacks is a 422 for the whole mint, so a refusal falls back to contents
+		// alone: granting it stays the app owner's decision, made on GitHub.
 		async repositoryToken(opts: { installationId: number; githubRepoId: number }): Promise<{ token: string; expiresAt: Date }> {
-			const minted = await mint({
-				installationId: opts.installationId,
-				githubRepoIds: [opts.githubRepoId],
-				permissions: { contents: 'write' }
-			});
+			const scope = { installationId: opts.installationId, githubRepoIds: [opts.githubRepoId] };
+			const refusedAt = workflowsRefusedAt.get(opts.installationId);
+			const askWorkflows = refusedAt === undefined || now() - refusedAt >= WORKFLOWS_REFUSAL_MS;
+			const minted = askWorkflows
+				? await mint({ ...scope, permissions: { contents: 'write', workflows: 'write' } }).catch((error: unknown) => {
+					if (!(error instanceof GithubError) || error.status !== 422) {
+						throw error;
+					}
+
+					workflowsRefusedAt.set(opts.installationId, now());
+
+					return mint({ ...scope, permissions: { contents: 'write' } });
+				})
+				: await mint({ ...scope, permissions: { contents: 'write' } });
 
 			return { token: minted.token, expiresAt: new Date(minted.expiresAt) };
 		},
