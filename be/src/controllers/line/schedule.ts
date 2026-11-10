@@ -18,6 +18,7 @@ import {
 	nextJob,
 	WAITING_STATUSES
 } from 'src/controllers/line/shared/next-job';
+import { staleProviders } from 'src/controllers/line/shared/stale-providers';
 import { repositoryCloning } from 'src/controllers/repositories/shared/config-for';
 import { type Machine } from 'src/types/MachineSchema';
 import { type Repository } from 'src/types/RepositorySchema';
@@ -230,7 +231,8 @@ function runnableScheduled(pass: Pass): BuildState[] {
 			state.build.status === 'scheduled' &&
 			(state.build.machineId ?? state.plan.machineId) === pass.machine.id &&
 			(kind === 'bullet' || kind === undefined) &&
-			blocking(state, snapshot.providers).length === 0
+			blocking(state, snapshot.providers).length === 0 &&
+			(state.build.worktreePath !== null || staleProviders({ state, snapshot }).length === 0)
 		);
 	});
 

@@ -1,5 +1,6 @@
 import { dependencyReleased, describeWait } from 'src/controllers/line/shared/dependencies';
 import { type BuildState, type RepositorySnapshot } from 'src/controllers/line/shared/line-snapshot';
+import { staleProviders } from 'src/controllers/line/shared/stale-providers';
 import { type BuildStatus, type NeedsYouReason } from 'src/types/BuildSchema';
 
 const NEEDS_YOU: Record<NeedsYouReason, string> = {
@@ -51,6 +52,12 @@ function scheduled(state: BuildState, snapshot: RepositorySnapshot): string {
 
 	if (waits.length > 0) {
 		return waits.map((dependency) => describeWait({ dependency, provider: snapshot.providers.get(dependency.providerPlanId) })).join(', ');
+	}
+
+	const stale = state.build.worktreePath === null ? staleProviders({ state, snapshot }) : [];
+
+	if (stale.length > 0) {
+		return `waits for ${stale.map((number) => `#${number}`).join(', ')} to catch up with its base`;
 	}
 
 	const line = snapshot.states.filter((entry) => entry.build.status === 'scheduled').sort((a, b) => a.build.position - b.build.position);

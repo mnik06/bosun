@@ -123,6 +123,12 @@ again, a real conflict to a session — after which the build goes straight back
 (`integrateBeforeBullet`). While bullets are left, a pending integration does not mean building is
 over (`hasBulletLeft`).
 
+A dependent is not cut while a provider is still catching up with its base — an integration
+queued, running or stuck on it, or on a plan it stacks on (`stale-providers.ts`). The cut starts
+from the default branch, so a provider behind it brings its stale copy of whatever the base changed
+since, and every dependent stopped on that same conflict; waiting resolves it once, in the provider.
+The card says which provider it waits for.
+
 The same holds when the branch is cut. Two providers built in parallel can conflict with each other
 (both created the shell a footprint never declared), and refusing the worktree for it parked the
 dependent on `needs_you: worktree` — a person, for a conflict the line resolves itself. The agent
