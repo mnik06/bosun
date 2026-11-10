@@ -219,6 +219,20 @@ describe('getProjectEnvService', () => {
 		expect(fs.existsSync(path.join(path.dirname(worktree), outside))).toBe(false);
 	});
 
+	it('reads a set stored under its .env file name as the folder holding it', () => {
+		const env = service();
+
+		fs.mkdirSync(path.dirname(env.storePath), { recursive: true });
+		fs.writeFileSync(
+			env.storePath,
+			JSON.stringify({ sets: { 'apps/api/.env': { vars: { DATABASE_URL: 'postgres://x' }, updatedAt: 'x' } } })
+		);
+		fs.mkdirSync(path.join(worktree, 'apps', 'api'), { recursive: true });
+
+		expect(env.applyTo(worktree)).toEqual({ written: ['apps/api/.env'], skipped: [] });
+		expect(fs.readFileSync(path.join(worktree, 'apps', 'api', '.env'), 'utf8')).toBe('DATABASE_URL=postgres://x\n');
+	});
+
 	describe('applyTo', () => {
 		it('merges into an existing .env and keeps the mode its owner gave it', () => {
 			const env = service();

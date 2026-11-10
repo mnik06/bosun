@@ -202,13 +202,22 @@ function checkedValue(opts: { entry: EnvVarInput; stored: Record<string, string>
 	return entry.value;
 }
 
+type StoredSet = Store['sets'][string];
+
 // An entry is only trusted if it could have been stored through `set`. The file
 // is hand-editable, and a path that escapes the worktree or a value with a
-// newline in it would otherwise be written into every bullet.
-function storedSetIsValid(envPath: string, set: Store['sets'][string]): boolean {
-	return (
-		normalizeEnvPath(envPath) === envPath &&
-		Object.entries(set.vars).every(([key, value]) => KEY_PATTERN.test(key) && !/[\r\n]/.test(value))
+// newline in it would otherwise be written into every bullet. A path stored
+// before a spelling was normalized (`apps/api/.env`, before it meant `apps/api`)
+// is read under the path it means now rather than dropped with its values; on a
+// collision the newer set wins, as a second `set` would have.
+function validStoredSets(sets: Record<string, StoredSet>): Record<string, StoredSet> {
+	return Object.fromEntries(
+		Object.entries(sets)
+			.map(([envPath, set]) => [normalizeEnvPath(envPath), set] as const)
+			.filter((entry): entry is readonly [string, StoredSet] =>
+				entry[0] !== null &&
+				Object.entries(entry[1].vars).every(([key, value]) => KEY_PATTERN.test(key) && !/[\r\n]/.test(value)))
+			.sort(([, a], [, b]) => a.updatedAt.localeCompare(b.updatedAt))
 	);
 }
 
@@ -271,9 +280,7 @@ export function getProjectEnvService(deps: { homeDir?: string }) {
 			return { sets: {}, secrets: {} };
 		}
 
-		const sets = Object.fromEntries(
-			Object.entries(parsed.data.sets).filter(([envPath, set]) => storedSetIsValid(envPath, set))
-		);
+		const sets = validStoredSets(parsed.data.sets);
 		const secrets = Object.fromEntries(
 			Object.entries(parsed.data.secrets).filter(([key, value]) => KEY_PATTERN.test(key) && !/[\r\n]/.test(value))
 		);
