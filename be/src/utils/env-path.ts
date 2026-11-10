@@ -18,7 +18,9 @@ export function normalizeEnvPath(raw: string): string | null {
 		path = path.slice(2);
 	}
 
-	path = path.replace(/^\/+/, '').replace(/\/+$/, '');
+	// Asked where the variables go, people name the file. It is always `.env`, so
+	// `apps/api/.env` means the folder, not a folder called `.env` that is never there.
+	path = path.replace(/^\/+/, '').replace(/\/+$/, '').replace(/(^|\/)\.env$/, '');
 
 	// `.` is what this returns for the root, so it has to be accepted back:
 	// the agent re-normalizes every path bosun sends it.

@@ -14,12 +14,14 @@ describe('normalizeEnvPath', () => {
 		['apps/web', 'apps/web'],
 		['/apps/web/', 'apps/web'],
 		['packages/my_pkg-2.x', 'packages/my_pkg-2.x'],
-		['.env-dir', '.env-dir']
+		['.env-dir', '.env-dir'],
+		['apps/api/.env', 'apps/api'],
+		['/apps/api/.env', 'apps/api']
 	])('normalizes %j to %j', (raw, expected) => {
 		expect(normalizeEnvPath(raw)).toBe(expected);
 	});
 
-	it.each(['', '   ', '/', '//', './', '.'])('reads %j as the repository root', (raw) => {
+	it.each(['', '   ', '/', '//', './', '.', '.env', './.env'])('reads %j as the repository root', (raw) => {
 		expect(normalizeEnvPath(raw)).toBe('.');
 	});
 

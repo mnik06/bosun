@@ -45,7 +45,9 @@ export function normalizeEnvPath(raw: string): string | null {
 		candidate = candidate.slice(2);
 	}
 
-	candidate = candidate.replace(/^\/+/, '').replace(/\/+$/, '');
+	// Asked where the variables go, people name the file. It is always `.env`, so
+	// `apps/api/.env` means the folder, not a folder called `.env` that is never there.
+	candidate = candidate.replace(/^\/+/, '').replace(/\/+$/, '').replace(/(^|\/)\.env$/, '');
 
 	// `.` is what the summary calls the root, so it is what the browser sends back
 	// to edit or delete that set. The segment rule below would refuse it.
